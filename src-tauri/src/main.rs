@@ -26,12 +26,14 @@ fn main() {
             let shared = shared_setup.clone();
             std::thread::spawn(move || {
                 if let Err(msg) = boot(&handle, &win, &res, &shared) {
-                    let safe = msg.replace('`', "'").replace('\\', "\\\\");
+                    // JSON 编码错误消息，安全注入到 JS 侧（避免 XSS）
+                    let safe_json = serde_json::to_string(&msg)
+                        .unwrap_or_else(|_| "\"unknown error\"".to_string());
                     let _ = win.eval(&format!(
                         "document.getElementById('spin').style.display='none';\
                          document.getElementById('msg').textContent='启动失败';\
                          var e=document.getElementById('err');e.style.display='block';\
-                         e.textContent=`{safe}`;\
+                         e.textContent={safe_json};\
                          var q=document.getElementById('quit');q.style.display='block';\
                          q.onclick=function(){{window.__TAURI__.process.exit(1)}};"));
                 }

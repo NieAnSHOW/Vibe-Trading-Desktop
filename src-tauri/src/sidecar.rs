@@ -45,15 +45,17 @@ pub fn spawn(python: &Path, runtime_agent: &Path, port: u16) -> Result<Child, St
     cmd.spawn().map_err(|e| format!("spawn sidecar failed: {e}"))
 }
 
-/// mac/unix: kill by process group (child.id() is the pgid, because it is the group leader)
+/// mac/unix: kill by process group (child.id() is the pgid, because it is the group leader).
+/// killpg sends SIGTERM to all processes in the group; we then wait for the leader to exit.
+/// No fallback child.kill() — avoids PID reuse race (killpg→wait is the canonical path).
 #[cfg(unix)]
 pub fn terminate(child: &mut Child) {
     let pid = child.id() as i32;
     unsafe {
         libc::killpg(pid, libc::SIGTERM);
     }
-    // fallback
-    let _ = child.kill();
+    // Wait for the group leader to exit. killpg is asynchronous but the kernel
+    // guarantees delivery before wait returns for a signaled process.
     let _ = child.wait();
 }
 
