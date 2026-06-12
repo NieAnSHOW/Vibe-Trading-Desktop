@@ -4,6 +4,7 @@
 mod port;
 mod resources;
 mod runtime_dir;
+mod sidecar;
 mod version;
 
 fn main() {
