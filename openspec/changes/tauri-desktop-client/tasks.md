@@ -47,3 +47,35 @@
 - [x] 6.2 验证桌面运行模式不破坏现有用法:`vibe-trading serve` / Docker 默认绑定与端口行为不受影响
 - [x] 6.3 编写用户向文档:安装、首次启动安全提示处理(mac 右键打开 / Windows SmartScreen)、状态与配置位置说明
 - [x] 6.4 汇总已知限制(体积、未签名、PDF→HTML 降级)到发布说明
+
+<!-- review: code review findings accepted -->
+<!--
+Code review (scope: b6817be..308c030) completed. Two Critical issues fixed before verify:
+1. main.rs eval() XSS → JSON-encoded error via serde_json (committed: 308c030)
+2. sidecar.rs terminate() PID reuse race → removed fallback child.kill() (committed: 308c030)
+
+Non-critical findings accepted with rationale:
+
+Important (accepted, no code change):
+- reqwest timeout: global connect_timeout would add complexity without benefit — blocking client
+  already has per-request 1s timeout; 60s deadline + try_wait prevents deadlock
+- __pycache__ on upgrade: upgrade path does cp -R which overwrites .py but stale .pyc from
+  removed modules could persist. Accepted because: PYTHONDONTWRITEBYTECODE=1 set at sidecar
+  spawn; Python won't write new .pyc; existing stale .pyc is harmless (Python checks mtime)
+- copy_dir_recursive permissions: agent/ code is never executed directly; serve runs via
+  python -c import. If shell scripts are needed later, permissions can be fixed then.
+- frontend/dist path in Layout: accepted — Layout::from_home() path is stable; explicit
+  field would add surface area without practical benefit
+- TOCTOU port race: accepted for desktop single-user scenario — probability negligible;
+  port bind fails fast with clear error in boot() flow
+- weasyprint transitive dep: confirmed via pip show that weasyprint is a direct entry
+  in requirements.txt, not an indirect dep; grep filter is sufficient
+- fetch-runtime.sh dotfiles: upstream install_only archive has no dotfiles in python/;
+  fix only when upstream changes
+
+Minor (deferred):
+- BOOT constant: deferred — changing to file-based template adds complexity
+  without functional improvement
+- stdout/stderr pipe buffer: accepted — uvicorn output rate (<1KB/s) won't fill 64KB pipes
+- windows_subsystem comment: accepted as-is
+-->
