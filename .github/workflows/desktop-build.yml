@@ -1,0 +1,162 @@
+name: Desktop Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src-tauri/**'
+      - 'scripts/desktop/**'
+      - 'agent/**'
+      - 'frontend/**'
+      - '.github/workflows/desktop-build.yml'
+  pull_request:
+    paths:
+      - 'src-tauri/**'
+      - 'scripts/desktop/**'
+      - '.github/workflows/desktop-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Desktop (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: macos-aarch64
+            rust-target: aarch64-apple-darwin
+            asset-pattern: cpython-3.12.*-aarch64-apple-darwin-install_only.tar.gz
+            python-bin: bin/python3
+          - os: windows-latest
+            target: windows-x64
+            rust-target: x86_64-pc-windows-msvc
+            asset-pattern: cpython-3.12.*-x86_64-pc-windows-msvc-install_only.tar.gz
+            python-bin: python.exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Fetch Python Runtime (${{ matrix.target }})
+        shell: bash
+        env:
+          PBS_TAG: '20260610'
+        run: |
+          set -euo pipefail
+          echo "Fetching Python runtime for ${{ matrix.target }}..."
+
+          # Resolve the actual asset filename from the GitHub release
+          RELEASE_URL="https://api.github.com/repos/astral-sh/python-build-standalone/releases/tags/${PBS_TAG}"
+          echo "Querying release: $RELEASE_URL"
+          ASSET_NAME=$(curl -fsSL "$RELEASE_URL" \
+            | python3 -c "
+      import json, sys, re
+      assets = json.load(sys.stdin).get('assets', [])
+      pattern = r'${{ matrix.asset-pattern }}'
+      for a in assets:
+          if re.match(pattern, a['name']):
+              print(a['name'])
+              sys.exit(0)
+      print('', file=sys.stderr)
+      sys.exit(1)
+      ")
+          echo "Resolved asset: $ASSET_NAME"
+          DOWNLOAD_URL="https://github.com/astral-sh/python-build-standalone/releases/download/${PBS_TAG}/${ASSET_NAME}"
+
+          OUT_DIR=".desktop-build/python-runtime"
+          mkdir -p "$(dirname "$OUT_DIR")"
+          tmp="$(mktemp -d)"
+
+          echo "Downloading $DOWNLOAD_URL"
+          curl -fsSL "$DOWNLOAD_URL" -o "$tmp/runtime.tar.gz"
+
+          rm -rf "$OUT_DIR"
+          mkdir -p "$OUT_DIR"
+
+          # install_only unpacks with a top-level python/ directory; flatten it
+          tar -xzf "$tmp/runtime.tar.gz" -C "$tmp"
+          mv "$tmp/python/"* "$OUT_DIR/"
+          rm -rf "$tmp"
+
+          echo "Runtime ready at: $OUT_DIR"
+          "$OUT_DIR/${{ matrix.python-bin }}" --version
+
+      - name: Install Python Dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUNTIME_DIR=".desktop-build/python-runtime"
+          PY="$RUNTIME_DIR/${{ matrix.python-bin }}"
+          REQ_SRC="agent/requirements.txt"
+
+          tmp_req="$(mktemp)"
+          grep -viE '^\s*weasyprint' "$REQ_SRC" > "$tmp_req"
+
+          echo "Installing deps into embedded runtime (weasyprint excluded)"
+          uv pip install --python "$PY" -r "$tmp_req"
+          rm -f "$tmp_req"
+
+          echo "Done. Installed packages:"
+          "$PY" -m pip list 2>/dev/null | head -40 || true
+
+      - name: Assemble Desktop Resources
+        shell: bash
+        run: bash scripts/desktop/assemble.sh
+
+      - name: Setup Tauri (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install libiconv
+          cargo install tauri-cli --version "^2"
+
+      - name: Setup Tauri (Windows)
+        if: matrix.os == 'windows-latest'
+        run: cargo install tauri-cli --version "^2"
+
+      - name: Build Tauri App
+        working-directory: src-tauri
+        run: cargo build --release
+
+      - name: Package (macOS DMG)
+        if: matrix.os == 'macos-latest'
+        working-directory: src-tauri
+        run: cargo tauri build --bundles dmg
+
+      - name: Package (Windows MSI)
+        if: matrix.os == 'windows-latest'
+        working-directory: src-tauri
+        run: cargo tauri build --bundles msi
+
+      - name: Upload Artifacts (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vibe-Trading-macos-aarch64
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+
+      - name: Upload Artifacts (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vibe-Trading-windows-x64
+          path: src-tauri/target/release/bundle/msi/*.msi
