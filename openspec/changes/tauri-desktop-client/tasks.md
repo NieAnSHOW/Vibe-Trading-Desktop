@@ -7,9 +7,9 @@
 
 - [x] 1.1 【mac】选定 python-build-standalone 发行版/版本与架构(mac arm64,确认是否需 x64),下载并解压一份可重定位运行时
 - [x] 1.2 【mac】在该运行时中 `pip install` `agent/requirements.txt`(排除 weasyprint),记录安装方式(直接 pip vs uv 锁定)
-- [ ] 1.3 【mac】把运行时整体移动到另一路径(模拟不同安装目录/用户名),编写并运行原生扩展导入冒烟测试:`numpy / scipy / scikit-learn / duckdb / pandas / Pillow / matplotlib` 均能 import 且无 BLAS/rpath 链接错误
-- [ ] 1.4 【mac】在迁移后的运行时中以子进程启动 `vibe-trading serve --host 127.0.0.1 --port <port>`,确认 `/health` 可达、SPA 静态资源可加载
-- [ ] 1.5 记录 spike 结论与任何需要的 rpath/路径修复手段;若不可重定位,回到 design 调整方案(阻塞后续)
+- [x] 1.3 【mac】把运行时整体移动到另一路径(模拟不同安装目录/用户名),编写并运行原生扩展导入冒烟测试:`numpy / scipy / scikit-learn / duckdb / pandas / Pillow / matplotlib` 均能 import 且无 BLAS/rpath 链接错误
+- [x] 1.4 【mac】在迁移后的运行时中以子进程启动 `vibe-trading serve --host 127.0.0.1 --port <port>`,确认 `/health` 可达、SPA 静态资源可加载
+- [x] 1.5 记录 spike 结论与任何需要的 rpath/路径修复手段;若不可重定位,回到 design 调整方案(阻塞后续)
 
 ## 2. Tauri 脚手架与项目结构【双】
 
