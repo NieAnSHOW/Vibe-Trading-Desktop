@@ -68,4 +68,55 @@ bash scripts/desktop/install-deps.sh ./.desktop-build/python-runtime
 
 ## serve / 回测冒烟
 
-> 待 Task 4 完成后填写。
+> 阶段 ① 次风险门：验证内嵌运行时能启动 serve、/health 可达、SPA 可加载、回测子进程自包含。
+
+### serve 启动方式
+
+```bash
+PYTHONPATH="<agent_dir>" PYTHONDONTWRITEBYTECODE=1 <runtime>/bin/python3 \
+  -c 'import cli, sys; raise SystemExit(cli.main(sys.argv[1:]))' \
+  serve --host 127.0.0.1 --port 8987
+```
+
+复用 `scripts/dev:162-164` 的精确调用形式。
+
+### /health 响应时间
+
+- 首次 `/health` 可达耗时：约 **23 秒**（含 preflight check、LLM 超时等）
+- 轮询间隔 0.5s，第 45 次尝试时成功
+- 响应状态码：200 OK
+
+### SPA 资源可达性
+
+- `http://127.0.0.1:8987/`（SPA 根路由）：200 OK
+- 前端构建产物位于 `frontend/dist`，由 FastAPI 静态托管
+
+### 回测子进程自包含验证
+
+```bash
+./.desktop-build/python-runtime/bin/python3 -c "import sys; print(sys.executable); import numpy, pandas, duckdb; print('backtest deps OK')"
+# 输出:
+# /.../.desktop-build/python-runtime/bin/python3
+# backtest deps OK
+```
+
+- 解释器路径指向内嵌运行时（非系统 Python）
+- numpy / pandas / duckdb 均正常导入
+- `runner.py:156-168` 在找不到项目 `.venv` 时回退到 `sys.executable`，此处 `sys.executable` 即内嵌运行时 —— 回测子进程自包含已验证
+
+### 冒烟脚本
+
+- `scripts/desktop/serve-smoke.sh`：自动化 serve 启动 → /health 轮询 → SPA 验证 → 清理
+
+### 阶段 ① 总结论
+
+**结果: PASS -- 阶段 ① 全部验证通过, 可重定位性 + serve + 回测均 OK**
+
+| 验证项 | 结果 |
+|---|---|
+| 运行时可重定位性（8 个原生扩展） | PASS |
+| serve 启动 + /health 可达 | PASS |
+| SPA 静态资源托管 | PASS |
+| 回测子进程自包含（runner.py 回退路径） | PASS |
+
+**阶段 ① 阻塞门已通过, 可以进入阶段 ②（Tauri 脚手架）。**
