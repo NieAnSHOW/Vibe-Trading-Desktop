@@ -19,12 +19,12 @@
 
 ## 3. Sidecar 启动编排(desktop-shell)【双,mac 先实现】
 
-- [ ] 3.1 实现空闲端口选取(`127.0.0.1:0` 系统分配或从 8899 起探测)
-- [ ] 3.2 实现 spawn Python sidecar:以内嵌运行时运行 serve,传入 `--host 127.0.0.1 --port <port>`,设置工作目录与必要环境变量(PYTHONPATH 指向 `agent/`)
-- [ ] 3.3 实现 `/health` 轮询 + 超时门控;就绪后将 webview 指向 `http://127.0.0.1:<port>`
-- [ ] 3.4 实现启动期加载态 UI(splash 或加载页),避免空白窗口
-- [ ] 3.5 实现就绪超时的可读错误提示与退出途径
-- [ ] 3.6 【mac】实现退出时进程清理(进程组/setsid 风格),验证关闭应用后无残留 Python 进程
+- [x] 3.1 实现空闲端口选取(`127.0.0.1:0` 系统分配或从 8899 起探测)
+- [x] 3.2 实现 spawn Python sidecar:以内嵌运行时运行 serve,传入 `--host 127.0.0.1 --port <port>`,设置工作目录与必要环境变量(PYTHONPATH 指向 `agent/`)
+- [x] 3.3 实现 `/health` 轮询 + 超时门控;就绪后将 webview 指向 `http://127.0.0.1:<port>`
+- [x] 3.4 实现启动期加载态 UI(splash 或加载页),避免空白窗口
+- [x] 3.5 实现就绪超时的可读错误提示与退出途径
+- [x] 3.6 【mac】实现退出时进程清理(进程组/setsid 风格),验证关闭应用后无残留 Python 进程
 
 ## 4. macOS 端到端打通与打包(desktop-packaging-build)
 

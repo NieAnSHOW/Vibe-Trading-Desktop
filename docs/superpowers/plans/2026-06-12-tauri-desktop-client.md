@@ -481,7 +481,7 @@ git commit -m "feat(desktop): resolve bundled resource paths (dev vs packaged)"
 - Create: `src-tauri/src/version.rs`
 - Modify: `src-tauri/src/main.rs`(加 `mod version;`)
 
-- [ ] **Step 1: 写失败的单元测试**
+- [x] **Step 1: 写失败的单元测试**
 
 ```rust
 // src-tauri/src/version.rs
@@ -511,12 +511,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `cd src-tauri && cargo test version:: 2>&1 | head`
 Expected: 编译失败 / `cannot find ... Action`。
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 ```rust
 // src-tauri/src/version.rs(置于测试模块上方)
@@ -533,12 +533,12 @@ pub fn decide(installed: Option<&str>, bundle: &str) -> Action {
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `cd src-tauri && cargo test version::`
 Expected: 4 个测试 PASS。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src-tauri/src/version.rs src-tauri/src/main.rs
@@ -552,7 +552,7 @@ git commit -m "feat(desktop): version marker comparison (first-run/reuse/upgrade
 - Modify: `src-tauri/Cargo.toml`(加 `tempfile` 到 dev-deps;`fs_extra` 或自写递归拷贝)
 - Modify: `src-tauri/src/main.rs`(加 `mod runtime_dir;`)
 
-- [ ] **Step 1: 写失败的单元测试(覆盖 spec 4 场景)**
+- [x] **Step 1: 写失败的单元测试(覆盖 spec 4 场景)**
 
 ```rust
 // src-tauri/src/runtime_dir.rs
@@ -640,12 +640,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd src-tauri && cargo test runtime_dir:: 2>&1 | head`
 Expected: 编译失败 / `cannot find ... Layout`。
 
-- [ ] **Step 3: 写实现**
+- [x] **Step 3: 写实现**
 
 数据子目录刷新策略:升级时**不删 runtime_agent**,逐文件覆盖代码;数据目录(`runs`/`sessions`/`uploads`/`.swarm`)因 bundle 模板不含(打包裁剪保证,见阶段⑤)而天然不被触碰。`.env` 仅当用户家目录 `.env` 缺失时种入。设 `PYTHONDONTWRITEBYTECODE=1` 由 sidecar 阶段负责(D8)。
 
@@ -732,12 +732,12 @@ pub fn prepare(
 ```
 在 `Cargo.toml` 加 `dirs = "5"`(deps)与 `tempfile = "3"`(dev-deps)。
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `cd src-tauri && cargo test runtime_dir::`
 Expected: 4 个测试 PASS。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src-tauri/src/runtime_dir.rs src-tauri/src/main.rs src-tauri/Cargo.toml
@@ -754,7 +754,7 @@ git commit -m "feat(desktop): prepare writable runtime dir (copy/upgrade/seed .e
 - Create: `src-tauri/src/port.rs`
 - Modify: `src-tauri/src/main.rs`(加 `mod port;`)
 
-- [ ] **Step 1: 写失败的单元测试**
+- [x] **Step 1: 写失败的单元测试**
 
 ```rust
 // src-tauri/src/port.rs
@@ -772,12 +772,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd src-tauri && cargo test port:: 2>&1 | head`
 Expected: `cannot find function pick_free_port`。
 
-- [ ] **Step 3: 写实现(bind :0 取端口再释放,D6 无递增探测竞态)**
+- [x] **Step 3: 写实现(bind :0 取端口再释放,D6 无递增探测竞态)**
 
 ```rust
 // src-tauri/src/port.rs(测试模块上方)
@@ -796,12 +796,12 @@ pub fn pick_free_port() -> Result<u16, String> {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd src-tauri && cargo test port::`
 Expected: PASS。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src-tauri/src/port.rs src-tauri/src/main.rs
@@ -815,7 +815,7 @@ git commit -m "feat(desktop): pick free loopback port via bind :0"
 - Modify: `src-tauri/src/main.rs`(加 `mod sidecar;`)
 - Modify: `src-tauri/Cargo.toml`(加 `reqwest`(blocking)或 `ureq`)
 
-- [ ] **Step 1: 写 sidecar 启动函数(复用 scripts/dev 精确调用形式)**
+- [x] **Step 1: 写 sidecar 启动函数(复用 scripts/dev 精确调用形式)**
 
 调用形式严格对齐 `scripts/dev:162-164`:`PYTHONPATH=<runtime_agent> <python> -c 'import cli, sys; raise SystemExit(cli.main(sys.argv[1:]))' serve --host 127.0.0.1 --port <P>`,并设 `PYTHONDONTWRITEBYTECODE=1`(D8)。mac 用 `pre_exec` 调 `setsid` 建进程组(D7)。
 
@@ -874,7 +874,7 @@ pub fn terminate(child: &mut Child) {
 ```
 `Cargo.toml` deps 加:`libc = "0.2"`(unix)、`reqwest = { version = "0.12", features = ["blocking"] }`。
 
-- [ ] **Step 2: 写健康轮询(D6:~300ms,~60s 上限)**
+- [x] **Step 2: 写健康轮询(D6:~300ms,~60s 上限)**
 
 ```rust
 // src-tauri/src/sidecar.rs(续)
@@ -903,12 +903,12 @@ pub fn await_health(child: &mut Child, port: u16) -> Ready {
 }
 ```
 
-- [ ] **Step 3: 编译确认通过**
+- [x] **Step 3: 编译确认通过**
 
 Run: `cd src-tauri && cargo build`
 Expected: 编译通过(可能需 `use` 调整)。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add src-tauri/src/sidecar.rs src-tauri/src/main.rs src-tauri/Cargo.toml
@@ -922,7 +922,7 @@ git commit -m "feat(desktop): spawn python sidecar with process group + health p
 - Modify: `src-tauri/src/main.rs`(完整 setup 编排 + RunEvent 清理)
 - Modify: `src-tauri/Cargo.toml`(`tauri` 加 webview 导航所需特性)
 
-- [ ] **Step 1: 写 loading.html(秒开,不空白)**
+- [x] **Step 1: 写 loading.html(秒开,不空白)**
 
 ```html
 <!doctype html>
@@ -947,7 +947,7 @@ git commit -m "feat(desktop): spawn python sidecar with process group + health p
 </body></html>
 ```
 
-- [ ] **Step 2: 写完整 setup 编排 + 退出清理**
+- [x] **Step 2: 写完整 setup 编排 + 退出清理**
 
 webview 初始加载打包的 `loading.html`;后台线程跑准备/spawn/门控,成功后用 `WebviewWindow::navigate` 跳到 `http://127.0.0.1:<port>`;失败/超时用 `eval` 注入错误信息并显示退出按钮。共享 `Child` 用 `Arc<Mutex<Option<Child>>>` 存入 Tauri state,`RunEvent::ExitRequested` / 窗口关闭时调 `terminate`。
 
@@ -1034,12 +1034,12 @@ fn boot(
 ```
 `Cargo.toml` 的 `tauri` 特性需含进程退出 API:加 `features = ["process-exit"]` 或在 capabilities 中允许 `core:process`(按 Tauri 2 capability 模型在 `src-tauri/capabilities/default.json` 放行)。
 
-- [ ] **Step 3: 编译确认通过**
+- [x] **Step 3: 编译确认通过**
 
 Run: `cd src-tauri && cargo build`
 Expected: 编译通过(按 Tauri 2 API 名做必要微调,如 `navigate` 签名)。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add src-tauri/src/main.rs src-tauri/src/loading.html src-tauri/Cargo.toml src-tauri/capabilities/
