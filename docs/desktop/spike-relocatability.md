@@ -120,3 +120,15 @@ PYTHONPATH="<agent_dir>" PYTHONDONTWRITEBYTECODE=1 <runtime>/bin/python3 \
 | 回测子进程自包含（runner.py 回退路径） | PASS |
 
 **阶段 ① 阻塞门已通过, 可以进入阶段 ②（Tauri 脚手架）。**
+
+## 装配产物体积
+
+> 记录 `scripts/desktop/assemble.sh` 执行后的打包资源体积。日期：2026-06-12，Git commit: `2e09892`。
+
+| 产物 | 大小 | 说明 |
+|---|---|---|
+| python-runtime | 728M | python-build-standalone 3.12.13 + 178 个依赖，已裁剪 `__pycache__` / tests |
+| agent 模板 | 7.5M | 代码模板，已删除 runs/sessions/uploads/.swarm/tests + `__pycache__` |
+| frontend/dist | 1.6M | Vite 构建产物，含 SPA + echarts + react |
+| VERSION | 6B | Git short SHA: `2e09892` |
+| **合计** | **~737M** | 桌面应用完整资源包 |
