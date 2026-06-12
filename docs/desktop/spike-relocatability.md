@@ -43,7 +43,28 @@ bash scripts/desktop/install-deps.sh ./.desktop-build/python-runtime
 
 ## 冒烟结论
 
-> 待 Task 3 完成后填写。
+**结果: PASS -- 可重定位性已验证, 继续阶段 ②**
+
+**测试方法:** 将完整运行时复制到随机临时路径 `/var/folders/.../tmp.XXXXXX/relocated-runtime`, 在新路径执行导入冒烟测试。
+
+**测试覆盖:**
+
+| 模块 | 版本 | 原始路径 | 迁移路径 |
+|---|---|---|---|
+| numpy | 2.4.6 | OK | OK |
+| scipy | 1.17.1 | OK | OK |
+| sklearn | 1.9.0 | OK | OK |
+| duckdb | 1.5.3 | OK | OK |
+| pandas | 3.0.3 | OK | OK |
+| PIL | 12.2.0 | OK | OK |
+| matplotlib | 3.11.0 | OK | OK |
+| scipy.linalg.inv (BLAS 原生调用) | -- | OK | OK |
+
+**关键发现:** python-build-standalone 的 `install_only` 产物在 macOS arm64 上完全可重定位。所有原生扩展(numpy/scipy BLAS、duckdb、sklearn Cython 模块等)在迁移到不同绝对路径后均正常工作, 无任何 rpath 链接错误或 OSError。
+
+**脚本位置:**
+- 冒烟测试: `scripts/desktop/smoke_imports.py`
+- 迁移测试: `scripts/desktop/relocate-smoke.sh`
 
 ## serve / 回测冒烟
 
