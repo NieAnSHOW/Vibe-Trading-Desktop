@@ -37,13 +37,13 @@
 ## 5. Windows 差异适配(desktop-shell + bundling)【win】
 
 - [ ] 5.1 选定/制作 Windows x64 python-build-standalone 运行时并预装依赖(排除 weasyprint),跑 1.3 同款导入冒烟测试
-- [ ] 5.2 适配 Rust 侧:`python.exe` 路径、路径分隔符、spawn 细节
-- [ ] 5.3 实现 Windows 进程清理:Job Object 关联子进程(或退出时 `taskkill /T`),验证关闭后无残留进程(含异常退出场景)
+- [x] 5.2 适配 Rust 侧:`python.exe` 路径、路径分隔符、spawn 细节
+- [x] 5.3 实现 Windows 进程清理:Job Object 关联子进程(或退出时 `taskkill /T`),验证关闭后无残留进程(含异常退出场景)
 - [ ] 5.4 编写 Windows 打包脚本,产出 `.msi`/`.exe` 并完成与 4.2–4.4 等价的端到端验证
 
 ## 6. 双平台构建与收尾
 
-- [ ] 6.1 配置 GitHub Actions 矩阵(macOS + Windows runner)分别构建产物,文档明确"无法交叉编译"约束
-- [ ] 6.2 验证桌面运行模式不破坏现有用法:`vibe-trading serve` / Docker 默认绑定与端口行为不受影响
-- [ ] 6.3 编写用户向文档:安装、首次启动安全提示处理(mac 右键打开 / Windows SmartScreen)、状态与配置位置说明
-- [ ] 6.4 汇总已知限制(体积、未签名、PDF→HTML 降级)到发布说明
+- [x] 6.1 配置 GitHub Actions 矩阵(macOS + Windows runner)分别构建产物,文档明确"无法交叉编译"约束
+- [x] 6.2 验证桌面运行模式不破坏现有用法:`vibe-trading serve` / Docker 默认绑定与端口行为不受影响
+- [x] 6.3 编写用户向文档:安装、首次启动安全提示处理(mac 右键打开 / Windows SmartScreen)、状态与配置位置说明
+- [x] 6.4 汇总已知限制(体积、未签名、PDF→HTML 降级)到发布说明

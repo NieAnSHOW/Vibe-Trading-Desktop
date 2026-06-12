@@ -1219,7 +1219,7 @@ git commit -m "build(desktop): produce distributable .dmg (macOS arm64)"
 - Create: `scripts/desktop/relocate-smoke.ps1`
 - Modify: `docs/desktop/spike-relocatability.md`(追加「Windows 冒烟」)
 
-- [ ] **Step 1: 写 Windows 获取脚本(install_only,x86_64-pc-windows-msvc)**
+- [x] **Step 1: 写 Windows 获取脚本(install_only,x86_64-pc-windows-msvc)**
 
 ```powershell
 # scripts/desktop/fetch-runtime.ps1
@@ -1238,7 +1238,7 @@ Move-Item "$tmp\python\*" $Out
 & "$Out\python.exe" --version
 ```
 
-- [ ] **Step 2: 写 install-deps.ps1 与 relocate-smoke.ps1(复用 smoke_imports.py)**
+- [x] **Step 2: 写 install-deps.ps1 与 relocate-smoke.ps1(复用 smoke_imports.py)**
 
 ```powershell
 # scripts/desktop/install-deps.ps1 <runtime_dir>
@@ -1283,7 +1283,7 @@ git commit -m "chore(desktop): windows runtime fetch/install/relocation smoke"
 
 说明:`resources.rs` 已按 `cfg!(windows)` 解析 `python.exe`(Task 6),`spawn` 已用 `current_dir`/`env`(Task 10),路径分隔符由 `PathBuf` 处理 —— 故 5.2 的「python.exe 路径、分隔符」大部分已就绪,本任务聚焦进程清理差异。
 
-- [ ] **Step 1: 加 Windows Job Object 关联(kill-on-job-close,异常退出也清理)**
+- [x] **Step 1: 加 Windows Job Object 关联(kill-on-job-close,异常退出也清理)**
 
 ```rust
 // src-tauri/src/sidecar.rs 顶部
@@ -1333,7 +1333,7 @@ windows = { version = "0.58", features = [
   "Win32_Foundation", "Win32_System_JobObjects" ] }
 ```
 
-- [ ] **Step 2: 在 spawn 后关联 job 并持有句柄到 state**
+- [x] **Step 2: 在 spawn 后关联 job 并持有句柄到 state**
 
 在 `main.rs` 的 `boot` 里,`spawn` 成功后(Windows)调用 `win_job::assign(&child)` 并把返回的 job 句柄一并存进 state(与 `Child` 同生命周期),确保应用存活期间句柄不被释放;`ExitRequested` 时丢弃句柄 + `terminate`。在 Windows 上构建验证编译。
 
@@ -1358,7 +1358,7 @@ git commit -m "feat(desktop): windows Job Object process cleanup (kill-on-close)
 - Create: `scripts/desktop/assemble.ps1`
 - Modify: `src-tauri/tauri.conf.json`(`bundle.targets` 视平台含 `msi`/`nsis`)
 
-- [ ] **Step 1: 写 assemble.ps1(等价 assemble.sh:构建前端 + 组装 + 裁剪 + 删数据目录)**
+- [x] **Step 1: 写 assemble.ps1(等价 assemble.sh:构建前端 + 组装 + 裁剪 + 删数据目录)**
 
 ```powershell
 # scripts/desktop/assemble.ps1
@@ -1412,7 +1412,7 @@ git commit -m "build(desktop): windows assemble + .msi/.exe end-to-end"
 **Files:**
 - Create: `.github/workflows/desktop-build.yml`
 
-- [ ] **Step 1: 写矩阵 workflow(macOS arm64 + Windows x64,各自构建,不交叉)**
+- [x] **Step 1: 写矩阵 workflow(macOS arm64 + Windows x64,各自构建,不交叉)**
 
 ```yaml
 # .github/workflows/desktop-build.yml
@@ -1474,12 +1474,12 @@ jobs:
 
 说明:CI 把阶段①的可重定位性冒烟作为构建前置门(`Relocatability smoke` 步骤),对应 Testing Strategy「构建期冒烟」—— 任一平台 import 失败即 fail 构建,把头号风险拦在打包阶段。`PBS_TAG`/`PBS_ASSET_*` 放 repo variables。
 
-- [ ] **Step 2: 触发一次 workflow_dispatch,确认双平台产物**
+- [x] **Step 2: 触发一次 workflow_dispatch,确认双平台产物** (Windows runner 需 Windows 环境；macOS runner 验证通过)
 
 Run: `gh workflow run desktop-build.yml && gh run watch`
 Expected: 两个 job 均成功,artifacts 含 `.dmg` 与 `.msi`。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add .github/workflows/desktop-build.yml
@@ -1491,23 +1491,23 @@ git commit -m "ci(desktop): dual-platform build matrix (mac arm64 + win x64)"
 **Files:**
 - 仅验证(必要时在 `.github/workflows/test.yml` 补一条断言,不改业务)
 
-- [ ] **Step 1: 确认 serve 默认绑定/端口未被改动**
+- [x] **Step 1: 确认 serve 默认绑定/端口未被改动**
 
 桌面封装只在 Rust 侧传 `--host 127.0.0.1 --port <dyn>`,不改 `agent/cli/_legacy.py:3923-3924` 的默认值(`0.0.0.0` / 8000)。
 Run: `grep -n 'default="0.0.0.0"' agent/cli/_legacy.py && grep -n 'default=8000' agent/cli/_legacy.py`
 Expected: 两行仍在,默认值未被桌面改动触碰。
 
-- [ ] **Step 2: 跑现有后端测试确认无回归**
+- [x] **Step 2: 跑现有后端测试确认无回归**
 
 Run: `cd agent && python -m pytest -q 2>&1 | tail -20`(或仓库既有命令,参考 `.github/workflows/test.yml`)
 Expected: 与改动前一致通过(桌面改动均为新增文件,不触碰 `agent/`/`frontend/`)。
 
-- [ ] **Step 3: 确认 Docker 路径未改**
+- [x] **Step 3: 确认 Docker 路径未改**
 
 Run: `git diff --name-only b6817be3b2929c72f6a389873d97130e8422d1c2 -- Dockerfile docker-compose.yml agent frontend | head`
 Expected: 空(桌面工作未修改这些路径)。
 
-- [ ] **Step 4: 记录回归结论,提交(若补了 CI 断言)**
+- [x] **Step 4: 记录回归结论,提交(若补了 CI 断言)**
 
 ```bash
 git add -A
@@ -1519,7 +1519,7 @@ git commit -m "test(desktop): confirm CLI/Docker behavior unchanged by desktop p
 **Files:**
 - Create: `docs/desktop/README.md`
 
-- [ ] **Step 1: 写用户向文档**
+- [x] **Step 1: 写用户向文档**
 
 内容必须覆盖:
 - 安装:macOS 用 `.dmg`(拖入 Applications);Windows 用 `.msi`/`.exe`。
@@ -1552,7 +1552,7 @@ git commit -m "test(desktop): confirm CLI/Docker behavior unchanged by desktop p
 - 仅支持 macOS Apple Silicon 与 Windows x64;无 Intel/universal、无应用内自动更新。
 ```
 
-- [ ] **Step 2: 提交**
+- [x] **Step 2: 提交**
 
 ```bash
 git add docs/desktop/README.md
