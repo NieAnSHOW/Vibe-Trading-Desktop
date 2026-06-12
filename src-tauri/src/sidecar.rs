@@ -57,8 +57,10 @@ pub fn terminate(child: &mut Child) {
     let _ = child.wait();
 }
 
-/// Windows cleanup (future Task will improve with Job Object)
-#[cfg(not(unix))]
+/// Windows 进程清理：使用 kill + wait 确保进程终止。
+/// 后续可改进为 WinAPI Job Object（CreateJobObject / AssignProcessToJobObject），
+/// 以便内核级关联所有子孙进程，确保在异常退出时也无残留。
+#[cfg(windows)]
 pub fn terminate(child: &mut Child) {
     let _ = child.kill();
     let _ = child.wait();
