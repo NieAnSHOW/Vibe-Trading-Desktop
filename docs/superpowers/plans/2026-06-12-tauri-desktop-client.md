@@ -1189,16 +1189,16 @@ git commit -m "test(desktop): verify .env precedence + report HTML fallback"
 **Files:**
 - Modify: `src-tauri/tauri.conf.json`(`bundle.targets` 含 `dmg`)
 
-- [ ] **Step 1: 打包 dmg**
+- [x] **Step 1: 打包 dmg**
 
 Run: `cd src-tauri && cargo tauri build --bundles dmg`
 Expected: 产出 `src-tauri/target/release/bundle/dmg/Vibe Trading_<ver>_aarch64.dmg`。
 
-- [ ] **Step 2: 挂载 dmg、拖入 Applications、双击验证未签名首启**
+- [x] **Step 2: 挂载 dmg、拖入 Applications、双击验证未签名首启**
 
 挂载 → 拖到 Applications → 双击。预期遇到 Gatekeeper 拦截(未签名,非目标内做签名)。验证「右键 → 打开」可绕过并正常启动。
 
-- [ ] **Step 3: 提交(配置变更)**
+- [x] **Step 3: 提交(配置变更)**
 
 ```bash
 git add src-tauri/tauri.conf.json
