@@ -45,6 +45,7 @@ pub fn prepare(
     bundle_agent: &Path,
     bundle_env_seed: &Path,
     bundle_version: &Path,
+    bundle_frontend_dist: Option<&Path>,
     layout: &Layout,
 ) -> Result<(), String> {
     if !bundle_agent.exists() {
@@ -62,6 +63,14 @@ pub fn prepare(
         crate::version::Action::Reuse => {}
         crate::version::Action::FirstRun | crate::version::Action::Upgrade => {
             copy_dir_recursive(bundle_agent, &layout.runtime_agent)?;
+            // 复制 frontend/dist 到可写运行目录（api_server.py 硬编码从 agent 的
+            // parent.parent/frontend/dist 加载 SPA 静态资源）
+            if let Some(frontend_dist) = bundle_frontend_dist {
+                if frontend_dist.exists() {
+                    let dest = layout.runtime_agent.parent().unwrap().join("frontend").join("dist");
+                    copy_dir_recursive(frontend_dist, &dest)?;
+                }
+            }
             if let Some(parent) = layout.marker.parent() {
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
@@ -104,6 +113,7 @@ mod tests {
             &bundle.join("agent"),
             &bundle.join("agent/.env"),
             &bundle.join("VERSION"),
+            None,
             &layout,
         )
         .unwrap();
@@ -130,6 +140,7 @@ mod tests {
             &bundle.join("agent"),
             &bundle.join("agent/.env"),
             &bundle.join("VERSION"),
+            None,
             &layout,
         )
         .unwrap();
@@ -151,6 +162,7 @@ mod tests {
             &bundle.join("agent"),
             &bundle.join("agent/.env"),
             &bundle.join("VERSION"),
+            None,
             &layout,
         )
         .unwrap();
@@ -164,6 +176,7 @@ mod tests {
             &bundle.join("agent"),
             &bundle.join("agent/.env"),
             &bundle.join("VERSION"),
+            None,
             &layout,
         )
         .unwrap();
@@ -192,6 +205,7 @@ mod tests {
             &missing,
             &missing.join(".env"),
             &tmp.path().join("VERSION"),
+            None,
             &layout,
         )
         .unwrap_err();

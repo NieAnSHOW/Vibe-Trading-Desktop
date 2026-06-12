@@ -9,6 +9,7 @@ pub struct Resources {
     pub env_seed: PathBuf,       // agent/.env 种子
     pub loading_html: PathBuf,   // 加载页
     pub version_file: PathBuf,   // VERSION 标记
+    pub frontend_dist: PathBuf,  // frontend/dist SPA 静态资源
 }
 
 impl Resources {
@@ -28,6 +29,7 @@ impl Resources {
             env_seed: base.join("agent").join(".env"),
             loading_html: base.join("loading.html"),
             version_file: base.join("VERSION"),
+            frontend_dist: base.join("frontend").join("dist"),
         })
     }
 }
@@ -46,6 +48,7 @@ pub fn resolve_from_base(base: &std::path::Path) -> Resources {
         env_seed: base.join("agent").join(".env"),
         loading_html: base.join("loading.html"),
         version_file: base.join("VERSION"),
+        frontend_dist: base.join("frontend").join("dist"),
     }
 }
 

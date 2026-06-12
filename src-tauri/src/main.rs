@@ -57,7 +57,7 @@ fn boot(
 ) -> Result<(), String> {
     // D4/D5: 准备可写运行目录
     let layout = runtime_dir::Layout::from_home()?;
-    runtime_dir::prepare(&res.agent_template, &res.env_seed, &res.version_file, &layout)?;
+    runtime_dir::prepare(&res.agent_template, &res.env_seed, &res.version_file, Some(&res.frontend_dist), &layout)?;
     // D6: 选端口
     let p = port::pick_free_port()?;
     // D7: 启动 sidecar(PYTHONPATH 指向可写副本)

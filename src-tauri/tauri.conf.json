@@ -5,9 +5,7 @@
   "identifier": "ai.vibetrading.desktop",
   "build": { "frontendDist": "./placeholder-dist" },
   "app": {
-    "windows": [
-      { "title": "Vibe Trading", "width": 1280, "height": 832, "resizable": true }
-    ],
+    "windows": [],
     "security": { "csp": null }
   },
   "bundle": {
