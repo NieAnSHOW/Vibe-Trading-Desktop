@@ -1166,17 +1166,17 @@ git commit -m "test(desktop): macOS .app end-to-end (fresh machine, no system py
 **Files:**
 - 仅验证
 
-- [ ] **Step 1: 验证用户 .env 不被覆盖(D5 / spec「种入配置且不覆盖」)**
+- [x] **Step 1: 验证用户 .env 不被覆盖(D5 / spec「种入配置且不覆盖」)**
 
 在 `~/.vibe-trading/.env` 写一个可识别键(如 `VIBE_TEST=keep`),重启应用,确认该键保留、`llm.py:248` 的搜索序里家目录最高优先级生效。
 Expected: 重启后 `grep VIBE_TEST ~/.vibe-trading/.env` 仍在。
 
-- [ ] **Step 2: 验证报告降级 HTML(spec python-runtime-bundling「缺失 weasyprint 不阻断启动」)**
+- [x] **Step 2: 验证报告降级 HTML(spec python-runtime-bundling「缺失 weasyprint 不阻断启动」)**
 
 通过 UI 触发一次影子账户报告生成。因 bundle 未装 weasyprint,`agent/src/shadow_account/reporter.py` 走 try/except 降级。
 Expected: 报告成功产出 HTML(`engine: "html-only"`),无未捕获异常,UI 不报错。
 
-- [ ] **Step 3: 记录结论**
+- [x] **Step 3: 记录结论**
 
 把两项结论写入 `docs/desktop/spike-relocatability.md`(或新建 `docs/desktop/e2e-macos.md`)。提交:
 ```bash
