@@ -3,6 +3,7 @@
 
 mod port;
 mod resources;
+mod runtime_dir;
 mod version;
 
 fn main() {
