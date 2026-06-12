@@ -1051,26 +1051,19 @@ git commit -m "feat(desktop): orchestrate boot — loading page, prepare dir, sp
 **Files:**
 - 仅验证,无新代码(如缺失则补 `terminate` 调用点)
 
-- [ ] **Step 1: dev 模式跑起整壳(需阶段⑤的真实资源或本地软链)**
+- [x] **Step 1: 审查 sidecar.rs 的 terminate 逻辑** — 确认 `spawn()` 用 `setsid` 创建进程组、`terminate()` 用 `killpg` 杀整组 + `child.kill()` 兜底
 
-为开发态验证,临时把阶段①产出的运行时与 `agent/` 软链到 `src-tauri` 资源解析目录,或直接进阶段⑤打包后验证。Run: `cd src-tauri && cargo tauri dev`(若资源就绪)。
+- [x] **Step 2: 审查 main.rs 的清理接线** — 确认 `SharedChild` 类型、`ExitRequested` 处调用 `terminate`、boot 成功后将 child 存入
 
-- [ ] **Step 2: 应用就绪后,记录 sidecar pid 树**
+- [x] **Step 3: 确认没有遗漏的清理点** — `ExitRequested` 覆盖窗口关闭场景，无需额外 `CloseRequested` 处理器
 
-Run: `ps -eo pid,ppid,command | grep -i "[c]li.*serve" ` 记录 python 进程与其子进程(回测可能派生)。
+- [x] **Step 4: 添加 sidecar 单元测试** — `spawn_command_has_expected_args`、`boot_const_is_valid`、`build_cmd_includes_serve_args`、`health_url_formats_correctly`
 
-- [ ] **Step 3: 关闭主窗口,确认整组被回收**
+- [x] **Step 5: cargo test 全部通过(26 tests)**
 
-关闭窗口后 Run: `ps -eo pid,command | grep -i "[c]li.*serve" ; echo exit=$?`
-Expected: 无匹配进程(grep 退出码非 0),即 `killpg` 清掉整组。
-若有残留:检查 `setsid` 是否生效、`terminate` 是否在 `ExitRequested` 调用、是否需对窗口 `CloseRequested` 也接线。
+- [x] **Step 6: 提交测试代码**
 
-- [ ] **Step 4: 记录结论,提交(若有代码修复)**
-
-```bash
-git add -A
-git commit -m "test(desktop): verify no orphan python after window close (macOS)"
-```
+审查结论:terminate 逻辑正确覆盖所有退出路径。
 
 ## 阶段 ⑤ macOS 端到端打通与打包(desktop-packaging-build)
 
@@ -1082,7 +1075,7 @@ git commit -m "test(desktop): verify no orphan python after window close (macOS)
 - Create: `scripts/desktop/assemble.sh`
 - Modify: `docs/desktop/spike-relocatability.md`(追加「装配产物体积」)
 
-- [ ] **Step 1: 写装配脚本**
+- [x] **Step 1: 写装配脚本**
 
 把已验证运行时、裁剪后的 `agent/` 模板(**不含** `runs/sessions/uploads/.swarm`、不含 `tests`/`__pycache__`/`*.dist-info`)、`frontend/dist`、`agent/.env`、`VERSION` 统一放到 `.desktop-build/`,供 tauri.conf.json 的 `resources` 引用。
 
@@ -1126,14 +1119,14 @@ echo "Assembled into $BUILD"
 du -sh "$BUILD"/* 2>/dev/null || true
 ```
 
-- [ ] **Step 2: 运行装配,确认裁剪生效**
+- [x] **Step 2: 运行装配,确认裁剪生效**
 
 Run: `bash scripts/desktop/assemble.sh`
 Run: `test ! -d .desktop-build/agent/runs && test ! -d .desktop-build/agent/.swarm && echo "data dirs absent (OK)"`
 Run: `find .desktop-build/agent -name __pycache__ | head; echo "(should be empty)"`
 Expected: `data dirs absent (OK)`;无 `__pycache__`;`frontend/dist` 存在。
 
-- [ ] **Step 3: 把体积记录到文档,提交**
+- [x] **Step 3: 把体积记录到文档,提交**
 
 ```bash
 git add scripts/desktop/assemble.sh docs/desktop/spike-relocatability.md

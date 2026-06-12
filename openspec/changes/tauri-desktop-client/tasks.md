@@ -28,7 +28,7 @@
 
 ## 4. macOS 端到端打通与打包(desktop-packaging-build)
 
-- [ ] 4.1 编写 macOS 打包脚本:构建 `frontend`(`npm run build`)→ 准备内嵌运行时与资源 → 资源裁剪(去 tests/`__pycache__`/`*.dist-info`)
+- [x] 4.1 编写 macOS 打包脚本:构建 `frontend`(`npm run build`)→ 准备内嵌运行时与资源 → 资源裁剪(去 tests/`__pycache__`/`*.dist-info`)
 - [ ] 4.2 产出 `.app` 并验证:全新/无系统 Python 环境下双击启动 → 加载态 → 后端就绪 → UI 加载 → 可正常对话/回测
 - [ ] 4.3 验证 `agent/.env` 兜底生效、`~/.vibe-trading/` 首启自动创建、状态在重启后保留
 - [ ] 4.4 验证报告降级:生成影子账户报告 → weasyprint 缺失 → 自动产出 HTML 不报错
