@@ -158,7 +158,7 @@ git commit -m "chore(desktop): install backend deps into embedded runtime (exclu
 - Create: `scripts/desktop/relocate-smoke.sh`
 - Modify: `docs/desktop/spike-relocatability.md`(追加「冒烟结论」)
 
-- [ ] **Step 1: 写导入冒烟测试脚本**
+- [x] **Step 1: 写导入冒烟测试脚本**
 
 ```python
 # scripts/desktop/smoke_imports.py
@@ -196,7 +196,7 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 2: 写迁移脚本 —— 把运行时移到全新随机路径再跑冒烟**
+- [x] **Step 2: 写迁移脚本 —— 把运行时移到全新随机路径再跑冒烟**
 
 ```bash
 #!/usr/bin/env bash
@@ -211,19 +211,19 @@ cp -R "$SRC/." "$DEST/"
 "$DEST/bin/python3" "$(dirname "$0")/smoke_imports.py"
 ```
 
-- [ ] **Step 3: 运行迁移冒烟测试**
+- [x] **Step 3: 运行迁移冒烟测试**
 
 Run: `bash scripts/desktop/relocate-smoke.sh ./.desktop-build/python-runtime`
 Expected: 每个模块打印 `OK import ...`,末尾 `SMOKE PASSED`,退出码 0。
 **若任一 FAIL(BLAS/rpath):记录到文档,这是头号风险显形 —— 进入 Step 4 的回设计分支,不继续后续阶段。**
 
-- [ ] **Step 4: 记录结论;失败则回设计**
+- [x] **Step 4: 记录结论;失败则回设计**
 
 把冒烟输出与结论写入 `docs/desktop/spike-relocatability.md`。
 - 通过 → 标注「可重定位性已验证,继续阶段 ②」。
 - 失败 → 记录失败包与错误,标注「阻塞:需调整 design(候选:`install_full` 变体 / `uv pip install --no-binary` 重编译 / 针对性 `install_name_tool` rpath 修复)」并停在此处,把结论回报给设计环节。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add scripts/desktop/smoke_imports.py scripts/desktop/relocate-smoke.sh docs/desktop/spike-relocatability.md
@@ -236,7 +236,7 @@ git commit -m "test(desktop): relocatable native-extension import smoke test"
 - Create: `scripts/desktop/serve-smoke.sh`
 - Modify: `docs/desktop/spike-relocatability.md`(追加「serve / 回测冒烟」)
 
-- [ ] **Step 1: 写 serve + health 冒烟脚本**
+- [x] **Step 1: 写 serve + health 冒烟脚本**
 
 复用 `scripts/dev:162-164` 的精确调用形式(`PYTHONPATH=<agent> python -c 'import cli, sys; raise SystemExit(cli.main(sys.argv[1:]))' serve --host 127.0.0.1 --port <P>`)。
 
@@ -270,13 +270,13 @@ done
 echo "FAIL /health never became ready"; exit 1
 ```
 
-- [ ] **Step 2: 运行 serve 冒烟(先构建前端)**
+- [x] **Step 2: 运行 serve 冒烟(先构建前端)**
 
 Run: `cd frontend && npm run build && cd ..`
 Run: `bash scripts/desktop/serve-smoke.sh ./.desktop-build/python-runtime`
 Expected: `OK /health reachable ...` 与 `OK SPA root served`,退出码 0。
 
-- [ ] **Step 3: 验证回测子进程在内嵌运行时自包含(runner.py:156-168 回退路径)**
+- [x] **Step 3: 验证回测子进程在内嵌运行时自包含(runner.py:156-168 回退路径)**
 
 在没有项目 `.venv` 的环境下触发一次最小回测,确认 `agent/src/core/runner.py:160` 回退到 `sys.executable`(即内嵌 Python)能加载全部依赖。手动方式:用上面 serve 起后端,通过 UI 或现有 API 触发一次最小回测,确认子进程成功完成。把方法与结果记录到文档。
 
@@ -284,7 +284,7 @@ Run(无 venv 验证解释器自包含,等价探针):
 `./.desktop-build/python-runtime/bin/python3 -c "import sys; print(sys.executable); import numpy, pandas, duckdb; print('backtest deps OK')"`
 Expected: 打印内嵌解释器路径 + `backtest deps OK`。
 
-- [ ] **Step 4: 记录次风险结论并提交**
+- [x] **Step 4: 记录次风险结论并提交**
 
 ```bash
 git add scripts/desktop/serve-smoke.sh docs/desktop/spike-relocatability.md
