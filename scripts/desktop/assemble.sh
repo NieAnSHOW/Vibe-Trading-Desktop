@@ -21,6 +21,13 @@ find "$RUNTIME" -type d -name "tests" -prune -exec rm -rf {} + 2>/dev/null || tr
 find "$RUNTIME" -type d -name "test" -prune -exec rm -rf {} + 2>/dev/null || true
 # 不删除 *.dist-info (pip/uv 需要它们来管理包)
 
+# 守卫：确认 trim 后仍保留 .dist-info（pip 需要 metadata 管理 --target 安装）
+if ! find "$RUNTIME" -type d -name "*.dist-info" | grep -q .; then
+  echo "WARNING: no *.dist-info found in runtime — pip --target install will still work"
+  echo "         (it writes new dist-info into ~/.vibe-trading/runtime/libs), but"
+  echo "         uninstall/upgrade of bundled core deps would lose metadata."
+fi
+
 # 4) 准备 agent 代码模板:复制后删除数据目录,保证 bundle 模板永不含用户数据
 echo "=== Preparing agent template ==="
 rm -rf "$BUILD/agent"
