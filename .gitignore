@@ -95,3 +95,6 @@ wiki/alpha-library/content/
 # Tauri desktop build artifacts
 src-tauri/target/
 .desktop-build/
+
+# Codegraph index
+.codegraph/
