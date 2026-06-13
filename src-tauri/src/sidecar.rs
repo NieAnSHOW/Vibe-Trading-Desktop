@@ -31,6 +31,14 @@ pub fn build_cmd(
         .env("PYTHONPATH", runtime_agent)
         .env("PYTHONDONTWRITEBYTECODE", "1")
         .env("VIBE_RUNTIME_LIBS", runtime_libs)
+        // Default pip mirror: Tsinghua (HTTPS) so first-run installs are fast
+        // on CN networks. The Python side (optional_deps.mirror) can override
+        // per-install via --index-url; this is just the process default.
+        .env(
+            "PIP_INDEX_URL",
+            "https://pypi.tuna.tsinghua.edu.cn/simple",
+        )
+        .env("PIP_DISABLE_PIP_VERSION_CHECK", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -192,5 +200,30 @@ mod tests {
             }
         }
         assert!(found, "VIBE_RUNTIME_LIBS not set to libs path");
+    }
+
+    #[test]
+    fn build_cmd_injects_default_pip_mirror() {
+        let python = Path::new("/fake/python3");
+        let agent = Path::new("/fake/agent");
+        let libs = Path::new("/fake/libs");
+        let cmd = build_cmd(python, agent, 8899, libs);
+
+        let mut index = None;
+        let mut trusted = None;
+        for (key, val) in cmd.get_envs() {
+            if key.to_str() == Some("PIP_INDEX_URL") {
+                index = val.and_then(|v| v.to_str()).map(String::from);
+            }
+            if key.to_str() == Some("PIP_TRUSTED_HOST") {
+                trusted = val.and_then(|v| v.to_str()).map(String::from);
+            }
+        }
+        assert_eq!(
+            index.as_deref(),
+            Some("https://pypi.tuna.tsinghua.edu.cn/simple"),
+            "PIP_INDEX_URL must default to the Tsinghua mirror"
+        );
+        assert_eq!(trusted, None, "HTTPS mirror needs no trusted-host");
     }
 }
