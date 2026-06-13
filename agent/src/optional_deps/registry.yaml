@@ -1,0 +1,66 @@
+# Optional broker/capability → PyPI package registry.
+# Single source of truth for the settings UI + the install API whitelist.
+# platforms values: macos_arm64 | macos_x86_64 | windows_amd64
+# recommended_mirror keys: tsinghua | aliyun | official
+version: 1
+brokers:
+  - id: okx
+    label: "OKX (crypto)"
+    package: python-okx
+    description: "OKX REST/WebSocket SDK"
+    platforms: [macos_arm64, macos_x86_64, windows_amd64]
+    recommended_mirror: tsinghua
+  - id: futu
+    label: "富途 Futu"
+    package: futu-api
+    description: "Futu OpenAPI SDK (sdist, pure Python)"
+    platforms: [macos_arm64, macos_x86_64, windows_amd64]
+    recommended_mirror: tsinghua
+  - id: ibkr
+    label: "Interactive Brokers"
+    package: ib_async
+    description: "ib_async — async IBKR client"
+    platforms: [macos_arm64, macos_x86_64, windows_amd64]
+    recommended_mirror: tsinghua
+  - id: longbridge
+    label: "Longbridge 长桥"
+    package: longbridge
+    description: "Longbridge SDK (native wheel, all platforms)"
+    platforms: [macos_arm64, macos_x86_64, windows_amd64]
+    recommended_mirror: tsinghua
+  - id: tiger
+    label: "老虎证券 Tiger"
+    package: tigeropen
+    description: "Tiger OpenAPI SDK"
+    platforms: [macos_arm64, macos_x86_64, windows_amd64]
+    recommended_mirror: tsinghua
+  - id: alpaca
+    label: "Alpaca"
+    package: alpaca-py
+    description: "Alpaca trading SDK"
+    platforms: [macos_arm64, macos_x86_64, windows_amd64]
+    recommended_mirror: tsinghua
+  - id: dhan
+    label: "Dhan (India)"
+    package: dhanhq
+    description: "Dhan HTTP API client"
+    platforms: [macos_arm64, macos_x86_64, windows_amd64]
+    recommended_mirror: tsinghua
+  - id: shoonya
+    label: "Shoonya (Finvasia)"
+    package: shoonya
+    description: "Shoonya trading API client"
+    platforms: [macos_arm64, macos_x86_64, windows_amd64]
+    recommended_mirror: tsinghua
+  - id: noren
+    label: "Noren (Finvasia REST)"
+    package: NorenRestApiPy
+    description: "Finvasia Noren REST API wrapper"
+    platforms: [macos_arm64, macos_x86_64, windows_amd64]
+    recommended_mirror: tsinghua
+  - id: vnpy_ctp
+    label: "vnpy CTP (期货)"
+    package: vnpy_ctp
+    description: "vnpy CTP gateway — Windows only (native CTP binding)"
+    platforms: [windows_amd64]
+    recommended_mirror: tsinghua
