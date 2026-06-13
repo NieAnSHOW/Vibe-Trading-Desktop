@@ -2276,6 +2276,18 @@ async def retry_swarm_run(run_id: str, http_request: Request):
 
 
 # ============================================================================
+# Optional deps — on-demand broker SDK install (desktop runtime)
+# ============================================================================
+# Mounted with the same loopback-or-auth gate as the other settings endpoints
+# so a non-local client must present API_AUTH_KEY to install packages.
+from src.optional_deps.api import router as optional_deps_router
+
+app.include_router(
+    optional_deps_router,
+    dependencies=[Depends(require_local_or_auth)],
+)
+
+# ============================================================================
 # Live trading channel — consent commit + kill switch
 # ============================================================================
 #
