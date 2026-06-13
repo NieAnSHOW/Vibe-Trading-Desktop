@@ -135,6 +135,14 @@ fi
 PY_VER="$("$PY_RUNTIME" --version 2>&1)"
 ok "运行时: $PY_VER"
 
+# ── 强制刷新 VERSION 标记 ─────────────────────────────────────
+# 每次构建必须生成唯一 VERSION，否则 runtime_dir::prepare() 会因版本
+# 匹配而跳过 frontend/dist 刷新（Action::Reuse），导致新版客户端显示旧 UI。
+section "刷新 VERSION 标记"
+VERSION_NEW="$(cd "$ROOT" && git rev-parse --short HEAD)-$(date -u +%Y%m%d%H%M%S)"
+echo "$VERSION_NEW" > "$BUILD/VERSION"
+ok "VERSION → $VERSION_NEW"
+
 # ── 前端构建 ─────────────────────────────────────────────────
 if [ "$SKIP_FRONTEND" -eq 1 ]; then
     section "前端构建（已跳过）"

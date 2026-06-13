@@ -36,9 +36,10 @@ if [ -f "$ROOT/agent/.env" ]; then cp "$ROOT/agent/.env" "$BUILD/agent/.env";
 elif [ -f "$ROOT/agent/.env.example" ]; then cp "$ROOT/agent/.env.example" "$BUILD/agent/.env";
 else : > "$BUILD/agent/.env"; fi
 
-# 6) VERSION 标记(取 git short sha)
+# 6) VERSION 标记(取 git short sha + 构建时间戳，确保每次构建都触发前端刷新)
 echo "=== Creating VERSION marker ==="
-( cd "$ROOT" && git rev-parse --short HEAD ) > "$BUILD/VERSION"
+VERSION_MARKER="$(cd "$ROOT" && git rev-parse --short HEAD)-$(date -u +%Y%m%d%H%M%S)"
+printf '%s\n' "$VERSION_MARKER" > "$BUILD/VERSION"
 
 echo "=== Assembly complete ==="
 echo "Contents of $BUILD:"
