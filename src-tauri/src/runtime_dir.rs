@@ -60,6 +60,10 @@ pub fn prepare(
 
     fs::create_dir_all(&layout.root)
         .map_err(|e| format!("create root {:?}: {e}", layout.root))?;
+    // 可写可选依赖目录：始终确保存在；升级时不被清空（与 runtime_agent 的
+    // copy_dir_recursive 无关——libs 永远是用户拥有的数据，不来自 bundle 模板）。
+    fs::create_dir_all(&layout.runtime_libs)
+        .map_err(|e| format!("create runtime_libs {:?}: {e}", layout.runtime_libs))?;
 
     match action {
         crate::version::Action::Reuse => {}
@@ -224,6 +228,69 @@ mod tests {
         assert_eq!(
             layout.runtime_libs,
             home.join("runtime").join("libs")
+        );
+    }
+
+    #[test]
+    fn prepare_creates_runtime_libs_dir() {
+        let tmp = tempdir().unwrap();
+        let bundle = tmp.path().join("bundle");
+        let home = tmp.path().join("home");
+        make_bundle(&bundle, "1.0.0");
+        let layout = Layout::new(&home);
+
+        prepare(
+            &bundle.join("agent"),
+            &bundle.join("agent/.env"),
+            &bundle.join("VERSION"),
+            None,
+            &layout,
+        )
+        .unwrap();
+
+        assert!(layout.runtime_libs.exists(), "runtime_libs should be created");
+        assert!(layout.runtime_libs.is_dir());
+    }
+
+    #[test]
+    fn upgrade_preserves_runtime_libs_contents() {
+        let tmp = tempdir().unwrap();
+        let bundle = tmp.path().join("bundle");
+        let home = tmp.path().join("home");
+        make_bundle(&bundle, "1.0.0");
+        let layout = Layout::new(&home);
+        prepare(
+            &bundle.join("agent"),
+            &bundle.join("agent/.env"),
+            &bundle.join("VERSION"),
+            None,
+            &layout,
+        )
+        .unwrap();
+
+        // 模拟用户安装了一个包到 libs
+        fs::create_dir_all(layout.runtime_libs.join("futu_api")).unwrap();
+        fs::write(layout.runtime_libs.join("futu_api/__init__.py"), "# user installed").unwrap();
+
+        // bundle 升级到 v2
+        fs::write(bundle.join("agent/api_server.py"), "# v2").unwrap();
+        fs::write(bundle.join("VERSION"), "2.0.0").unwrap();
+        prepare(
+            &bundle.join("agent"),
+            &bundle.join("agent/.env"),
+            &bundle.join("VERSION"),
+            None,
+            &layout,
+        )
+        .unwrap();
+
+        assert!(
+            layout.runtime_libs.join("futu_api/__init__.py").exists(),
+            "runtime_libs contents must survive an upgrade"
+        );
+        assert_eq!(
+            fs::read_to_string(layout.runtime_libs.join("futu_api/__init__.py")).unwrap(),
+            "# user installed"
         );
     }
 }
