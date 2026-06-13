@@ -13,7 +13,12 @@ const BOOT: &str = "import cli, sys; raise SystemExit(cli.main(sys.argv[1:]))";
 /// Build the Command for spawning the python sidecar.
 /// Extracted for testability — allows verifying the argument/env construction
 /// without actually spawning a process.
-pub fn build_cmd(python: &Path, runtime_agent: &Path, port: u16) -> std::process::Command {
+pub fn build_cmd(
+    python: &Path,
+    runtime_agent: &Path,
+    port: u16,
+    runtime_libs: &Path,
+) -> std::process::Command {
     let mut cmd = Command::new(python);
     cmd.arg("-c")
         .arg(BOOT)
@@ -25,6 +30,7 @@ pub fn build_cmd(python: &Path, runtime_agent: &Path, port: u16) -> std::process
         .current_dir(runtime_agent)
         .env("PYTHONPATH", runtime_agent)
         .env("PYTHONDONTWRITEBYTECODE", "1")
+        .env("VIBE_RUNTIME_LIBS", runtime_libs)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -46,8 +52,13 @@ pub fn build_cmd(python: &Path, runtime_agent: &Path, port: u16) -> std::process
     cmd
 }
 
-pub fn spawn(python: &Path, runtime_agent: &Path, port: u16) -> Result<Child, String> {
-    let mut cmd = build_cmd(python, runtime_agent, port);
+pub fn spawn(
+    python: &Path,
+    runtime_agent: &Path,
+    port: u16,
+    runtime_libs: &Path,
+) -> Result<Child, String> {
+    let mut cmd = build_cmd(python, runtime_agent, port, runtime_libs);
     cmd.spawn().map_err(|e| format!("spawn sidecar failed: {e}"))
 }
 
@@ -117,7 +128,7 @@ mod tests {
     fn spawn_command_has_expected_args() {
         let python = Path::new("/fake/python3");
         let agent = Path::new("/fake/agent");
-        let cmd = build_cmd(python, agent, 8899);
+        let cmd = build_cmd(python, agent, 8899, Path::new("/fake/libs"));
 
         // Verify the program path is set correctly
         assert_eq!(cmd.get_program(), "/fake/python3");
@@ -150,7 +161,7 @@ mod tests {
     fn build_cmd_includes_serve_args() {
         let python = Path::new("/fake/python3");
         let agent = Path::new("/fake/agent");
-        let cmd = build_cmd(python, agent, 8899);
+        let cmd = build_cmd(python, agent, 8899, Path::new("/fake/libs"));
 
         let args: Vec<&str> = cmd.get_args().map(|a| a.to_str().unwrap()).collect();
         let args_str = args.join(" ");
@@ -163,5 +174,23 @@ mod tests {
     fn health_url_formats_correctly() {
         assert_eq!(health_url(8899), "http://127.0.0.1:8899/health");
         assert_eq!(health_url(3000), "http://127.0.0.1:3000/health");
+    }
+
+    #[test]
+    fn build_cmd_injects_runtime_libs_env() {
+        let python = Path::new("/fake/python3");
+        let agent = Path::new("/fake/agent");
+        let libs = Path::new("/fake/libs");
+        let cmd = build_cmd(python, agent, 8899, libs);
+
+        let mut found = false;
+        for (key, val) in cmd.get_envs() {
+            if key.to_str() == Some("VIBE_RUNTIME_LIBS")
+                && val.and_then(|v| v.to_str()) == Some("/fake/libs")
+            {
+                found = true;
+            }
+        }
+        assert!(found, "VIBE_RUNTIME_LIBS not set to libs path");
     }
 }

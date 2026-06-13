@@ -65,7 +65,7 @@ fn boot(
     let is_dev = cfg!(debug_assertions);
     let p = sidecar_port_dev_aware(is_dev)?;
     // D7: 启动 sidecar(PYTHONPATH 指向可写副本)
-    let mut child = sidecar::spawn(&res.runtime_python, &layout.runtime_agent, p)?;
+    let mut child = sidecar::spawn(&res.runtime_python, &layout.runtime_agent, p, &layout.runtime_libs)?;
     // D8: 门控
     match sidecar::await_health(&mut child, p) {
         sidecar::Ready::Ok => {
