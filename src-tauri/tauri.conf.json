@@ -3,7 +3,11 @@
   "productName": "Vibe Trading",
   "version": "0.1.0",
   "identifier": "ai.vibetrading.desktop",
-  "build": { "frontendDist": "./placeholder-dist" },
+  "build": {
+    "frontendDist": "./placeholder-dist",
+    "devUrl": "http://127.0.0.1:5899/",
+    "beforeDevCommand": "cd frontend && npm run dev"
+  },
   "app": {
     "windows": [],
     "security": { "csp": null }
@@ -17,7 +21,6 @@
       "../.desktop-build/agent": "agent",
       "../frontend/dist": "frontend/dist",
       "../.desktop-build/agent/.env": "agent/.env",
-      "../src-tauri/src/loading.html": "loading.html",
       "../.desktop-build/VERSION": "VERSION"
     }
   }

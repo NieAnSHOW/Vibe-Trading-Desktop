@@ -1,13 +1,15 @@
 // src-tauri/src/resources.rs
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
+// Manager trait 仅为 release 分支的 app.path() 所需；dev 分支不调用，故门控引入。
+#[cfg(not(debug_assertions))]
+use tauri::Manager;
 
 /// 解析打包资源根。开发态回退到仓库内 .desktop-build / 源码目录。
 pub struct Resources {
     pub runtime_python: PathBuf, // 内嵌解释器可执行
     pub agent_template: PathBuf, // 只读 agent/ 模板
     pub env_seed: PathBuf,       // agent/.env 种子
-    pub loading_html: PathBuf,   // 加载页
     pub version_file: PathBuf,   // VERSION 标记
     pub frontend_dist: PathBuf,  // frontend/dist SPA 静态资源
 }
@@ -15,14 +17,7 @@ pub struct Resources {
 impl Resources {
     pub fn resolve(app: &AppHandle) -> Result<Self, String> {
         let base = resolve_base(app)?;
-        let mut res = resolve_from_base(&base);
-        // dev: loading.html 位于源码目录(src-tauri/src)，而非 .desktop-build
-        #[cfg(debug_assertions)]
-        {
-            res.loading_html =
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src").join("loading.html");
-        }
-        Ok(res)
+        Ok(resolve_from_base(&base))
     }
 }
 
@@ -86,7 +81,6 @@ pub fn resolve_from_base(base: &std::path::Path) -> Resources {
         runtime_python: py,
         agent_template: base.join("agent"),
         env_seed: base.join("agent").join(".env"),
-        loading_html: base.join("loading.html"),
         version_file: base.join("VERSION"),
         frontend_dist: base.join("frontend").join("dist"),
     }
@@ -132,14 +126,6 @@ mod tests {
     }
 
     #[test]
-    fn resolve_from_base_loading_html_is_at_root() {
-        let base = Path::new("/opt/app/resources");
-        let res = resolve_from_base(base);
-
-        assert_eq!(res.loading_html, PathBuf::from("/opt/app/resources/loading.html"));
-    }
-
-    #[test]
     fn resolve_from_base_version_file_is_at_root() {
         let base = Path::new("/opt/app/resources");
         let res = resolve_from_base(base);
@@ -156,7 +142,6 @@ mod tests {
         assert!(res.runtime_python.starts_with(base));
         assert!(res.agent_template.starts_with(base));
         assert!(res.env_seed.starts_with(base));
-        assert!(res.loading_html.starts_with(base));
         assert!(res.version_file.starts_with(base));
     }
 
