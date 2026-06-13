@@ -1431,7 +1431,7 @@ git commit -s -m "feat(optional-deps): pip installer with --target and dist-info
 - Create: `agent/src/optional_deps/sse_lines.py`
 - Test: `agent/src/optional_deps/tests/test_sse_lines.py`
 
-- [ ] **Step 1：写失败测试 — SSE 帧格式**
+- [x] **Step 1：写失败测试 — SSE 帧格式**
 
 新建 `agent/src/optional_deps/tests/test_sse_lines.py`：
 
@@ -1469,12 +1469,12 @@ def test_sse_event_escapes_newlines_in_data():
     assert "event: progress" in frame
 ```
 
-- [ ] **Step 2：运行测试确认失败**
+- [x] **Step 2：运行测试确认失败**
 
 Run: `cd agent && python -m pytest src/optional_deps/tests/test_sse_lines.py -q`
 Expected: FAIL — `ModuleNotFoundError`。
 
-- [ ] **Step 3：实现 sse_lines.py**
+- [x] **Step 3：实现 sse_lines.py**
 
 新建 `agent/src/optional_deps/sse_lines.py`：
 
@@ -1515,12 +1515,12 @@ def stage_line(stage: str, message: str = "") -> str:
     return sse_event("progress", {"stage": stage, "message": message})
 ```
 
-- [ ] **Step 4：运行测试确认通过**
+- [x] **Step 4：运行测试确认通过**
 
 Run: `cd agent && python -m pytest src/optional_deps/tests/test_sse_lines.py -q`
 Expected: PASS（3 个测试）。
 
-- [ ] **Step 5：提交**
+- [x] **Step 5：提交**
 
 ```bash
 git add agent/src/optional_deps/sse_lines.py agent/src/optional_deps/tests/test_sse_lines.py
@@ -1535,7 +1535,7 @@ git commit -s -m "feat(optional-deps): SSE progress frame formatting"
 - Create: `agent/src/optional_deps/api.py`
 - Test: `agent/src/optional_deps/tests/test_api.py`
 
-- [ ] **Step 1：写失败测试 — list、白名单拒绝、平台预检、mirror 读写**
+- [x] **Step 1：写失败测试 — list、白名单拒绝、平台预检、mirror 读写**
 
 新建 `agent/src/optional_deps/tests/test_api.py`：
 
@@ -1630,12 +1630,12 @@ def test_mirror_put_persists_selection(client):
     assert client.get("/optional-deps/mirror").json()["name"] == "aliyun"
 ```
 
-- [ ] **Step 2：运行测试确认失败**
+- [x] **Step 2：运行测试确认失败**
 
 Run: `cd agent && python -m pytest src/optional_deps/tests/test_api.py -q`
 Expected: FAIL — `ModuleNotFoundError`。
 
-- [ ] **Step 3：实现 api.py**
+- [x] **Step 3：实现 api.py**
 
 新建 `agent/src/optional_deps/api.py`：
 
@@ -1992,12 +1992,12 @@ async def _run_uninstall_job(job: _Job) -> None:
     job.done = True
 ```
 
-- [ ] **Step 4：运行测试确认通过**
+- [x] **Step 4：运行测试确认通过**
 
 Run: `cd agent && python -m pytest src/optional_deps/tests/test_api.py -q`
 Expected: PASS（5 个测试）。注：`test_install_rejects_unknown_package` 与平台预检路径不触发真实 pip（`evil-pkg` 在白名单校验即被拒）。
 
-- [ ] **Step 5：提交**
+- [x] **Step 5：提交**
 
 ```bash
 git add agent/src/optional_deps/api.py agent/src/optional_deps/tests/test_api.py

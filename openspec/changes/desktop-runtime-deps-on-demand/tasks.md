@@ -24,13 +24,13 @@
 
 ## 4. 后端安装/卸载/列表 API
 
-- [ ] 4.1 新增 `agent/src/optional_deps/` 模块：安装、卸载、列表、状态查询
-- [ ] 4.2 实现 `GET /optional-deps/list`：返回 registry 内容并扫描 `libs/` 的 `.dist-info` 标注已装状态
-- [ ] 4.3 实现 `POST /optional-deps/install`：registry 白名单校验 → spawn 包管理器子进程写入 `libs/`
-- [ ] 4.4 实现平台 wheel 预检：目标包在当前平台无预编译 wheel 时返回明确提示，不触发源码构建
-- [ ] 4.5 实现 `POST /optional-deps/uninstall`
-- [ ] 4.6 实现安装进度反馈：SSE 推送子进程 stdout / 阶段状态（复用 `sse-starlette`）
-- [ ] 4.7 实现镜像源配置读写端点（`GET/PUT /optional-deps/mirror`），持久化到用户配置
+- [x] 4.1 新增 `agent/src/optional_deps/` 模块：安装、卸载、列表、状态查询
+- [x] 4.2 实现 `GET /optional-deps/list`：返回 registry 内容并扫描 `libs/` 的 `.dist-info` 标注已装状态
+- [x] 4.3 实现 `POST /optional-deps/install`：registry 白名单校验 → spawn 包管理器子进程写入 `libs/`
+- [x] 4.4 实现平台 wheel 预检：目标包在当前平台无预编译 wheel 时返回明确提示，不触发源码构建
+- [x] 4.5 实现 `POST /optional-deps/uninstall`
+- [x] 4.6 实现安装进度反馈：SSE 推送子进程 stdout / 阶段状态（复用 `sse-starlette`）
+- [x] 4.7 实现镜像源配置读写端点（`GET/PUT /optional-deps/mirror`），持久化到用户配置
 - [ ] 4.8 将 `/optional-deps` 路由组挂载到 `agent/api_server.py`
 
 ## 5. 国内镜像注入
