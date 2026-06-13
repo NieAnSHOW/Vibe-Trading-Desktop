@@ -2222,7 +2222,7 @@ export interface UpdateMirrorRequest {
 Run: `cd frontend && npx tsc -b`
 Expected: 无错误（类型在后续 Task 14 使用，此处仅声明）。
 
-- [ ] **Step 4：提交**
+- [x] **Step 4：提交**
 
 ```bash
 git add frontend/src/lib/api.ts
