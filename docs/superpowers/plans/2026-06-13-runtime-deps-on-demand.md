@@ -1128,7 +1128,7 @@ git commit -s -m "feat(optional-deps): mirror config persistence with tsinghua d
 - Create: `agent/src/optional_deps/installer.py`
 - Test: `agent/src/optional_deps/tests/test_installer.py`
 
-- [ ] **Step 1：写失败测试 — 已装状态扫描与命令构造**
+- [x] **Step 1：写失败测试 — 已装状态扫描与命令构造**
 
 新建 `agent/src/optional_deps/tests/test_installer.py`：
 
@@ -1225,12 +1225,12 @@ def test_build_pip_args_includes_trusted_host_when_set(tmp_path):
     assert "insecure.mirror" in args
 ```
 
-- [ ] **Step 2：运行测试确认失败**
+- [x] **Step 2：运行测试确认失败**
 
 Run: `cd agent && python -m pytest src/optional_deps/tests/test_installer.py -q`
 Expected: FAIL — `ModuleNotFoundError`。
 
-- [ ] **Step 3：实现 installer.py**
+- [x] **Step 3：实现 installer.py**
 
 新建 `agent/src/optional_deps/installer.py`：
 
@@ -1411,12 +1411,12 @@ def default_python_executable() -> str:
     return sys.executable
 ```
 
-- [ ] **Step 4：运行测试确认通过**
+- [x] **Step 4：运行测试确认通过**
 
 Run: `cd agent && python -m pytest src/optional_deps/tests/test_installer.py -q`
 Expected: PASS（6 个测试）。
 
-- [ ] **Step 5：提交**
+- [x] **Step 5：提交**
 
 ```bash
 git add agent/src/optional_deps/installer.py agent/src/optional_deps/tests/test_installer.py
