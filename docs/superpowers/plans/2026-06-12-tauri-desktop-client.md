@@ -2,6 +2,7 @@
 change: tauri-desktop-client
 design-doc: docs/superpowers/specs/2026-06-12-tauri-desktop-client-design.md
 base-ref: b6817be3b2929c72f6a389873d97130e8422d1c2
+archived-with: 2026-06-13-tauri-desktop-client
 ---
 
 # Tauri 桌面客户端实施计划
@@ -14,6 +15,7 @@ base-ref: b6817be3b2929c72f6a389873d97130e8422d1c2
 
 **Tech Stack:** Tauri 2.x(Rust)、python-build-standalone(`install_only`)、uv、现有 FastAPI/uvicorn 后端、Vite 前端构建、GitHub Actions(macOS arm64 + Windows x64 矩阵)。
 
+archived-with: 2026-06-13-tauri-desktop-client
 ---
 
 ## 关键事实(已在 base-ref 核对)
@@ -49,6 +51,7 @@ base-ref: b6817be3b2929c72f6a389873d97130e8422d1c2
 - 新建 `docs/desktop/README.md`:用户向安装/首启/已知限制文档。
 - **不修改** `agent/**`、`frontend/**` 业务代码。
 
+archived-with: 2026-06-13-tauri-desktop-client
 ---
 ## 阶段 ① 可重定位性 Spike(头号风险,先行 —— 通不过则回设计,阻塞后续)
 
@@ -1561,6 +1564,7 @@ git commit -m "docs(desktop): user install guide + known limitations"
 
 **阶段 ⑦ 完成判据:** CI 矩阵双平台产物可下载;回归确认 CLI/Docker 默认行为未变;用户文档与已知限制齐备。
 
+archived-with: 2026-06-13-tauri-desktop-client
 ---
 
 ## 全局完成判据(交付门)
@@ -1572,6 +1576,7 @@ git commit -m "docs(desktop): user install guide + known limitations"
 - 报告在缺 weasyprint 时降级 HTML 不报错。
 - CLI/Docker 默认绑定与端口行为未受影响。
 
+archived-with: 2026-06-13-tauri-desktop-client
 ---
 
 ## Self-Review(规格覆盖核对)
@@ -1599,6 +1604,7 @@ git commit -m "docs(desktop): user install guide + known limitations"
 
 **Design 决策映射:** D1→Task 11(navigate 到后端);D2→Task 1/13;D3→Task 2;D4→Task 8;D5→Task 7/8/13;D6→Task 9/10/11;D7→Task 12/18;D8→Task 10(`PYTHONDONTWRITEBYTECODE=1`);D9→Task 20。全部覆盖。
 
+archived-with: 2026-06-13-tauri-desktop-client
 ---
 
 ## Execution Handoff
