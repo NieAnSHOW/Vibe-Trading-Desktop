@@ -2575,11 +2575,11 @@ git commit -s -m "feat(frontend): OptionalDepsManager with install/uninstall/SSE
 **Files:**
 - Modify: `scripts/desktop/assemble.sh`（显式保留 .dist-info；registry.yaml 已随 agent 模板复制）
 
-- [ ] **Step 1：确认 registry.yaml 随 agent 模板进入 bundle**
+- [x] **Step 1：确认 registry.yaml 随 agent 模板进入 bundle**
 
 `scripts/desktop/assemble.sh:28` 的 `cp -R "$ROOT/agent/." "$BUILD/agent/"` 已把 `agent/src/optional_deps/registry.yaml` 复制进 bundle。无需改动复制逻辑。
 
-- [ ] **Step 2：显式保留 .dist-info（防止未来误删）**
+- [x] **Step 2：显式保留 .dist-info（防止未来误删）**
 
 `scripts/desktop/assemble.sh:22` 已有注释「不删除 *.dist-info」。将该注释强化为带 `grep` 断言的守卫。在 `assemble.sh` 的 `=== Trimming runtime ===` 块之后（约第 22 行注释之后）追加一段校验：
 
@@ -2592,12 +2592,12 @@ if ! find "$RUNTIME" -type d -name "*.dist-info" | grep -q .; then
 fi
 ```
 
-- [ ] **Step 3：本地验证脚本语法**
+- [x] **Step 3：本地验证脚本语法**
 
 Run: `cd /Users/niean/Documents/project/Vibe-Trading-Desktop && bash -n scripts/desktop/assemble.sh`
 Expected: 无输出（语法正确）。
 
-- [ ] **Step 4：提交**
+- [x] **Step 4：提交**
 
 ```bash
 git add scripts/desktop/assemble.sh
@@ -2613,7 +2613,7 @@ git commit -s -m "build(desktop): guard .dist-info retention in assemble.sh"
 
 > 这是有真实 pip 调用的慢测试，默认用 `@pytest.mark.optional_deps_integration` 标记，CI 主流程不跑（与 e2e_backtest 同策略）。`pyproject.toml` 已有 e2e ignore 模式；这里用 marker 而非默认收集。
 
-- [ ] **Step 1：写集成测试**
+- [x] **Step 1：写集成测试**
 
 新建 `agent/tests/test_optional_deps_integration.py`：
 
@@ -2671,21 +2671,21 @@ def test_install_then_import(tmp_path, monkeypatch):
     )[0]
 ```
 
-- [ ] **Step 2：注册 marker（如 pyproject 已有 markers 配置则跳过）**
+- [x] **Step 2：注册 marker（如 pyproject 已有 markers 配置则跳过）**
 
 检查 `pyproject.toml` 的 `[tool.pytest.ini_options]` 是否有 `markers`。若无，在 `markers` 列表追加 `"optional_deps_integration: slow integration test that runs real pip"`。若已有 markers 列表，仅追加该项。
 
-- [ ] **Step 3：确认 marker 未被默认收集误跑**
+- [x] **Step 3：确认 marker 未被默认收集误跑**
 
 Run: `cd agent && python -m pytest tests/test_optional_deps_integration.py --collect-only -q -m optional_deps_integration`
 Expected: 收集到 1 个测试（未加 `-m` 时默认不运行，因为 `pytestmark` 标记了它，但 collect-only 仍会列出）。
 
-- [ ] **Step 4：（可选）手动跑一次集成测试验证链路**
+- [x] **Step 4：（可选）手动跑一次集成测试验证链路**
 
 Run: `cd agent && python -m pytest tests/test_optional_deps_integration.py -m optional_deps_integration -q`
 Expected: PASS（需联网下载 six）。若离线环境，跳过此步并在 PR 说明。
 
-- [ ] **Step 5：提交**
+- [x] **Step 5：提交**
 
 ```bash
 git add agent/tests/test_optional_deps_integration.py pyproject.toml

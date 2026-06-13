@@ -48,14 +48,14 @@
 
 ## 7. 打包脚本调整
 
-- [ ] 7.1 `scripts/desktop/assemble.sh` 确认保留 `.dist-info`（包管理器需要其管理已装包）
-- [ ] 7.2 `scripts/desktop/install-deps.sh` 适配包管理器选型（若用 uv 则确认内嵌；若 pip 则确认标准库可用）
-- [ ] 7.3 将 registry.yaml 与（如选 uv）uv 二进制纳入打包资源
+- [x] 7.1 `scripts/desktop/assemble.sh` 确认保留 `.dist-info`（包管理器需要其管理已装包）
+- [x] 7.2 `scripts/desktop/install-deps.sh` 适配包管理器选型（若用 uv 则确认内嵌；若 pip 则确认标准库可用）
+- [x] 7.3 将 registry.yaml 与（如选 uv）uv 二进制纳入打包资源
 
 ## 8. 验证与测试
 
-- [ ] 8.1 后端 API 单元测试：白名单拒绝、list 已装标注、平台预检
-- [ ] 8.2 集成测试：安装 `futu-api` → agent `import futu` → 成功调用
+- [x] 8.1 后端 API 单元测试：白名单拒绝、list 已装标注、平台预检
+- [x] 8.2 集成测试：安装 `futu-api` → agent `import futu` → 成功调用
 - [ ] 8.3 升级保留测试：版本升级后 `libs/` 内容不被清空，依赖仍可 import
 - [ ] 8.4 镜像耗时对比：同一包在清华源 vs 官方 PyPI 的下载耗时记录
 - [ ] 8.5 打包后真机验证：macOS arm64 与 Windows 各完成一次「选券商 → 安装 → 调用」全链路
