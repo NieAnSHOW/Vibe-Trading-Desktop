@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 pub struct Layout {
     pub root: PathBuf,           // ~/.vibe-trading
     pub runtime_agent: PathBuf,  // ~/.vibe-trading/runtime/agent
+    pub runtime_libs: PathBuf,   // ~/.vibe-trading/runtime/libs (按需安装的可选依赖)
     pub marker: PathBuf,         // ~/.vibe-trading/runtime/.installed_version
     pub user_env: PathBuf,       // ~/.vibe-trading/.env
 }
@@ -14,6 +15,7 @@ impl Layout {
         Self {
             root: home_vibe.to_path_buf(),
             runtime_agent: home_vibe.join("runtime").join("agent"),
+            runtime_libs: home_vibe.join("runtime").join("libs"),
             marker: home_vibe.join("runtime").join(".installed_version"),
             user_env: home_vibe.join(".env"),
         }
@@ -212,6 +214,16 @@ mod tests {
         assert!(
             err.contains("agent") || err.contains("VERSION"),
             "msg: {err}"
+        );
+    }
+
+    #[test]
+    fn layout_exposes_runtime_libs_path() {
+        let home = std::path::Path::new("/fake/home/.vibe-trading");
+        let layout = Layout::new(home);
+        assert_eq!(
+            layout.runtime_libs,
+            home.join("runtime").join("libs")
         );
     }
 }
