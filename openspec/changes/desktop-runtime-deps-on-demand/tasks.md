@@ -4,10 +4,10 @@
 
 ## 1. 可写依赖目录与 sidecar 模块搜索集成
 
-- [ ] 1.1 在 `src-tauri/src/runtime_dir.rs` 扩展 `Layout`，新增 `runtime_libs: ~/.vibe-trading/runtime/libs` 字段及其创建逻辑
-- [ ] 1.2 实现 `runtime_libs` 在版本升级迁移时被显式保留（与 `.env` 同级，不随 bundle 模板覆盖）
-- [ ] 1.3 在 Python 入口（`cli` 加载早期）以 `sys.path.append(runtime_libs)` 注入，确保排在 bundle `site-packages` **之后**
-- [ ] 1.4 编写断言：可写目录中同名包不覆盖核心打包依赖（核心版本优先）
+- [x] 1.1 在 `src-tauri/src/runtime_dir.rs` 扩展 `Layout`，新增 `runtime_libs: ~/.vibe-trading/runtime/libs` 字段及其创建逻辑
+- [x] 1.2 实现 `runtime_libs` 在版本升级迁移时被显式保留（与 `.env` 同级，不随 bundle 模板覆盖）
+- [x] 1.3 在 Python 入口（`cli` 加载早期）以 `sys.path.append(runtime_libs)` 注入，确保排在 bundle `site-packages` **之后**
+- [x] 1.4 编写断言：可写目录中同名包不覆盖核心打包依赖（核心版本优先）
 
 ## 2. 包管理器选型与平台 wheel 探查 [spike]
 
