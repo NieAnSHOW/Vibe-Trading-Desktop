@@ -11,7 +11,7 @@ def test_stage_line_emits_json_with_stage():
     frame = stage_line("downloading", message="Fetching futu-api")
     assert frame.startswith("event: progress")
     assert frame.endswith("\n\n")
-    data_line = [line for line in frame.splitlines() if l.startswith("data: ")][0]
+    data_line = [line for line in frame.splitlines() if line.startswith("data: ")][0]
     payload = json.loads(data_line[len("data: "):])
     assert payload["stage"] == "downloading"
     assert payload["message"] == "Fetching futu-api"
