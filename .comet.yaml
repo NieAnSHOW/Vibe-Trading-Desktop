@@ -1,0 +1,9 @@
+# Project-level Comet guard config for this polyglot repo
+# (python agent + react frontend + tauri rust). The guard's auto-detection
+# (package.json "build" / pom.xml / Cargo.toml at repo root) does not apply
+# here — the root package.json only carries the openspec tool — so tell the
+# guard explicitly how to build and verify.
+#
+# Commands follow CLAUDE.md's documented syntax-check and test invocations.
+build_command: python3 -m compileall -q agent/cli agent/api_server.py agent/mcp_server.py
+verify_command: PYTHONPATH=agent python3 -m pytest --ignore=agent/tests/e2e_backtest --ignore=agent/tests/test_e2e_harness_v2.py --tb=short -q
