@@ -92,13 +92,49 @@ function Invoke-Step3Tauri {
   Write-Host "MSI built at src-tauri/target/release/bundle/msi/" -ForegroundColor Green
 }
 
-# 主流程（后续 task 在此扩展）
+function Invoke-Step4Archive {
+  Write-Step 4 "Archive"
+  $MsiGlob = "$Root\src-tauri\target\release\bundle\msi\*.msi"
+  $msiFiles = @(Get-ChildItem $MsiGlob -ErrorAction SilentlyContinue)
+  if ($msiFiles.Count -eq 0) { throw "no .msi found at $MsiGlob" }
+
+  if (-not (Test-Path $OutputDir)) {
+    New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+  }
+  $dest = (Resolve-Path $OutputDir).Path
+
+  $sizeMB = 0
+  foreach ($f in $msiFiles) {
+    Copy-Item $f.FullName -Destination $dest -Force
+    $copied = Join-Path $dest $f.Name
+    $sizeMB = [math]::Round((Get-Item $copied).Length / 1MB, 1)
+    Write-Host "Archived: $copied ($sizeMB MB)" -ForegroundColor Green
+  }
+
+  $elapsed = ((Get-Date) - $BuildStartTime).ToString('hh\:mm\:ss')
+  $commit = (git -C $Root rev-parse --short HEAD 2>$null)
+  $tauriVer = ((cargo tauri --version 2>$null) -split "`n" | Select-Object -First 1)
+  Write-Host ""
+  Write-Host "=== Build complete ===" -ForegroundColor Green
+  Write-Host "  Output dir : $dest"
+  Write-Host "  MSI size   : $sizeMB MB"
+  Write-Host "  Git HEAD   : $commit"
+  Write-Host "  Tauri      : $tauriVer"
+  Write-Host "  Elapsed    : $elapsed"
+}
+
+# 主流程
 Push-Location $Root
 try {
   Invoke-Step0Checks
   Invoke-Step1Runtime
   Invoke-Step2Assemble
   Invoke-Step3Tauri
+  Invoke-Step4Archive
+} catch {
+  Write-Host ""
+  Write-Host "[FAILED] $($_.Exception.Message)" -ForegroundColor Red
+  exit 1
 } finally {
   Pop-Location
 }
