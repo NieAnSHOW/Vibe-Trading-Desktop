@@ -43,5 +43,5 @@ Write-Host "=== Creating VERSION marker ==="
 (git -C $Root rev-parse --short HEAD) | Set-Content "$Build\VERSION"
 
 Write-Host "=== Assembly complete ==="
-Write-Host "Contents of $Build:"
+Write-Host "Contents of ${Build}:"
 Get-ChildItem $Build | ForEach-Object { $size = (Get-ChildItem $_.FullName -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum; "$($_.Name): $([math]::Round($size/1MB, 1))MB" }
