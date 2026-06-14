@@ -55,6 +55,7 @@ docs/
 !wiki/docs/
 !wiki/docs/**
 !docs/desktop/
+release/
 docs/screenshots/agent-run.png
 docs/screenshots/boot.png
 data/minutes/
@@ -95,6 +96,14 @@ wiki/alpha-library/content/
 # Tauri desktop build artifacts
 src-tauri/target/
 .desktop-build/
+
+# Tauri generated artifacts
+# Regenerated on every build by tauri_build::build() (see src-tauri/build.rs).
+src-tauri/gen/
+
+# Local external toolchains (WiX, NSIS, etc.)
+# Auto-downloaded by Tauri during MSI/bundle build; do not commit binaries.
+.tools/
 
 # Codegraph index
 .codegraph/
