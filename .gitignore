@@ -105,6 +105,9 @@ src-tauri/gen/
 # Auto-downloaded by Tauri during MSI/bundle build; do not commit binaries.
 .tools/
 
+# Build output logs
+*.log
+
 # Codegraph index
 .codegraph/
 .comet
