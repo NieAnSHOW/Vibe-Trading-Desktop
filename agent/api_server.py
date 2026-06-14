@@ -22,8 +22,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request, Security, UploadFile, status
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from rich.console import Console
@@ -3081,24 +3083,51 @@ register_alpha_routes(app)
 # Main Entry Point
 # ============================================================================
 
+
+def _accept_header(scope: Dict[str, Any]) -> str:
+    """Read the ``Accept`` header from an ASGI scope (case-insensitive).
+
+    ASGI headers are a list of ``(bytes, bytes)`` tuples with lowercased keys.
+    Used by :class:`SPAStaticFiles` to tell browser navigation from API calls
+    on the 404 fallback path.
+    """
+    for key, value in scope.get("headers", []):
+        if key == b"accept":
+            return value.decode("latin-1", errors="replace")
+    return ""
+
+
+class SPAStaticFiles(StaticFiles):
+    """Serve index.html for browser refreshes on client-side routes.
+
+    On a 404 we only fall back to ``index.html`` when the caller is a
+    browser navigating to a client-side route (``Accept: text/html``).
+    Programmatic API callers (``Accept: application/json`` / ``*/*``) get a
+    clean JSON 404 instead — otherwise a stale backend missing an API
+    route (e.g. an older bundled agent) makes the frontend ``JSON.parse``
+    the SPA shell and surface an opaque "Unrecognized token '<'" error.
+    """
+
+    async def get_response(self, path: str, scope: Dict[str, Any]):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code != status.HTTP_404_NOT_FOUND:
+                raise
+            # Only browsers (Accept: text/html) get the SPA shell on a
+            # deep-link refresh; API callers get a JSON 404.
+            if "text/html" in _accept_header(scope):
+                return await super().get_response("index.html", scope)
+            return JSONResponse(
+                {"detail": "Not Found"}, status_code=status.HTTP_404_NOT_FOUND
+            )
+
+
 def serve_main(argv: list[str] | None = None) -> int:
     """Start the API server from CLI-style arguments."""
     import argparse
     import subprocess
     import uvicorn
-    from fastapi.staticfiles import StaticFiles
-    from starlette.exceptions import HTTPException as StarletteHTTPException
-
-    class SPAStaticFiles(StaticFiles):
-        """Serve index.html for browser refreshes on client-side routes."""
-
-        async def get_response(self, path: str, scope: Dict[str, Any]):
-            try:
-                return await super().get_response(path, scope)
-            except StarletteHTTPException as exc:
-                if exc.status_code != status.HTTP_404_NOT_FOUND:
-                    raise
-                return await super().get_response("index.html", scope)
 
     parser = argparse.ArgumentParser(description="Vibe-Trading Server")
     parser.add_argument("--port", type=int, default=8000, help="Listen port (default 8000)")
