@@ -7,7 +7,6 @@ import { getChartTheme } from "@/lib/chart-theme";
 import { abbreviateNum } from "@/lib/formatters";
 import { echarts, CHART_GROUP, connectCharts } from "@/lib/echarts";
 import { useDarkMode } from "@/hooks/useDarkMode";
-import { useI18n } from "@/i18n";
 
 type Sub = "vol" | "macd" | "rsi" | "kdj";
 type Range = "1M" | "3M" | "6M" | "1Y" | "ALL";
@@ -41,7 +40,6 @@ export function CandlestickChart({ data, markers, indicators, height = 500 }: Pr
   const [overlays, setOverlays] = useState<Set<Overlay>>(new Set(["ma5", "ma20"]));
   const [showMenu, setShowMenu] = useState(false);
   const { dark } = useDarkMode();
-  const { t: tr } = useI18n();
 
   const toggleOverlay = useCallback((id: Overlay) => {
     setOverlays(prev => {
@@ -211,10 +209,10 @@ export function CandlestickChart({ data, markers, indicators, height = 500 }: Pr
               const chg = close - open;
               const pct = open ? ((chg / open) * 100).toFixed(2) : "0.00";
               const clr = chg >= 0 ? t.upColor : t.downColor;
-              html += `<br/>${tr("charts.candlestick.tooltipOpen")}: ${open.toFixed(2)}&nbsp;${tr("charts.candlestick.tooltipHigh")}: ${high.toFixed(2)}`;
-              html += `<br/>${tr("charts.candlestick.tooltipLow")}: ${low.toFixed(2)}&nbsp;${tr("charts.candlestick.tooltipClose")}: <span style="color:${clr}"><b>${close.toFixed(2)}</b> ${chg >= 0 ? "+" : ""}${chg.toFixed(2)} (${chg >= 0 ? "+" : ""}${pct}%)</span>`;
+              html += `<br/>O: ${open.toFixed(2)}&nbsp; H: ${high.toFixed(2)}`;
+              html += `<br/>L: ${low.toFixed(2)}&nbsp; C: <span style="color:${clr}"><b>${close.toFixed(2)}</b> ${chg >= 0 ? "+" : ""}${chg.toFixed(2)} (${chg >= 0 ? "+" : ""}${pct}%)</span>`;
             } else if (p.seriesName === "Vol") {
-              html += `<br/>${tr("charts.candlestick.tooltipVol")}: ${abbreviateNum(Number(p.value))}`;
+              html += `<br/>Vol: ${abbreviateNum(Number(p.value))}`;
             } else if (p.value != null) {
               html += `<br/>${p.marker} ${p.seriesName}: ${Number(p.value).toFixed(2)}`;
             }
@@ -223,7 +221,7 @@ export function CandlestickChart({ data, markers, indicators, height = 500 }: Pr
         },
       },
       toolbox: {
-        feature: { saveAsImage: { title: tr("charts.candlestick.save") }, dataZoom: { title: { zoom: tr("charts.candlestick.zoom"), back: tr("charts.candlestick.reset") } }, restore: { title: tr("charts.candlestick.reset") } },
+        feature: { saveAsImage: { title: "Save" }, dataZoom: { title: { zoom: "Zoom", back: "Reset" } }, restore: { title: "Reset" } },
         right: 8, top: 0, iconStyle: { borderColor: t.textColor },
       },
       legend: { data: legendNames, textStyle: { color: t.textColor, fontSize: 10 }, right: 80, top: 2, type: "scroll", itemWidth: 12, itemHeight: 8, itemGap: 8 },
@@ -257,7 +255,7 @@ export function CandlestickChart({ data, markers, indicators, height = 500 }: Pr
   }, [data, markers, baseData, indicatorCache, extraIndicators, sub, range, overlays, dark]);
 
   if (data.length === 0) {
-    return <div className="text-muted-foreground text-sm p-4">{tr("charts.candlestick.noPriceData")}</div>;
+    return <div className="text-muted-foreground text-sm p-4">No price data</div>;
   }
 
   return (
@@ -278,7 +276,7 @@ export function CandlestickChart({ data, markers, indicators, height = 500 }: Pr
             onClick={() => setShowMenu(!showMenu)}
             className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
           >
-            {tr("charts.candlestick.indicators")} ({overlays.size}) <ChevronDown className="h-3 w-3" />
+            Indicators ({overlays.size}) <ChevronDown className="h-3 w-3" />
           </button>
           {showMenu && (
             <div className="absolute top-full left-0 mt-1 z-50 bg-card border rounded-lg shadow-lg p-2 min-w-[160px]" onMouseLeave={() => setShowMenu(false)}>
@@ -295,7 +293,7 @@ export function CandlestickChart({ data, markers, indicators, height = 500 }: Pr
               ))}
               <div className="border-t mt-1 pt-1">
                 <button onClick={() => { setOverlays(new Set()); setShowMenu(false); }} className="text-[10px] text-muted-foreground hover:text-foreground px-1 py-0.5 w-full text-left rounded hover:bg-muted/30">
-                  {tr("charts.candlestick.bareK")}
+                  Bare K (clear all)
                 </button>
               </div>
             </div>

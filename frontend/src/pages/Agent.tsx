@@ -1,8 +1,8 @@
+import { useTranslation } from 'react-i18next';
 import { useEffect, useRef, useState, useMemo, useCallback, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Send, Loader2, ArrowDown, Square, Download, Plus, Paperclip, X, Users, Target, ChevronDown, Pencil, Check, Play, OctagonX, Activity, Ban, CheckCircle2, Landmark } from "lucide-react";
 import { toast } from "sonner";
-import { useI18n } from "@/i18n";
 import { useAgentStore } from "@/stores/agent";
 import { useSSE } from "@/hooks/useSSE";
 import { ApiError, AUTH_REQUIRED_MESSAGE, api, isAuthRequiredError, type GoalSnapshot, type MandateProposal, type MandateCommitted, type LiveAction, type LiveHalted, type LiveStatus } from "@/lib/api";
@@ -45,6 +45,9 @@ function groupMessages(msgs: AgentMessage[]): MsgGroup[] {
 }
 
 const act = () => useAgentStore.getState();
+
+// i18n hook for Agent component — used inside the component below
+// (declared at module scope for helper usage is fine since t() reads from i18n singleton)
 
 /** Poll cadence for the shared `GET /live/status` snapshot. */
 const LIVE_STATUS_POLL_INTERVAL_MS = 15_000;
@@ -108,7 +111,6 @@ function liveActionLabel(action: LiveAction): string {
 }
 
 function LiveActionChip({ action }: { action: LiveAction }) {
-  const { t } = useI18n();
   const { icon: Icon, tone } = liveActionStyle(action.kind);
   return (
     <div className="flex gap-3">
@@ -116,7 +118,7 @@ function LiveActionChip({ action }: { action: LiveAction }) {
       <div className="flex-1 min-w-0">
         <div className={["inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs", tone].join(" ")}>
           <Icon className="h-3 w-3 shrink-0" />
-          <span className="shrink-0 font-medium uppercase tracking-wide text-[10px]">{t("pages.agent.runtime")}</span>
+          <span className="shrink-0 font-medium uppercase tracking-wide text-[10px]">RUNTIME</span>
           <span className="shrink-0 font-medium">{liveActionLabel(action)}</span>
           {action.intent_normalized && (
             <span className="truncate text-foreground/80">· {action.intent_normalized}</span>
@@ -208,6 +210,7 @@ function goalContinuePrompt(snapshot: GoalSnapshot): string {
 
 /* ---------- Component ---------- */
 export function Agent() {
+  const { t } = useTranslation();
   const [input, setInput] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   const listRef = useRef<HTMLDivElement>(null);
@@ -263,8 +266,6 @@ export function Agent() {
   const toolCalls = useAgentStore(s => s.toolCalls);
   const sessionLoading = useAgentStore(s => s.sessionLoading);
 
-  const { t } = useI18n();
-
   const { connect, disconnect, onStatusChange } = useSSE();
 
   const urlSessionId = searchParams.get("session");
@@ -309,8 +310,8 @@ export function Agent() {
   useEffect(() => {
     onStatusChange((s) => {
       act().setSseStatus(s);
-      if (s === "reconnecting" && prevSseStatusRef.current === "connected") toast.warning(t("pages.agent.toastConnectionLost"));
-      else if (s === "connected" && prevSseStatusRef.current === "reconnecting") toast.success(t("pages.agent.toastConnectionRestored"));
+      if (s === "reconnecting" && prevSseStatusRef.current === "connected") toast.warning(t('agent.connectionLostReconnect'));
+      else if (s === "connected" && prevSseStatusRef.current === "reconnecting") toast.success(t('agent.connectionRestored'));
       prevSseStatusRef.current = s;
     });
   }, [onStatusChange]);
@@ -339,7 +340,7 @@ export function Agent() {
         setGoalDetailsOpen(false);
         setGoalEditActive(false);
       } else {
-        toast.error(error instanceof Error ? error.message : "Failed to load goal.");
+        toast.error(error instanceof Error ? error.message : t('agent.failedToLoadGoal'));
       }
     }
   }, []);
@@ -668,7 +669,7 @@ export function Agent() {
         // the RunnerStatus panel re-polls so its per-broker rows show "halted".
         setLiveHalted(halted);
         setLiveStatusRefresh((n) => n + 1);
-        toast.warning(t("pages.agent.toastConnectorHalted"));
+        toast.warning(t('agent.connectorHalted'));
       },
 
       "live.resumed": (d) => {
@@ -678,7 +679,7 @@ export function Agent() {
         void d;
         setLiveHalted(null);
         setLiveStatusRefresh((n) => n + 1);
-        toast.success(t("pages.agent.toastConnectorResumed"));
+        toast.success(t('agent.connectionRestored'));
       },
 
       "live.action": (d) => {
@@ -722,6 +723,21 @@ export function Agent() {
       } else {
         loadSessionMessages(urlSessionId, gen);
       }
+      setupSSE(urlSessionId);
+    } else if (urlSessionId && urlSessionId === curSid && sseSessionRef.current !== urlSessionId) {
+      // #229: returning to the SAME session after the page was unmounted (user
+      // navigated away and back). The store kept our messages, but the unmount
+      // cleanup tore down the SSE stream, so a running attempt stopped updating
+      // and the UI looked frozen until the safety timeout fired. Re-hydrate like
+      // a reload: reset the transient streaming view first (so replay=active
+      // rebuilds the in-flight turn from the backend ring buffer instead of
+      // duplicating deltas onto the preserved text), refresh committed history
+      // (covers an attempt that finished while we were away), then re-subscribe.
+      const gen = genRef.current + 1;
+      genRef.current = gen;
+      const seed = curMsgs.length > 0 ? curMsgs : getCachedSession(urlSessionId);
+      switchSession(urlSessionId, seed);
+      loadSessionMessages(urlSessionId, gen);
       setupSSE(urlSessionId);
     } else if (!urlSessionId && curSid) {
       genRef.current += 1;
@@ -802,7 +818,7 @@ export function Agent() {
       if (lastEventRef.current && Date.now() - lastEventRef.current > sseTimeoutMsRef.current && act().status === "streaming") {
         setReasoningActive(false);
         act().setStatus("idle");
-        toast.warning(t("pages.agent.toastExecutionTimeout"));
+        toast.warning(t('agent.executionTimedOut'));
       }
     }, 10_000);
     return () => clearInterval(timer);
@@ -820,7 +836,7 @@ export function Agent() {
         setGoalSnapshot(snapshot);
         setGoalComposerActive(false);
         setGoalDetailsOpen(true);
-        toast.success(t("pages.agent.toastGoalAttached"));
+        toast.success(t('agent.researchGoalAttached'));
         const kickoff = goalKickoffPrompt(prompt);
         act().addMessage({ id: "", type: "user", content: kickoff, timestamp: Date.now() });
         act().setStatus("streaming");
@@ -829,7 +845,7 @@ export function Agent() {
         await api.sendMessage(sid, kickoff);
       } catch (error) {
         act().setStatus("idle");
-        toast.error(error instanceof Error ? error.message : "Failed to start goal.");
+        toast.error(error instanceof Error ? error.message : t('agent.failedToStartGoal'));
       }
       return;
     }
@@ -864,7 +880,7 @@ export function Agent() {
       await api.sendMessage(sid, finalPrompt);
     } catch (error) {
       act().setStatus("error");
-      const message = isAuthRequiredError(error) ? AUTH_REQUIRED_MESSAGE : "Failed to send message, please retry.";
+      const message = isAuthRequiredError(error) ? AUTH_REQUIRED_MESSAGE : t('agent.failedToSend');
       toast.error(message);
       act().addMessage({ id: "", type: "error", content: message, timestamp: Date.now() });
     }
@@ -895,9 +911,9 @@ export function Agent() {
       act().setStatus("idle");
       act().clearStreaming();
       useAgentStore.setState({ toolCalls: [] });
-      toast.info(t("pages.agent.toastCancelSent"));
+      toast.info(t('agent.cancelRequestSent'));
     } catch {
-      toast.error(t("pages.agent.toastCancelFailed"));
+      toast.error(t('agent.cancelFailed'));
     }
   };
 
@@ -915,9 +931,9 @@ export function Agent() {
       // optimistically and re-poll the runtime panel so the runner shows stopped.
       setLiveHalted((cur) => cur ?? { broker: null, by: "frontend", tripped_at: new Date().toISOString() });
       setLiveStatusRefresh((n) => n + 1);
-      toast.success(t("pages.agent.toastConnectorHalted"));
+      toast.success(t('agent.connectorHalted'));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to halt connector runtime.");
+      toast.error(error instanceof Error ? error.message : t('agent.failedToHaltConnector'));
     } finally {
       setHalting(false);
     }
@@ -934,9 +950,9 @@ export function Agent() {
       });
       setGoalSnapshot(null);
       setGoalDetailsOpen(false);
-      toast.success(t("pages.agent.toastGoalCancelled"));
+      toast.success(t('agent.researchGoalCancelled'));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to cancel goal.");
+      toast.error(error instanceof Error ? error.message : t('agent.failedToCancelGoal'));
     }
   }, [goalSnapshot, sessionId]);
 
@@ -957,9 +973,9 @@ export function Agent() {
       });
       setGoalSnapshot(response.snapshot);
       setGoalEditActive(false);
-      toast.success(t("pages.agent.toastGoalUpdated"));
+      toast.success(t('agent.researchGoalUpdated'));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update goal.");
+      toast.error(error instanceof Error ? error.message : t('agent.failedToUpdateGoal'));
     }
   }, [goalEditValue, goalSnapshot, sessionId]);
 
@@ -975,7 +991,7 @@ export function Agent() {
       await api.sendMessage(sessionId, prompt);
     } catch (error) {
       act().setStatus("error");
-      const message = isAuthRequiredError(error) ? AUTH_REQUIRED_MESSAGE : "Failed to continue goal, please retry.";
+      const message = isAuthRequiredError(error) ? AUTH_REQUIRED_MESSAGE : t('agent.failedToContinue');
       toast.error(message);
       act().addMessage({ id: "", type: "error", content: message, timestamp: Date.now() });
     }
@@ -1037,11 +1053,11 @@ export function Agent() {
     ];
     const lowered = file.name.toLowerCase();
     if (blockedExts.some((ext) => lowered.endsWith(ext))) {
-      toast.error(t("pages.agent.toastFileBlocked"));
+      toast.error(t('agent.executablesNotAllowed'));
       return;
     }
     if (file.size > 50 * 1024 * 1024) {
-      toast.error(t("pages.agent.toastFileSizeExceeded"));
+      toast.error(t('agent.fileSizeExceeds'));
       return;
     }
     setUploading(true);
@@ -1049,9 +1065,9 @@ export function Agent() {
     try {
       const result = await api.uploadFile(file);
       setAttachment({ filename: result.filename, filePath: result.file_path });
-      toast.success(t("pages.agent.toastUploaded", { filename: result.filename }));
+      toast.success(t('agent.uploaded', { filename: result.filename }));
     } catch (err) {
-      toast.error(t("pages.agent.toastUploadFailed", { error: err instanceof Error ? err.message : "Unknown error" }));
+      toast.error(t('agent.uploadFailed', { error: err instanceof Error ? err.message : 'Unknown error' }));
     } finally {
       setUploading(false);
     }
@@ -1173,7 +1189,7 @@ export function Agent() {
               <AgentAvatar />
               <div className="flex-1 min-w-0 flex items-center gap-2 text-xs text-muted-foreground pt-1">
                 <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
-                <span>{t("pages.agent.agentWorking")}</span>
+                <span>{t('agent.agentWorking')}</span>
               </div>
             </div>
           )}
@@ -1186,7 +1202,7 @@ export function Agent() {
                 {reasoningActive && !streamingText && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
-                    <span>{t("pages.agent.reasoning")}</span>
+                    <span>{t('agent.reasoning')}</span>
                   </div>
                 )}
                 {streamingText && (
@@ -1208,7 +1224,7 @@ export function Agent() {
               <div className="h-0.5 flex-1 rounded-full bg-primary/20 overflow-hidden">
                 <div className="h-full w-1/3 bg-primary rounded-full animate-[pulse-slide_2s_ease-in-out_infinite]" />
               </div>
-              <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">{t("pages.agent.running")}</span>
+              <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">{t('agent.running')}</span>
             </div>
           )}
 
@@ -1220,7 +1236,7 @@ export function Agent() {
             onClick={forceScrollToBottom}
             className="sticky bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-medium shadow-lg hover:opacity-90 transition-opacity z-10"
           >
-            <ArrowDown className="h-3 w-3" /> {t("pages.agent.newMessages")}
+            <ArrowDown className="h-3 w-3" /> {t('agent.newMessages')}
           </button>
         )}
         <ConversationTimeline messages={messages} containerRef={listRef} />
@@ -1244,7 +1260,7 @@ export function Agent() {
             <div className="flex items-center gap-1">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs font-medium">
                 <Target className="h-3 w-3" />
-                {t("pages.agent.newResearchGoal")}
+                New Research Goal
                 <button type="button" onClick={() => setGoalComposerActive(false)} className="hover:text-destructive transition-colors">
                   <X className="h-3 w-3" />
                 </button>
@@ -1258,11 +1274,11 @@ export function Agent() {
                 onClick={() => setGoalDetailsOpen((open) => !open)}
                 className="inline-flex max-w-full items-center gap-1.5 justify-self-start rounded-lg bg-primary/10 px-2.5 py-1 text-left text-xs font-medium text-primary transition-colors hover:bg-primary/15"
                 title={goalSnapshot.goal.objective}
-                aria-label={t("pages.agent.activeResearchGoal")}
+                aria-label="Active research goal"
                 aria-expanded={goalDetailsOpen}
               >
                 <Target className="h-3 w-3 shrink-0" />
-                <span className="shrink-0">{t("pages.agent.goal")}</span>
+                <span className="shrink-0">{t('agent.goal')}</span>
                 <span className="truncate text-muted-foreground">
                   {goalSnapshot.goal.ui_summary || goalSnapshot.goal.objective}
                 </span>
@@ -1272,8 +1288,8 @@ export function Agent() {
                   </span>
                 )}
                 {goalProgress.evidenceTotal > 0 && (
-                  <span className="shrink-0 rounded bg-background px-1 font-mono text-[10px] text-primary" title={t("pages.agent.activeResearchGoal")}>
-                    {goalProgress.evidenceTotal} {t("pages.agent.evidence")}
+                  <span className="shrink-0 rounded bg-background px-1 font-mono text-[10px] text-primary" title="Evidence collected toward this research goal">
+                    {goalProgress.evidenceTotal} evidence
                   </span>
                 )}
                 <ChevronDown
@@ -1301,7 +1317,7 @@ export function Agent() {
                           className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
                         >
                           <X className="h-3 w-3" />
-                          {t("common.cancel")}
+                          Cancel
                         </button>
                         <button
                           type="button"
@@ -1310,7 +1326,7 @@ export function Agent() {
                           className="inline-flex items-center gap-1 rounded-lg bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground transition-opacity disabled:opacity-40"
                         >
                           <Check className="h-3 w-3" />
-                          {t("common.save")}
+                          Save
                         </button>
                       </div>
                     </div>
@@ -1322,7 +1338,7 @@ export function Agent() {
                   <div className="grid grid-cols-2 gap-2">
                     <div className="rounded-lg border bg-muted/20 p-2.5">
                       <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        {t("pages.agent.criteria")}
+                        Criteria
                       </div>
                       <div className="mt-1 font-mono text-base font-semibold text-foreground">
                         {goalProgress.label || "0/0"}
@@ -1330,7 +1346,7 @@ export function Agent() {
                     </div>
                     <div className="rounded-lg border bg-muted/20 p-2.5">
                       <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        {t("pages.agent.evidence")}
+                        Evidence
                       </div>
                       <div className="mt-1 font-mono text-base font-semibold text-foreground">
                         {goalProgress.evidenceTotal}
@@ -1367,7 +1383,7 @@ export function Agent() {
                   {goalSnapshot.evidence.length > 0 && (
                     <div className="grid gap-1.5 border-t pt-2">
                       <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        {t("pages.agent.recentEvidence")}
+                        Recent Evidence
                       </div>
                       {latestGoalEvidence(goalSnapshot).map((item) => (
                         <div key={item.evidence_id} className="rounded-lg bg-muted/20 px-2 py-1.5">
@@ -1390,7 +1406,7 @@ export function Agent() {
                       className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
                     >
                       <Play className="h-3 w-3" />
-                      {t("pages.agent.continue")}
+                      Continue
                     </button>
                     <button
                       type="button"
@@ -1399,7 +1415,7 @@ export function Agent() {
                       className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
                     >
                       <Pencil className="h-3 w-3" />
-                      {t("pages.agent.edit")}
+                      Edit
                     </button>
                     <button
                       type="button"
@@ -1407,7 +1423,7 @@ export function Agent() {
                       className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
                     >
                       <X className="h-3 w-3" />
-                      {t("pages.agent.cancelGoal")}
+                      Cancel Goal
                     </button>
                   </div>
                 </div>
@@ -1438,7 +1454,7 @@ export function Agent() {
           {uploading && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
-              {t("pages.agent.uploading")}
+              Uploading...
             </div>
           )}
           {/* Persistent kill switch — distinct from the per-turn Stop button
@@ -1448,7 +1464,7 @@ export function Agent() {
               {liveIsHalted ? (
                 <span className="inline-flex items-center gap-1.5 rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive">
                   <OctagonX className="h-3 w-3" />
-                  {t("pages.agent.connectorRuntimeHalted")}
+                  Connector runtime halted
                 </span>
               ) : (
                 <button
@@ -1456,10 +1472,10 @@ export function Agent() {
                   onClick={handleHaltLive}
                   disabled={halting}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/40 bg-destructive/5 px-2.5 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-40"
-                  title={t("pages.agent.haltConnectorRuntimeTitle")}
+                  title="Instantly halt connector runtime activity"
                 >
                   {halting ? <Loader2 className="h-3 w-3 animate-spin" /> : <OctagonX className="h-3 w-3" />}
-                  {t("pages.agent.haltConnectorRuntime")}
+                  Halt connector runtime
                 </button>
               )}
             </div>
@@ -1472,7 +1488,7 @@ export function Agent() {
                 onClick={() => setShowUploadMenu(prev => !prev)}
                 disabled={status === "streaming" || uploading}
                 className="w-9 h-9 rounded-full border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40 shrink-0"
-                title={t("pages.agent.moreOptions")}
+                title="More options"
               >
                 <Plus className="h-4 w-4" />
               </button>
@@ -1484,7 +1500,7 @@ export function Agent() {
                     className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2"
                   >
                     <Paperclip className="h-4 w-4" />
-                    {t("pages.agent.uploadPdf")}
+                    Upload PDF document
                   </button>
                   <div className="border-t my-1" />
                   <button
@@ -1498,20 +1514,20 @@ export function Agent() {
                     className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2"
                   >
                     <Target className="h-4 w-4" />
-                    {t("pages.agent.researchGoal")}
+                    Research Goal
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       setShowUploadMenu(false);
                       setGoalComposerActive(false);
-                      setSwarmPreset({ name: "auto", title: t("pages.agent.agentSwarm") });
+                      setSwarmPreset({ name: "auto", title: "Agent Swarm" });
                       inputRef.current?.focus();
                     }}
                     className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2"
                   >
                     <Users className="h-4 w-4" />
-                    {t("pages.agent.agentSwarm")}
+                    Agent Swarm
                   </button>
                   <div className="border-t my-1" />
                   <button
@@ -1523,7 +1539,7 @@ export function Agent() {
                     className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2"
                   >
                     <Landmark className="h-4 w-4" />
-                    {t("pages.agent.checkTradingConnector")}
+                    Check Trading Connector
                   </button>
                   <button
                     type="button"
@@ -1534,7 +1550,7 @@ export function Agent() {
                     className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2"
                   >
                     <Landmark className="h-4 w-4" />
-                    {t("pages.agent.analyzeConnectorPortfolio")}
+                    Analyze Connector Portfolio
                   </button>
                 </div>
               )}
@@ -1580,8 +1596,8 @@ export function Agent() {
               }}
               placeholder={
                 goalComposerActive
-                  ? t("pages.agent.goalInputPlaceholder")
-                  : t("pages.agent.inputPlaceholder")
+                  ? "Describe the research goal to attach to this session"
+                  : "e.g. Create a dual MA crossover strategy for 000001.SZ, backtest 2024"
               }
               className="flex-1 px-4 py-2.5 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition-shadow resize-none max-h-32 overflow-y-auto"
               disabled={status === "streaming"}
@@ -1591,7 +1607,7 @@ export function Agent() {
                 type="button"
                 onClick={handleExport}
                 className="px-3 py-2.5 rounded-xl border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                title={t("pages.agent.exportChat")}
+                title={t('agent.exportChat')}
               >
                 <Download className="h-4 w-4" />
               </button>
@@ -1601,7 +1617,7 @@ export function Agent() {
                 type="button"
                 onClick={handleCancel}
                 className="px-4 py-2.5 rounded-xl bg-destructive text-destructive-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-                title={t("pages.agent.stopGeneration")}
+                title={t('agent.stopGeneration')}
               >
                 <Square className="h-4 w-4" />
               </button>

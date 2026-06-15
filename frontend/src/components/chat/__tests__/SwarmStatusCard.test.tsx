@@ -1,7 +1,6 @@
 // @vitest-environment node
 
 import { renderToStaticMarkup } from "react-dom/server";
-import { LanguageProvider } from "@/i18n";
 import { SwarmStatusCard } from "../SwarmStatusCard";
 import {
   applySwarmEvent,
@@ -9,14 +8,6 @@ import {
   buildSwarmStatusFromToolResultPreview,
 } from "@/lib/swarmStatus";
 import type { SwarmRunStatus } from "@/types/agent";
-
-// Force English for i18n text assertions
-beforeEach(() => {
-  vi.stubGlobal("localStorage", {
-    getItem: () => "en",
-    setItem: () => {},
-  });
-});
 
 function makeStatus(overrides: Partial<SwarmRunStatus> = {}): SwarmRunStatus {
   return {
@@ -40,11 +31,7 @@ function makeStatus(overrides: Partial<SwarmRunStatus> = {}): SwarmRunStatus {
 
 describe("SwarmStatusCard", () => {
   it("renders agent status rows", () => {
-    const html = renderToStaticMarkup(
-      <LanguageProvider>
-        <SwarmStatusCard status={makeStatus()} />
-      </LanguageProvider>,
-    );
+    const html = renderToStaticMarkup(<SwarmStatusCard status={makeStatus()} />);
 
     expect(html).toContain("demo_team");
     expect(html).toContain("running");
@@ -58,11 +45,7 @@ describe("SwarmStatusCard", () => {
   });
 
   it("shows empty state while waiting for events", () => {
-    const html = renderToStaticMarkup(
-      <LanguageProvider>
-        <SwarmStatusCard status={makeStatus({ agents: [] })} />
-      </LanguageProvider>,
-    );
+    const html = renderToStaticMarkup(<SwarmStatusCard status={makeStatus({ agents: [] })} />);
 
     expect(html).toContain("Waiting for agent events...");
   });

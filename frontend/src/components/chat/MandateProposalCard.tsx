@@ -1,10 +1,8 @@
+import i18n from '@/i18n';
 import { memo, useCallback, useState } from "react";
 import { ShieldCheck, ShieldAlert, Wallet, OctagonX, SlidersHorizontal, Check, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, type MandateProfile, type MandateProposal } from "@/lib/api";
-import { useI18n } from "@/i18n";
-import type { NestedKeyOf } from "@/i18n/types";
-import type { Translation } from "@/i18n/locales/zh";
 import { AgentAvatar } from "./AgentAvatar";
 
 interface Props {
@@ -28,12 +26,12 @@ function formatUsd(value: number): string {
   return `$${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
-function formatLeverage(leverage: MandateProfile["leverage"], t: (key: NestedKeyOf<Translation>) => string): string {
+function formatLeverage(leverage: MandateProfile["leverage"]): string {
   if (typeof leverage === "number") {
-    return leverage <= 1 ? t("chat.runner.noLeverage") : `${leverage}× leverage`;
+    return leverage <= 1 ? "no leverage" : `${leverage}× leverage`;
   }
   const lowered = leverage.toLowerCase();
-  return lowered === "none" || lowered === "" ? t("chat.runner.noLeverage") : leverage;
+  return lowered === "none" || lowered === "" ? "no leverage" : leverage;
 }
 
 function formatUniverse(universe: MandateProfile["universe"]): string {
@@ -62,7 +60,6 @@ function ProfileTile({
   onAdjustSubmit: (text: string) => void;
   onAdjustCancel: () => void;
 }) {
-  const { t } = useI18n();
   const [adjustText, setAdjustText] = useState("");
 
   const submit = () => {
@@ -93,32 +90,32 @@ function ProfileTile({
           onClick={onAdjustToggle}
           disabled={disabled}
           className="inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
-          title={t("chat.mandate.adjustTitle")}
+          title="Adjust this mandate"
         >
           <SlidersHorizontal className="h-3 w-3" />
-          {t("chat.mandate.adjust")}
+          Adjust
         </button>
       </div>
 
       <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
         <div className="col-span-2">
-          <dt className="text-muted-foreground">{t("chat.mandate.universe")}</dt>
+          <dt className="text-muted-foreground">{i18n.t("mandate.universe")}</dt>
           <dd className="font-medium text-foreground">{formatUniverse(profile.universe)}</dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">{t("chat.mandate.maxOrder")}</dt>
+          <dt className="text-muted-foreground">{i18n.t("mandate.maxOrder")}</dt>
           <dd className="font-mono font-medium text-foreground">{formatUsd(profile.max_order_usd)}</dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">{t("chat.mandate.dailyCap")}</dt>
+          <dt className="text-muted-foreground">{i18n.t("mandate.dailyCap")}</dt>
           <dd className="font-mono font-medium text-foreground">{profile.daily_trade_cap} trades/day</dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">{t("chat.mandate.leverage")}</dt>
-          <dd className="font-medium text-foreground">{formatLeverage(profile.leverage, t)}</dd>
+          <dt className="text-muted-foreground">{i18n.t("mandate.leverage")}</dt>
+          <dd className="font-medium text-foreground">{formatLeverage(profile.leverage)}</dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">{t("chat.mandate.instruments")}</dt>
+          <dt className="text-muted-foreground">{i18n.t("mandate.instruments")}</dt>
           <dd className="font-medium text-foreground">{profile.instruments.join(", ") || "—"}</dd>
         </div>
       </dl>
@@ -142,7 +139,7 @@ function ProfileTile({
                 onAdjustCancel();
               }
             }}
-            placeholder={t("chat.mandate.adjustPlaceholder")}
+            placeholder="e.g. keep this but raise the daily cap to 10"
             className="w-full rounded-lg border bg-background px-3 py-1.5 text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/30"
           />
           <div className="flex justify-end gap-2">
@@ -152,7 +149,7 @@ function ProfileTile({
               className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               <X className="h-3 w-3" />
-              {t("chat.mandate.cancel")}
+              Cancel
             </button>
             <button
               type="button"
@@ -161,7 +158,7 @@ function ProfileTile({
               className="inline-flex items-center gap-1 rounded-lg bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground transition-opacity disabled:opacity-40"
             >
               <Check className="h-3 w-3" />
-              {t("chat.mandate.sendAdjustment")}
+              Send adjustment
             </button>
           </div>
         </div>
@@ -173,7 +170,7 @@ function ProfileTile({
           className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-          {busy ? t("chat.mandate.committing") : t("chat.mandate.commit", { label: profile.label })}
+          {busy ? "Committing…" : `Commit “${profile.label}”`}
         </button>
       )}
     </div>
@@ -189,7 +186,6 @@ function ProfileTile({
  * to re-render a fresh proposal. Once committed, the card collapses to a compact badge.
  */
 export const MandateProposalCard = memo(function MandateProposalCard({ proposal, committed, onAdjust }: Props) {
-  const { t } = useI18n();
   const [busyOrdinal, setBusyOrdinal] = useState<number | null>(null);
   const [adjustingOrdinal, setAdjustingOrdinal] = useState<number | null>(null);
 
@@ -198,7 +194,7 @@ export const MandateProposalCard = memo(function MandateProposalCard({ proposal,
       if (busyOrdinal != null) return;
       const broker = proposal.account?.broker?.trim().toLowerCase();
       if (!broker) {
-        toast.error(t("chat.mandate.mandateMissingError"));
+        toast.error("Cannot commit mandate: connector broker is missing. Ask the agent to regenerate the proposal.");
         return;
       }
       setBusyOrdinal(ordinal);
@@ -215,10 +211,10 @@ export const MandateProposalCard = memo(function MandateProposalCard({ proposal,
         // SSE event arrives; no optimistic state-write here.
       } catch (error) {
         setBusyOrdinal(null);
-        toast.error(error instanceof Error ? error.message : t("chat.mandate.commitFailedError"));
+        toast.error(error instanceof Error ? error.message : "Failed to commit mandate.");
       }
     },
-    [busyOrdinal, proposal.account?.broker, proposal.proposal_id, proposal.session_id, t],
+    [busyOrdinal, proposal.account?.broker, proposal.proposal_id, proposal.session_id],
   );
 
   // Collapsed state: a compact active-mandate badge (same visual family as the goal badge).
@@ -234,7 +230,7 @@ export const MandateProposalCard = memo(function MandateProposalCard({ proposal,
           <span className="inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-lg bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
             <ShieldCheck className="h-3 w-3 shrink-0" />
             <span className="shrink-0">
-              {committed.selected_ordinal != null ? t("chat.mandate.active", { ordinal: committed.selected_ordinal }) : t("chat.mandate.activeNoOrdinal")}
+              Mandate {committed.selected_ordinal != null ? `#${committed.selected_ordinal} ` : ""}active
             </span>
             {maxOrder != null && (
               <span className="shrink-0 font-mono text-[11px]">· ≤{formatUsd(maxOrder)}/order</span>
@@ -242,7 +238,7 @@ export const MandateProposalCard = memo(function MandateProposalCard({ proposal,
             {dailyCap != null && <span className="shrink-0 font-mono text-[11px]">· {dailyCap}/day</span>}
             {expires && (
               <span className="shrink-0 text-[10px] text-muted-foreground">
-                · {t("chat.mandate.expires")} {expires.toLocaleDateString()}
+                · expires {expires.toLocaleDateString()}
               </span>
             )}
           </span>
@@ -265,7 +261,7 @@ export const MandateProposalCard = memo(function MandateProposalCard({ proposal,
           )}
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground">
-              {isReauth ? t("chat.mandate.reauthTitle") : t("chat.mandate.title")}
+              {isReauth ? i18n.t("mandate.reauthMandate") : i18n.t("mandate.runtimeMandate")}
             </p>
             {proposal.intent_normalized && (
               <p className="text-xs text-muted-foreground">{proposal.intent_normalized}</p>

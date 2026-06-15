@@ -1,6 +1,5 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { LanguageProvider } from "@/i18n";
 import { MessageBubble } from "../MessageBubble";
 import type { AgentMessage } from "@/types/agent";
 
@@ -28,47 +27,42 @@ function makeMsg(overrides: Partial<AgentMessage> = {}): AgentMessage {
   };
 }
 
-function renderWithI18n(ui: React.ReactElement) {
-  localStorage.setItem("vibe-lang", "en");
-  return render(<LanguageProvider>{ui}</LanguageProvider>);
-}
-
 describe("MessageBubble", () => {
   describe("user messages", () => {
     it("renders user content in a styled bubble", () => {
-      renderWithI18n(<MessageBubble msg={makeMsg({ type: "user", content: "Hello agent!" })} />);
+      render(<MessageBubble msg={makeMsg({ type: "user", content: "Hello agent!" })} />);
       expect(screen.getByText("Hello agent!")).toBeInTheDocument();
     });
 
     it("shows timestamp", () => {
-      renderWithI18n(<MessageBubble msg={makeMsg({ type: "user" })} />);
+      render(<MessageBubble msg={makeMsg({ type: "user" })} />);
       expect(screen.getByText("14:30")).toBeInTheDocument();
     });
   });
 
   describe("answer messages", () => {
     it("renders markdown content", () => {
-      renderWithI18n(<MessageBubble msg={makeMsg({ type: "answer", content: "Here is the **analysis**" })} />);
+      render(<MessageBubble msg={makeMsg({ type: "answer", content: "Here is the **analysis**" })} />);
       expect(screen.getByTestId("markdown")).toHaveTextContent("Here is the **analysis**");
     });
   });
 
   describe("error messages", () => {
     it("renders error content with danger styling", () => {
-      renderWithI18n(<MessageBubble msg={makeMsg({ type: "error", content: "Execution failed" })} />);
+      render(<MessageBubble msg={makeMsg({ type: "error", content: "Execution failed" })} />);
       expect(screen.getByText("Execution failed")).toBeInTheDocument();
     });
 
     it("shows retry button when onRetry is provided", () => {
       const onRetry = vi.fn();
-      renderWithI18n(<MessageBubble msg={makeMsg({ type: "error", content: "Something broke" })} onRetry={onRetry} />);
+      render(<MessageBubble msg={makeMsg({ type: "error", content: "Something broke" })} onRetry={onRetry} />);
       expect(screen.getByRole("button")).toBeInTheDocument();
     });
 
     it("calls onRetry when retry button is clicked", async () => {
       const onRetry = vi.fn();
       const msg = makeMsg({ type: "error", content: "Something broke" });
-      renderWithI18n(<MessageBubble msg={msg} onRetry={onRetry} />);
+      render(<MessageBubble msg={msg} onRetry={onRetry} />);
 
       const user = userEvent.setup();
       await user.click(screen.getByRole("button"));
@@ -76,7 +70,7 @@ describe("MessageBubble", () => {
     });
 
     it("shows timeout hint for timeout errors", () => {
-      renderWithI18n(
+      render(
         <MessageBubble
           msg={makeMsg({ type: "error", content: "Execution timed out after 600s" })}
           onRetry={vi.fn()}
@@ -88,7 +82,7 @@ describe("MessageBubble", () => {
 
   describe("run_complete messages", () => {
     it("renders RunCompleteCard when runId is present", () => {
-      renderWithI18n(<MessageBubble msg={makeMsg({ type: "run_complete", runId: "run-42" })} />);
+      render(<MessageBubble msg={makeMsg({ type: "run_complete", runId: "run-42" })} />);
       expect(screen.getByTestId("run-complete-card")).toBeInTheDocument();
       expect(screen.getByText("Run: run-42")).toBeInTheDocument();
     });
@@ -96,12 +90,12 @@ describe("MessageBubble", () => {
 
   describe("fallback", () => {
     it("renders content for unknown message types", () => {
-      renderWithI18n(<MessageBubble msg={makeMsg({ type: "thinking", content: "analyzing data..." })} />);
+      render(<MessageBubble msg={makeMsg({ type: "thinking", content: "analyzing data..." })} />);
       expect(screen.getByText("analyzing data...")).toBeInTheDocument();
     });
 
     it("renders null for empty content on unknown types", () => {
-      const { container } = renderWithI18n(<MessageBubble msg={makeMsg({ type: "thinking", content: "" })} />);
+      const { container } = render(<MessageBubble msg={makeMsg({ type: "thinking", content: "" })} />);
       expect(container.innerHTML).toBe("");
     });
   });

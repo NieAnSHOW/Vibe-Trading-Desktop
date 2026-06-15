@@ -1,7 +1,6 @@
 import { Suspense, lazy, type ComponentType } from "react";
 import { createBrowserRouter } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
-import { useI18n } from "@/i18n";
 
 const Home = lazy(() => import("@/pages/Home").then((m) => ({ default: m.Home })));
 const Agent = lazy(() => import("@/pages/Agent").then((m) => ({ default: m.Agent })));
@@ -14,6 +13,9 @@ const Compare = lazy(() =>
 const Settings = lazy(() =>
   import("@/pages/Settings").then((m) => ({ default: m.Settings })),
 );
+const Runtime = lazy(() =>
+  import("@/pages/Runtime").then((m) => ({ default: m.Runtime })),
+);
 const Correlation = lazy(() =>
   import("@/pages/Correlation").then((m) => ({ default: m.Correlation })),
 );
@@ -22,10 +24,9 @@ const AlphaZoo = lazy(() =>
 );
 
 function PageLoader() {
-  const { t } = useI18n();
   return (
     <div className="flex h-[60vh] items-center justify-center text-muted-foreground">
-      {t("router.loading")}
+      Loading…
     </div>
   );
 }
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
     children: [
       { path: "/", element: wrap(Home) },
       { path: "/agent", element: wrap(Agent) },
+      { path: "/runtime", element: wrap(Runtime) },
       { path: "/settings", element: wrap(Settings) },
       { path: "/runs/:runId", element: wrap(RunDetail) },
       { path: "/compare", element: wrap(Compare) },

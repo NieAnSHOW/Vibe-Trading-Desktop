@@ -1,9 +1,9 @@
+import i18n from "@/i18n";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Database, KeyRound, Loader2, Package, RotateCcw, Save, Server, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { api, isAuthRequiredError, type DataSourceSettings, type LLMProviderOption, type LLMSettings } from "@/lib/api";
 import { getApiAuthKey, setApiAuthKey } from "@/lib/apiAuth";
-import { useI18n } from "@/i18n";
 import { OptionalDepsManager } from "@/components/settings/OptionalDepsManager";
 
 interface LLMFormState {
@@ -34,7 +34,7 @@ function toForm(settings: LLMSettings): LLMFormState {
 }
 
 export function Settings() {
-  const { t } = useI18n();
+  
   const [settings, setSettings] = useState<LLMSettings | null>(null);
   const [dataSettings, setDataSettings] = useState<DataSourceSettings | null>(null);
   const [form, setForm] = useState<LLMFormState | null>(null);
@@ -64,8 +64,8 @@ export function Settings() {
         if (isAuthRequiredError(error)) {
           toast.error(message);
         } else {
-          toast.error(t("pages.settings.toastLlmLoadFailed", { error: message }));
-          toast.error(t("pages.settings.toastDataLoadFailed", { error: message }));
+          toast.error(`Failed to load LLM settings: ${message}`);
+          toast.error(`Failed to load data source settings: ${message}`);
         }
       })
       .finally(() => {
@@ -105,7 +105,7 @@ export function Settings() {
   const submitLocalApiKey = (event: FormEvent) => {
     event.preventDefault();
     setApiAuthKey(localApiKey);
-    toast.success(t("pages.settings.toastLocalKeySaved"));
+    toast.success("Local API key saved");
     window.location.reload();
   };
 
@@ -123,9 +123,9 @@ export function Settings() {
       setForm(toForm(updated));
       setApiKey("");
       setClearApiKey(false);
-      toast.success(t("pages.settings.toastLlmSaved"));
+      toast.success("LLM settings saved");
     } catch (error) {
-      toast.error(t("pages.settings.toastLlmSaveFailed", { error: error instanceof Error ? error.message : "Unknown error" }));
+      toast.error(`Failed to save LLM settings: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setSaving(false);
     }
@@ -142,9 +142,9 @@ export function Settings() {
       setDataSettings(updated);
       setTushareToken("");
       setClearTushareToken(false);
-      toast.success(t("pages.settings.toastDataSaved"));
+      toast.success("Data source settings saved");
     } catch (error) {
-      toast.error(t("pages.settings.toastDataSaveFailed", { error: error instanceof Error ? error.message : "Unknown error" }));
+      toast.error(`Failed to save data source settings: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setDataSaving(false);
     }
@@ -155,19 +155,19 @@ export function Settings() {
       <div className="mb-4 space-y-1">
         <div className="flex items-center gap-2">
           <KeyRound className="h-4 w-4 text-primary" />
-          <h2 className="text-base font-semibold">{t("pages.settings.localApiAccess")}</h2>
+          <h2 className="text-base font-semibold">{"Local API access"}</h2>
         </div>
-        <p className="text-sm text-muted-foreground">{t("pages.settings.localApiAccessDesc")}</p>
+        <p className="text-sm text-muted-foreground">{"For remote or private Web UI deployments, enter the server API key once in this browser. Localhost use can stay blank."}</p>
       </div>
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
         <label className="grid gap-2">
-          <span className={labelClass}>{t("pages.settings.serverApiKey")}</span>
+          <span className={labelClass}>{"Server API key"}</span>
           <input
             type="password"
             value={localApiKey}
             onChange={(event) => setLocalApiKeyState(event.target.value)}
             className={fieldClass}
-            placeholder={t("pages.settings.serverApiKeyPlaceholder")}
+            placeholder={"Stored only in this browser. Leave blank to clear it."}
             autoComplete="current-password"
           />
         </label>
@@ -176,10 +176,10 @@ export function Settings() {
           className="inline-flex items-center justify-center gap-2 self-end rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
         >
           <Save className="h-4 w-4" />
-          {t("pages.settings.saveLocalKey")}
+          {i18n.t("settings.save")}
         </button>
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">{t("pages.settings.serverApiKeyHint")}</p>
+      <p className="mt-2 text-xs text-muted-foreground">{"Stored only in this browser. Leave blank to clear it."}</p>
     </form>
   );
 
@@ -187,20 +187,20 @@ export function Settings() {
     return (
       <div className="mx-auto max-w-5xl space-y-6 p-6">
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">{t("pages.settings.title")}</h1>
-          <p className="max-w-3xl text-sm text-muted-foreground">{t("pages.settings.subtitle")}</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{"Settings"}</h1>
+          <p className="max-w-3xl text-sm text-muted-foreground">{"Configure model credentials and market data source tokens for this local project."}</p>
         </div>
         {localApiAccessSection}
         <div className="flex min-h-32 items-center justify-center rounded-lg border bg-card p-5 text-sm text-muted-foreground">
           {settingsLoadError ? (
             <div className="text-center">
-              <div className="font-medium text-foreground">{t("pages.settings.unavailable")}</div>
+              <div className="font-medium text-foreground">{"Settings are unavailable"}</div>
               <div className="mt-1">{settingsLoadError}</div>
             </div>
           ) : (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {t("pages.settings.loadingText")}
+              {"Loading..."}
             </>
           )}
         </div>
@@ -209,41 +209,41 @@ export function Settings() {
   }
 
   const keyStatus = settings.api_key_configured
-    ? t("pages.settings.keyConfigured")
+    ? "Configured"
     : settings.api_key_required
-      ? t("pages.settings.leaveBlankKeepKey")
+      ? "Leave blank to keep the current key"
       : selectedProvider?.auth_type === "oauth" && selectedProvider.login_command
-        ? `${t("pages.settings.oauthHint")} ${selectedProvider.login_command}`
-        : t("pages.settings.noApiKeyRequired");
+        ? `This provider uses OAuth. Run: ${selectedProvider.login_command}`
+        : "This provider does not require an API key.";
   const apiKeyDisabled = !selectedProvider?.api_key_required || clearApiKey;
   const tushareStatus = dataSettings.tushare_token_configured
-    ? t("pages.settings.keyConfigured")
-    : t("pages.settings.leaveBlankKeepToken");
+    ? "Configured"
+    : "Leave blank to keep the current token";
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("pages.settings.title")}</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">{t("pages.settings.subtitle")}</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{"Settings"}</h1>
+        <p className="max-w-3xl text-sm text-muted-foreground">{"Configure model credentials and market data source tokens for this local project."}</p>
       </div>
 
       {localApiAccessSection}
 
       <div className="space-y-2">
-        <h2 className="text-lg font-semibold tracking-tight">{t("pages.settings.llmTitle")}</h2>
-        <p className="max-w-3xl text-sm text-muted-foreground">{t("pages.settings.llmDesc")}</p>
+        <h2 className="text-lg font-semibold tracking-tight">{"LLM Settings"}</h2>
+        <p className="max-w-3xl text-sm text-muted-foreground">{"Choose the model used by the agent and save it to the project-local agent/.env file."}</p>
       </div>
 
       <form onSubmit={submit} className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
         <section className="rounded-lg border bg-card p-5 shadow-sm">
           <div className="mb-5 flex items-center gap-2">
             <Server className="h-4 w-4 text-primary" />
-            <h2 className="text-base font-semibold">{t("pages.settings.connection")}</h2>
+            <h2 className="text-base font-semibold">{"Connection"}</h2>
           </div>
 
           <div className="grid gap-4">
             <label className="grid gap-2">
-              <span className={labelClass}>{t("pages.settings.provider")}</span>
+              <span className={labelClass}>{i18n.t("settings.provider")}</span>
               <select
                 value={form.provider}
                 onChange={(event) => onProviderChange(event.target.value)}
@@ -253,11 +253,11 @@ export function Settings() {
                   <option key={provider.name} value={provider.name}>{provider.label}</option>
                 ))}
               </select>
-              <span className={hintClass}>{t("pages.settings.providerHint")}</span>
+              <span className={hintClass}>{"Changing providers updates the recommended model and endpoint."}</span>
             </label>
 
             <label className="grid gap-2">
-              <span className={labelClass}>{t("pages.settings.model")}</span>
+              <span className={labelClass}>{"Model"}</span>
               <div className="flex gap-2">
                 <input
                   value={form.model_name}
@@ -269,17 +269,17 @@ export function Settings() {
                   type="button"
                   onClick={() => applyProviderDefaults()}
                   className="inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                  title={t("pages.settings.useProviderDefaults")}
+                  title={"Use provider defaults"}
                 >
                   <RotateCcw className="h-4 w-4" />
-                  <span className="hidden sm:inline">{t("pages.settings.useProviderDefaults")}</span>
+                  <span className="hidden sm:inline">{"Use provider defaults"}</span>
                 </button>
               </div>
-              <span className={hintClass}>{t("pages.settings.modelHint")}</span>
+              <span className={hintClass}>{"Use the exact model id required by your provider."}</span>
             </label>
 
             <label className="grid gap-2">
-              <span className={labelClass}>{t("pages.settings.baseUrl")}</span>
+              <span className={labelClass}>{i18n.t("settings.baseUrl")}</span>
               <input
                 value={form.base_url}
                 onChange={(event) => setForm({ ...form, base_url: event.target.value })}
@@ -291,7 +291,7 @@ export function Settings() {
 
             <label className="grid gap-2">
               <span className={labelClass}>
-                {selectedProvider?.auth_type === "oauth" ? t("pages.settings.oauth") : t("pages.settings.apiKey")}
+                {selectedProvider?.auth_type === "oauth" ? "OAuth" : "API key"}
               </span>
               <div className="relative">
                 <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -318,7 +318,7 @@ export function Settings() {
                       }}
                       className="h-3.5 w-3.5 accent-primary"
                     />
-                    {t("pages.settings.clearApiKey")}
+                    {"Clear saved API key"}
                   </label>
                 ) : null}
               </div>
@@ -329,12 +329,12 @@ export function Settings() {
         <section className="rounded-lg border bg-card p-5 shadow-sm">
           <div className="mb-5 flex items-center gap-2">
             <SlidersHorizontal className="h-4 w-4 text-primary" />
-            <h2 className="text-base font-semibold">{t("pages.settings.generation")}</h2>
+            <h2 className="text-base font-semibold">{"Generation"}</h2>
           </div>
 
           <div className="grid gap-4">
             <label className="grid gap-2">
-              <span className={labelClass}>{t("pages.settings.temperature")}</span>
+              <span className={labelClass}>{i18n.t("settings.temperature")}</span>
               <input
                 type="number"
                 min={0}
@@ -347,7 +347,7 @@ export function Settings() {
             </label>
 
             <label className="grid gap-2">
-              <span className={labelClass}>{t("pages.settings.timeoutSeconds")}</span>
+              <span className={labelClass}>{i18n.t("settings.timeoutSeconds")}</span>
               <input
                 type="number"
                 min={1}
@@ -360,7 +360,7 @@ export function Settings() {
             </label>
 
             <label className="grid gap-2">
-              <span className={labelClass}>{t("pages.settings.maxRetries")}</span>
+              <span className={labelClass}>{"Max retries"}</span>
               <input
                 type="number"
                 min={0}
@@ -373,23 +373,23 @@ export function Settings() {
             </label>
 
             <label className="grid gap-2">
-              <span className={labelClass}>{t("pages.settings.reasoningEffort")}</span>
+              <span className={labelClass}>{i18n.t("settings.reasoningEffort")}</span>
               <select
                 value={form.reasoning_effort}
                 onChange={(event) => setForm({ ...form, reasoning_effort: event.target.value })}
                 className={fieldClass}
               >
-                <option value="">{t("pages.settings.reasoningEffortOff")}</option>
+                <option value="">{"Off"}</option>
                 <option value="low">low</option>
                 <option value="medium">medium</option>
                 <option value="high">high</option>
                 <option value="max">max</option>
               </select>
-              <span className={hintClass}>{t("pages.settings.reasoningEffortHint")}</span>
+              <span className={hintClass}>{"How hard the model thinks before answering. Higher is more thorough but slower; leave Off for fastest replies."}</span>
             </label>
 
             <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">{t("pages.settings.savedTo")}: </span>
+              <span className="font-medium text-foreground">{i18n.t("settings.saved")}: </span>
               <span className="break-all font-mono">{settings.env_path}</span>
             </div>
 
@@ -399,7 +399,7 @@ export function Settings() {
               className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {saving ? t("pages.settings.saving") : t("pages.settings.saveSettings")}
+              {saving ? i18n.t("settings.saving") : i18n.t("settings.save")}
             </button>
           </div>
         </section>
@@ -409,15 +409,15 @@ export function Settings() {
         <div className="mb-5 space-y-1">
           <div className="flex items-center gap-2">
             <Database className="h-4 w-4 text-primary" />
-            <h2 className="text-base font-semibold">{t("pages.settings.dataTitle")}</h2>
+            <h2 className="text-base font-semibold">{"Data Source Settings"}</h2>
           </div>
-          <p className="text-sm text-muted-foreground">{t("pages.settings.dataDesc")}</p>
+          <p className="text-sm text-muted-foreground">{"Configure optional market data credentials used by backtests and research agents."}</p>
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
           <div className="grid gap-4">
             <label className="grid gap-2">
-              <span className={labelClass}>{t("pages.settings.tushareToken")}</span>
+              <span className={labelClass}>{"Tushare token"}</span>
               <div className="relative">
                 <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <input
@@ -431,7 +431,7 @@ export function Settings() {
                 />
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className={hintClass}>{t("pages.settings.tushareHint")}</span>
+                <span className={hintClass}>{"Used for China A-share, futures, fund, and macro data. If unset, the project falls back to AKShare where available."}</span>
                 <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                   <input
                     type="checkbox"
@@ -442,13 +442,13 @@ export function Settings() {
                     }}
                     className="h-3.5 w-3.5 accent-primary"
                   />
-                  {t("pages.settings.clearTushareToken")}
+                  {"Clear saved Tushare token"}
                 </label>
               </div>
             </label>
 
             <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">{t("pages.settings.savedTo")}: </span>
+              <span className="font-medium text-foreground">{i18n.t("settings.saved")}: </span>
               <span className="break-all font-mono">{dataSettings.env_path}</span>
             </div>
 
@@ -458,30 +458,31 @@ export function Settings() {
               className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {dataSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {dataSaving ? t("pages.settings.saving") : t("pages.settings.saveDataSettings")}
+              {dataSaving ? i18n.t("settings.saving") : "Save data source settings"}
             </button>
           </div>
 
           <div className="rounded-md border bg-muted/20 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <span className="text-sm font-medium">{t("pages.settings.baoStock")}</span>
+              <span className="text-sm font-medium">{"BaoStock"}</span>
               <span className={`rounded-full px-2 py-0.5 text-xs ${dataSettings.baostock_supported ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}>
-                {dataSettings.baostock_supported ? t("pages.settings.loaderAvailable") : t("pages.settings.noProjectLoader")}
+                {dataSettings.baostock_supported ? "Loader available" : "No project loader"}
               </span>
             </div>
             <div className="space-y-2 text-sm text-muted-foreground">
               <p>{dataSettings.baostock_message}</p>
               <p>
                 {dataSettings.baostock_installed
-                  ? t("pages.settings.pkgInstalled")
-                  : t("pages.settings.pkgNotInstalled")}
+                  ? "Python package installed"
+                  : "Python package not installed"}
               </p>
             </div>
           </div>
         </div>
       </form>
 
-      <div className="rounded-lg border bg-background p-6 space-y-4">
+      {/* Desktop: optional broker SDK management */}
+      <section className="mt-6 rounded-xl border bg-card p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Package className="h-5 w-5" />
           <h2 className="text-lg font-semibold">券商支持 (可选依赖)</h2>
@@ -490,7 +491,7 @@ export function Settings() {
           按需安装券商 SDK。安装到本地可写目录，不影响核心依赖。
         </p>
         <OptionalDepsManager />
-      </div>
+      </section>
     </div>
   );
 }

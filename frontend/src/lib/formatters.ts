@@ -1,46 +1,77 @@
-import type { Vars } from "@/i18n/types";
+import i18n from '@/i18n';
 
-export const METRIC_KEY_MAP: Record<string, string> = {
-  total_return: "charts.metrics.total_return",
-  annual_return: "charts.metrics.annual_return",
-  sharpe: "charts.metrics.sharpe",
-  max_drawdown: "charts.metrics.max_drawdown",
-  win_rate: "charts.metrics.win_rate",
-  trade_count: "charts.metrics.trade_count",
-  final_value: "charts.metrics.final_value",
-  calmar: "charts.metrics.calmar",
-  sortino: "charts.metrics.sortino",
-  profit_loss_ratio: "charts.metrics.profit_loss_ratio",
-  max_consecutive_loss: "charts.metrics.max_consecutive_loss",
-  avg_holding_days: "charts.metrics.avg_holding_days",
-  benchmark_return: "charts.metrics.benchmark_return",
-  excess_return: "charts.metrics.excess_return",
-  information_ratio: "charts.metrics.information_ratio",
-  annualized_return: "charts.metrics.annualized_return",
-  calmar_ratio: "charts.metrics.calmar_ratio",
-  sortino_ratio: "charts.metrics.sortino_ratio",
-  volatility: "charts.metrics.volatility",
-  profit_factor: "charts.metrics.profit_factor",
-  avg_win: "charts.metrics.avg_win",
-  avg_loss: "charts.metrics.avg_loss",
-  max_consecutive_losses: "charts.metrics.max_consecutive_losses",
-  exposure_time: "charts.metrics.exposure_time",
-  avg_holding_period: "charts.metrics.avg_holding_period",
+const METRIC_LABELS_EN: Record<string, string> = {
+  total_return: "Total Return",
+  annual_return: "Annual",
+  sharpe: "Sharpe",
+  max_drawdown: "Max DD",
+  win_rate: "Win Rate",
+  trade_count: "Trades",
+  final_value: "Final Value",
+  calmar: "Calmar",
+  sortino: "Sortino",
+  profit_loss_ratio: "P/L Ratio",
+  max_consecutive_loss: "Max Consec. Loss",
+  avg_holding_days: "Avg Hold Days",
+  benchmark_return: "Benchmark",
+  excess_return: "Excess Return",
+  information_ratio: "IR",
+  // Desktop-extended metrics
+  annualized_return: "Annualized",
+  calmar_ratio: "Calmar Ratio",
+  sortino_ratio: "Sortino Ratio",
+  volatility: "Volatility",
+  profit_factor: "Profit Factor",
+  avg_win: "Avg Win",
+  avg_loss: "Avg Loss",
+  max_consecutive_losses: "Max Consec. Losses",
+  exposure_time: "Exposure",
+  avg_holding_period: "Avg Hold Period",
 };
 
-/** Resolve a metric key to its translated label via the provided loose translator (`tRaw`). */
-export function getMetricLabel(
-  k: string,
-  resolve: (path: string, vars?: Vars) => string,
-): string {
-  const path = METRIC_KEY_MAP[k];
-  return path ? resolve(path) : k;
+const METRIC_LABELS_ZH: Record<string, string> = {
+  total_return: "总收益率",
+  annual_return: "年化",
+  sharpe: "夏普比率",
+  max_drawdown: "最大回撤",
+  win_rate: "胜率",
+  trade_count: "交易次数",
+  final_value: "最终净值",
+  calmar: "卡尔马",
+  sortino: "索提诺",
+  profit_loss_ratio: "盈亏比",
+  max_consecutive_loss: "最大连续亏损",
+  avg_holding_days: "平均持仓天数",
+  benchmark_return: "基准收益",
+  excess_return: "超额收益",
+  information_ratio: "IR",
+  // Desktop-extended metrics
+  annualized_return: "年化收益",
+  calmar_ratio: "卡尔马比率",
+  sortino_ratio: "索提诺比率",
+  volatility: "波动率",
+  profit_factor: "盈亏因子",
+  avg_win: "平均盈利",
+  avg_loss: "平均亏损",
+  max_consecutive_losses: "最大连续亏损次数",
+  exposure_time: "持仓时间",
+  avg_holding_period: "平均持仓周期",
+};
+
+// Canonical metric key set (English labels). Kept exported so consumers and
+// tests have a stable label map; localized lookups go through getMetricLabel.
+export const METRIC_LABELS = METRIC_LABELS_EN;
+
+export function getMetricLabel(k: string): string {
+  const lang = i18n.language;
+  if (lang.startsWith('zh')) return METRIC_LABELS_ZH[k] || METRIC_LABELS_EN[k] || k;
+  return METRIC_LABELS_EN[k] || k;
 }
 
-const PCT_KEYS = ["total_return", "annual_return", "win_rate", "max_drawdown", "benchmark_return", "excess_return"];
-const RATIO_KEYS = ["sharpe", "calmar", "sortino", "profit_loss_ratio", "information_ratio"];
-const INT_KEYS = ["trade_count", "max_consecutive_loss"];
-const NEUTRAL_KEYS = new Set(["trade_count", "avg_holding_days", "final_value"]);
+const PCT_KEYS = ["total_return", "annual_return", "win_rate", "max_drawdown", "benchmark_return", "excess_return", "annualized_return", "volatility", "exposure_time"];
+const RATIO_KEYS = ["sharpe", "calmar", "sortino", "profit_loss_ratio", "information_ratio", "calmar_ratio", "sortino_ratio", "profit_factor"];
+const INT_KEYS = ["trade_count", "max_consecutive_loss", "max_consecutive_losses"];
+const NEUTRAL_KEYS = new Set(["trade_count", "avg_holding_days", "avg_holding_period", "final_value"]);
 
 export function formatMetricVal(k: string, v: number): string {
   if (PCT_KEYS.includes(k)) {
@@ -53,17 +84,18 @@ export function formatMetricVal(k: string, v: number): string {
   }
   if (INT_KEYS.includes(k)) return String(Math.round(v));
   if (k === "final_value") return v.toLocaleString(undefined, { maximumFractionDigits: 0 });
-  if (k === "avg_holding_days") return v.toFixed(1);
+  if (k === "avg_holding_days" || k === "avg_holding_period") return v.toFixed(1);
   return v.toFixed(4);
 }
 
 export function metricSentiment(k: string, v: number): "positive" | "neutral" | "negative" {
   if (NEUTRAL_KEYS.has(k)) return "neutral";
   if (k === "max_drawdown") return v > -0.05 ? "positive" : v > -0.2 ? "neutral" : "negative";
-  if (k === "max_consecutive_loss") return v <= 3 ? "positive" : v <= 6 ? "neutral" : "negative";
+  if (k === "max_consecutive_loss" || k === "max_consecutive_losses") return v <= 3 ? "positive" : v <= 6 ? "neutral" : "negative";
   if (k === "win_rate") return v >= 0.5 ? "positive" : v >= 0.35 ? "neutral" : "negative";
-  if (k === "sharpe" || k === "calmar" || k === "sortino") return v >= 1.0 ? "positive" : v >= 0.3 ? "neutral" : "negative";
+  if (k === "sharpe" || k === "calmar" || k === "sortino" || k === "calmar_ratio" || k === "sortino_ratio") return v >= 1.0 ? "positive" : v >= 0.3 ? "neutral" : "negative";
   if (k === "information_ratio") return v >= 0.5 ? "positive" : v >= 0 ? "neutral" : "negative";
+  if (k === "profit_factor") return v >= 1.5 ? "positive" : v >= 1.0 ? "neutral" : "negative";
   return v > 0 ? "positive" : v === 0 ? "neutral" : "negative";
 }
 

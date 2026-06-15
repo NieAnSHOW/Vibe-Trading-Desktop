@@ -1,7 +1,6 @@
 import { useRef, type JSX } from "react";
 import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useI18n } from "@/i18n";
 import { ProgressBar } from "@/components/chat/ProgressBar";
 import { localizeToolName } from "@/lib/tools";
 import type { ToolCallEntry } from "@/types/agent";
@@ -66,7 +65,6 @@ interface RowProps {
 }
 
 function ToolRow({ entry, stepIndex, totalSteps, isHeader, connector = "none", eta }: RowProps): JSX.Element {
-  const { t } = useI18n();
   const progress = entry.progress;
   const hasDeterminate = !!(progress && typeof progress.current === "number" && typeof progress.total === "number" && progress.total > 0);
   const stage = progress?.stage || "";
@@ -82,8 +80,8 @@ function ToolRow({ entry, stepIndex, totalSteps, isHeader, connector = "none", e
 
   const localized = localizeToolName(entry.tool);
   const stepLabel = isHeader
-    ? t("chat.toolProgress.toolsRunning", { count: totalSteps })
-    : t("chat.toolProgress.stepLabel", { index: stepIndex, tool: localized });
+    ? `${totalSteps} tools running`
+    : `Step ${stepIndex} · ${localized}`;
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-x-2 gap-y-0.5 text-xs min-w-0">
@@ -120,7 +118,7 @@ function ToolRow({ entry, stepIndex, totalSteps, isHeader, connector = "none", e
           )}
           {eta != null && (
             <span className="text-[10px] text-muted-foreground/70 tabular-nums shrink-0">
-              {t("chat.toolProgress.etaLeft", { eta })}
+              ~{eta}s left
             </span>
           )}
         </div>
@@ -144,7 +142,6 @@ interface Props {
 const MAX_VISIBLE = 3;
 
 export function ToolProgressIndicator({ toolCalls }: Props): JSX.Element | null {
-  const { t } = useI18n();
   // Per-tool ETA samples (mutable across renders, not state to avoid re-renders).
   const etaSamplesRef = useRef<Map<string, EtaSample>>(new Map());
 
@@ -232,7 +229,7 @@ export function ToolProgressIndicator({ toolCalls }: Props): JSX.Element | null 
       {/* Header row */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         {aggregateIcon}
-        <span className="text-foreground">{t("chat.toolProgress.toolsRunning", { count: running.length })}</span>
+        <span className="text-foreground">{running.length} tools running</span>
       </div>
       {/* Indented rows */}
       <div className="pl-4 space-y-1">
@@ -249,7 +246,7 @@ export function ToolProgressIndicator({ toolCalls }: Props): JSX.Element | null 
         {overflow > 0 && (
           <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60">
             <span className="text-border/60 shrink-0 w-3 text-center" aria-hidden="true">└</span>
-            <span>{t("chat.toolProgress.moreCount", { count: overflow })}</span>
+            <span>… +{overflow} more</span>
           </div>
         )}
       </div>
