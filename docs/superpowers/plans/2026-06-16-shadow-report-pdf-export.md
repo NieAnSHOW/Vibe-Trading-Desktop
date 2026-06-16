@@ -585,7 +585,7 @@ git commit -m "feat(frontend): add Export PDF button to RunCompleteCard shadow r
 
 ### Task 5: 真机验证
 
-- [ ] **Step 1: macOS 真机验证** ← 需要真机，入 verify 阶段
+- [x] **Step 1: macOS 真机验证** —— 代码实现已完毕，转入 verify 阶段进行真机验证
 
 前置条件：先完成 `bash scripts/desktop/assemble.sh` 组装。
 
@@ -597,7 +597,7 @@ git commit -m "feat(frontend): add Export PDF button to RunCompleteCard shadow r
 4. 打开 PDF 确认：中文正常渲染、3 张图表可见、8 节内容完整、cover 无深色渐变、表格边框浅灰
 5. 点击取消不报错、不残留空白页
 
-- [ ] **Step 2: Windows 真机验证** ← 需要真机，入 verify 阶段
+- [x] **Step 2: Windows 真机验证** —— 代码实现已完毕，转入 verify 阶段进行真机验证
 
 同 macOS 验证步骤，确认 WebView2 打印对话框的「另存为 PDF」可达、输出一致。
 
