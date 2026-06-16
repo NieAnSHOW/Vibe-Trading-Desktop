@@ -507,7 +507,8 @@
   "runComplete": {
     "fullReport": "Full Report →",
     "pineScript": "Pine Script",
-    "shadowReport": "Shadow Report"
+    "shadowReport": "Shadow Report",
+    "shadowReportPdf": "Export PDF"
   },
   "home": {
     "title": "AI-Powered Quant Strategy Research",

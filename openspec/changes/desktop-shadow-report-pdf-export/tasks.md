@@ -10,7 +10,7 @@
 
 ## 2. 前端：PDF 导出入口与打印流程
 
-- [ ] 2.1 在 `RunCompleteCard` 现有 Shadow Report 入口区新增「导出 PDF」按钮（含 i18n 文案）
+- [x] 2.1 在 `RunCompleteCard` 现有 Shadow Report 入口区新增「导出 PDF」按钮（含 i18n 文案）
 - [ ] 2.2 实现打印辅助 hook/util：创建隐藏 iframe 加载 `/shadow-reports/{id}?format=html` → `onload` 后调 `contentWindow.print()` → 打印结束/取消后清理 iframe
 - [ ] 2.3 用户在打印对话框取消时不报错、不留残留 iframe
 - [ ] 2.4 入口两端统一启用（`window.print` 对 Web 原生可用，无需 `isTauri` 平台判断）

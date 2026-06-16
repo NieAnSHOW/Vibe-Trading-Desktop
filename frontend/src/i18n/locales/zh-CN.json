@@ -507,7 +507,8 @@
   "runComplete": {
     "fullReport": "完整报告 →",
     "pineScript": "Pine Script",
-    "shadowReport": "影子报告"
+    "shadowReport": "影子报告",
+    "shadowReportPdf": "导出 PDF"
   },
   "home": {
     "title": "AI 驱动的量化策略研究",

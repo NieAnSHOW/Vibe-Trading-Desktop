@@ -151,45 +151,25 @@ git commit -m "feat(shadow): inline charts as data URIs instead of file:// URIs"
 - Modify: `frontend/src/i18n/locales/en.json`
 - Modify: `frontend/src/i18n/locales/zh-CN.json`
 
-- [ ] **Step 1: 在 zh-CN.json 添加文案**
+- [x] **Step 1: 在 zh-CN.json 添加文案**
 
 打开 `frontend/src/i18n/locales/zh-CN.json`，找到 `"runComplete"` 区域。查看 `en.json` 中 `runComplete` 的结构来定位同级插入位置：
 
-在 `runComplete` 对象中，`"shadowReport"` 和 `"shadowReportDesc"` 附近新增：
+在 `runComplete` 对象中，`"shadowReport"` 之后新增：
 
 ```json
 "shadowReportPdf": "导出 PDF",
 ```
 
-在 `settings` 区域（en.json 中的 `"shadowReport"` key 在 510 行），找到中文对应的 `"shadowReport"`，在其后新增：
+- [x] **Step 2: 在 en.json 添加文案**
 
-```json
-"shadowReportExportPdf": "导出 PDF",
-```
-
-   注意：需要确认 zh-CN.json 的对应位置。先用 grep 确认：
-
-```bash
-grep -n 'shadowReport' /Users/niean/Documents/project/Vibe-Trading-Desktop/frontend/src/i18n/locales/zh-CN.json
-```
-
-在返回的行号附近，与 en.json 对齐替换。
-
-- [ ] **Step 2: 在 en.json 添加文案**
-
-在 `frontend/src/i18n/locales/en.json` 的 `runComplete` 对象中（约 128-135 行），`"shadowReportDesc"` 之后新增：
+在 `frontend/src/i18n/locales/en.json` 的 `runComplete` 对象中（约 508-512 行），`"shadowReport"` 之后新增：
 
 ```json
 "shadowReportPdf": "Export PDF",
 ```
 
-在文件约 510 行的 `settings` 区域：
-
-```json
-"shadowReportExportPdf": "Export PDF",
-```
-
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add frontend/src/i18n/locales/en.json frontend/src/i18n/locales/zh-CN.json
