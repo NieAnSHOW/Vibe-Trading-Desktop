@@ -186,7 +186,7 @@ git commit -m "feat(i18n): add Export PDF labels for shadow report"
 - Create: `frontend/src/hooks/usePrintShadowReport.ts`
 - Create: `frontend/src/hooks/__tests__/usePrintShadowReport.test.ts`
 
-- [ ] **Step 1: 创建 `usePrintShadowReport` hook**
+- [x] **Step 1: 创建 `usePrintShadowReport` hook**
 
 ```bash
 mkdir -p /Users/niean/Documents/project/Vibe-Trading-Desktop/frontend/src/hooks/__tests__
@@ -294,7 +294,7 @@ export function usePrintShadowReport(shadowId: string) {
 }
 ```
 
-- [ ] **Step 2: 编写前端单测**
+- [x] **Step 2: 编写前端单测**
 
 创建 `frontend/src/hooks/__tests__/usePrintShadowReport.test.ts`：
 
@@ -477,7 +477,7 @@ describe("usePrintShadowReport", () => {
 });
 ```
 
-- [ ] **Step 3: 运行前端单测确认通过**
+- [x] **Step 3: 运行前端单测确认通过**
 
 ```bash
 cd /Users/niean/Documents/project/Vibe-Trading-Desktop/frontend
@@ -486,7 +486,7 @@ npx vitest run src/hooks/__tests__/usePrintShadowReport.test.ts --reporter=verbo
 
 **Expected:** 全部 PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/hooks/usePrintShadowReport.ts frontend/src/hooks/__tests__/usePrintShadowReport.test.ts
