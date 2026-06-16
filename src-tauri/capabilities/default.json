@@ -1,9 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability scoped to internal app webviews only (app + shell + grid). External tab-* webviews are deny-by-default.",
-  "windows": [],
-  "webviews": ["app", "shell", "grid"],
+  "description": "Default capability for the main window and all internal app webviews (app + shell + grid). External tab-* webviews are deny-by-default.",
+  "windows": ["main"],
   "permissions": [
     "core:default",
     "core:event:default",
