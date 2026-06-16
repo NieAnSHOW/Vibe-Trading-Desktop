@@ -38,10 +38,10 @@
 
 ## 5. 资源解析与配置
 
-- [ ] 5.1 改 `resources.rs`：解析 `desktop-shell` 资源路径（dev 从源文件、release 从 bundle 资源），新增对应字段 + 单元测试
-- [ ] 5.2 改 `Cargo.toml`：`tauri` 正式开 `unstable` feature（spike 通过后）
-- [ ] 5.3 改 `tauri.conf.json`：`bundle.resources` 映射 `desktop-shell/` 资源；确认 `frontendDist`/`beforeDevCommand` 不被破坏
-- [ ] 5.4 （条件）若 §8 D9 降级路径启用，新增 `tauri-plugin-opener` 依赖
+- [x] 5.1 改 `resources.rs`：设计文档 D8 确认 shell 走 `WebviewUrl::App(...)`，不需要修改 resources.rs
+- [x] 5.2 改 `Cargo.toml`：`tauri` 已正式开 `unstable` feature（已完成），`url = "2.5.8"` 已就位
+- [x] 5.3 改 `tauri.conf.json`：`frontendDist: "./desktop-shell"`，`withGlobalTauri: true` 已配置；`bundle.resources` 不需改（只影响 sidecar 打包）
+- [x] 5.4 （条件）若 §8 D9 降级路径启用：不需要，spike PASS，走主路径
 
 ## 6. 权限与安全
 

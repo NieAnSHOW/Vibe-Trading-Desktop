@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Capability for the main windows","local":true,"windows":["main"],"permissions":["core:default","core:window:default","core:window:allow-close","core:window:allow-set-size","core:window:allow-set-title","process:default"]}}
+{"default":{"identifier":"default","description":"Capability scoped to internal app webviews only (app + shell + grid). External tab-* webviews are deny-by-default.","local":true,"webviews":["app","shell","grid"],"permissions":["core:default","core:event:default","process:default"]}}
