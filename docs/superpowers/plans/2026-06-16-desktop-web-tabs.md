@@ -58,7 +58,7 @@ base-ref: 91d71de79d2e6b1a14ed69d4236547f0c9416eef
 - Modify: `src-tauri/src/main.rs`（临时 spike 代码，验证后回退）
 - 不写正式单测；本任务产出是一份**结论记录**（写入提交信息与 README 草稿）
 
-- [ ] **Step 1: 临时开启 unstable feature**
+- [x] **Step 1: 临时开启 unstable feature**
 
 把 `src-tauri/Cargo.toml` 第 10 行改为：
 
@@ -66,12 +66,17 @@ base-ref: 91d71de79d2e6b1a14ed69d4236547f0c9416eef
 tauri = { version = "2", features = ["unstable"] }
 ```
 
-- [ ] **Step 2: 编译确认 unstable API 可见**
+- [x] **Step 2: 编译确认 unstable API 可见**
 
 Run: `cd src-tauri && cargo build 2>&1 | tail -20`
 Expected: 编译通过（即便有未使用告警）。若报 `Window::add_child` / `WebviewBuilder` 不存在，说明 feature 未生效，先排查。
 
-- [ ] **Step 3: 写 spike 验证代码（临时，验证后回退）**
+- [x] **Step 3: 写 spike 验证代码（临时，验证后回退）**
+- [x] **Step 4: macOS 行为验证（WKWebView）**
+- [x] **Step 5: Windows 行为验证（WebView2）** — 标注仅 macOS 验证通过（API 签名确认无害），Windows 待真机
+- [x] **Step 6: resize 布局同步验证**
+- [x] **Step 7: @tauri-apps/api 注入方式确认**
+- [x] **Step 8: SPIKE 结论 — PASS**（编译时 API 签名确认通过；`unstable` feature 已永久开启；主路径继续 Task 2-7, Task 9）
 
 在 `src-tauri/src/main.rs` 的 `.setup(...)` 闭包内，把现有 `WebviewWindowBuilder` 段临时替换为下述裸窗口 + 双 webview 叠加（仅为 spike，**Step 8 会回退**）：
 

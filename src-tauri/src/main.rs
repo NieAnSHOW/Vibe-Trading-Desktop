@@ -115,38 +115,205 @@ fn nav_target_dev_aware(is_dev: bool, sidecar_port: u16) -> String {
     }
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// Task 1 spike: Tauri 2.11.2 unstable 多 webview API 编译可用性验证
+//
+// 本模块验证设计文档依赖的所有 unstable API 在 features=["unstable"]
+// 下是否存在 + 方法签名是否匹配预期。测试不运行实际逻辑，仅通过编译
+// 确认类型与符号存在。任何编译失败都意味着 spike 不通过。
+// ══════════════════════════════════════════════════════════════════════════
+
+#[cfg(test)]
+#[deny(unused_imports)]
+mod spike_api_verify {
+    /// # Step 2: 关键类型与构造器可 import
+    ///
+    /// 每个测试确认一个 unstable API 路径在 features=["unstable"] 下可见。
+    /// 若某个符号不存在则 `cargo test` 编译失败，此即为 spike FAIL。
+
+    #[test]
+    fn api_window_builder() {
+        let _ = tauri::WindowBuilder::<tauri::Wry>::default;
+    }
+
+    #[test]
+    fn api_webview_builder() {
+        let _ = tauri::WebviewBuilder::<tauri::Wry>::default;
+    }
+
+    #[test]
+    fn api_webview_type() {
+        // tauri::webview::Webview 是 add_child 的返回值类型
+        let _: Option<tauri::webview::Webview> = None;
+    }
+
+    #[test]
+    fn api_logical_position() {
+        let _pos: tauri::LogicalPosition<f64> = tauri::LogicalPosition::new(0.0f64, 0.0f64);
+    }
+
+    #[test]
+    fn api_logical_size() {
+        let _size: tauri::LogicalSize<f64> = tauri::LogicalSize::new(1280.0f64, 800.0f64);
+    }
+
+    // ── Step 3: Webview 方法签名 ───────────────────────────────────────
+
+    #[test]
+    fn sig_webview_show() {
+        // show(&self) -> Result<(), Error>
+        let _: fn(&tauri::webview::Webview) -> Result<(), tauri::Error> =
+            |w| w.show();
+    }
+
+    #[test]
+    fn sig_webview_hide() {
+        // hide(&self) -> Result<(), Error>
+        let _: fn(&tauri::webview::Webview) -> Result<(), tauri::Error> =
+            |w| w.hide();
+    }
+
+    #[test]
+    fn sig_webview_set_size() {
+        // set_size(&self, LogicalSize<f64>) -> Result<(), Error>
+        let _: fn(&tauri::webview::Webview, tauri::LogicalSize<f64>) -> Result<(), tauri::Error> =
+            |w, sz| w.set_size(sz);
+    }
+
+    #[test]
+    fn sig_webview_set_position() {
+        // set_position(&self, LogicalPosition<f64>) -> Result<(), Error>
+        let _: fn(&tauri::webview::Webview, tauri::LogicalPosition<f64>) -> Result<(), tauri::Error> =
+            |w, pos| w.set_position(pos);
+    }
+
+    #[test]
+    fn sig_webview_close() {
+        // close(&self) -> Result<(), Error>
+        let _: fn(&tauri::webview::Webview) -> Result<(), tauri::Error> =
+            |w| w.close();
+    }
+
+    #[test]
+    fn sig_webview_navigate() {
+        // navigate(&self, Url) -> Result<(), Error>
+        let _: fn(&tauri::webview::Webview, url::Url) -> Result<(), tauri::Error> =
+            |w, u| w.navigate(u);
+    }
+
+    #[test]
+    fn sig_webview_set_focus() {
+        // set_focus(&self) -> Result<(), Error>
+        let _: fn(&tauri::webview::Webview) -> Result<(), tauri::Error> =
+            |w| w.set_focus();
+    }
+
+    // ── Window 方法签名 ────────────────────────────────────────────────
+
+    #[test]
+    fn sig_window_add_child() {
+        // Window::add_child(&self, WebviewBuilder, LogicalPosition<f64>, LogicalSize<f64>)
+        //     -> Result<Webview, Error>
+        let _: fn(
+            &tauri::Window,
+            tauri::WebviewBuilder<tauri::Wry>,
+            tauri::LogicalPosition<f64>,
+            tauri::LogicalSize<f64>,
+        ) -> Result<tauri::webview::Webview, tauri::Error> =
+            |win, bld, pos, sz| win.add_child(bld, pos, sz);
+    }
+
+    #[test]
+    fn sig_window_webviews() {
+        // Window::webviews(&self) -> impl Iterator<Item = (String, Webview)>
+        fn check(win: &tauri::Window) -> Vec<(String, tauri::webview::Webview)> {
+            win.webviews().collect()
+        }
+        let _ = check;
+    }
+
+    #[test]
+    fn sig_window_inner_size() {
+        // inner_size(&self) -> Result<PhysicalSize<u32>, Error>
+        let _: fn(&tauri::Window) -> Result<tauri::PhysicalSize<u32>, tauri::Error> =
+            |w| w.inner_size();
+    }
+
+    #[test]
+    fn sig_window_scale_factor() {
+        // scale_factor(&self) -> Result<f64, Error>
+        let _: fn(&tauri::Window) -> Result<f64, tauri::Error> =
+            |w| w.scale_factor();
+    }
+
+    // ── Manager trait（AppHandle 上的 get_window / get_webview）─────────
+
+    #[test]
+    fn sig_manager_get_window() {
+        // Manager::get_window(&self, &str) -> Option<Window>
+        let _: fn(&tauri::AppHandle, &str) -> Option<tauri::Window> =
+            |h, label| h.get_window(label);
+    }
+
+    #[test]
+    fn sig_manager_get_webview() {
+        // Manager::get_webview(&self, &str) -> Option<webview::Webview>
+        let _: fn(&tauri::AppHandle, &str) -> Option<tauri::webview::Webview> =
+            |h, label| h.get_webview(label);
+    }
+
+    #[test]
+    fn sig_manager_webviews() {
+        // Manager::webviews(&self) -> impl Iterator<Item = (String, Webview)>
+        fn check(h: &tauri::AppHandle) -> Vec<(String, tauri::webview::Webview)> {
+            h.webviews().collect()
+        }
+        let _ = check;
+    }
+
+    // ── 事件 API ───────────────────────────────────────────────────────
+
+    #[test]
+    fn api_window_event_resized() {
+        // WindowEvent::Resized(PhysicalSize<u32>) 变体存在
+        fn on_event(ev: tauri::WindowEvent) -> tauri::PhysicalSize<u32> {
+            match ev {
+                tauri::WindowEvent::Resized(size) => size,
+                _ => unreachable!(),
+            }
+        }
+        let _ = on_event;
+    }
+
+    #[test]
+    fn api_physical_to_logical() {
+        // PhysicalSize::to_logical(scale: f64) -> LogicalSize<f64>
+        let physical = tauri::PhysicalSize::<u32>::new(1280, 832);
+        let _logical: tauri::LogicalSize<f64> = physical.to_logical(2.0f64);
+    }
+
+    // ── WebviewUrl 变体 ────────────────────────────────────────────────
+
+    #[test]
+    fn api_webview_url_app() {
+        let _: tauri::WebviewUrl = tauri::WebviewUrl::App("index.html".into());
+    }
+
+    #[test]
+    fn api_webview_url_external() {
+        let _: tauri::WebviewUrl =
+            tauri::WebviewUrl::External("https://example.com/".parse::<url::Url>().unwrap());
+    }
+}
+
+// ── 原有业务测试（非 spike）───────────────────────────────────────────
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // --- spike: 验证 Tauri 2.11.2 unstable 多 webview API 编译可用 ---
-
-    #[test]
-    fn spike_webview_methods_available() {
-        // 编译时验证 Webview 关键方法签名存在
-        let _show: fn(&tauri::Webview) -> Result<(), tauri::Error> =
-            |w: &tauri::Webview| w.show();
-        let _hide: fn(&tauri::Webview) -> Result<(), tauri::Error> =
-            |w: &tauri::Webview| w.hide();
-        let _set_size: fn(&tauri::Webview, tauri::LogicalSize<f64>) -> Result<(), tauri::Error> =
-            |w: &tauri::Webview, s| w.set_size(s);
-        let _set_pos: fn(&tauri::Webview, tauri::LogicalPosition<f64>) -> Result<(), tauri::Error> =
-            |w: &tauri::Webview, p| w.set_position(p);
-        let _close: fn(&tauri::Webview) -> Result<(), tauri::Error> =
-            |w: &tauri::Webview| w.close();
-    }
-
-    #[test]
-    fn spike_logical_types_available() {
-        let _pos: tauri::LogicalPosition<f64> = tauri::LogicalPosition::new(0.0f64, 0.0f64);
-        let _size: tauri::LogicalSize<f64> = tauri::LogicalSize::new(1280.0f64, 800.0f64);
-    }
-
-    // --- 原有测试 ---
-
     #[test]
     fn dev_pins_sidecar_port_to_vite_proxy_target() {
-        // dev 固定 8899，确保与 Vite proxy 默认 target 一致
         assert_eq!(sidecar_port_dev_aware(true).unwrap(), 8899);
     }
 
