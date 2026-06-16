@@ -4,6 +4,6 @@
   "windows": [],
   "webviews": ["grid"],
   "permissions": [
-    "open_news_tab"
+    "tabs:open-news-tab"
   ]
 }

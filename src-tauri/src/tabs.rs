@@ -170,26 +170,31 @@ pub fn register_app_tab(app: &AppHandle, url: &str) -> Result<(), String> {
 /// 打开/激活格速拨页（幂等）
 #[tauri::command]
 pub async fn open_grid_tab(app: AppHandle) -> Result<(), String> {
-    let registry = app.state::<Mutex<TabRegistry>>();
-    let mut r = registry.lock().map_err(|e| format!("lock registry: {e}"))?;
-
-    // 幂等：已存在则直接激活
-    if let Some(label) = r.find_by_site("__grid__") {
-        drop(r);
-        return activate_tab_inner(&app, &label).await;
+    // 幂等检查：已存在则直接激活（独立 block 避免 MutexGuard 跨越 await）
+    let existing = {
+        let registry = app.state::<Mutex<TabRegistry>>();
+        let r = registry.lock().map_err(|e| format!("lock registry: {e}"))?;
+        r.find_by_site("__grid__")
+    };
+    if let Some(existing_label) = existing {
+        return activate_tab_inner(&app, &existing_label).await;
     }
 
-    let label = r.next_label();
+    // 注册（独立 block）
+    let label;
     let site_id = "__grid__".to_string();
     let title = "Grid".to_string();
-
-    r.register(Tab {
-        label: label.clone(),
-        site_id: site_id.clone(),
-        title: title.clone(),
-        closable: true,
-    })?;
-    drop(r);
+    {
+        let registry = app.state::<Mutex<TabRegistry>>();
+        let mut r = registry.lock().map_err(|e| format!("lock registry: {e}"))?;
+        label = r.next_label();
+        r.register(Tab {
+            label: label.clone(),
+            site_id: site_id.clone(),
+            title: title.clone(),
+            closable: true,
+        })?;
+    }
 
     // 获取 main 窗口尺寸
     let win = app
@@ -232,24 +237,29 @@ pub async fn open_news_tab(
     title: String,
     site_id: String,
 ) -> Result<(), String> {
-    let registry = app.state::<Mutex<TabRegistry>>();
-    let mut r = registry.lock().map_err(|e| format!("lock registry: {e}"))?;
-
-    // 幂等：已存在则直接激活
-    if let Some(label) = r.find_by_site(&site_id) {
-        drop(r);
-        return activate_tab_inner(&app, &label).await;
+    // 幂等检查
+    let existing = {
+        let registry = app.state::<Mutex<TabRegistry>>();
+        let r = registry.lock().map_err(|e| format!("lock registry: {e}"))?;
+        r.find_by_site(&site_id)
+    };
+    if let Some(existing_label) = existing {
+        return activate_tab_inner(&app, &existing_label).await;
     }
 
-    let label = r.next_label();
-
-    r.register(Tab {
-        label: label.clone(),
-        site_id: site_id.clone(),
-        title: title.clone(),
-        closable: true,
-    })?;
-    drop(r);
+    // 注册
+    let label;
+    {
+        let registry = app.state::<Mutex<TabRegistry>>();
+        let mut r = registry.lock().map_err(|e| format!("lock registry: {e}"))?;
+        label = r.next_label();
+        r.register(Tab {
+            label: label.clone(),
+            site_id: site_id.clone(),
+            title: title.clone(),
+            closable: true,
+        })?;
+    }
 
     // 获取主窗口尺寸
     let win = app

@@ -3,7 +3,7 @@ mod resources; mod version; mod runtime_dir; mod port; mod sidecar; mod tabs;
 
 use std::sync::{Arc, Mutex};
 use std::process::Child;
-use tauri::{RunEvent, WebviewUrl, WebviewWindowBuilder};
+use tauri::{LogicalPosition, LogicalSize, Manager, RunEvent, WebviewBuilder, WebviewUrl, WindowBuilder};
 
 type SharedChild = Arc<Mutex<Option<Child>>>;
 
@@ -13,47 +13,89 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
+        .manage(tabs::TabRegistry::new())
+        .manage(tabs::ActiveState::new())
+        .invoke_handler(tauri::generate_handler![
+            tabs::open_grid_tab,
+            tabs::open_news_tab,
+            tabs::activate_tab,
+            tabs::close_tab,
+        ])
         .setup(move |app| {
             let handle = app.handle().clone();
-            // D3: 窗口先开,加载本地加载页(frontendDist 的 index.html,带 logo + spinner)
+            // D3: 创建主窗口，不含任何预建 webview
             let res = resources::Resources::resolve(&handle)
                 .map_err(|e| format!("resources: {e}"))?;
-            let win = WebviewWindowBuilder::new(
-                &handle, "main",
-                WebviewUrl::App("index.html".into()))
-                .title("Vibe Trading").inner_size(1280.0, 832.0).build()?;
+
+            let win = WindowBuilder::new(&handle, "main")
+                .title("Vibe Trading")
+                .inner_size(1280.0, 832.0)
+                .build()?;
+
+            let logical = {
+                let s = win.inner_size().map_err(|e| format!("inner_size: {e}"))?;
+                let f = win.scale_factor().map_err(|e| format!("scale_factor: {e}"))?;
+                s.to_logical(f)
+            };
+
+            // 壳 webview（全宽 × H_SHELL，top 0）
+            win.add_child(
+                WebviewBuilder::new("shell", WebviewUrl::App("shell.html".into())),
+                LogicalPosition::new(0.0, 0.0),
+                LogicalSize::new(logical.width, tabs::H_SHELL),
+            )
+            .map_err(|e| format!("add_child shell: {e}"))?;
+
+            // 加载页 webview（H_SHELL 下方，覆盖剩余区域）
+            win.add_child(
+                WebviewBuilder::new("app", WebviewUrl::App("index.html".into())),
+                LogicalPosition::new(0.0, tabs::H_SHELL),
+                LogicalSize::new(logical.width, (logical.height - tabs::H_SHELL).max(0.0)),
+            )
+            .map_err(|e| format!("add_child app: {e}"))?;
 
             let shared = shared_setup.clone();
             std::thread::spawn(move || {
-                if let Err(msg) = boot(&handle, &win, &res, &shared) {
+                if let Err(msg) = boot(&handle, &res, &shared) {
                     // JSON 编码错误消息，安全注入到 JS 侧（避免 XSS）
                     let safe_json = serde_json::to_string(&msg)
                         .unwrap_or_else(|_| "\"unknown error\"".to_string());
-                    let _ = win.eval(&format!(
-                        "document.getElementById('spin').style.display='none';\
-                         document.getElementById('msg').textContent='启动失败';\
-                         var e=document.getElementById('err');e.style.display='block';\
-                         e.textContent={safe_json};\
-                         var q=document.getElementById('quit');q.style.display='block';\
-                         q.onclick=function(){{window.__TAURI__.process.exit(1)}};"));
+                    if let Some(wv) = handle.get_webview("app") {
+                        let _ = wv.eval(&format!(
+                            "document.getElementById('spin').style.display='none';\
+                             document.getElementById('msg').textContent='启动失败';\
+                             var e=document.getElementById('err');e.style.display='block';\
+                             e.textContent={safe_json};\
+                             var q=document.getElementById('quit');q.style.display='block';\
+                             q.onclick=function(){{window.__TAURI__.process.exit(1)}};"));
+                    }
                 }
             });
             Ok(())
         })
         .build(tauri::generate_context!())
         .expect("build tauri app")
-        .run(move |_app, event| {
-            if let RunEvent::ExitRequested { .. } = event {
-                if let Some(mut child) = shared.lock().unwrap().take() {
-                    sidecar::terminate(&mut child);
+        .run(move |app, event| {
+            match &event {
+                RunEvent::WindowEvent { label, event: we, .. } => {
+                    if label == "main" {
+                        if let tauri::WindowEvent::Resized(physical) = we {
+                            tabs::sync_resize(app, *physical);
+                        }
+                    }
                 }
+                RunEvent::ExitRequested { .. } => {
+                    if let Some(mut child) = shared.lock().unwrap().take() {
+                        sidecar::terminate(&mut child);
+                    }
+                }
+                _ => {}
             }
         });
 }
 
 fn boot(
-    _handle: &tauri::AppHandle,
-    win: &tauri::WebviewWindow,
+    handle: &tauri::AppHandle,
     res: &resources::Resources,
     shared: &SharedChild,
 ) -> Result<(), String> {
@@ -64,8 +106,7 @@ fn boot(
     // dev 模式固定 8899（与 Vite proxy 默认 target 对齐），release 由系统分配。
     let is_dev = cfg!(debug_assertions);
     let p = sidecar_port_dev_aware(is_dev)?;
-    // D6.5 (dev): 清理上次 session 可能遗留的 sidecar 进程，避免 await_health
-    // 误连旧进程（旧进程已监听同一端口，新进程 start-up 缓慢时竞态会发生）。
+    // D6.5 (dev): 清理上次 session 可能遗留的 sidecar 进程
     if is_dev {
         port::kill_listener_on_port(p);
     }
@@ -75,11 +116,15 @@ fn boot(
     match sidecar::await_health(&mut child, p) {
         sidecar::Ready::Ok => {
             shared.lock().unwrap().replace(child);
-            // Tauri 2 navigate 接受 Url 类型
             // dev：导航到 Vite dev server（HMR）；release：sidecar 静态 SPA。
             let target = nav_target_dev_aware(is_dev, p);
-            win.navigate(tauri::Url::parse(&target).map_err(|e| format!("parse url: {e}"))?)
-                .map_err(|e| format!("navigate: {e}"))?;
+            tabs::register_app_tab(handle, &target)?;
+
+            // 异步打开网格速拨页
+            let h = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = tabs::open_grid_tab(h).await;
+            });
             Ok(())
         }
         sidecar::Ready::ProcessExited(code) =>
@@ -142,8 +187,6 @@ mod spike_api_verify {
 
     #[test]
     fn api_window_builder() {
-        // WindowBuilder<'a, R, M>: 仅在 #[cfg(feature = "unstable")] 下 re-export
-        // 验证类型和 new 方法存在即可（linter 会去掉未使用的 type alias）
         fn _new(m: &tauri::AppHandle, label: &str) {
             let _ = tauri::WindowBuilder::new(m, label);
         }
@@ -151,9 +194,7 @@ mod spike_api_verify {
 
     #[test]
     fn api_webview_builder() {
-        // WebviewBuilder<R>: 仅在 #[cfg(feature = "unstable")] 下 re-export
         type _Wb = tauri::WebviewBuilder<tauri::Wry>;
-        // 确认 new(label, url) 存在
         fn _new(label: &str, url: tauri::WebviewUrl) -> tauri::WebviewBuilder<tauri::Wry> {
             tauri::WebviewBuilder::new(label, url)
         }
@@ -161,7 +202,6 @@ mod spike_api_verify {
 
     #[test]
     fn api_webview_type() {
-        // tauri::Webview (即 tauri::webview::Webview) — add_child 的返回值
         let _: Option<tauri::Webview> = None;
     }
 
@@ -177,7 +217,6 @@ mod spike_api_verify {
 
     #[test]
     fn api_position_and_size_enums() {
-        // Position 与 Size enum 变体（LogicalPosition/Size 可 Into 它们）
         let _p: tauri::Position = tauri::Position::Logical(tauri::LogicalPosition::new(0.0, 0.0));
         let _s: tauri::Size = tauri::Size::Logical(tauri::LogicalSize::new(1280.0, 800.0));
     }
@@ -186,46 +225,39 @@ mod spike_api_verify {
 
     #[test]
     fn sig_webview_show() {
-        // show(&self) -> Result<()>
         let _: fn(&tauri::Webview) -> Result<(), tauri::Error> = |w| w.show();
     }
 
     #[test]
     fn sig_webview_hide() {
-        // hide(&self) -> Result<()>
         let _: fn(&tauri::Webview) -> Result<(), tauri::Error> = |w| w.hide();
     }
 
     #[test]
     fn sig_webview_set_size() {
-        // set_size<S: Into<Size>>(&self, S) -> Result<()>
         let _: fn(&tauri::Webview, tauri::LogicalSize<f64>) -> Result<(), tauri::Error> =
             |w, sz| w.set_size(sz);
     }
 
     #[test]
     fn sig_webview_set_position() {
-        // set_position<Pos: Into<Position>>(&self, Pos) -> Result<()>
         let _: fn(&tauri::Webview, tauri::LogicalPosition<f64>) -> Result<(), tauri::Error> =
             |w, pos| w.set_position(pos);
     }
 
     #[test]
     fn sig_webview_close() {
-        // close(&self) -> Result<()>
         let _: fn(&tauri::Webview) -> Result<(), tauri::Error> = |w| w.close();
     }
 
     #[test]
     fn sig_webview_navigate() {
-        // navigate(&self, Url) -> Result<()>  (Url = tauri::Url = url::Url)
         let _: fn(&tauri::Webview, tauri::Url) -> Result<(), tauri::Error> =
             |w, u| w.navigate(u);
     }
 
     #[test]
     fn sig_webview_set_focus() {
-        // set_focus(&self) -> Result<()>
         let _: fn(&tauri::Webview) -> Result<(), tauri::Error> = |w| w.set_focus();
     }
 
@@ -233,10 +265,6 @@ mod spike_api_verify {
 
     #[test]
     fn sig_window_add_child() {
-        // 实际签名：add_child<P: Into<Position>, S: Into<Size>>(
-        //     &self, WebviewBuilder<R>, position: P, size: S) -> Result<Webview<R>>
-        //
-        // 调用时传入 LogicalPosition<f64> / LogicalSize<f64>，各自满足 Into 边界。
         let _: fn(
             &tauri::Window,
             tauri::WebviewBuilder<tauri::Wry>,
@@ -248,8 +276,6 @@ mod spike_api_verify {
 
     #[test]
     fn sig_window_webviews() {
-        // Window::webviews(&self) -> Vec<Webview<R>>
-        // 返回值是 Vec（不是 iterator），不需要 .collect()
         fn check(win: &tauri::Window) -> Vec<tauri::Webview> {
             win.webviews()
         }
@@ -258,14 +284,12 @@ mod spike_api_verify {
 
     #[test]
     fn sig_window_inner_size() {
-        // inner_size() -> Result<PhysicalSize<u32>>
         let _: fn(&tauri::Window) -> Result<tauri::PhysicalSize<u32>, tauri::Error> =
             |w| w.inner_size();
     }
 
     #[test]
     fn sig_window_scale_factor() {
-        // scale_factor() -> Result<f64>
         let _: fn(&tauri::Window) -> Result<f64, tauri::Error> = |w| w.scale_factor();
     }
 
@@ -273,21 +297,18 @@ mod spike_api_verify {
 
     #[test]
     fn sig_manager_get_window() {
-        // Manager::get_window(&self, &str) -> Option<Window>
         let _: fn(&tauri::AppHandle, &str) -> Option<tauri::Window> =
             |h, label| h.get_window(label);
     }
 
     #[test]
     fn sig_manager_get_webview() {
-        // Manager::get_webview(&self, &str) -> Option<Webview>
         let _: fn(&tauri::AppHandle, &str) -> Option<tauri::Webview> =
             |h, label| h.get_webview(label);
     }
 
     #[test]
     fn sig_manager_webviews() {
-        // Manager::webviews(&self) -> HashMap<String, Webview<R>>
         use std::collections::HashMap;
         fn check(h: &tauri::AppHandle) -> HashMap<String, tauri::Webview> {
             h.webviews()
@@ -299,7 +320,6 @@ mod spike_api_verify {
 
     #[test]
     fn api_window_event_resized() {
-        // WindowEvent::Resized(PhysicalSize<u32>) 变体存在
         fn on_event(ev: tauri::WindowEvent) -> tauri::PhysicalSize<u32> {
             match ev {
                 tauri::WindowEvent::Resized(size) => size,
@@ -311,7 +331,6 @@ mod spike_api_verify {
 
     #[test]
     fn api_physical_to_logical() {
-        // PhysicalSize::to_logical(scale: f64) -> LogicalSize<f64>
         let physical = tauri::PhysicalSize::<u32>::new(1280, 832);
         let _logical: tauri::LogicalSize<f64> = physical.to_logical(2.0);
     }

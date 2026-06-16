@@ -5,8 +5,8 @@
   "webviews": ["shell"],
   "permissions": [
     "core:event:default",
-    "open_grid_tab",
-    "activate_tab",
-    "close_tab"
+    "tabs:open-grid-tab",
+    "tabs:activate-tab",
+    "tabs:close-tab"
   ]
 }
