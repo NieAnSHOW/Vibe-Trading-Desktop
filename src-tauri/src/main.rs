@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-mod resources; mod version; mod runtime_dir; mod port; mod sidecar;
+mod resources; mod version; mod runtime_dir; mod port; mod sidecar; mod tabs;
 
 use std::sync::{Arc, Mutex};
 use std::process::Child;

@@ -196,19 +196,19 @@ git commit -s -m "spike(desktop): verify Tauri 2.11.2 multi-webview overlay + un
 - Modify: `src-tauri/Cargo.toml:10`（`unstable`，若 Task 1 Step 8 未保留则在此加）
 - Test: `src-tauri/src/resources.rs`（确认无需改 + 复核单测仍过）
 
-- [ ] **Step 1: grep 确认 placeholder-dist 的所有引用**
+- [x] **Step 1: grep 确认 placeholder-dist 的所有引用**
 
 Run: `cd /Users/niean/Documents/project/Vibe-Trading-Desktop && grep -rn "placeholder-dist" --include="*.json" --include="*.sh" --include="*.rs" --include="*.toml" .`
 Expected: 命中 `src-tauri/tauri.conf.json` 的 `frontendDist`。记录所有命中点（设计 Risk 提示需先 grep `assemble.sh` / `tauri.conf.json`）。若 `scripts/desktop/assemble.sh` 命中，一并在 Step 4 处理。
 
-- [ ] **Step 2: 改名目录**
+- [x] **Step 2: 改名目录**
 
 ```bash
 cd /Users/niean/Documents/project/Vibe-Trading-Desktop/src-tauri
 git mv placeholder-dist desktop-shell
 ```
 
-- [ ] **Step 3: 改 tauri.conf.json**
+- [x] **Step 3: 改 tauri.conf.json**
 
 把 `frontendDist` 与 `app` 段改为（`withGlobalTauri` 让纯 HTML 壳/网格页拿到 `window.__TAURI__`，加载页退出按钮也依赖它）：
 
@@ -227,25 +227,25 @@ git mv placeholder-dist desktop-shell
 
 > 不动 `bundle.resources` 的 `../frontend/dist`（sidecar 托管的真 Web UI，与壳无关，设计 D8）。
 
-- [ ] **Step 4: 处理 assemble.sh（条件）**
+- [x] **Step 4: 处理 assemble.sh（条件）**
 
 若 Step 1 在 `scripts/desktop/assemble.sh` 命中 `placeholder-dist`，把引用改为 `desktop-shell`。若未命中则跳过，并在提交信息注明「assemble.sh 不引用该目录」。
 
-- [ ] **Step 5: 确认 Cargo.toml 已开 unstable**
+- [x] **Step 5: 确认 Cargo.toml 已开 unstable**
 
 确认 `src-tauri/Cargo.toml:10` 为 `tauri = { version = "2", features = ["unstable"] }`（Task 1 已加则跳过）。
 
-- [ ] **Step 6: 编译 + 复核 resources 单测**
+- [x] **Step 6: 编译 + 复核 resources 单测**
 
 Run: `cd src-tauri && cargo test resources 2>&1 | tail -20`
 Expected: `resources.rs` 现有 5 个 `resolve_from_base*` 测试全 PASS（设计 D8 明确 `resources.rs` 不改，此步是回归确认）。
 
-- [ ] **Step 7: dev 冒烟（确认改名未破坏加载页）**
+- [x] **Step 7: dev 冒烟（确认改名未破坏加载页）**
 
 Run: `cd src-tauri && cargo tauri dev`
 Expected: 仍能弹出加载页 `index.html`（logo + spinner）。Ctrl-C 退出。
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
 ```bash
 cd /Users/niean/Documents/project/Vibe-Trading-Desktop
@@ -262,7 +262,7 @@ git commit -s -m "chore(desktop): rename placeholder-dist to desktop-shell, poin
 - Create: `src-tauri/desktop-shell/grid.html`
 - Create: `src-tauri/desktop-shell/grid.js`
 
-- [ ] **Step 1: 写 sites.json（配置驱动，初始 2 站）**
+- [x] **Step 1: 写 sites.json（配置驱动，初始 2 站）**
 
 `src-tauri/desktop-shell/sites.json`:
 
@@ -275,7 +275,7 @@ git commit -s -m "chore(desktop): rename placeholder-dist to desktop-shell, poin
 }
 ```
 
-- [ ] **Step 2: 写 grid.html**
+- [x] **Step 2: 写 grid.html**
 
 `src-tauri/desktop-shell/grid.html`:
 
@@ -303,7 +303,7 @@ git commit -s -m "chore(desktop): rename placeholder-dist to desktop-shell, poin
 </body></html>
 ```
 
-- [ ] **Step 3: 写 grid.js**
+- [x] **Step 3: 写 grid.js**
 
 `src-tauri/desktop-shell/grid.js`:
 
@@ -328,7 +328,7 @@ load();
 
 > 注：Tauri 2 命令参数 snake_case `site_id` 在 JS 侧用 camelCase `siteId`（Tauri 自动转换）。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 cd /Users/niean/Documents/project/Vibe-Trading-Desktop
