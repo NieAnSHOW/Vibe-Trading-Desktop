@@ -34,6 +34,7 @@ export default defineConfig(({ mode }) => {
       alias: { "@": path.resolve(__dirname, "./src") },
     },
     server: {
+      host: "127.0.0.1", // 强制 IPv4 — macOS 上 Vite 6 默认监听 IPv6 ::1，Tauri devUrl 期望 IPv4
       port: 5899,
       proxy: {
         ...Object.fromEntries(PROXY_PATHS.map((p) => [p, apiProxy])),

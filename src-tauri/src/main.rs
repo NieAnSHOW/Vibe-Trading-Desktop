@@ -64,6 +64,11 @@ fn boot(
     // dev 模式固定 8899（与 Vite proxy 默认 target 对齐），release 由系统分配。
     let is_dev = cfg!(debug_assertions);
     let p = sidecar_port_dev_aware(is_dev)?;
+    // D6.5 (dev): 清理上次 session 可能遗留的 sidecar 进程，避免 await_health
+    // 误连旧进程（旧进程已监听同一端口，新进程 start-up 缓慢时竞态会发生）。
+    if is_dev {
+        port::kill_listener_on_port(p);
+    }
     // D7: 启动 sidecar(PYTHONPATH 指向可写副本)
     let mut child = sidecar::spawn(&res.runtime_python, &layout.runtime_agent, p, &layout.runtime_libs)?;
     // D8: 门控

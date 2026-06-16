@@ -457,6 +457,28 @@ def test_render_shadow_report_includes_today_signals(
 
 
 @pytest.mark.unit
+def test_render_charts_returns_data_uris(profitable_journal: Path, tmp_path: Path) -> None:
+    """图表返回值应为 data:image/png;base64, 前缀，非 file:// URI。"""
+    from src.shadow_account.reporter import _render_charts
+
+    profile = extract_shadow_profile(profitable_journal)
+    result = _stub_backtest_result(profile)
+    assets_dir = tmp_path / "charts_test"
+    assets_dir.mkdir()
+
+    charts = _render_charts(profile, result, assets_dir)
+    assert len(charts) > 0, "Expected at least one chart"
+    for name, uri in charts.items():
+        assert uri.startswith("data:image/png;base64,"), (
+            f"Chart {name} should be data URI, got: {uri[:80]}..."
+        )
+        # 验证是有效 base64（不含 file:// 前缀）
+        assert not uri.startswith("file://"), (
+            f"Chart {name} should NOT be file:// URI"
+        )
+
+
+@pytest.mark.unit
 def test_render_shadow_report_handles_empty_equity(
     profitable_journal: Path, tmp_path: Path,
 ) -> None:

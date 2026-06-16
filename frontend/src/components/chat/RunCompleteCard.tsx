@@ -1,12 +1,13 @@
 import { useTranslation } from 'react-i18next';
 import { memo, useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { BarChart3, Code2, FileText, Loader2 } from "lucide-react";
+import { BarChart3, Code2, FileText, Loader2, Printer } from "lucide-react";
 import { api } from "@/lib/api";
 import { AgentAvatar } from "./AgentAvatar";
 import { MetricsCard } from "./MetricsCard";
 import { MiniEquityChart } from "@/components/charts/MiniEquityChart";
 import { PineScriptViewer } from "./PineScriptViewer";
+import { usePrintShadowReport } from "@/hooks/usePrintShadowReport";
 import type { AgentMessage } from "@/types/agent";
 
 interface Props {
@@ -21,6 +22,7 @@ export const RunCompleteCard = memo(function RunCompleteCard({ msg }: Props) {
   const [showPine, setShowPine] = useState(false);
   const [pineChecked, setPineChecked] = useState(false);
   const [pineExists, setPineExists] = useState(false);
+  const { exportPdf } = usePrintShadowReport(msg.shadowId ?? "");
 
   useEffect(() => {
     if (!curve && msg.runId) {
@@ -96,15 +98,24 @@ export const RunCompleteCard = memo(function RunCompleteCard({ msg }: Props) {
             </button>
           )}
           {msg.shadowId && (
-            <a
-              href={`/shadow-reports/${encodeURIComponent(msg.shadowId)}?format=html`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-teal-600 dark:text-teal-400 hover:underline inline-flex items-center gap-1.5 font-medium"
-            >
-              <FileText className="h-3.5 w-3.5" />
-              Shadow Report
-            </a>
+            <>
+              <a
+                href={`/shadow-reports/${encodeURIComponent(msg.shadowId)}?format=html`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-teal-600 dark:text-teal-400 hover:underline inline-flex items-center gap-1.5 font-medium"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Shadow Report
+              </a>
+              <button
+                onClick={(e) => { e.preventDefault(); exportPdf(); }}
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1.5 font-medium"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                {t("runComplete.shadowReportPdf")}
+              </button>
+            </>
           )}
         </div>
         {showPine && pineCode && (

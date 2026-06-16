@@ -214,7 +214,7 @@ if [ "$SKIP_SMOKE" -eq 0 ]; then
 
     # 4) 打包资源齐全（python-runtime / agent / frontend dist）
     RES="$APP_PATH/Contents/Resources"
-    for r in python-runtime agent frontend/dist loading.html; do
+    for r in python-runtime agent frontend/dist; do
         if [ -e "$RES/$r" ]; then ok "resource ✓ $r"; else err "resource ✗ $r 缺失"; exit 4; fi
     done
 

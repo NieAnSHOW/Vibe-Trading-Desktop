@@ -173,7 +173,7 @@ def _render_charts(
             logger.warning("Chart %s failed to render: %s", name, exc)
             continue
         if path.exists() and path.stat().st_size > 0:
-            charts[name] = path.resolve().as_uri()
+            charts[name] = embed_image_as_data_uri(path)
     return charts
 
 
