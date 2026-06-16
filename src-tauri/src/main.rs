@@ -119,6 +119,31 @@ fn nav_target_dev_aware(is_dev: bool, sidecar_port: u16) -> String {
 mod tests {
     use super::*;
 
+    // --- spike: 验证 Tauri 2.11.2 unstable 多 webview API 编译可用 ---
+
+    #[test]
+    fn spike_webview_methods_available() {
+        // 编译时验证 Webview 关键方法签名存在
+        let _show: fn(&tauri::Webview) -> Result<(), tauri::Error> =
+            |w: &tauri::Webview| w.show();
+        let _hide: fn(&tauri::Webview) -> Result<(), tauri::Error> =
+            |w: &tauri::Webview| w.hide();
+        let _set_size: fn(&tauri::Webview, tauri::LogicalSize<f64>) -> Result<(), tauri::Error> =
+            |w: &tauri::Webview, s| w.set_size(s);
+        let _set_pos: fn(&tauri::Webview, tauri::LogicalPosition<f64>) -> Result<(), tauri::Error> =
+            |w: &tauri::Webview, p| w.set_position(p);
+        let _close: fn(&tauri::Webview) -> Result<(), tauri::Error> =
+            |w: &tauri::Webview| w.close();
+    }
+
+    #[test]
+    fn spike_logical_types_available() {
+        let _pos: tauri::LogicalPosition<f64> = tauri::LogicalPosition::new(0.0f64, 0.0f64);
+        let _size: tauri::LogicalSize<f64> = tauri::LogicalSize::new(1280.0f64, 800.0f64);
+    }
+
+    // --- 原有测试 ---
+
     #[test]
     fn dev_pins_sidecar_port_to_vite_proxy_target() {
         // dev 固定 8899，确保与 Vite proxy 默认 target 一致
