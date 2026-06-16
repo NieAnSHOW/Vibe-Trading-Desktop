@@ -1,14 +1,11 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main windows",
+  "description": "Default capability for the main window and all internal app webviews (app + shell + grid). External tab-* webviews are deny-by-default.",
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "core:window:default",
-    "core:window:allow-close",
-    "core:window:allow-set-size",
-    "core:window:allow-set-title",
+    "core:event:default",
     "process:default"
   ]
 }

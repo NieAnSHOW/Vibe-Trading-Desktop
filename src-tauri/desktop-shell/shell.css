@@ -1,0 +1,136 @@
+/* shell.css — 标签栏样式，默认暗色主题（匹配 body bg #0e0f13） */
+
+:root {
+  --h-shell: 40px;
+  --bar-bg: #1a1b1e;
+  --tab-bg: #23262e;
+  --tab-active-bg: #5b8cff;
+  --tab-text: #c8ccd4;
+  --tab-active-text: #ffffff;
+  --add-bg: #23262e;
+  --add-hover-bg: #2d3038;
+  --add-color: #c8ccd4;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  height: var(--h-shell);
+  margin: 0;
+  overflow: hidden;
+  font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 12px;
+  background: var(--bar-bg);
+  color: var(--tab-text);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#tab-bar {
+  display: flex;
+  align-items: center;
+  height: var(--h-shell);
+  padding: 0 6px;
+  gap: 4px;
+  background: var(--bar-bg);
+}
+
+#tabs {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  height: var(--h-shell);
+  align-items: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* 隐藏滚动条 */
+#tabs::-webkit-scrollbar { height: 0; }
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: var(--tab-bg);
+  color: var(--tab-text);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 200px;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.tab:hover {
+  background: #2d3038;
+}
+
+.tab.active {
+  background: var(--tab-active-bg);
+  color: var(--tab-active-text);
+}
+
+.tab .ttl {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab .x {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.tab .x:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+#add {
+  height: 30px;
+  width: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--add-bg);
+  color: var(--add-color);
+  font-size: 18px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+#add:hover {
+  background: var(--add-hover-bg);
+  color: var(--tab-active-bg);
+}
+
+/* 亮色主题 */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bar-bg: #eceef2;
+    --tab-bg: #ffffff;
+    --tab-active-bg: #5b8cff;
+    --tab-text: #333333;
+    --tab-active-text: #ffffff;
+    --add-bg: #ffffff;
+    --add-hover-bg: #e0e2e6;
+    --add-color: #333333;
+  }
+}
