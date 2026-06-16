@@ -45,9 +45,9 @@
 
 ## 6. 权限与安全
 
-- [ ] 6.1 扩展 `src-tauri/capabilities/default.json`：新增 webview 创建/关闭 + 事件通信权限（`core:webview:*` / `core:event:default` 等）
-- [ ] 6.2 确认 capability 仅授予壳 webview 必需的最小权限集
-- [ ] 6.3 确认外部资讯站子 webview 不注入 Tauri IPC（验证外部站 JS 无法调用本地 command）
+- [x] 6.1 扩展 `src-tauri/capabilities/default.json`：新增 webview 创建/关闭 + 事件通信权限（`core:webview:*` / `core:event:default` 等）
+- [x] 6.2 确认 capability 仅授予壳 webview 必需的最小权限集
+- [x] 6.3 确认外部资讯站子 webview 不注入 Tauri IPC（验证外部站 JS 无法调用本地 command）
 
 ## 7. 测试
 

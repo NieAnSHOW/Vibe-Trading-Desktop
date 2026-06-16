@@ -1,0 +1,9 @@
+{
+  "identifier": "grid",
+  "description": "Capability for the grid speed-dial webview",
+  "windows": [],
+  "webviews": ["grid"],
+  "permissions": [
+    "open_news_tab"
+  ]
+}

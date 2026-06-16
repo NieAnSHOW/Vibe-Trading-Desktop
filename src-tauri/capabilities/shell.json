@@ -1,0 +1,12 @@
+{
+  "identifier": "shell",
+  "description": "Capability for the tab bar shell webview",
+  "windows": [],
+  "webviews": ["shell"],
+  "permissions": [
+    "core:event:default",
+    "open_grid_tab",
+    "activate_tab",
+    "close_tab"
+  ]
+}

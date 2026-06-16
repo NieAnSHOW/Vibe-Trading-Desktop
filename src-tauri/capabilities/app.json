@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "app",
+  "description": "Capability for the main app webview (loading page → sidecar SPA)",
+  "windows": [],
+  "webviews": ["app"],
+  "permissions": [
+    "core:default",
+    "process:default"
+  ]
+}
