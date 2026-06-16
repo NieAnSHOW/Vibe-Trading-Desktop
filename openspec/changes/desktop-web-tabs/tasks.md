@@ -13,11 +13,11 @@
 
 ## 2. 桌面壳前端（desktop-shell/）
 
-- [ ] 2.1 新增 `desktop-shell/index.html`：顶部标签栏骨架（无地址栏）+「+」入口
-- [ ] 2.2 新增 `desktop-shell/shell.css`：标签栏样式（主页标签无关闭按钮、其余标签有关闭按钮），支持暗色/亮色
-- [ ] 2.3 新增 `desktop-shell/sites.json`：财经站配置（site_id → url/name/icon），初始 2 站（新浪财经、同花顺）
-- [ ] 2.4 新增 `desktop-shell/grid.html` + 配套脚本：读取 `sites.json` 以网格渲染快捷入口，点击调 `open_news_tab`
-- [ ] 2.5 新增 `desktop-shell/shell.js`：管理标签状态（开/切/关）；调 Tauri command；监听 `tab://opened`/`tab://closed`/`tab://activated` 更新标签栏；主页标签禁关；「+」调 `open_grid_tab`
+- [x] 2.1 新增 `desktop-shell/index.html`：顶部标签栏骨架（无地址栏）+「+」入口
+- [x] 2.2 新增 `desktop-shell/shell.css`：标签栏样式（主页标签无关闭按钮、其余标签有关闭按钮），支持暗色/亮色
+- [x] 2.3 新增 `desktop-shell/sites.json`：财经站配置（site_id → url/name/icon），初始 2 站（新浪财经、同花顺）
+- [x] 2.4 新增 `desktop-shell/grid.html` + 配套脚本：读取 `sites.json` 以网格渲染快捷入口，点击调 `open_news_tab`
+- [x] 2.5 新增 `desktop-shell/shell.js`：管理标签状态（开/切/关）；调 Tauri command；监听 `tab://opened`/`tab://closed`/`tab://activated` 更新标签栏；主页标签禁关；「+」调 `open_grid_tab`
 
 ## 3. Tauri 标签/webview 生命周期（src-tauri/src/tabs.rs）
 

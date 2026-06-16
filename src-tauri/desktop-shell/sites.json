@@ -1,0 +1,16 @@
+{
+  "sites": [
+    {
+      "id": "sina_finance",
+      "name": "新浪财经",
+      "url": "https://finance.sina.com.cn/",
+      "icon": "📈"
+    },
+    {
+      "id": "10jqka",
+      "name": "同花顺",
+      "url": "https://www.10jqka.com.cn/",
+      "icon": "📊"
+    }
+  ]
+}

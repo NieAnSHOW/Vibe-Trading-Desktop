@@ -19,4 +19,11 @@
   <div id="msg">正在启动 Vibe Trading 后端...</div>
   <div id="err"></div>
   <button id="quit" style="display:none">退出</button>
+  <script>
+    // withGlobalTauri 注入 window.__TAURI__，支持进程退出（需 capability app.json 中的 process:default）
+    document.getElementById('quit').onclick = function () {
+      if (window.__TAURI__) { window.__TAURI__.process.exit(1); }
+      else { window.close(); }
+    };
+  </script>
 </body></html>

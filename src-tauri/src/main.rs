@@ -121,129 +121,152 @@ fn nav_target_dev_aware(is_dev: bool, sidecar_port: u16) -> String {
 // 本模块验证设计文档依赖的所有 unstable API 在 features=["unstable"]
 // 下是否存在 + 方法签名是否匹配预期。测试不运行实际逻辑，仅通过编译
 // 确认类型与符号存在。任何编译失败都意味着 spike 不通过。
+//
+// 实际 Tauri 2.11.2 源码签名（通过 cargo registry 源码核实）：
+//  - add_child<P: Into<Position>, S: Into<Size>>(&self, WebviewBuilder, P, S) -> Result<Webview>
+//  - webview.show / hide / set_focus / close -> Result<()>
+//  - webview.set_size<S: Into<Size>>(&self, S) -> Result<()>
+//  - webview.set_position<Pos: Into<Position>>(&self, Pos) -> Result<()>
+//  - webview.navigate(&self, Url) -> Result<()>
+//  - Window::webviews(&self) -> Vec<Webview<R>>
+//  - Manager::webviews(&self) -> HashMap<String, Webview<R>>
+//  - Manager::get_webview(&self, &str) -> Option<Webview<R>>
 // ══════════════════════════════════════════════════════════════════════════
 
 #[cfg(test)]
-#[deny(unused_imports)]
 mod spike_api_verify {
-    /// # Step 2: 关键类型与构造器可 import
-    ///
-    /// 每个测试确认一个 unstable API 路径在 features=["unstable"] 下可见。
-    /// 若某个符号不存在则 `cargo test` 编译失败，此即为 spike FAIL。
+    // Manager trait 必须在作用域内才能调用 get_webview/webviews/get_window
+    use tauri::Manager;
+
+    // ── Step 2: 关键类型可 import ──────────────────────────────────────
 
     #[test]
     fn api_window_builder() {
-        let _ = tauri::WindowBuilder::<tauri::Wry>::default;
+        // WindowBuilder<'a, R, M>: 仅在 #[cfg(feature = "unstable")] 下 re-export
+        // 验证类型和 new 方法存在即可（linter 会去掉未使用的 type alias）
+        fn _new(m: &tauri::AppHandle, label: &str) {
+            let _ = tauri::WindowBuilder::new(m, label);
+        }
     }
 
     #[test]
     fn api_webview_builder() {
-        let _ = tauri::WebviewBuilder::<tauri::Wry>::default;
+        // WebviewBuilder<R>: 仅在 #[cfg(feature = "unstable")] 下 re-export
+        type _Wb = tauri::WebviewBuilder<tauri::Wry>;
+        // 确认 new(label, url) 存在
+        fn _new(label: &str, url: tauri::WebviewUrl) -> tauri::WebviewBuilder<tauri::Wry> {
+            tauri::WebviewBuilder::new(label, url)
+        }
     }
 
     #[test]
     fn api_webview_type() {
-        // tauri::webview::Webview 是 add_child 的返回值类型
-        let _: Option<tauri::webview::Webview> = None;
+        // tauri::Webview (即 tauri::webview::Webview) — add_child 的返回值
+        let _: Option<tauri::Webview> = None;
     }
 
     #[test]
     fn api_logical_position() {
-        let _pos: tauri::LogicalPosition<f64> = tauri::LogicalPosition::new(0.0f64, 0.0f64);
+        let _pos: tauri::LogicalPosition<f64> = tauri::LogicalPosition::new(0.0, 0.0);
     }
 
     #[test]
     fn api_logical_size() {
-        let _size: tauri::LogicalSize<f64> = tauri::LogicalSize::new(1280.0f64, 800.0f64);
+        let _size: tauri::LogicalSize<f64> = tauri::LogicalSize::new(1280.0, 800.0);
+    }
+
+    #[test]
+    fn api_position_and_size_enums() {
+        // Position 与 Size enum 变体（LogicalPosition/Size 可 Into 它们）
+        let _p: tauri::Position = tauri::Position::Logical(tauri::LogicalPosition::new(0.0, 0.0));
+        let _s: tauri::Size = tauri::Size::Logical(tauri::LogicalSize::new(1280.0, 800.0));
     }
 
     // ── Step 3: Webview 方法签名 ───────────────────────────────────────
 
     #[test]
     fn sig_webview_show() {
-        // show(&self) -> Result<(), Error>
-        let _: fn(&tauri::webview::Webview) -> Result<(), tauri::Error> =
-            |w| w.show();
+        // show(&self) -> Result<()>
+        let _: fn(&tauri::Webview) -> Result<(), tauri::Error> = |w| w.show();
     }
 
     #[test]
     fn sig_webview_hide() {
-        // hide(&self) -> Result<(), Error>
-        let _: fn(&tauri::webview::Webview) -> Result<(), tauri::Error> =
-            |w| w.hide();
+        // hide(&self) -> Result<()>
+        let _: fn(&tauri::Webview) -> Result<(), tauri::Error> = |w| w.hide();
     }
 
     #[test]
     fn sig_webview_set_size() {
-        // set_size(&self, LogicalSize<f64>) -> Result<(), Error>
-        let _: fn(&tauri::webview::Webview, tauri::LogicalSize<f64>) -> Result<(), tauri::Error> =
+        // set_size<S: Into<Size>>(&self, S) -> Result<()>
+        let _: fn(&tauri::Webview, tauri::LogicalSize<f64>) -> Result<(), tauri::Error> =
             |w, sz| w.set_size(sz);
     }
 
     #[test]
     fn sig_webview_set_position() {
-        // set_position(&self, LogicalPosition<f64>) -> Result<(), Error>
-        let _: fn(&tauri::webview::Webview, tauri::LogicalPosition<f64>) -> Result<(), tauri::Error> =
+        // set_position<Pos: Into<Position>>(&self, Pos) -> Result<()>
+        let _: fn(&tauri::Webview, tauri::LogicalPosition<f64>) -> Result<(), tauri::Error> =
             |w, pos| w.set_position(pos);
     }
 
     #[test]
     fn sig_webview_close() {
-        // close(&self) -> Result<(), Error>
-        let _: fn(&tauri::webview::Webview) -> Result<(), tauri::Error> =
-            |w| w.close();
+        // close(&self) -> Result<()>
+        let _: fn(&tauri::Webview) -> Result<(), tauri::Error> = |w| w.close();
     }
 
     #[test]
     fn sig_webview_navigate() {
-        // navigate(&self, Url) -> Result<(), Error>
-        let _: fn(&tauri::webview::Webview, url::Url) -> Result<(), tauri::Error> =
+        // navigate(&self, Url) -> Result<()>  (Url = tauri::Url = url::Url)
+        let _: fn(&tauri::Webview, tauri::Url) -> Result<(), tauri::Error> =
             |w, u| w.navigate(u);
     }
 
     #[test]
     fn sig_webview_set_focus() {
-        // set_focus(&self) -> Result<(), Error>
-        let _: fn(&tauri::webview::Webview) -> Result<(), tauri::Error> =
-            |w| w.set_focus();
+        // set_focus(&self) -> Result<()>
+        let _: fn(&tauri::Webview) -> Result<(), tauri::Error> = |w| w.set_focus();
     }
 
     // ── Window 方法签名 ────────────────────────────────────────────────
 
     #[test]
     fn sig_window_add_child() {
-        // Window::add_child(&self, WebviewBuilder, LogicalPosition<f64>, LogicalSize<f64>)
-        //     -> Result<Webview, Error>
+        // 实际签名：add_child<P: Into<Position>, S: Into<Size>>(
+        //     &self, WebviewBuilder<R>, position: P, size: S) -> Result<Webview<R>>
+        //
+        // 调用时传入 LogicalPosition<f64> / LogicalSize<f64>，各自满足 Into 边界。
         let _: fn(
             &tauri::Window,
             tauri::WebviewBuilder<tauri::Wry>,
             tauri::LogicalPosition<f64>,
             tauri::LogicalSize<f64>,
-        ) -> Result<tauri::webview::Webview, tauri::Error> =
+        ) -> Result<tauri::Webview, tauri::Error> =
             |win, bld, pos, sz| win.add_child(bld, pos, sz);
     }
 
     #[test]
     fn sig_window_webviews() {
-        // Window::webviews(&self) -> impl Iterator<Item = (String, Webview)>
-        fn check(win: &tauri::Window) -> Vec<(String, tauri::webview::Webview)> {
-            win.webviews().collect()
+        // Window::webviews(&self) -> Vec<Webview<R>>
+        // 返回值是 Vec（不是 iterator），不需要 .collect()
+        fn check(win: &tauri::Window) -> Vec<tauri::Webview> {
+            win.webviews()
         }
         let _ = check;
     }
 
     #[test]
     fn sig_window_inner_size() {
-        // inner_size(&self) -> Result<PhysicalSize<u32>, Error>
+        // inner_size() -> Result<PhysicalSize<u32>>
         let _: fn(&tauri::Window) -> Result<tauri::PhysicalSize<u32>, tauri::Error> =
             |w| w.inner_size();
     }
 
     #[test]
     fn sig_window_scale_factor() {
-        // scale_factor(&self) -> Result<f64, Error>
-        let _: fn(&tauri::Window) -> Result<f64, tauri::Error> =
-            |w| w.scale_factor();
+        // scale_factor() -> Result<f64>
+        let _: fn(&tauri::Window) -> Result<f64, tauri::Error> = |w| w.scale_factor();
     }
 
     // ── Manager trait（AppHandle 上的 get_window / get_webview）─────────
@@ -257,16 +280,17 @@ mod spike_api_verify {
 
     #[test]
     fn sig_manager_get_webview() {
-        // Manager::get_webview(&self, &str) -> Option<webview::Webview>
-        let _: fn(&tauri::AppHandle, &str) -> Option<tauri::webview::Webview> =
+        // Manager::get_webview(&self, &str) -> Option<Webview>
+        let _: fn(&tauri::AppHandle, &str) -> Option<tauri::Webview> =
             |h, label| h.get_webview(label);
     }
 
     #[test]
     fn sig_manager_webviews() {
-        // Manager::webviews(&self) -> impl Iterator<Item = (String, Webview)>
-        fn check(h: &tauri::AppHandle) -> Vec<(String, tauri::webview::Webview)> {
-            h.webviews().collect()
+        // Manager::webviews(&self) -> HashMap<String, Webview<R>>
+        use std::collections::HashMap;
+        fn check(h: &tauri::AppHandle) -> HashMap<String, tauri::Webview> {
+            h.webviews()
         }
         let _ = check;
     }
@@ -289,7 +313,7 @@ mod spike_api_verify {
     fn api_physical_to_logical() {
         // PhysicalSize::to_logical(scale: f64) -> LogicalSize<f64>
         let physical = tauri::PhysicalSize::<u32>::new(1280, 832);
-        let _logical: tauri::LogicalSize<f64> = physical.to_logical(2.0f64);
+        let _logical: tauri::LogicalSize<f64> = physical.to_logical(2.0);
     }
 
     // ── WebviewUrl 变体 ────────────────────────────────────────────────
@@ -302,7 +326,7 @@ mod spike_api_verify {
     #[test]
     fn api_webview_url_external() {
         let _: tauri::WebviewUrl =
-            tauri::WebviewUrl::External("https://example.com/".parse::<url::Url>().unwrap());
+            tauri::WebviewUrl::External("https://example.com/".parse::<tauri::Url>().unwrap());
     }
 }
 

@@ -4,12 +4,13 @@
   "version": "0.1.0",
   "identifier": "ai.vibetrading.desktop",
   "build": {
-    "frontendDist": "./placeholder-dist",
+    "frontendDist": "./desktop-shell",
     "devUrl": "http://127.0.0.1:5899/",
     "beforeDevCommand": "cd frontend && npm run dev"
   },
   "app": {
     "windows": [],
+    "withGlobalTauri": true,
     "security": { "csp": null }
   },
   "bundle": {

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>速拨</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      height: 100vh;
+      margin: 0;
+      font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #0e0f13;
+      color: #e6e6e6;
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    h1 {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 0 0 16px;
+      color: #9aa0aa;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: #1a1c22;
+      border: 1px solid #2a2d36;
+      border-radius: 10px;
+      padding: 18px;
+      cursor: pointer;
+      text-align: center;
+      transition: border-color 0.15s;
+    }
+
+    .card:hover {
+      border-color: #5b8cff;
+    }
+
+    .ico {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      background: #5b8cff;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      margin: 0 auto 10px;
+    }
+
+    .name {
+      font-size: 13px;
+    }
+
+    @media (prefers-color-scheme: light) {
+      body { background: #f5f6f8; color: #222; }
+      .card { background: #fff; border-color: #e1e4ea; }
+    }
+  </style>
+</head>
+<body>
+  <h1>财经资讯速拨</h1>
+  <div class="grid" id="grid">
+    <!-- 由 grid.js 动态渲染 -->
+  </div>
+  <script src="grid.js"></script>
+</body>
+</html>
