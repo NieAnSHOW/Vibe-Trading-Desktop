@@ -345,7 +345,7 @@ git commit -s -m "feat(desktop): add sites.json config and grid speed-dial page"
 - Create: `src-tauri/desktop-shell/shell.css`
 - Create: `src-tauri/desktop-shell/shell.js`
 
-- [ ] **Step 1: 写 shell.html**
+- [x] **Step 1: 写 shell.html**
 
 `src-tauri/desktop-shell/shell.html`:
 
@@ -362,7 +362,7 @@ git commit -s -m "feat(desktop): add sites.json config and grid speed-dial page"
 </body></html>
 ```
 
-- [ ] **Step 2: 写 shell.css**
+- [x] **Step 2: 写 shell.css**
 
 `src-tauri/desktop-shell/shell.css`:
 
@@ -385,7 +385,7 @@ body{margin:0;height:40px;overflow:hidden;font-family:-apple-system,Segoe UI,san
 }
 ```
 
-- [ ] **Step 3: 写 shell.js**
+- [x] **Step 3: 写 shell.js**
 
 `src-tauri/desktop-shell/shell.js`:
 
@@ -425,7 +425,7 @@ api.event.listen('tab://closed', (e) => { tabs.delete(e.payload.label); render()
 document.getElementById('add').onclick = () => api.core.invoke('open_grid_tab');
 ```
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 cd /Users/niean/Documents/project/Vibe-Trading-Desktop

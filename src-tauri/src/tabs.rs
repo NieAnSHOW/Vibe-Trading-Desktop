@@ -84,6 +84,320 @@ impl TabRegistry {
     }
 }
 
+// ── 命令实现 ────────────────────────────────────────────────────────────
+
+use std::collections::HashSet;
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewBuilder, WebviewUrl};
+
+/// shell webview 的固定 label
+const SHELL_LABEL: &str = "shell";
+
+/// 主窗口的 label
+const MAIN_WINDOW: &str = "main";
+
+/// 保持当前活跃标签状态（纯状态跟踪，不参与 registry 逻辑）
+pub struct ActiveState {
+    pub current: Mutex<String>,
+}
+
+impl ActiveState {
+    pub fn new() -> Self {
+        Self {
+            current: Mutex::new(String::new()),
+        }
+    }
+}
+
+/// 事件 payload —— 通知 shell 标签变化
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TabEvent {
+    pub label: String,
+    pub site_id: String,
+    pub title: String,
+    pub closable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub all: Option<Vec<Tab>>,
+}
+
+/// 内部函数（非 #[command]）：注册主页标签并导航。
+/// 由 boot() 线程调用，不在 generate_handler! 中注册。
+pub fn register_app_tab(app: &AppHandle, url: &str) -> Result<(), String> {
+    let registry = app.state::<Mutex<TabRegistry>>();
+    let mut r = registry.lock().map_err(|e| format!("lock registry: {e}"))?;
+
+    let tab = Tab {
+        label: "app".into(),
+        site_id: "__app__".into(),
+        title: "Vibe Trading".into(),
+        closable: false,
+    };
+    r.register(tab)?;
+    drop(r);
+
+    // 导航已存在的 "app" webview
+    let target_url =
+        tauri::Url::parse(url).map_err(|e| format!("parse app url: {e}"))?;
+    if let Some(wv) = app.get_webview("app") {
+        wv.navigate(target_url)
+            .map_err(|e| format!("navigate app: {e}"))?;
+    }
+
+    // 发送 opened 事件通知 shell
+    let all = {
+        let r = registry.lock().map_err(|e| format!("lock registry: {e}"))?;
+        r.all().to_vec()
+    };
+    if let Some(sh) = app.get_webview(SHELL_LABEL) {
+        let _ = sh.emit("tab://opened", TabEvent {
+            label: "app".into(),
+            site_id: "__app__".into(),
+            title: "Vibe Trading".into(),
+            closable: false,
+            all: Some(all),
+        });
+    }
+
+    // 设置活跃标签
+    if let Some(state) = app.try_state::<ActiveState>() {
+        let mut cur = state.current.lock().map_err(|e| format!("lock active: {e}"))?;
+        *cur = "app".to_string();
+    }
+
+    Ok(())
+}
+
+/// 打开/激活格速拨页（幂等）
+#[tauri::command]
+pub async fn open_grid_tab(app: AppHandle) -> Result<(), String> {
+    let registry = app.state::<Mutex<TabRegistry>>();
+    let mut r = registry.lock().map_err(|e| format!("lock registry: {e}"))?;
+
+    // 幂等：已存在则直接激活
+    if let Some(label) = r.find_by_site("__grid__") {
+        drop(r);
+        return activate_tab_inner(&app, &label).await;
+    }
+
+    let label = r.next_label();
+    let site_id = "__grid__".to_string();
+    let title = "Grid".to_string();
+
+    r.register(Tab {
+        label: label.clone(),
+        site_id: site_id.clone(),
+        title: title.clone(),
+        closable: true,
+    })?;
+    drop(r);
+
+    // 获取 main 窗口尺寸
+    let win = app
+        .get_window(MAIN_WINDOW)
+        .ok_or("main window not found")?;
+    let physical = win.inner_size().map_err(|e| format!("inner_size: {e}"))?;
+    let scale = win.scale_factor().map_err(|e| format!("scale_factor: {e}"))?;
+    let logical: LogicalSize<f64> = physical.to_logical(scale);
+
+    // 创建子 webview
+    win.add_child(
+        WebviewBuilder::new(&label, WebviewUrl::App("grid.html".into())),
+        LogicalPosition::new(0.0, H_SHELL),
+        LogicalSize::new(logical.width, logical.height - H_SHELL),
+    )
+    .map_err(|e| format!("add_child grid: {e}"))?;
+
+    // 发送 opened 事件
+    let reg = app.state::<Mutex<TabRegistry>>();
+    let all = reg.lock().map_err(|e| format!("lock registry: {e}"))?.all().to_vec();
+    if let Some(sh) = app.get_webview(SHELL_LABEL) {
+        let _ = sh.emit("tab://opened", TabEvent {
+            label: label.clone(),
+            site_id: site_id.clone(),
+            title: title.clone(),
+            closable: true,
+            all: Some(all),
+        });
+    }
+
+    // 激活
+    activate_tab_inner(&app, &label).await
+}
+
+/// 打开/激活资讯标签（幂等，按 site_id）
+#[tauri::command]
+pub async fn open_news_tab(
+    app: AppHandle,
+    url: String,
+    title: String,
+    site_id: String,
+) -> Result<(), String> {
+    let registry = app.state::<Mutex<TabRegistry>>();
+    let mut r = registry.lock().map_err(|e| format!("lock registry: {e}"))?;
+
+    // 幂等：已存在则直接激活
+    if let Some(label) = r.find_by_site(&site_id) {
+        drop(r);
+        return activate_tab_inner(&app, &label).await;
+    }
+
+    let label = r.next_label();
+
+    r.register(Tab {
+        label: label.clone(),
+        site_id: site_id.clone(),
+        title: title.clone(),
+        closable: true,
+    })?;
+    drop(r);
+
+    // 获取主窗口尺寸
+    let win = app
+        .get_window(MAIN_WINDOW)
+        .ok_or("main window not found")?;
+    let physical = win.inner_size().map_err(|e| format!("inner_size: {e}"))?;
+    let scale = win.scale_factor().map_err(|e| format!("scale_factor: {e}"))?;
+    let logical: LogicalSize<f64> = physical.to_logical(scale);
+
+    // 外部 URL
+    let parsed = tauri::Url::parse(&url).map_err(|e| format!("parse external url: {e}"))?;
+    win.add_child(
+        WebviewBuilder::new(&label, WebviewUrl::External(parsed)),
+        LogicalPosition::new(0.0, H_SHELL),
+        LogicalSize::new(logical.width, logical.height - H_SHELL),
+    )
+    .map_err(|e| format!("add_child news: {e}"))?;
+
+    // 发送 opened 事件
+    let reg = app.state::<Mutex<TabRegistry>>();
+    let all = reg.lock().map_err(|e| format!("lock registry: {e}"))?.all().to_vec();
+    if let Some(sh) = app.get_webview(SHELL_LABEL) {
+        let _ = sh.emit("tab://opened", TabEvent {
+            label: label.clone(),
+            site_id: site_id.clone(),
+            title: title.clone(),
+            closable: true,
+            all: Some(all),
+        });
+    }
+
+    // 激活
+    activate_tab_inner(&app, &label).await
+}
+
+/// 激活指定标签
+#[tauri::command]
+pub async fn activate_tab(app: AppHandle, label: String) -> Result<(), String> {
+    activate_tab_inner(&app, &label).await
+}
+
+/// 激活标签的内部实现
+async fn activate_tab_inner(app: &AppHandle, label: &str) -> Result<(), String> {
+    // 验证 label 存在于 registry
+    {
+        let registry = app.state::<Mutex<TabRegistry>>();
+        let r = registry.lock().map_err(|e| format!("lock registry: {e}"))?;
+        r.get(label).ok_or_else(|| format!("tab not found: {label}"))?;
+    }
+
+    let tabs = app.webviews();
+    let exclude: HashSet<&str> = [SHELL_LABEL, label].iter().copied().collect();
+
+    // 隐藏其他内容 webview
+    for (wl, wv) in &tabs {
+        if !exclude.contains(wl.as_str()) {
+            let _ = wv.hide();
+        }
+    }
+
+    // 显示并聚焦目标 webview
+    if let Some(wv) = app.get_webview(label) {
+        let _ = wv.show();
+        let _ = wv.set_focus();
+    }
+
+    // 更新活跃状态
+    if let Some(state) = app.try_state::<ActiveState>() {
+        let mut cur = state.current.lock().map_err(|e| format!("lock active: {e}"))?;
+        *cur = label.to_string();
+    }
+
+    // 获取 tab 元数据发送事件
+    let registry = app.state::<Mutex<TabRegistry>>();
+    let r = registry.lock().map_err(|e| format!("lock registry: {e}"))?;
+    let tab = r.get(label).cloned();
+
+    if let (Some(t), Some(sh)) = (tab, app.get_webview(SHELL_LABEL)) {
+        let _ = sh.emit("tab://activated", TabEvent {
+            label: t.label.clone(),
+            site_id: t.site_id.clone(),
+            title: t.title.clone(),
+            closable: t.closable,
+            all: None,
+        });
+    }
+
+    Ok(())
+}
+
+/// 关闭指定标签
+#[tauri::command]
+pub async fn close_tab(app: AppHandle, label: String) -> Result<(), String> {
+    // 检查 closable 并移除
+    let tab = {
+        let registry = app.state::<Mutex<TabRegistry>>();
+        let mut r = registry.lock().map_err(|e| format!("lock registry: {e}"))?;
+        r.remove(&label)?
+    };
+
+    // 关闭 webview
+    if let Some(wv) = app.get_webview(&label) {
+        let _ = wv.close();
+    }
+
+    // 发送 closed 事件
+    let registry = app.state::<Mutex<TabRegistry>>();
+    let r = registry.lock().map_err(|e| format!("lock registry: {e}"))?;
+    let all = r.all().to_vec();
+    if let Some(sh) = app.get_webview(SHELL_LABEL) {
+        let _ = sh.emit("tab://closed", TabEvent {
+            label: tab.label.clone(),
+            site_id: tab.site_id.clone(),
+            title: tab.title.clone(),
+            closable: tab.closable,
+            all: Some(all),
+        });
+    }
+
+    Ok(())
+}
+
+/// resize 同步：窗口大小变化时更新 shell 和内容 webview 的位置/大小
+pub fn sync_resize(app: &AppHandle, physical: tauri::PhysicalSize<u32>) {
+    if let Some(win) = app.get_window(MAIN_WINDOW) {
+        let scale = match win.scale_factor() {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        let logical: LogicalSize<f64> = physical.to_logical(scale);
+
+        // 更新 shell webview 大小
+        if let Some(sh) = app.get_webview(SHELL_LABEL) {
+            let _ = sh.set_size(LogicalSize::new(logical.width, H_SHELL));
+        }
+
+        // 更新所有内容 webview（非 shell）的位置和大小
+        let tabs = app.webviews();
+        let content_h = (logical.height - H_SHELL).max(0.0);
+        for (wl, wv) in &tabs {
+            if wl.as_str() != SHELL_LABEL {
+                let _ = wv.set_position(LogicalPosition::new(0.0, H_SHELL));
+                let _ = wv.set_size(LogicalSize::new(logical.width, content_h));
+            }
+        }
+    }
+}
+
 // ══════════════════════════════════════════════════════════════════════════
 // TDD：先写测试，确认全部失败后，再补实现
 // ══════════════════════════════════════════════════════════════════════════
