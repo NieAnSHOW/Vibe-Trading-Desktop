@@ -21,20 +21,20 @@
 
 ## 3. Tauri 标签/webview 生命周期（src-tauri/src/tabs.rs）
 
-- [x] 3.1 新增 `tabs.rs`：标签状态结构（label/site_id/url/title/closable）与 webview 注册表（线程安全）
-- [x] 3.2 实现 `open_app_tab(app, url)`：把 Web UI 作为固定首个「主页」标签创建（site_id=`__app__`，closable=false），sidecar 就绪后调用
-- [x] 3.3 实现 `open_grid_tab(app)`：打开/激活网格速拨页（幂等：已存在则 activate），closable=true
-- [x] 3.4 实现 `open_news_tab(app, url, title, site_id)`：幂等（site_id 已存在则 activate），否则 `WebviewBuilder` 在 main 窗口内创建子 webview，emit `tab://opened`
-- [x] 3.5 实现 `activate_tab(app, label)`：show+focus 目标 webview，hide 其余，emit `tab://activated`
-- [x] 3.6 实现 `close_tab(app, label)`：拒绝关闭主页标签（closable=false）；其余销毁 webview、清理注册表，emit `tab://closed`
-- [x] 3.7 实现 resize 同步：监听 `WindowEvent::Resized`，遍历内容 webview 同步 `set_size`（y=壳高度、铺满内容区）
+- [ ] 3.1 新增 `tabs.rs`：标签状态结构（label/site_id/url/title/closable）与 webview 注册表（线程安全）
+- [ ] 3.2 实现 `open_app_tab(app, url)`：把 Web UI 作为固定首个「主页」标签创建（site_id=`__app__`，closable=false），sidecar 就绪后调用
+- [ ] 3.3 实现 `open_grid_tab(app)`：打开/激活网格速拨页（幂等：已存在则 activate），closable=true
+- [ ] 3.4 实现 `open_news_tab(app, url, title, site_id)`：幂等（site_id 已存在则 activate），否则 `WebviewBuilder` 在 main 窗口内创建子 webview，emit `tab://opened`
+- [ ] 3.5 实现 `activate_tab(app, label)`：show+focus 目标 webview，hide 其余，emit `tab://activated`
+- [ ] 3.6 实现 `close_tab(app, label)`：拒绝关闭主页标签（closable=false）；其余销毁 webview、清理注册表，emit `tab://closed`
+- [ ] 3.7 实现 resize 同步：监听 `WindowEvent::Resized`，遍历内容 webview 同步 `set_size`（y=壳高度、铺满内容区）
 
 ## 4. 启动流程改造（src-tauri/src/main.rs）
 
-- [x] 4.1 `mod tabs;` 并改 `WebviewWindowBuilder`：建 main 窗口后先建壳 webview（加载 `desktop-shell/index.html`，顶部固定高度）替代直接加载 Web UI
-- [x] 4.2 改 `boot()`：sidecar 健康检查通过后，把末尾 `win.navigate(sidecar_url)` 替换为 `open_app_tab(sidecar_url)`，随后 `open_grid_tab` 装入网格页
-- [x] 4.3 在 `invoke_handler` 注册 5 个 command（open_app_tab/open_grid_tab/open_news_tab/activate_tab/close_tab）
-- [x] 4.4 在 `.run(...)` 的事件循环接入 `WindowEvent::Resized` → resize 同步（3.7）
+- [ ] 4.1 `mod tabs;` 并改 `WebviewWindowBuilder`：建 main 窗口后先建壳 webview（加载 `desktop-shell/index.html`，顶部固定高度）替代直接加载 Web UI
+- [ ] 4.2 改 `boot()`：sidecar 健康检查通过后，把末尾 `win.navigate(sidecar_url)` 替换为 `open_app_tab(sidecar_url)`，随后 `open_grid_tab` 装入网格页
+- [ ] 4.3 在 `invoke_handler` 注册 5 个 command（open_app_tab/open_grid_tab/open_news_tab/activate_tab/close_tab）
+- [ ] 4.4 在 `.run(...)` 的事件循环接入 `WindowEvent::Resized` → resize 同步（3.7）
 
 ## 5. 资源解析与配置
 
