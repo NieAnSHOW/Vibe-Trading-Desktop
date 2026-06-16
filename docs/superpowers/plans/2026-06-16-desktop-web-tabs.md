@@ -2,6 +2,7 @@
 change: desktop-web-tabs
 design-doc: docs/superpowers/specs/2026-06-16-desktop-web-tabs-design.md
 base-ref: 91d71de79d2e6b1a14ed69d4236547f0c9416eef
+archived-with: 2026-06-16-desktop-web-tabs
 ---
 
 # Desktop Web Tabs 实施计划
@@ -16,6 +17,7 @@ base-ref: 91d71de79d2e6b1a14ed69d4236547f0c9416eef
 
 **设计依据:** 全文遵循 `docs/superpowers/specs/2026-06-16-desktop-web-tabs-design.md`（决策 D1–D10），任务边界对应 `openspec/changes/desktop-web-tabs/tasks.md` 的 9 个任务组。
 
+archived-with: 2026-06-16-desktop-web-tabs
 ---
 
 > **决策门（最重要）:** Task 0 是 spike 前置任务，必须最先完成。spike 通过 → 走主路径 Task 1–7；spike 失败 → 跳过 Task 2/3/4 的多 webview 实现，改走 Task 8 降级（D10 外部浏览器）。**未完成 Task 0 不得开始 Task 1。**
@@ -58,6 +60,7 @@ base-ref: 91d71de79d2e6b1a14ed69d4236547f0c9416eef
 
 > **关于网格 label 的特殊说明**：Design D4 表格规定网格 label 为 `grid`（非 `tab-{n}`），`tab-{n}` 仅用于外部站。这是因为网格页只有一个，用固定 label 更适合 `add_child` 时作为 webview 标识符。`WebviewUrl::App("grid.html")` 通过 label 引用，不依赖计数器。
 
+archived-with: 2026-06-16-desktop-web-tabs
 ---
 
 ## Task 0: 多 webview 叠加切换 spike `[spike]` —— 决策门
@@ -198,6 +201,7 @@ git commit -s -m "spike(desktop): verify Tauri 2.11.2 multi-webview overlay + un
 结论：<填入 Step 0.7 判定与具体行为观察>"
 ```
 
+archived-with: 2026-06-16-desktop-web-tabs
 ---
 
 ## Task 1: 目录改名与资源/配置接线（desktop-shell 落地）
@@ -275,6 +279,7 @@ git add src-tauri/desktop-shell src-tauri/tauri.conf.json src-tauri/Cargo.toml
 git commit -s -m "chore(desktop): rename placeholder-dist to desktop-shell, point frontendDist, enable withGlobalTauri + unstable"
 ```
 
+archived-with: 2026-06-16-desktop-web-tabs
 ---
 
 ## Task 2: 壳前端 —— sites.json + 网格页 + 标签栏
@@ -436,6 +441,7 @@ git add src-tauri/desktop-shell/sites.json src-tauri/desktop-shell/grid.html src
 git commit -s -m "feat(desktop): add shell tab bar, grid speed-dial page, and sites.json"
 ```
 
+archived-with: 2026-06-16-desktop-web-tabs
 ---
 
 ## Task 3: tabs.rs —— TabRegistry 纯逻辑 + 命令 + resize 同步
@@ -784,6 +790,7 @@ git add src-tauri/src/tabs.rs src-tauri/src/main.rs
 git commit -s -m "feat(desktop): add TabRegistry pure logic + tab lifecycle async commands + resize sync"
 ```
 
+archived-with: 2026-06-16-desktop-web-tabs
 ---
 
 ## Task 4: 权限拆分 —— capabilities（webviews 作用域，deny-by-default）
@@ -865,6 +872,7 @@ git add src-tauri/capabilities
 git commit -s -m "feat(desktop): split capabilities by webview scope to enforce external-site IPC isolation"
 ```
 
+archived-with: 2026-06-16-desktop-web-tabs
 ---
 
 ## Task 5: main.rs 启动流程改造（接线 + resize 事件）
@@ -1039,6 +1047,7 @@ git add src-tauri/src/main.rs
 git commit -s -m "feat(desktop): rework startup to WindowBuilder + transition steps + resize event loop"
 ```
 
+archived-with: 2026-06-16-desktop-web-tabs
 ---
 
 ## Task 6: 集成验证（macOS `cargo tauri dev`）+ 安全验证
@@ -1100,6 +1109,7 @@ Expected: 打印 `BLOCKED`（外部站不在任何 capability 的 `webviews` 列
 git commit -s --allow-empty -m "test(desktop): macOS integration + external-site isolation verification passed"
 ```
 
+archived-with: 2026-06-16-desktop-web-tabs
 ---
 
 ## Task 7: 文档
@@ -1163,6 +1173,7 @@ git add docs/desktop/README.md
 git commit -s -m "docs(desktop): document tab bar, grid speed-dial, sites.json, and unstable feature dependency"
 ```
 
+archived-with: 2026-06-16-desktop-web-tabs
 ---
 
 ## Task 8: 降级兜底（条件 —— 仅 Task 0 spike 失败时执行）
@@ -1217,6 +1228,7 @@ git add src-tauri/Cargo.toml src-tauri/src/tabs.rs src-tauri/desktop-shell/grid.
 git commit -s -m "feat(desktop): fallback to external browser for news sites (spike failed)"
 ```
 
+archived-with: 2026-06-16-desktop-web-tabs
 ---
 
 ## 自检（Self-Review）
@@ -1247,6 +1259,7 @@ git commit -s -m "feat(desktop): fallback to external browser for news sites (sp
 
 **4. 回滚方案:** 所有变更隔离在 `src-tauri/` 壳层。回退 `main.rs` + `Cargo.toml` + `tauri.conf.json` + `capabilities/` 即恢复单 webview navigate 行为。
 
+archived-with: 2026-06-16-desktop-web-tabs
 ---
 
 ## Execution Handoff

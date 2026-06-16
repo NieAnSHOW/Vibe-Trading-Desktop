@@ -1,0 +1,14 @@
+{
+  "change": "desktop-shadow-report-pdf-export",
+  "phase": "design",
+  "mode": "compact",
+  "canonical_spec": "openspec",
+  "generated_by": "comet-handoff.sh",
+  "context_hash": "079968868f33effa1e292ba92a4937bf4651793b03ea5565d6958b6cec55fa3b",
+  "files": [
+    { "path": "openspec/changes/desktop-shadow-report-pdf-export/proposal.md", "sha256": "ef5be7f9645285a48d75bb0b6855b7d2bc85ff585c8be6cdfb1665a928234a8e" },
+    { "path": "openspec/changes/desktop-shadow-report-pdf-export/design.md", "sha256": "36fa4606377601bdedbf5961b7706e50adbd334a3e2fed0aaab37cba4317a1c0" },
+    { "path": "openspec/changes/desktop-shadow-report-pdf-export/tasks.md", "sha256": "ee31018ecc0c4f79d4d9136f6b8d2a7d9845e303a088ba94d417ca3975dd24cd" },
+    { "path": "openspec/changes/desktop-shadow-report-pdf-export/specs/shadow-report-export/spec.md", "sha256": "f72956d7953619676b033748aec19ba2b92cb394e204824a8b922444366d7b1e" }
+  ]
+}

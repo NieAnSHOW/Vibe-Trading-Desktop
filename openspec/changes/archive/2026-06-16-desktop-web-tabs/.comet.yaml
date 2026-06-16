@@ -8,7 +8,7 @@ isolation: worktree
 verify_mode: full
 verify_result: pass
 verified_at: 2026-06-16
-archived: false
+archived: true
 subagent_dispatch: confirmed
 tdd_mode: tdd
 build_command: python3 -m compileall -q agent/cli agent/api_server.py agent/mcp_server.py

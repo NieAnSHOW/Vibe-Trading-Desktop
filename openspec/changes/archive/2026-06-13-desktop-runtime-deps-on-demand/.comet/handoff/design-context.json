@@ -1,0 +1,14 @@
+{
+  "change": "desktop-runtime-deps-on-demand",
+  "phase": "design",
+  "mode": "compact",
+  "canonical_spec": "openspec",
+  "generated_by": "comet-handoff.sh",
+  "context_hash": "f53640f8092c6904bc217ea438ca4649629e0220fdc81aead36e57558772157f",
+  "files": [
+    { "path": "openspec/changes/desktop-runtime-deps-on-demand/proposal.md", "sha256": "55b2a3152b3c921773897fcd44db8ee6bc086e0d16c46aa4d0b8939e8d0c8840" },
+    { "path": "openspec/changes/desktop-runtime-deps-on-demand/design.md", "sha256": "ac3cb124922af700281f3ed310f80d64cd8dd3ab336d61029dee5acc9f2b26df" },
+    { "path": "openspec/changes/desktop-runtime-deps-on-demand/tasks.md", "sha256": "91635f0ed2f0e344174db8ef5fc7eee47a6d1b8a96b304200ae83a7f128c1c71" },
+    { "path": "openspec/changes/desktop-runtime-deps-on-demand/specs/python-runtime-optional-deps/spec.md", "sha256": "a73900aef37f7705bbad211ae8ac7def7d9ccd7e4a7cd7b3b536c0dec6ad1c7f" }
+  ]
+}
