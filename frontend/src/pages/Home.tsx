@@ -1,9 +1,16 @@
+import type { MouseEvent } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Bot, BarChart3, Zap, UserCircle2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { openDesktopTab } from "@/lib/desktopShell";
 
 export function Home() {
   const { t } = useTranslation();
+  const handleStartResearch = async (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    const opened = await openDesktopTab({ title: "Agent", url: "/agent" });
+    if (!opened) window.location.assign("/agent");
+  };
 
   const FEATURES = [
     { icon: Bot, title: t("home.featureAgent"), desc: t("home.featureAgentDesc") },
@@ -19,6 +26,7 @@ export function Home() {
         <p className="text-lg text-muted-foreground">{t("home.subtitle")}</p>
         <Link
           to="/agent"
+          onClick={handleStartResearch}
           className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-primary text-primary-foreground font-medium hover:opacity-90 transition"
         >
           {t("home.startResearch")} <ArrowRight className="h-4 w-4" />

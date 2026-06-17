@@ -34,10 +34,7 @@ pub fn build_cmd(
         // Default pip mirror: Tsinghua (HTTPS) so first-run installs are fast
         // on CN networks. The Python side (optional_deps.mirror) can override
         // per-install via --index-url; this is just the process default.
-        .env(
-            "PIP_INDEX_URL",
-            "https://pypi.tuna.tsinghua.edu.cn/simple",
-        )
+        .env("PIP_INDEX_URL", "https://pypi.tuna.tsinghua.edu.cn/simple")
         .env("PIP_DISABLE_PIP_VERSION_CHECK", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -67,7 +64,8 @@ pub fn spawn(
     runtime_libs: &Path,
 ) -> Result<Child, String> {
     let mut cmd = build_cmd(python, runtime_agent, port, runtime_libs);
-    cmd.spawn().map_err(|e| format!("spawn sidecar failed: {e}"))
+    cmd.spawn()
+        .map_err(|e| format!("spawn sidecar failed: {e}"))
 }
 
 /// mac/unix: kill by process group (child.id() is the pgid, because it is the group leader).
@@ -108,11 +106,7 @@ pub fn await_health(child: &mut Child, port: u16) -> Ready {
         if let Ok(Some(status)) = child.try_wait() {
             return Ready::ProcessExited(status.code());
         }
-        if let Ok(resp) = client
-            .get(&url)
-            .timeout(Duration::from_millis(1000))
-            .send()
-        {
+        if let Ok(resp) = client.get(&url).timeout(Duration::from_millis(1000)).send() {
             if resp.status().is_success() {
                 return Ready::Ok;
             }
@@ -173,9 +167,21 @@ mod tests {
 
         let args: Vec<&str> = cmd.get_args().map(|a| a.to_str().unwrap()).collect();
         let args_str = args.join(" ");
-        assert!(args_str.contains("serve"), "expected 'serve' in args: {}", args_str);
-        assert!(args_str.contains("127.0.0.1"), "expected '127.0.0.1' in args: {}", args_str);
-        assert!(args_str.contains("8899"), "expected '8899' in args: {}", args_str);
+        assert!(
+            args_str.contains("serve"),
+            "expected 'serve' in args: {}",
+            args_str
+        );
+        assert!(
+            args_str.contains("127.0.0.1"),
+            "expected '127.0.0.1' in args: {}",
+            args_str
+        );
+        assert!(
+            args_str.contains("8899"),
+            "expected '8899' in args: {}",
+            args_str
+        );
     }
 
     #[test]

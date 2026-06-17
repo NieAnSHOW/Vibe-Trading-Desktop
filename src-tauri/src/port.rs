@@ -3,8 +3,8 @@ use std::net::TcpListener;
 
 /// 让系统在 127.0.0.1 分配一个空闲端口,取号后立即释放交给后端绑定。
 pub fn pick_free_port() -> Result<u16, String> {
-    let listener = TcpListener::bind(("127.0.0.1", 0))
-        .map_err(|e| format!("bind 127.0.0.1:0 failed: {e}"))?;
+    let listener =
+        TcpListener::bind(("127.0.0.1", 0)).map_err(|e| format!("bind 127.0.0.1:0 failed: {e}"))?;
     let port = listener
         .local_addr()
         .map_err(|e| format!("local_addr failed: {e}"))?
@@ -43,14 +43,18 @@ pub fn kill_listener_on_port(port: u16) {
                     }
                     if let Ok(pid) = pid_str.parse::<i32>() {
                         // SIGTERM first, then SIGKILL after 2 s if still alive
-                        unsafe { libc::kill(pid, libc::SIGTERM); }
+                        unsafe {
+                            libc::kill(pid, libc::SIGTERM);
+                        }
                         std::thread::sleep(std::time::Duration::from_millis(500));
                         // check if still running
                         let rc = unsafe { libc::kill(pid, 0) };
                         if rc == 0 {
                             std::thread::sleep(std::time::Duration::from_millis(1500));
                             if unsafe { libc::kill(pid, 0) } == 0 {
-                                unsafe { libc::kill(pid, libc::SIGKILL); }
+                                unsafe {
+                                    libc::kill(pid, libc::SIGKILL);
+                                }
                             }
                         }
                     }

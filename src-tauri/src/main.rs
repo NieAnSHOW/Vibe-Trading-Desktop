@@ -1,9 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-mod resources; mod version; mod runtime_dir; mod port; mod sidecar;
+mod desktop_shell;
+mod port;
+mod resources;
+mod runtime_dir;
+mod sidecar;
+mod version;
 
-use std::sync::{Arc, Mutex};
 use std::process::Child;
-use tauri::{RunEvent, WebviewUrl, WebviewWindowBuilder};
+use std::sync::{Arc, Mutex};
+use tauri::{Manager, RunEvent, WindowEvent};
 
 type SharedChild = Arc<Mutex<Option<Child>>>;
 
@@ -11,17 +16,21 @@ fn main() {
     let shared: SharedChild = Arc::new(Mutex::new(None));
     let shared_setup = shared.clone();
 
-    tauri::Builder::default()
+    desktop_shell::register_shell_protocol(tauri::Builder::default())
         .plugin(tauri_plugin_process::init())
+        .manage(desktop_shell::DesktopShellState::default())
+        .invoke_handler(tauri::generate_handler![
+            desktop_shell::get_tabs,
+            desktop_shell::open_desktop_tab,
+            desktop_shell::activate_tab,
+            desktop_shell::close_tab,
+        ])
         .setup(move |app| {
             let handle = app.handle().clone();
             // D3: 窗口先开,加载本地加载页(frontendDist 的 index.html,带 logo + spinner)
-            let res = resources::Resources::resolve(&handle)
-                .map_err(|e| format!("resources: {e}"))?;
-            let win = WebviewWindowBuilder::new(
-                &handle, "main",
-                WebviewUrl::App("index.html".into()))
-                .title("Vibe Trading").inner_size(1280.0, 832.0).build()?;
+            let res =
+                resources::Resources::resolve(&handle).map_err(|e| format!("resources: {e}"))?;
+            let win = desktop_shell::build_shell_window(&handle)?;
 
             let shared = shared_setup.clone();
             std::thread::spawn(move || {
@@ -29,13 +38,7 @@ fn main() {
                     // JSON 编码错误消息，安全注入到 JS 侧（避免 XSS）
                     let safe_json = serde_json::to_string(&msg)
                         .unwrap_or_else(|_| "\"unknown error\"".to_string());
-                    let _ = win.eval(&format!(
-                        "document.getElementById('spin').style.display='none';\
-                         document.getElementById('msg').textContent='启动失败';\
-                         var e=document.getElementById('err');e.style.display='block';\
-                         e.textContent={safe_json};\
-                         var q=document.getElementById('quit');q.style.display='block';\
-                         q.onclick=function(){{window.__TAURI__.process.exit(1)}};"));
+                    desktop_shell::show_boot_error(&win, &safe_json);
                 }
             });
             Ok(())
@@ -47,19 +50,36 @@ fn main() {
                 if let Some(mut child) = shared.lock().unwrap().take() {
                     sidecar::terminate(&mut child);
                 }
+            } else if let RunEvent::WindowEvent {
+                label,
+                event: WindowEvent::Resized(_),
+                ..
+            } = event
+            {
+                if label == "main" {
+                    if let Some(window) = _app.get_window("main") {
+                        let _ = desktop_shell::resize_shell_webviews(&window);
+                    }
+                }
             }
         });
 }
 
 fn boot(
     _handle: &tauri::AppHandle,
-    win: &tauri::WebviewWindow,
+    win: &tauri::Window,
     res: &resources::Resources,
     shared: &SharedChild,
 ) -> Result<(), String> {
     // D4/D5: 准备可写运行目录
     let layout = runtime_dir::Layout::from_home()?;
-    runtime_dir::prepare(&res.agent_template, &res.env_seed, &res.version_file, Some(&res.frontend_dist), &layout)?;
+    runtime_dir::prepare(
+        &res.agent_template,
+        &res.env_seed,
+        &res.version_file,
+        Some(&res.frontend_dist),
+        &layout,
+    )?;
     // D6: 选端口
     // dev 模式固定 8899（与 Vite proxy 默认 target 对齐），release 由系统分配。
     let is_dev = cfg!(debug_assertions);
@@ -70,22 +90,26 @@ fn boot(
         port::kill_listener_on_port(p);
     }
     // D7: 启动 sidecar(PYTHONPATH 指向可写副本)
-    let mut child = sidecar::spawn(&res.runtime_python, &layout.runtime_agent, p, &layout.runtime_libs)?;
+    let mut child = sidecar::spawn(
+        &res.runtime_python,
+        &layout.runtime_agent,
+        p,
+        &layout.runtime_libs,
+    )?;
     // D8: 门控
     match sidecar::await_health(&mut child, p) {
         sidecar::Ready::Ok => {
             shared.lock().unwrap().replace(child);
-            // Tauri 2 navigate 接受 Url 类型
-            // dev：导航到 Vite dev server（HMR）；release：sidecar 静态 SPA。
+            // dev：content webview 指向 Vite dev server（HMR）；
+            // release：content webview 指向 sidecar 静态 SPA。
             let target = nav_target_dev_aware(is_dev, p);
-            win.navigate(tauri::Url::parse(&target).map_err(|e| format!("parse url: {e}"))?)
-                .map_err(|e| format!("navigate: {e}"))?;
+            let _content = desktop_shell::mount_shell_webviews(win, &target)?;
             Ok(())
         }
-        sidecar::Ready::ProcessExited(code) =>
-            Err(format!("后端进程提前退出(退出码 {code:?})。请检查依赖与配置。")),
-        sidecar::Ready::Timeout =>
-            Err("后端在 120 秒内未就绪(健康检查超时)。".into()),
+        sidecar::Ready::ProcessExited(code) => Err(format!(
+            "后端进程提前退出(退出码 {code:?})。请检查依赖与配置。"
+        )),
+        sidecar::Ready::Timeout => Err("后端在 120 秒内未就绪(健康检查超时)。".into()),
     }
 }
 

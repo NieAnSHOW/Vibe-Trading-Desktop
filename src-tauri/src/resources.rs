@@ -15,6 +15,13 @@ pub struct Resources {
 }
 
 impl Resources {
+    #[cfg(debug_assertions)]
+    pub fn resolve(app: &AppHandle) -> Result<Self, String> {
+        let _ = app;
+        resolve_dev()
+    }
+
+    #[cfg(not(debug_assertions))]
     pub fn resolve(app: &AppHandle) -> Result<Self, String> {
         let base = resolve_base(app)?;
         Ok(resolve_from_base(&base))
@@ -30,6 +37,7 @@ impl Resources {
 ///
 /// dev 回退由 `#[cfg(debug_assertions)]` 编译期门控：**release 构建不编译此分支**，
 /// 因此正式构建的资源解析路径与定位逐字节不变。
+#[cfg(not(debug_assertions))]
 fn resolve_base(app: &AppHandle) -> Result<PathBuf, String> {
     #[cfg(not(debug_assertions))]
     {
@@ -68,6 +76,20 @@ fn dev_build_base() -> Result<PathBuf, String> {
              bash scripts/desktop/assemble.sh"
         ))
     }
+}
+
+#[cfg(debug_assertions)]
+fn resolve_dev() -> Result<Resources, String> {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let repo = manifest
+        .parent()
+        .ok_or("无法从 CARGO_MANIFEST_DIR 解析仓库根目录")?;
+    let build = dev_build_base()?;
+    let mut res = resolve_from_base(&build);
+    res.agent_template = repo.join("agent");
+    res.env_seed = repo.join("agent").join(".env");
+    res.frontend_dist = repo.join("frontend").join("dist");
+    Ok(res)
 }
 
 /// 从给定 base 目录解析资源路径（resolve 与单元测试共享的构建器）。
@@ -114,7 +136,10 @@ mod tests {
         let base = Path::new("/opt/app/resources");
         let res = resolve_from_base(base);
 
-        assert_eq!(res.agent_template, PathBuf::from("/opt/app/resources/agent"));
+        assert_eq!(
+            res.agent_template,
+            PathBuf::from("/opt/app/resources/agent")
+        );
     }
 
     #[test]
@@ -130,7 +155,10 @@ mod tests {
         let base = Path::new("/opt/app/resources");
         let res = resolve_from_base(base);
 
-        assert_eq!(res.version_file, PathBuf::from("/opt/app/resources/VERSION"));
+        assert_eq!(
+            res.version_file,
+            PathBuf::from("/opt/app/resources/VERSION")
+        );
     }
 
     #[test]
@@ -155,6 +183,26 @@ mod tests {
                 p.ends_with(".desktop-build"),
                 "expected path ending in .desktop-build, got {p:?}"
             ),
+            Err(_) => { /* .desktop-build 未组装（CI/全新克隆），跳过 */ }
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn dev_resources_use_source_agent_and_frontend_dist() {
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let repo = manifest.parent().unwrap();
+
+        match dev_build_base() {
+            Ok(base) => {
+                let res = resolve_dev().unwrap();
+
+                assert_eq!(res.agent_template, repo.join("agent"));
+                assert_eq!(res.env_seed, repo.join("agent").join(".env"));
+                assert_eq!(res.frontend_dist, repo.join("frontend").join("dist"));
+                assert_eq!(res.version_file, base.join("VERSION"));
+                assert!(res.runtime_python.starts_with(base));
+            }
             Err(_) => { /* .desktop-build 未组装（CI/全新克隆），跳过 */ }
         }
     }
