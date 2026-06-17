@@ -19,7 +19,38 @@
     "light": "Light",
     "dark": "Dark",
     "collapse": "Collapse",
-    "expand": "Expand"
+    "expand": "Expand",
+    "desktopTabs": {
+      "webUi": "Trading Agent",
+      "shortcuts": "Shortcuts"
+    },
+    "externalShortcuts": {
+      "title": "Shortcuts",
+      "description": "Open frequently used mainland China financial information sites. If a site restricts embedding, you can still open it in an external browser.",
+      "open": "Open {{label}}",
+      "close": "Close {{label}}",
+      "refresh": "Refresh {{label}}",
+      "openExternally": "Open externally",
+      "embeddedHint": "Embedded login and cache are best-effort. If this site blocks embedding or login, use Open externally.",
+      "sites": {
+        "tonghuashun": {
+          "label": "Tonghuashun",
+          "description": "A-share market quotes, news, data, and trading references."
+        },
+        "tencentFinance": {
+          "label": "Tencent Finance",
+          "description": "Tencent market quotes for A-shares, Hong Kong, funds, and global markets."
+        },
+        "eastmoney": {
+          "label": "East Money",
+          "description": "Financial portal for stocks, funds, data center, and market news."
+        },
+        "sinaFinance": {
+          "label": "Sina Finance",
+          "description": "Financial news, market data, and 24-hour market coverage."
+        }
+      }
+    }
   },
   "runtime": {
     "monitorBadge": "Runtime Monitor",

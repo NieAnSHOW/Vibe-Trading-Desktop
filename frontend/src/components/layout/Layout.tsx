@@ -1,7 +1,31 @@
 import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useSearchParams } from "react-router-dom";
-import { Activity, BarChart3, Bot, Languages, Moon, Sun, Plus, Trash2, Pencil, MessageSquare, ChevronsLeft, ChevronsRight, Settings, Layers, Loader2 } from "lucide-react";
+import {
+  Activity,
+  BarChart3,
+  Bot,
+  Languages,
+  Moon,
+  Sun,
+  Plus,
+  Trash2,
+  Pencil,
+  MessageSquare,
+  ChevronsLeft,
+  ChevronsRight,
+  Settings,
+  Layers,
+  Loader2,
+  ExternalLink,
+  RefreshCw,
+  X,
+  Globe2,
+  LineChart,
+  Newspaper,
+  Search,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { api, type SessionItem } from "@/lib/api";
@@ -10,36 +34,90 @@ import { ConnectionBanner } from "@/components/layout/ConnectionBanner";
 
 // Bump on each release; one place keeps the footer in sync with package.json.
 const APP_VERSION = "v0.1.9";
+const WEB_UI_TAB_ID = "web-ui";
+const SHORTCUTS_TAB_ID = "shortcuts";
+
+type FixedTabId = typeof WEB_UI_TAB_ID | typeof SHORTCUTS_TAB_ID;
+type ActiveTabId = FixedTabId | `external-${string}`;
+
+type ExternalShortcut = {
+  id: string;
+  labelKey: string;
+  url: string;
+  descriptionKey: string;
+  icon: LucideIcon;
+};
+
+type ExternalTab = ExternalShortcut & {
+  tabId: `external-${string}`;
+  reloadKey: number;
+};
+
+const EXTERNAL_SHORTCUTS: ExternalShortcut[] = [
+  {
+    id: "tonghuashun",
+    labelKey: "layout.externalShortcuts.sites.tonghuashun.label",
+    url: "https://www.10jqka.com.cn/",
+    descriptionKey: "layout.externalShortcuts.sites.tonghuashun.description",
+    icon: LineChart,
+  },
+  {
+    id: "tencent-finance",
+    labelKey: "layout.externalShortcuts.sites.tencentFinance.label",
+    url: "https://stockapp.finance.qq.com/",
+    descriptionKey: "layout.externalShortcuts.sites.tencentFinance.description",
+    icon: Newspaper,
+  },
+  {
+    id: "eastmoney",
+    labelKey: "layout.externalShortcuts.sites.eastmoney.label",
+    url: "https://www.eastmoney.com/",
+    descriptionKey: "layout.externalShortcuts.sites.eastmoney.description",
+    icon: Search,
+  },
+  {
+    id: "sina-finance",
+    labelKey: "layout.externalShortcuts.sites.sinaFinance.label",
+    url: "https://finance.sina.com.cn/",
+    descriptionKey: "layout.externalShortcuts.sites.sinaFinance.description",
+    icon: Globe2,
+  },
+];
 
 export function Layout() {
   const { t, i18n: i18nHook } = useTranslation();
 
   const NAV = [
-    { to: "/", icon: BarChart3, label: t('layout.home') },
-    { to: "/agent", icon: Bot, label: t('layout.agent') },
-    { to: "/runtime", icon: Activity, label: t('layout.runtime') },
-    { to: "/alpha-zoo", icon: Layers, label: t('layout.alphaZoo') },
-    { to: "/settings", icon: Settings, label: t('layout.settings') },
-    { to: "/correlation", icon: BarChart3, label: t('layout.correlation') },
+    { to: "/", icon: BarChart3, label: t("layout.home") },
+    { to: "/agent", icon: Bot, label: t("layout.agent") },
+    { to: "/runtime", icon: Activity, label: t("layout.runtime") },
+    { to: "/alpha-zoo", icon: Layers, label: t("layout.alphaZoo") },
+    { to: "/settings", icon: Settings, label: t("layout.settings") },
+    { to: "/correlation", icon: BarChart3, label: t("layout.correlation") },
   ];
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const { dark, toggle } = useDarkMode();
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
-  const sseStatus = useAgentStore(s => s.sseStatus);
-  const sseRetryAttempt = useAgentStore(s => s.sseRetryAttempt);
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem("qa-sidebar") === "collapsed");
+  const sseStatus = useAgentStore((s) => s.sseStatus);
+  const sseRetryAttempt = useAgentStore((s) => s.sseRetryAttempt);
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem("qa-sidebar") === "collapsed"
+  );
+  const [activeTab, setActiveTab] = useState<ActiveTabId>(WEB_UI_TAB_ID);
+  const [externalTabs, setExternalTabs] = useState<ExternalTab[]>([]);
 
   const activeSessionId = searchParams.get("session");
-  const streamingSessionId = useAgentStore(s => s.streamingSessionId);
+  const streamingSessionId = useAgentStore((s) => s.streamingSessionId);
 
   useEffect(() => {
     localStorage.setItem("qa-sidebar", collapsed ? "collapsed" : "expanded");
   }, [collapsed]);
 
   const loadSessions = () => {
-    api.listSessions()
+    api
+      .listSessions()
       .then((list) => setSessions(Array.isArray(list) ? list : []))
       .catch(() => {})
       .finally(() => setSessionsLoading(false));
@@ -48,7 +126,9 @@ export function Layout() {
   // Load sessions on mount. Also refresh when navigating TO /agent or when
   // the active session changes (covers new session creation from Agent).
   const isAgentPage = pathname.startsWith("/agent");
-  useEffect(() => { loadSessions(); }, [isAgentPage, activeSessionId]);
+  useEffect(() => {
+    loadSessions();
+  }, [isAgentPage, activeSessionId]);
 
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
@@ -58,34 +138,81 @@ export function Layout() {
     try {
       await api.deleteSession(sid);
       setSessions((prev) => prev.filter((s) => s.session_id !== sid));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setDeleteTarget(null);
   };
 
   const renameSession = async (sid: string) => {
-    if (!renameValue.trim()) { setRenameTarget(null); return; }
+    if (!renameValue.trim()) {
+      setRenameTarget(null);
+      return;
+    }
     try {
       await api.renameSession(sid, renameValue.trim());
-      setSessions((prev) => prev.map((s) => s.session_id === sid ? { ...s, title: renameValue.trim() } : s));
-    } catch { /* ignore */ }
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.session_id === sid ? { ...s, title: renameValue.trim() } : s
+        )
+      );
+    } catch {
+      /* ignore */
+    }
     setRenameTarget(null);
   };
 
-  return (
-    <div className="flex h-screen bg-background">
-      {/* Sidebar */}
-      <aside className={cn(
-        "border-r bg-card flex flex-col shrink-0 transition-all duration-200",
-        collapsed ? "w-12" : "w-64"
-      )}>
-        {/* Brand */}
-        <div className={cn("border-b", collapsed ? "p-2 flex justify-center" : "p-4")}>
-          <Link to="/" className={cn("flex items-center font-bold text-base tracking-tight", collapsed ? "justify-center" : "gap-2")}>
-            <BarChart3 className="h-5 w-5 text-primary shrink-0" />
-            {!collapsed && "Vibe-Trading-Desktop"}
-          </Link>
-        </div>
+  const openShortcut = (shortcut: ExternalShortcut) => {
+    const tabId = `external-${shortcut.id}` as const;
+    setExternalTabs((prev) =>
+      prev.some((tab) => tab.tabId === tabId)
+        ? prev
+        : [...prev, { ...shortcut, tabId, reloadKey: 0 }]
+    );
+    setActiveTab(tabId);
+  };
 
+  const refreshExternalTab = (tabId: ExternalTab["tabId"]) => {
+    setExternalTabs((prev) =>
+      prev.map((tab) =>
+        tab.tabId === tabId ? { ...tab, reloadKey: tab.reloadKey + 1 } : tab
+      )
+    );
+  };
+
+  const closeExternalTab = (tabId: ExternalTab["tabId"]) => {
+    setExternalTabs((prev) => prev.filter((tab) => tab.tabId !== tabId));
+    if (activeTab === tabId) {
+      setActiveTab(SHORTCUTS_TAB_ID);
+    }
+  };
+
+  const fixedTabs: Array<{ id: FixedTabId; label: string; icon: LucideIcon }> =
+    [
+      {
+        id: WEB_UI_TAB_ID,
+        label: t("layout.desktopTabs.webUi"),
+        icon: BarChart3,
+      },
+      {
+        id: SHORTCUTS_TAB_ID,
+        label: t("layout.desktopTabs.shortcuts"),
+        icon: Globe2,
+      },
+    ];
+
+  const webUiPanel = (
+    <div
+      data-testid="web-ui-shell"
+      className="flex h-full w-full min-h-0 min-w-0 bg-background"
+    >
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "border-r bg-card flex flex-col shrink-0 transition-all duration-200",
+          collapsed ? "w-12" : "w-64"
+        )}
+      >
         {/* Nav */}
         <nav className={cn("space-y-0.5", collapsed ? "p-1" : "p-2")}>
           {NAV.map(({ to, icon: Icon, label }) => {
@@ -121,7 +248,7 @@ export function Layout() {
               <Link
                 to="/agent"
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                title={t('layout.newChat')}
+                title={t("layout.newChat")}
               >
                 <Plus className="h-3.5 w-3.5" />
               </Link>
@@ -131,24 +258,35 @@ export function Layout() {
               {sessionsLoading ? (
                 <div className="space-y-1.5 px-2 py-1">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-7 rounded-md bg-muted/50 animate-pulse" />
+                    <div
+                      key={i}
+                      className="h-7 rounded-md bg-muted/50 animate-pulse"
+                    />
                   ))}
                 </div>
               ) : sessions.length === 0 ? (
-                <p className="px-3 py-2 text-xs text-muted-foreground/60">{t('layout.noSessions')}</p>
+                <p className="px-3 py-2 text-xs text-muted-foreground/60">
+                  {t("layout.noSessions")}
+                </p>
               ) : null}
               {sessions.map((s) => {
                 const isActive = s.session_id === activeSessionId;
                 const isDeleting = deleteTarget === s.session_id;
                 const isRenaming = renameTarget === s.session_id;
                 return (
-                  <div key={s.session_id} className="group relative flex items-center">
+                  <div
+                    key={s.session_id}
+                    className="group relative flex items-center"
+                  >
                     {isRenaming ? (
                       <input
                         autoFocus
                         value={renameValue}
                         onChange={(e) => setRenameValue(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") renameSession(s.session_id); if (e.key === "Escape") setRenameTarget(null); }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") renameSession(s.session_id);
+                          if (e.key === "Escape") setRenameTarget(null);
+                        }}
                         onBlur={() => renameSession(s.session_id)}
                         className="flex-1 min-w-0 pl-3 pr-2 py-1 rounded-md text-xs border border-primary bg-background outline-none"
                       />
@@ -167,10 +305,14 @@ export function Layout() {
                           {streamingSessionId === s.session_id ? (
                             <Loader2 className="h-3 w-3 shrink-0 animate-spin text-primary" />
                           ) : (
-                            <span className={cn(
-                              "h-1.5 w-1.5 rounded-full shrink-0",
-                              isActive ? "bg-primary/70" : "bg-muted-foreground/40"
-                            )} />
+                            <span
+                              className={cn(
+                                "h-1.5 w-1.5 rounded-full shrink-0",
+                                isActive
+                                  ? "bg-primary/70"
+                                  : "bg-muted-foreground/40"
+                              )}
+                            />
                           )}
                           {s.title || s.session_id.slice(0, 16)}
                         </span>
@@ -178,22 +320,41 @@ export function Layout() {
                     )}
                     {!isRenaming && isDeleting ? (
                       <div className="absolute right-0.5 flex items-center gap-0.5">
-                        <button onClick={() => deleteSession(s.session_id)} className="p-1 text-danger hover:bg-danger/10 rounded text-[10px] font-medium">{t('layout.confirm')}</button>
-                        <button onClick={() => setDeleteTarget(null)} className="p-1 text-muted-foreground hover:bg-muted rounded text-[10px]">{t('layout.cancel')}</button>
+                        <button
+                          onClick={() => deleteSession(s.session_id)}
+                          className="p-1 text-danger hover:bg-danger/10 rounded text-[10px] font-medium"
+                        >
+                          {t("layout.confirm")}
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(null)}
+                          className="p-1 text-muted-foreground hover:bg-muted rounded text-[10px]"
+                        >
+                          {t("layout.cancel")}
+                        </button>
                       </div>
                     ) : !isRenaming ? (
                       <div className="absolute right-1 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity">
                         <button
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setRenameTarget(s.session_id); setRenameValue(s.title || ""); }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setRenameTarget(s.session_id);
+                            setRenameValue(s.title || "");
+                          }}
                           className="p-1 text-muted-foreground hover:text-foreground rounded"
-                          title={t('layout.rename')}
+                          title={t("layout.rename")}
                         >
                           <Pencil className="h-3 w-3" />
                         </button>
                         <button
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteTarget(s.session_id); }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setDeleteTarget(s.session_id);
+                          }}
                           className="p-1 text-muted-foreground hover:text-danger rounded"
-                          title={t('layout.delete')}
+                          title={t("layout.delete")}
                         >
                           <Trash2 className="h-3 w-3" />
                         </button>
@@ -210,13 +371,30 @@ export function Layout() {
         {collapsed && <div className="flex-1" />}
 
         {/* Footer */}
-        <div className={cn("border-t", collapsed ? "p-1 flex flex-col items-center gap-1" : "p-3 space-y-2")}>
+        <div
+          className={cn(
+            "border-t",
+            collapsed ? "p-1 flex flex-col items-center gap-1" : "p-3 space-y-2"
+          )}
+        >
           {collapsed ? (
             <>
-              <button onClick={toggle} className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors" title={dark ? t('layout.light') : t('layout.dark')}>
-                {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+              <button
+                onClick={toggle}
+                className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+                title={dark ? t("layout.light") : t("layout.dark")}
+              >
+                {dark ? (
+                  <Sun className="h-3.5 w-3.5" />
+                ) : (
+                  <Moon className="h-3.5 w-3.5" />
+                )}
               </button>
-              <button onClick={() => setCollapsed(false)} className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors" title={t('layout.expand')}>
+              <button
+                onClick={() => setCollapsed(false)}
+                className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+                title={t("layout.expand")}
+              >
                 <ChevronsRight className="h-3.5 w-3.5" />
               </button>
             </>
@@ -227,14 +405,18 @@ export function Layout() {
                   onClick={toggle}
                   className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                  {dark ? (
+                    <Sun className="h-3.5 w-3.5" />
+                  ) : (
+                    <Moon className="h-3.5 w-3.5" />
+                  )}
                   {dark ? "Light" : "Dark"}
                 </button>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => setCollapsed(true)}
                     className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
-                    title={t('layout.collapse')}
+                    title={t("layout.collapse")}
                   >
                     <ChevronsLeft className="h-3.5 w-3.5" />
                   </button>
@@ -242,13 +424,19 @@ export function Layout() {
               </div>
               <div className="flex items-center justify-between">
                 <button
-                  onClick={() => { i18nHook.changeLanguage(i18nHook.language === "zh-CN" ? "en" : "zh-CN"); }}
+                  onClick={() => {
+                    i18nHook.changeLanguage(
+                      i18nHook.language === "zh-CN" ? "en" : "zh-CN"
+                    );
+                  }}
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <Languages className="h-3.5 w-3.5" />
                   {i18nHook.language === "zh-CN" ? "English" : "中文"}
                 </button>
-                <p className="text-xs text-muted-foreground/60">{APP_VERSION}</p>
+                <p className="text-xs text-muted-foreground/60">
+                  {APP_VERSION}
+                </p>
               </div>
             </>
           )}
@@ -256,12 +444,196 @@ export function Layout() {
       </aside>
 
       {/* Main */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div
+        data-testid="web-ui-main"
+        className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden"
+      >
         <ConnectionBanner status={sseStatus} retryAttempt={sseRetryAttempt} />
-        <main className="flex-1 overflow-auto">
+        <main
+          data-testid="web-ui-outlet"
+          className="flex-1 min-h-0 min-w-0 overflow-auto"
+        >
           <Outlet />
         </main>
       </div>
+    </div>
+  );
+
+  return (
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      <header className="flex h-11 shrink-0 items-end gap-1 border-b bg-card px-2 pt-1">
+        <div
+          role="tablist"
+          aria-label="Desktop tabs"
+          className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto"
+        >
+          {fixedTabs.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === id}
+              onClick={() => setActiveTab(id)}
+              className={cn(
+                "flex h-9 shrink-0 items-center gap-2 rounded-t-md border px-3 text-sm transition-colors",
+                activeTab === id
+                  ? "border-b-background bg-background text-foreground font-medium"
+                  : "border-transparent bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <Icon className="h-4 w-4" aria-hidden="true" />
+              {label}
+            </button>
+          ))}
+          {externalTabs.map((tab) => {
+            const Icon = tab.icon;
+            const label = t(tab.labelKey);
+            return (
+              <div
+                key={tab.tabId}
+                className={cn(
+                  "group flex h-9 max-w-56 shrink-0 items-center rounded-t-md border text-sm transition-colors",
+                  activeTab === tab.tabId
+                    ? "border-b-background bg-background text-foreground font-medium"
+                    : "border-transparent bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === tab.tabId}
+                  onClick={() => setActiveTab(tab.tabId)}
+                  className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
+                >
+                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{label}</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={t("layout.externalShortcuts.close", { label })}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeExternalTab(tab.tabId);
+                  }}
+                  className="mr-2 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </header>
+
+      <section
+        data-testid="web-ui-tab-panel"
+        className={cn(
+          activeTab === WEB_UI_TAB_ID ? "flex" : "hidden",
+          "h-full w-full min-h-0 min-w-0 flex-1"
+        )}
+      >
+        {webUiPanel}
+      </section>
+
+      <section
+        data-testid="shortcuts-tab-panel"
+        className={cn(
+          activeTab === SHORTCUTS_TAB_ID ? "flex" : "hidden",
+          "h-full w-full min-h-0 min-w-0 flex-1 overflow-auto bg-background"
+        )}
+      >
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 p-6">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">
+              {t("layout.externalShortcuts.title")}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t("layout.externalShortcuts.description")}
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {EXTERNAL_SHORTCUTS.map((shortcut) => {
+              const Icon = shortcut.icon;
+              const label = t(shortcut.labelKey);
+              const description = t(shortcut.descriptionKey);
+              return (
+                <button
+                  key={shortcut.id}
+                  type="button"
+                  onClick={() => openShortcut(shortcut)}
+                  className="flex min-h-36 flex-col items-start gap-3 rounded-md border bg-card p-4 text-left transition-colors hover:border-primary/50 hover:bg-muted/40"
+                  aria-label={t("layout.externalShortcuts.open", { label })}
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Icon className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-medium text-foreground">
+                      {label}
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                      {description}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {externalTabs.map((tab) => {
+        const isActive = activeTab === tab.tabId;
+        const label = t(tab.labelKey);
+        return (
+          <section
+            key={tab.tabId}
+            data-testid={`external-tab-panel-${tab.id}`}
+            className={cn(
+              isActive ? "flex" : "hidden",
+              "h-full w-full min-h-0 min-w-0 flex-1 bg-background"
+            )}
+          >
+            <div className="flex h-full w-full min-h-0 min-w-0 flex-col">
+              <div className="flex h-11 shrink-0 items-center gap-2 border-b bg-card px-3">
+                <button
+                  type="button"
+                  onClick={() => refreshExternalTab(tab.tabId)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  title={t("layout.externalShortcuts.refresh", { label })}
+                  aria-label={t("layout.externalShortcuts.refresh", { label })}
+                >
+                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border bg-background px-3 py-1.5 text-xs text-muted-foreground">
+                  <Globe2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{tab.url}</span>
+                </div>
+                <a
+                  href={tab.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                  {t("layout.externalShortcuts.openExternally")}
+                </a>
+              </div>
+              <div className="border-b bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                {t("layout.externalShortcuts.embeddedHint")}
+              </div>
+              <iframe
+                key={`${tab.tabId}-${tab.reloadKey}`}
+                title={label}
+                src={tab.url}
+                className="min-h-0 flex-1 border-0 bg-background"
+                referrerPolicy="strict-origin-when-cross-origin"
+                sandbox="allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
+              />
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }

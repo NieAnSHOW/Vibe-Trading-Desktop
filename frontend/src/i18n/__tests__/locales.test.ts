@@ -15,3 +15,42 @@ describe("i18n — shadow report PDF export", () => {
     expect(val?.shadowReportPdf?.length).toBeGreaterThan(0);
   });
 });
+
+describe("i18n — desktop external shortcuts", () => {
+  const requiredPaths = [
+    "layout.desktopTabs.webUi",
+    "layout.desktopTabs.shortcuts",
+    "layout.externalShortcuts.title",
+    "layout.externalShortcuts.description",
+    "layout.externalShortcuts.open",
+    "layout.externalShortcuts.close",
+    "layout.externalShortcuts.refresh",
+    "layout.externalShortcuts.openExternally",
+    "layout.externalShortcuts.embeddedHint",
+    "layout.externalShortcuts.sites.tonghuashun.label",
+    "layout.externalShortcuts.sites.tonghuashun.description",
+    "layout.externalShortcuts.sites.tencentFinance.label",
+    "layout.externalShortcuts.sites.tencentFinance.description",
+    "layout.externalShortcuts.sites.eastmoney.label",
+    "layout.externalShortcuts.sites.eastmoney.description",
+    "layout.externalShortcuts.sites.sinaFinance.label",
+    "layout.externalShortcuts.sites.sinaFinance.description",
+  ];
+
+  const readPath = (source: unknown, path: string) =>
+    path.split(".").reduce<unknown>((value, key) => {
+      if (!value || typeof value !== "object") return undefined;
+      return (value as Record<string, unknown>)[key];
+    }, source);
+
+  it.each([
+    ["en.json", en],
+    ["zh-CN.json", zhCN],
+  ])("%s has all external shortcut keys", (_name, locale) => {
+    for (const path of requiredPaths) {
+      const value = readPath(locale, path);
+      expect(value, path).toBeTypeOf("string");
+      expect((value as string).length, path).toBeGreaterThan(0);
+    }
+  });
+});

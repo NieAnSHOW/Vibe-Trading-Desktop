@@ -19,7 +19,38 @@
     "light": "亮色",
     "dark": "暗色",
     "collapse": "收起",
-    "expand": "展开"
+    "expand": "展开",
+    "desktopTabs": {
+      "webUi": "交易智能体",
+      "shortcuts": "快捷入口"
+    },
+    "externalShortcuts": {
+      "title": "快捷入口",
+      "description": "打开常用的中国大陆金融资讯网站。若站点限制内嵌，仍可使用外部浏览器打开。",
+      "open": "打开 {{label}}",
+      "close": "关闭 {{label}}",
+      "refresh": "刷新 {{label}}",
+      "openExternally": "外部打开",
+      "embeddedHint": "内嵌登录和缓存为尽力支持。若该站点限制内嵌或登录，请使用外部打开。",
+      "sites": {
+        "tonghuashun": {
+          "label": "同花顺",
+          "description": "A 股行情、财经资讯、数据与交易参考。"
+        },
+        "tencentFinance": {
+          "label": "腾讯财经",
+          "description": "腾讯提供的 A 股、港股、基金与全球市场行情。"
+        },
+        "eastmoney": {
+          "label": "东方财富",
+          "description": "股票、基金、数据中心与财经资讯门户。"
+        },
+        "sinaFinance": {
+          "label": "新浪财经",
+          "description": "财经新闻、市场数据与 24 小时市场资讯。"
+        }
+      }
+    }
   },
   "runtime": {
     "monitorBadge": "运行时监控",

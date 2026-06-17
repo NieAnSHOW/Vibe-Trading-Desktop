@@ -15,7 +15,7 @@ i18n
     // Default to English for everyone on first visit; only an explicit toggle
     // (persisted to localStorage) switches to Chinese. We intentionally do NOT
     // read `navigator` so a zh browser is not auto-switched away from English.
-    fallbackLng: "en",
+    fallbackLng: "zh-CN",
     interpolation: { escapeValue: false },
     detection: {
       order: ["localStorage"],
