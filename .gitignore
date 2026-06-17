@@ -110,5 +110,6 @@ src-tauri/gen/
 
 # Codegraph index
 .codegraph/
+.superpowers/
 .comet
 .idea
