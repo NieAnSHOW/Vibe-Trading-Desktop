@@ -13,6 +13,7 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
+        .invoke_handler(tauri::generate_handler![open_external_url])
         .setup(move |app| {
             let handle = app.handle().clone();
             // D3: 窗口先开,加载本地加载页(frontendDist 的 index.html,带 logo + spinner)
@@ -49,6 +50,47 @@ fn main() {
                 }
             }
         });
+}
+
+#[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    validate_external_url(&url)?;
+    open_url_with_system(&url)
+}
+
+fn validate_external_url(url: &str) -> Result<(), String> {
+    let parsed = tauri::Url::parse(url).map_err(|_| "invalid url".to_string())?;
+    match parsed.scheme() {
+        "http" | "https" => Ok(()),
+        _ => Err("only http and https URLs can be opened externally".to_string()),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn open_url_with_system(url: &str) -> Result<(), String> {
+    std::process::Command::new("open")
+        .arg(url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("open external url: {e}"))
+}
+
+#[cfg(target_os = "windows")]
+fn open_url_with_system(url: &str) -> Result<(), String> {
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "", url])
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("open external url: {e}"))
+}
+
+#[cfg(target_os = "linux")]
+fn open_url_with_system(url: &str) -> Result<(), String> {
+    std::process::Command::new("xdg-open")
+        .arg(url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("open external url: {e}"))
 }
 
 fn boot(
@@ -139,5 +181,18 @@ mod tests {
     #[test]
     fn release_navigates_to_sidecar() {
         assert_eq!(nav_target_dev_aware(false, 7070), "http://127.0.0.1:7070/");
+    }
+
+    #[test]
+    fn external_url_allows_http_and_https() {
+        assert!(validate_external_url("https://www.10jqka.com.cn/").is_ok());
+        assert!(validate_external_url("http://example.com/path?q=1").is_ok());
+    }
+
+    #[test]
+    fn external_url_rejects_non_web_protocols() {
+        assert!(validate_external_url("file:///etc/passwd").is_err());
+        assert!(validate_external_url("javascript:alert(1)").is_err());
+        assert!(validate_external_url("not a url").is_err());
     }
 }

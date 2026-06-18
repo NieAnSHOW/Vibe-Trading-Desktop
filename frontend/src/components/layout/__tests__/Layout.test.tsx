@@ -13,6 +13,10 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn().mockResolvedValue(undefined),
+}));
+
 function renderLayout() {
   i18n.changeLanguage("zh-CN");
   return render(
@@ -70,7 +74,22 @@ describe("Layout desktop tabs", () => {
 
     const iframe = screen.getByTitle("同花顺");
     expect(iframe).toHaveAttribute("src", "https://www.10jqka.com.cn/");
-    expect(screen.getByRole("link", { name: /外部打开/i })).toHaveAttribute("href", "https://www.10jqka.com.cn/");
+    expect(iframe).not.toHaveAttribute("sandbox");
+    expect(screen.getByRole("button", { name: /外部打开/i })).toBeInTheDocument();
+  });
+
+  it("opens the current external tab URL through the desktop shell", async () => {
+    const user = userEvent.setup();
+    renderLayout();
+
+    await user.click(screen.getByRole("tab", { name: /快捷入口/i }));
+    await user.click(screen.getByRole("button", { name: /打开 同花顺/i }));
+    await user.click(screen.getByRole("button", { name: /外部打开/i }));
+
+    const { invoke } = await import("@tauri-apps/api/core");
+    expect(invoke).toHaveBeenCalledWith("open_external_url", {
+      url: "https://www.10jqka.com.cn/",
+    });
   });
 
   it("closing an external tab returns to Shortcuts", async () => {

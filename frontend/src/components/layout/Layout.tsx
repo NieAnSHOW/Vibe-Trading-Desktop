@@ -187,6 +187,15 @@ export function Layout() {
     }
   };
 
+  const openExternalUrl = async (url: string) => {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("open_external_url", { url });
+    } catch {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  };
+
   const fixedTabs: Array<{ id: FixedTabId; label: string; icon: LucideIcon }> =
     [
       {
@@ -609,15 +618,14 @@ export function Layout() {
                   <Globe2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   <span className="truncate">{tab.url}</span>
                 </div>
-                <a
-                  href={tab.url}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  type="button"
+                  onClick={() => openExternalUrl(tab.url)}
                   className="inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                   {t("layout.externalShortcuts.openExternally")}
-                </a>
+                </button>
               </div>
               <div className="border-b bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                 {t("layout.externalShortcuts.embeddedHint")}
@@ -628,7 +636,6 @@ export function Layout() {
                 src={tab.url}
                 className="min-h-0 flex-1 border-0 bg-background"
                 referrerPolicy="strict-origin-when-cross-origin"
-                sandbox="allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
               />
             </div>
           </section>

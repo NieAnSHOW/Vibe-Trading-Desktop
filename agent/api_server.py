@@ -46,6 +46,7 @@ UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
 AGENT_DIR = Path(__file__).resolve().parent
 ENV_PATH = AGENT_DIR / ".env"
 ENV_EXAMPLE_PATH = AGENT_DIR / ".env.example"
+USER_ENV_PATH = Path.home() / ".vibe-trading" / ".env"
 
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
 _UPLOAD_CHUNK_SIZE = 1024 * 1024  # 1 MB
@@ -788,13 +789,41 @@ LLM_PROVIDER_BY_NAME = {provider.name: provider for provider in LLM_PROVIDERS}
 LLM_REASONING_EFFORTS = {"", "low", "medium", "high", "max"}
 LLM_API_KEY_PLACEHOLDERS = {"", "sk-or-v1-your-key-here", "sk-xxx", "xxx", "gsk_xxx"}
 TUSHARE_TOKEN_PLACEHOLDERS = {"", "your-tushare-token"}
+CORE_LLM_ENV_KEYS = {
+    "LANGCHAIN_PROVIDER",
+    "LANGCHAIN_MODEL_NAME",
+    "LANGCHAIN_TEMPERATURE",
+    "LANGCHAIN_REASONING_EFFORT",
+    "TIMEOUT_SECONDS",
+    "MAX_RETRIES",
+}
 
 
-def _ensure_agent_env_file() -> Path:
-    """Ensure the project-local agent/.env exists."""
-    if not ENV_PATH.exists():
-        ENV_PATH.write_text("# Created by Vibe-Trading Web UI settings.\n", encoding="utf-8")
-    return ENV_PATH
+def _is_runtime_agent(agent_dir: Optional[Path] = None, user_env_path: Optional[Path] = None) -> bool:
+    """Return True when the API server is running from the desktop runtime copy."""
+    resolved_agent_dir = agent_dir or AGENT_DIR
+    resolved_user_env_path = user_env_path or USER_ENV_PATH
+    return resolved_agent_dir.parent.parent == resolved_user_env_path.parent
+
+
+def _resolve_settings_env_path(
+    agent_env_path: Optional[Path] = None,
+    user_env_path: Optional[Path] = None,
+) -> Path:
+    """Return the dotenv file that should back Settings reads and writes."""
+    resolved_agent_env_path = agent_env_path or ENV_PATH
+    resolved_user_env_path = user_env_path or USER_ENV_PATH
+    if _is_runtime_agent(resolved_agent_env_path.parent, resolved_user_env_path):
+        return resolved_user_env_path
+    return resolved_agent_env_path
+
+
+def _ensure_settings_env_file(path: Path) -> Path:
+    """Ensure the target dotenv file exists before mutating it."""
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# Created by Vibe-Trading Web UI settings.\n", encoding="utf-8")
+    return path
 
 
 def _strip_env_value(value: str) -> str:
@@ -824,13 +853,15 @@ def _read_env_values(path: Path) -> Dict[str, str]:
 
 
 def _read_settings_env_values() -> Dict[str, str]:
-    """Read settings without creating agent/.env.
+    """Read settings without creating the target dotenv file.
 
-    Prefer the user's active agent/.env. If it does not exist yet, fall back to
-    agent/.env.example for display defaults only.
+    Prefer the desktop user env when running from the packaged runtime.
+    Otherwise use agent/.env for source-tree development. If the active env
+    does not exist yet, use agent/.env.example for display defaults only.
     """
-    if ENV_PATH.exists():
-        return _read_env_values(ENV_PATH)
+    env_path = _resolve_settings_env_path()
+    if env_path.exists():
+        return _read_env_values(env_path)
     if ENV_EXAMPLE_PATH.exists():
         return _read_env_values(ENV_EXAMPLE_PATH)
     return {}
@@ -858,7 +889,7 @@ def _format_env_value(value: str) -> str:
 
 def _write_env_values(path: Path, updates: Dict[str, str]) -> None:
     """Upsert active dotenv values while preserving comments and ordering."""
-    _ensure_agent_env_file()
+    _ensure_settings_env_file(path)
     lines = path.read_text(encoding="utf-8").splitlines()
     seen: set[str] = set()
     for index, raw in enumerate(lines):
@@ -878,6 +909,28 @@ def _write_env_values(path: Path, updates: Dict[str, str]) -> None:
         lines.append("# Updated from Web UI")
         for key in missing:
             lines.append(f"{key}={_format_env_value(updates[key])}")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _llm_env_keys() -> set[str]:
+    """Return active dotenv keys controlled by the LLM settings form."""
+    keys = set(CORE_LLM_ENV_KEYS)
+    for provider in LLM_PROVIDERS:
+        if provider.api_key_env:
+            keys.add(provider.api_key_env)
+        keys.add(provider.base_url_env)
+    return keys
+
+
+def _rewrite_env_values(path: Path, updates: Dict[str, str], *, drop_keys: set[str]) -> None:
+    """Rewrite active dotenv values, dropping stale keys instead of preserving them."""
+    _ensure_settings_env_file(path)
+    current = _read_env_values(path)
+    next_values = {key: value for key, value in current.items() if key not in drop_keys}
+    next_values.update(updates)
+    lines = ["# Updated from Web UI"]
+    for key, value in next_values.items():
+        lines.append(f"{key}={_format_env_value(value)}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -906,6 +959,7 @@ def _coerce_int(value: str, default: int) -> int:
 def _build_llm_settings_response(values: Optional[Dict[str, str]] = None) -> LLMSettingsResponse:
     """Build the public settings payload from dotenv values."""
     env_values = values if values is not None else _read_settings_env_values()
+    env_path = _resolve_settings_env_path()
     provider_name = env_values.get("LANGCHAIN_PROVIDER", "openai").strip().lower()
     provider = LLM_PROVIDER_BY_NAME.get(provider_name, LLM_PROVIDER_BY_NAME["openai"])
     api_key = env_values.get(provider.api_key_env or "", "") if provider.api_key_env else ""
@@ -933,7 +987,7 @@ def _build_llm_settings_response(values: Optional[Dict[str, str]] = None) -> LLM
         max_retries=_coerce_int(env_values.get("MAX_RETRIES", "2"), 2),
         reasoning_effort=env_values.get("LANGCHAIN_REASONING_EFFORT", "").strip().lower(),
         sse_timeout_seconds=_coerce_int(env_values.get("VIBE_TRADING_SSE_TIMEOUT", "90"), 90),
-        env_path=_project_relative_path(ENV_PATH),
+        env_path=_project_relative_path(env_path),
         providers=LLM_PROVIDERS,
     )
 
@@ -954,6 +1008,7 @@ def _baostock_installed() -> bool:
 def _build_data_source_settings_response(values: Optional[Dict[str, str]] = None) -> DataSourceSettingsResponse:
     """Build the public data source settings payload."""
     env_values = values if values is not None else _read_settings_env_values()
+    env_path = _resolve_settings_env_path()
     token = env_values.get("TUSHARE_TOKEN", "")
     token_configured = _is_configured_secret(token, TUSHARE_TOKEN_PLACEHOLDERS)
     supported = _baostock_supported()
@@ -970,7 +1025,7 @@ def _build_data_source_settings_response(values: Optional[Dict[str, str]] = None
         baostock_supported=supported,
         baostock_installed=installed,
         baostock_message=baostock_message,
-        env_path=_project_relative_path(ENV_PATH),
+        env_path=_project_relative_path(env_path),
     )
 
 
@@ -1408,9 +1463,10 @@ async def update_llm_settings(payload: UpdateLLMSettingsRequest):
     elif payload.clear_api_key:
         os.environ.pop("OPENAI_API_KEY", None)
 
-    _write_env_values(ENV_PATH, updates)
+    env_path = _resolve_settings_env_path()
+    _rewrite_env_values(env_path, updates, drop_keys=_llm_env_keys())
     _sync_runtime_env(provider, updates)
-    return _build_llm_settings_response(_read_env_values(ENV_PATH))
+    return _build_llm_settings_response(_read_env_values(env_path))
 
 
 @app.get(
@@ -1441,14 +1497,15 @@ async def update_data_source_settings(payload: UpdateDataSourceSettingsRequest):
         updates["TUSHARE_TOKEN"] = current_values["TUSHARE_TOKEN"]
 
     if updates:
-        _write_env_values(ENV_PATH, updates)
+        env_path = _resolve_settings_env_path()
+        _write_env_values(env_path, updates)
         token = updates.get("TUSHARE_TOKEN", "").strip()
         if _is_configured_secret(token, TUSHARE_TOKEN_PLACEHOLDERS):
             os.environ["TUSHARE_TOKEN"] = token
         else:
             os.environ.pop("TUSHARE_TOKEN", None)
 
-    return _build_data_source_settings_response(_read_env_values(ENV_PATH))
+    return _build_data_source_settings_response(_read_settings_env_values())
 
 
 @app.get("/health", response_model=HealthResponse)

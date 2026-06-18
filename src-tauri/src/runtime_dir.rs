@@ -3,11 +3,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 pub struct Layout {
-    pub root: PathBuf,           // ~/.vibe-trading
-    pub runtime_agent: PathBuf,  // ~/.vibe-trading/runtime/agent
-    pub runtime_libs: PathBuf,   // ~/.vibe-trading/runtime/libs (按需安装的可选依赖)
-    pub marker: PathBuf,         // ~/.vibe-trading/runtime/.installed_version
-    pub user_env: PathBuf,       // ~/.vibe-trading/.env
+    pub root: PathBuf,          // ~/.vibe-trading
+    pub runtime_agent: PathBuf, // ~/.vibe-trading/runtime/agent
+    pub runtime_libs: PathBuf,  // ~/.vibe-trading/runtime/libs (按需安装的可选依赖)
+    pub marker: PathBuf,        // ~/.vibe-trading/runtime/.installed_version
+    pub user_env: PathBuf,      // ~/.vibe-trading/.env
 }
 
 impl Layout {
@@ -43,6 +43,13 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn replace_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
+    if dst.exists() {
+        fs::remove_dir_all(dst).map_err(|e| format!("remove_dir_all {dst:?}: {e}"))?;
+    }
+    copy_dir_recursive(src, dst)
+}
+
 pub fn prepare(
     bundle_agent: &Path,
     bundle_env_seed: &Path,
@@ -58,24 +65,31 @@ pub fn prepare(
     let installed = fs::read_to_string(&layout.marker).ok();
     let action = crate::version::decide(installed.as_deref(), &bundle_ver);
 
-    fs::create_dir_all(&layout.root)
-        .map_err(|e| format!("create root {:?}: {e}", layout.root))?;
+    fs::create_dir_all(&layout.root).map_err(|e| format!("create root {:?}: {e}", layout.root))?;
     // 可写可选依赖目录：始终确保存在；升级时不被清空（与 runtime_agent 的
     // copy_dir_recursive 无关——libs 永远是用户拥有的数据，不来自 bundle 模板）。
     fs::create_dir_all(&layout.runtime_libs)
         .map_err(|e| format!("create runtime_libs {:?}: {e}", layout.runtime_libs))?;
 
+    if let Some(frontend_dist) = bundle_frontend_dist {
+        if frontend_dist.exists() {
+            let dest = layout
+                .runtime_agent
+                .parent()
+                .unwrap()
+                .join("frontend")
+                .join("dist");
+            replace_dir_recursive(frontend_dist, &dest)?;
+        }
+    }
+
     match action {
         crate::version::Action::Reuse => {}
         crate::version::Action::FirstRun | crate::version::Action::Upgrade => {
             copy_dir_recursive(bundle_agent, &layout.runtime_agent)?;
-            // 复制 frontend/dist 到可写运行目录（api_server.py 硬编码从 agent 的
-            // parent.parent/frontend/dist 加载 SPA 静态资源）
-            if let Some(frontend_dist) = bundle_frontend_dist {
-                if frontend_dist.exists() {
-                    let dest = layout.runtime_agent.parent().unwrap().join("frontend").join("dist");
-                    copy_dir_recursive(frontend_dist, &dest)?;
-                }
+            if bundle_env_seed.exists() {
+                fs::copy(bundle_env_seed, &layout.user_env)
+                    .map_err(|e| format!("seed .env: {e}"))?;
             }
             if let Some(parent) = layout.marker.parent() {
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -83,12 +97,6 @@ pub fn prepare(
             fs::write(&layout.marker, bundle_ver.trim())
                 .map_err(|e| format!("write marker: {e}"))?;
         }
-    }
-
-    // .env 仅在用户配置缺失时种入
-    if !layout.user_env.exists() && bundle_env_seed.exists() {
-        fs::copy(bundle_env_seed, &layout.user_env)
-            .map_err(|e| format!("seed .env: {e}"))?;
     }
     Ok(())
 }
@@ -126,21 +134,32 @@ mod tests {
 
         assert!(layout.runtime_agent.join("api_server.py").exists());
         assert_eq!(fs::read_to_string(layout.user_env).unwrap(), "SEED=1");
-        assert_eq!(
-            fs::read_to_string(layout.marker).unwrap().trim(),
-            "1.0.0"
-        );
+        assert_eq!(fs::read_to_string(layout.marker).unwrap().trim(), "1.0.0");
     }
 
     #[test]
-    fn does_not_overwrite_existing_user_env() {
+    fn upgrade_overwrites_existing_user_env_with_bundle_seed() {
         let tmp = tempdir().unwrap();
         let bundle = tmp.path().join("bundle");
         let home = tmp.path().join("home");
         make_bundle(&bundle, "1.0.0");
         let layout = Layout::new(&home);
         fs::create_dir_all(&home).unwrap();
-        fs::write(&layout.user_env, "USER_KEY=keep").unwrap();
+        fs::write(&layout.user_env, "OLD_KEY=stale").unwrap();
+
+        prepare(
+            &bundle.join("agent"),
+            &bundle.join("agent/.env"),
+            &bundle.join("VERSION"),
+            None,
+            &layout,
+        )
+        .unwrap();
+
+        assert_eq!(fs::read_to_string(&layout.user_env).unwrap(), "SEED=1");
+
+        fs::write(bundle.join("agent/.env"), "SEED=2\nNEW_KEY=fresh\n").unwrap();
+        fs::write(bundle.join("VERSION"), "2.0.0").unwrap();
 
         prepare(
             &bundle.join("agent"),
@@ -152,8 +171,8 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            fs::read_to_string(layout.user_env).unwrap(),
-            "USER_KEY=keep"
+            fs::read_to_string(&layout.user_env).unwrap(),
+            "SEED=2\nNEW_KEY=fresh\n"
         );
     }
 
@@ -195,10 +214,7 @@ mod tests {
             layout.runtime_agent.join("runs/r1/x").exists(),
             "user data preserved"
         );
-        assert_eq!(
-            fs::read_to_string(layout.marker).unwrap().trim(),
-            "2.0.0"
-        );
+        assert_eq!(fs::read_to_string(layout.marker).unwrap().trim(), "2.0.0");
     }
 
     #[test]
@@ -225,10 +241,7 @@ mod tests {
     fn layout_exposes_runtime_libs_path() {
         let home = std::path::Path::new("/fake/home/.vibe-trading");
         let layout = Layout::new(home);
-        assert_eq!(
-            layout.runtime_libs,
-            home.join("runtime").join("libs")
-        );
+        assert_eq!(layout.runtime_libs, home.join("runtime").join("libs"));
     }
 
     #[test]
@@ -248,8 +261,62 @@ mod tests {
         )
         .unwrap();
 
-        assert!(layout.runtime_libs.exists(), "runtime_libs should be created");
+        assert!(
+            layout.runtime_libs.exists(),
+            "runtime_libs should be created"
+        );
         assert!(layout.runtime_libs.is_dir());
+    }
+
+    #[test]
+    fn reuse_refreshes_frontend_dist_and_removes_stale_assets() {
+        let tmp = tempdir().unwrap();
+        let bundle = tmp.path().join("bundle");
+        let home = tmp.path().join("home");
+        make_bundle(&bundle, "1.0.0");
+        let frontend_dist = bundle.join("frontend/dist");
+        fs::create_dir_all(frontend_dist.join("assets")).unwrap();
+        fs::write(
+            frontend_dist.join("index.html"),
+            r#"<script src="/assets/old.js"></script>"#,
+        )
+        .unwrap();
+        fs::write(frontend_dist.join("assets/old.js"), "old bundle").unwrap();
+        let layout = Layout::new(&home);
+
+        prepare(
+            &bundle.join("agent"),
+            &bundle.join("agent/.env"),
+            &bundle.join("VERSION"),
+            Some(&frontend_dist),
+            &layout,
+        )
+        .unwrap();
+
+        fs::write(
+            frontend_dist.join("index.html"),
+            r#"<script src="/assets/new.js"></script>"#,
+        )
+        .unwrap();
+        fs::remove_file(frontend_dist.join("assets/old.js")).unwrap();
+        fs::write(frontend_dist.join("assets/new.js"), "new bundle").unwrap();
+
+        prepare(
+            &bundle.join("agent"),
+            &bundle.join("agent/.env"),
+            &bundle.join("VERSION"),
+            Some(&frontend_dist),
+            &layout,
+        )
+        .unwrap();
+
+        let runtime_dist = layout.runtime_agent.parent().unwrap().join("frontend/dist");
+        assert_eq!(
+            fs::read_to_string(runtime_dist.join("index.html")).unwrap(),
+            r#"<script src="/assets/new.js"></script>"#
+        );
+        assert!(runtime_dist.join("assets/new.js").exists());
+        assert!(!runtime_dist.join("assets/old.js").exists());
     }
 
     #[test]
@@ -270,7 +337,11 @@ mod tests {
 
         // 模拟用户安装了一个包到 libs
         fs::create_dir_all(layout.runtime_libs.join("futu_api")).unwrap();
-        fs::write(layout.runtime_libs.join("futu_api/__init__.py"), "# user installed").unwrap();
+        fs::write(
+            layout.runtime_libs.join("futu_api/__init__.py"),
+            "# user installed",
+        )
+        .unwrap();
 
         // bundle 升级到 v2
         fs::write(bundle.join("agent/api_server.py"), "# v2").unwrap();

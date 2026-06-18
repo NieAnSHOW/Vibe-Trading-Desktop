@@ -3,11 +3,111 @@
 from __future__ import annotations
 
 from pathlib import Path
+import asyncio
 
 import pytest
 from fastapi.testclient import TestClient
 
 import api_server
+
+
+def test_settings_env_path_prefers_user_env_for_desktop_runtime(tmp_path: Path) -> None:
+    user_env = tmp_path / "home" / ".vibe-trading" / ".env"
+    agent_env = tmp_path / "home" / ".vibe-trading" / "runtime" / "agent" / ".env"
+    user_env.parent.mkdir(parents=True)
+    agent_env.parent.mkdir(parents=True)
+
+    selected = api_server._resolve_settings_env_path(agent_env, user_env)
+
+    assert selected == user_env
+
+
+def test_update_llm_settings_persists_desktop_user_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_env = tmp_path / "home" / ".vibe-trading" / ".env"
+    agent_env = tmp_path / "home" / ".vibe-trading" / "runtime" / "agent" / ".env"
+    user_env.parent.mkdir(parents=True)
+    agent_env.parent.mkdir(parents=True)
+    user_env.write_text("LANGCHAIN_PROVIDER=openai\n", encoding="utf-8")
+    agent_env.write_text("LANGCHAIN_PROVIDER=ollama\n", encoding="utf-8")
+    monkeypatch.setattr(api_server, "USER_ENV_PATH", user_env)
+    monkeypatch.setattr(api_server, "ENV_PATH", agent_env)
+    monkeypatch.setattr(api_server, "ENV_EXAMPLE_PATH", tmp_path / ".env.example")
+
+    response = asyncio.run(
+        api_server.update_llm_settings(
+            api_server.UpdateLLMSettingsRequest(
+                provider="openrouter",
+                model_name="deepseek/deepseek-v4-pro",
+                base_url="https://openrouter.ai/api/v1",
+                api_key="or-secret-value",
+                temperature=0.1,
+                timeout_seconds=45,
+                max_retries=1,
+                reasoning_effort="max",
+            )
+        )
+    )
+
+    user_env_text = user_env.read_text(encoding="utf-8")
+    agent_env_text = agent_env.read_text(encoding="utf-8")
+    assert response.provider == "openrouter"
+    assert "LANGCHAIN_PROVIDER=openrouter" in user_env_text
+    assert "OPENROUTER_API_KEY=or-secret-value" in user_env_text
+    assert "LANGCHAIN_PROVIDER=ollama" in agent_env_text
+    assert "or-secret-value" not in agent_env_text
+
+
+def test_update_llm_settings_removes_stale_active_provider_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_env = tmp_path / "home" / ".vibe-trading" / ".env"
+    agent_env = tmp_path / "home" / ".vibe-trading" / "runtime" / "agent" / ".env"
+    user_env.parent.mkdir(parents=True)
+    agent_env.parent.mkdir(parents=True)
+    user_env.write_text(
+        "\n".join(
+            [
+                "LANGCHAIN_PROVIDER=openai",
+                "LANGCHAIN_MODEL_NAME=gpt-old",
+                "OPENAI_API_KEY=old-openai-key",
+                "OPENAI_BASE_URL=https://old.example/v1",
+                "DEEPSEEK_API_KEY=old-deepseek-key",
+                "TUSHARE_TOKEN=ts-existing-token",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    agent_env.write_text("LANGCHAIN_PROVIDER=ollama\n", encoding="utf-8")
+    monkeypatch.setattr(api_server, "USER_ENV_PATH", user_env)
+    monkeypatch.setattr(api_server, "ENV_PATH", agent_env)
+    monkeypatch.setattr(api_server, "ENV_EXAMPLE_PATH", tmp_path / ".env.example")
+
+    asyncio.run(
+        api_server.update_llm_settings(
+            api_server.UpdateLLMSettingsRequest(
+                provider="openrouter",
+                model_name="deepseek/deepseek-v4-pro",
+                base_url="https://openrouter.ai/api/v1",
+                api_key="or-secret-value",
+                temperature=0.1,
+                timeout_seconds=45,
+                max_retries=1,
+                reasoning_effort="max",
+            )
+        )
+    )
+
+    user_env_text = user_env.read_text(encoding="utf-8")
+    assert "LANGCHAIN_PROVIDER=openrouter" in user_env_text
+    assert "OPENROUTER_API_KEY=or-secret-value" in user_env_text
+    assert "TUSHARE_TOKEN=ts-existing-token" in user_env_text
+    assert "OPENAI_API_KEY=" not in user_env_text
+    assert "OPENAI_BASE_URL=" not in user_env_text
+    assert "DEEPSEEK_API_KEY=" not in user_env_text
+    assert "gpt-old" not in user_env_text
 
 
 @pytest.fixture
@@ -33,6 +133,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     )
     monkeypatch.setattr(api_server, "ENV_PATH", env_path)
     monkeypatch.setattr(api_server, "ENV_EXAMPLE_PATH", env_example)
+    monkeypatch.setattr(api_server, "USER_ENV_PATH", tmp_path / "home" / ".vibe-trading" / ".env")
     monkeypatch.setattr(api_server, "_baostock_supported", lambda: False)
     monkeypatch.setattr(api_server, "_baostock_installed", lambda: False)
     monkeypatch.delenv("API_AUTH_KEY", raising=False)
@@ -181,6 +282,7 @@ def test_settings_reads_reject_remote_dev_mode_clients(
     env_example.write_text("LANGCHAIN_PROVIDER=openai\n", encoding="utf-8")
     monkeypatch.setattr(api_server, "ENV_PATH", env_path)
     monkeypatch.setattr(api_server, "ENV_EXAMPLE_PATH", env_example)
+    monkeypatch.setattr(api_server, "USER_ENV_PATH", tmp_path / "home" / ".vibe-trading" / ".env")
     monkeypatch.delenv("API_AUTH_KEY", raising=False)
     remote_client = TestClient(api_server.app, client=("203.0.113.10", 50000))
 
@@ -211,6 +313,7 @@ def test_settings_reads_allow_loopback_without_bearer_even_when_api_auth_key_con
     env_example.write_text("LANGCHAIN_PROVIDER=openai\n", encoding="utf-8")
     monkeypatch.setattr(api_server, "ENV_PATH", env_path)
     monkeypatch.setattr(api_server, "ENV_EXAMPLE_PATH", env_example)
+    monkeypatch.setattr(api_server, "USER_ENV_PATH", tmp_path / "home" / ".vibe-trading" / ".env")
     monkeypatch.setenv("API_AUTH_KEY", "settings-secret")
     local_client = TestClient(api_server.app, client=("127.0.0.1", 50000))
 
@@ -255,6 +358,7 @@ def test_settings_writes_reject_remote_dev_mode_clients(
     env_example.write_text("LANGCHAIN_PROVIDER=openai\n", encoding="utf-8")
     monkeypatch.setattr(api_server, "ENV_PATH", env_path)
     monkeypatch.setattr(api_server, "ENV_EXAMPLE_PATH", env_example)
+    monkeypatch.setattr(api_server, "USER_ENV_PATH", tmp_path / "home" / ".vibe-trading" / ".env")
     monkeypatch.delenv("API_AUTH_KEY", raising=False)
     remote_client = TestClient(api_server.app, client=("203.0.113.10", 50000))
 
