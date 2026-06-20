@@ -26,4 +26,9 @@ export default {
     },
   },
   plugins: [require("@tailwindcss/typography")],
+  variants: {
+    extend: {
+      animation: ["motion-safe", "motion-reduce"],
+    },
+  },
 } satisfies Config;

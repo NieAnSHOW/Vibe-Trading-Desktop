@@ -15,7 +15,7 @@
     --primary-foreground: 0 0% 100%;
 
     --muted: 220 14% 92%;
-    --muted-foreground: 220 14% 46%;
+    --muted-foreground: 220 14% 40%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     --border: 220 14% 87%;
@@ -29,7 +29,7 @@
 
     /* Chart tokens */
     --chart-grid: 220 14% 90%;
-    --chart-text: 220 14% 46%;
+    --chart-text: 220 14% 40%;
     --chart-axis: 220 14% 80%;
     --chart-compare-a: #3b82f6;
     --chart-compare-b: #f59e0b;
@@ -59,7 +59,7 @@
 
     /* Chart tokens */
     --chart-grid: 220 20% 12%;
-    --chart-text: 220 10% 42%;
+    --chart-text: 220 10% 54%;
     --chart-axis: 220 20% 22%;
     --chart-compare-a: #60a5fa;
     --chart-compare-b: #fbbf24;
@@ -85,4 +85,13 @@
   0%   { transform: translateX(-100%); }
   50%  { transform: translateX(200%); }
   100% { transform: translateX(-100%); }
+}
+
+/* Accessibility: disable animations for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

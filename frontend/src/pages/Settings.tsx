@@ -234,7 +234,7 @@ export function Settings() {
         <p className="max-w-3xl text-sm text-muted-foreground">{"Choose the model used by the agent and save it to the project-local agent/.env file."}</p>
       </div>
 
-      <form onSubmit={submit} className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
+      <form onSubmit={submit} className="grid gap-6 md:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
         <section className="rounded-lg border bg-card p-5 shadow-sm">
           <div className="mb-5 flex items-center gap-2">
             <Server className="h-4 w-4 text-primary" />
@@ -414,7 +414,7 @@ export function Settings() {
           <p className="text-sm text-muted-foreground">{"Configure optional market data credentials used by backtests and research agents."}</p>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
+        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
           <div className="grid gap-4">
             <label className="grid gap-2">
               <span className={labelClass}>{"Tushare token"}</span>

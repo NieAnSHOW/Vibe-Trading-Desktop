@@ -152,21 +152,12 @@ const CATEGORIES: Category[] = [
 ];
 
 const CAPABILITY_CHIPS = [
-  "Finance Skills Library",
-  "Swarm Agent Teams",
-  "Auto-Discovered Tools",
-  "3 Markets: A-Share · Crypto · HK/US",
-  "Trading Connector Profiles",
-  "Minute to Daily Timeframes",
-  "4 Portfolio Optimizers",
-  "15+ Risk Metrics",
-  "Options & Derivatives",
-  "PDF & Web Research",
-  "Factor Analysis & ML",
-  "Trade Journal Analyzer",
-  "Shadow Account Backtest",
-  "Persistent Memory",
-  "Session Search",
+  "Global Markets",
+  "Smart Backtesting",
+  "Multi-Agent Teams",
+  "Live Trading",
+  "Deep Research",
+  "Trade Analytics",
 ];
 
 interface Props {

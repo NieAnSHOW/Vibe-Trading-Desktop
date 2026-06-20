@@ -32,8 +32,7 @@ import { api, type SessionItem } from "@/lib/api";
 import { useAgentStore } from "@/stores/agent";
 import { ConnectionBanner } from "@/components/layout/ConnectionBanner";
 
-// Bump on each release; one place keeps the footer in sync with package.json.
-const APP_VERSION = "v0.1.9";
+const APP_VERSION = __APP_VERSION__;
 const WEB_UI_TAB_ID = "web-ui";
 const SHORTCUTS_TAB_ID = "shortcuts";
 
@@ -303,10 +302,10 @@ export function Layout() {
                       <Link
                         to={`/agent?session=${s.session_id}`}
                         className={cn(
-                          "flex-1 min-w-0 pl-3 pr-14 py-1.5 rounded-md text-xs transition-colors truncate block border-l-2",
+                          "flex-1 min-w-0 pl-3 pr-14 py-1.5 rounded-md text-xs transition-colors truncate block",
                           isActive
-                            ? "border-l-primary bg-primary/10 text-primary font-medium"
-                            : "border-l-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
+                            ? "bg-primary/10 text-primary font-medium"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
                         )}
                         title={s.title || s.session_id}
                       >
