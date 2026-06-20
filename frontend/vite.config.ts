@@ -13,6 +13,8 @@ const PROXY_PATHS = [
   "/upload",
   "/shadow-reports",
   "/optional-deps",
+  "/news/finance",
+  "/stock/hot",
 ];
 
 export default defineConfig(({ mode }) => {
@@ -42,6 +44,15 @@ export default defineConfig(({ mode }) => {
         // form should fall back to ``index.html`` on browser navigation.
         // ``/runs/{id}/code`` and ``/runs/{id}/pine`` are API-only and
         // must keep proxying to the backend even when Accept is text/html.
+        "^/runs/[^/]+/?$": apiProxyWithHtmlFallback,
+        "/runs": apiProxy,
+        "/correlation": apiProxyWithHtmlFallback,
+        "^/alpha(?:/|$)": apiProxy,
+      },
+    },
+    preview: {
+      proxy: {
+        ...Object.fromEntries(PROXY_PATHS.map((p) => [p, apiProxy])),
         "^/runs/[^/]+/?$": apiProxyWithHtmlFallback,
         "/runs": apiProxy,
         "/correlation": apiProxyWithHtmlFallback,

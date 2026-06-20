@@ -16,6 +16,12 @@ const Settings = lazy(() =>
 const Runtime = lazy(() =>
   import("@/pages/Runtime").then((m) => ({ default: m.Runtime })),
 );
+const News = lazy(() =>
+  import("@/pages/News").then((m) => ({ default: m.News })),
+);
+const StockHot = lazy(() =>
+  import("@/pages/StockHot").then((m) => ({ default: m.StockHot })),
+);
 const Correlation = lazy(() =>
   import("@/pages/Correlation").then((m) => ({ default: m.Correlation })),
 );
@@ -46,6 +52,8 @@ export const router = createBrowserRouter([
       { path: "/", element: wrap(Home) },
       { path: "/agent", element: wrap(Agent) },
       { path: "/runtime", element: wrap(Runtime) },
+      { path: "/news", element: wrap(News) },
+      { path: "/stock-hot", element: wrap(StockHot) },
       { path: "/settings", element: wrap(Settings) },
       { path: "/runs/:runId", element: wrap(RunDetail) },
       { path: "/compare", element: wrap(Compare) },

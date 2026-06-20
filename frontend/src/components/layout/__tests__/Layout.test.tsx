@@ -1,5 +1,4 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi } from "vitest";
 import i18n from "@/i18n";
@@ -13,95 +12,62 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn().mockResolvedValue(undefined),
-}));
-
-function renderLayout() {
+function renderLayout(initialEntry = "/") {
   i18n.changeLanguage("zh-CN");
   return render(
-    <MemoryRouter initialEntries={["/"]}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<div>Dashboard route content</div>} />
           <Route path="/agent" element={<div>Agent route content</div>} />
+          <Route path="/news" element={<div>News route content</div>} />
+          <Route path="/stock-hot" element={<div>Stock hot route content</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,
   );
 }
 
-describe("Layout desktop tabs", () => {
-  it("starts on the Web UI tab with the existing sidebar and route outlet", () => {
+describe("Layout navigation", () => {
+  it("shows the React Router-managed app shell and route outlet", () => {
     renderLayout();
 
-    expect(screen.getByRole("tab", { name: /交易智能体/i })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("link", { name: /首页/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /首页/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /新闻/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /股票热度/i }).length).toBeGreaterThan(0);
     expect(screen.getByText("Dashboard route content")).toBeInTheDocument();
   });
 
-  it("keeps the Web UI panel constrained to the available tab body size", () => {
+  it("keeps the web UI shell constrained to the available body size", () => {
     const { container } = renderLayout();
 
-    expect(container.querySelector('[data-testid="web-ui-tab-panel"]')).toHaveClass("flex", "h-full", "w-full", "min-h-0", "min-w-0");
     expect(container.querySelector('[data-testid="web-ui-shell"]')).toHaveClass("flex", "h-full", "w-full", "min-h-0", "min-w-0");
     expect(container.querySelector('[data-testid="web-ui-main"]')).toHaveClass("min-h-0", "min-w-0", "overflow-hidden");
     expect(container.querySelector('[data-testid="web-ui-outlet"]')).toHaveClass("min-h-0", "min-w-0", "overflow-auto");
   });
 
-  it("shows shortcuts without the Web UI sidebar", async () => {
-    const user = userEvent.setup();
-    const { container } = renderLayout();
-
-    await user.click(screen.getByRole("tab", { name: /快捷入口/i }));
-
-    expect(screen.getByRole("tab", { name: /快捷入口/i })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText(/打开常用的中国大陆金融资讯网站/i)).toBeInTheDocument();
-    expect(container.querySelector('[data-testid="web-ui-tab-panel"]')).toHaveClass("hidden");
-    expect(container.querySelector('[data-testid="shortcuts-tab-panel"]')).toHaveClass("flex");
-  });
-
-  it("opens an external iframe tab from a shortcut and keeps it outside the Web UI sidebar", async () => {
-    const user = userEvent.setup();
-    const { container } = renderLayout();
-
-    await user.click(screen.getByRole("tab", { name: /快捷入口/i }));
-    await user.click(screen.getByRole("button", { name: /打开 同花顺/i }));
-
-    expect(screen.getByRole("tab", { name: /同花顺/i })).toHaveAttribute("aria-selected", "true");
-    expect(container.querySelector('[data-testid="web-ui-tab-panel"]')).toHaveClass("hidden");
-    expect(container.querySelector('[data-testid="external-tab-panel-tonghuashun"]')).toHaveClass("flex");
-
-    const iframe = screen.getByTitle("同花顺");
-    expect(iframe).toHaveAttribute("src", "https://www.10jqka.com.cn/");
-    expect(iframe).not.toHaveAttribute("sandbox");
-    expect(screen.getByRole("button", { name: /外部打开/i })).toBeInTheDocument();
-  });
-
-  it("opens the current external tab URL through the desktop shell", async () => {
-    const user = userEvent.setup();
+  it("does not render deprecated external shortcut tabs or iframe panels", () => {
     renderLayout();
 
-    await user.click(screen.getByRole("tab", { name: /快捷入口/i }));
-    await user.click(screen.getByRole("button", { name: /打开 同花顺/i }));
-    await user.click(screen.getByRole("button", { name: /外部打开/i }));
-
-    const { invoke } = await import("@tauri-apps/api/core");
-    expect(invoke).toHaveBeenCalledWith("open_external_url", {
-      url: "https://www.10jqka.com.cn/",
-    });
+    expect(screen.queryByRole("tab", { name: /快捷入口/i })).not.toBeInTheDocument();
+    expect(screen.queryByTitle("同花顺")).not.toBeInTheDocument();
   });
 
-  it("closing an external tab returns to Shortcuts", async () => {
-    const user = userEvent.setup();
-    renderLayout();
+  it("renders the news module outside the existing Web UI shell", () => {
+    const { container } = renderLayout("/news");
 
-    await user.click(screen.getByRole("tab", { name: /快捷入口/i }));
-    await user.click(screen.getByRole("button", { name: /打开 同花顺/i }));
+    expect(screen.getByText("News route content")).toBeInTheDocument();
+    expect(container.querySelector('[data-testid="web-ui-shell"]')).not.toBeInTheDocument();
+    expect(screen.queryByText("Sessions")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /智能体/i })).not.toBeInTheDocument();
+  });
 
-    await user.click(screen.getByRole("button", { name: /关闭 同花顺/i }));
+  it("renders the stock hotness module outside the existing Web UI shell", () => {
+    const { container } = renderLayout("/stock-hot");
 
-    expect(screen.queryByRole("tab", { name: /同花顺/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /快捷入口/i })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Stock hot route content")).toBeInTheDocument();
+    expect(container.querySelector('[data-testid="web-ui-shell"]')).not.toBeInTheDocument();
+    expect(screen.queryByText("Sessions")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /智能体/i })).not.toBeInTheDocument();
   });
 });

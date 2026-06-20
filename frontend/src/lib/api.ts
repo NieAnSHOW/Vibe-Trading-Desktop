@@ -1,6 +1,9 @@
 import { authHeaders, withAuthQuery } from "@/lib/apiAuth";
 
 const BASE = "";
+const AKTOOLS_BASE =
+  (import.meta.env.VITE_AKTOOLS_API_URL || "https://aktool.nieanshow.cn").replace(/\/+$/, "");
+const STOCK_HOT_PREVIEW_LIMIT = 20;
 
 export class ApiError extends Error {
   status: number;
@@ -47,7 +50,137 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     throw await errorFromResponse(res);
   }
   const text = await res.text();
-  return text ? JSON.parse(text) : ({} as T);
+  try {
+    return text ? JSON.parse(text) : ({} as T);
+  } catch (exc) {
+    throw new ApiError(`HTTP ${res.status}: invalid JSON response`, res.status);
+  }
+}
+
+async function aktoolsRequest<T>(functionName: string, params?: Record<string, string>): Promise<T> {
+  const url = new URL(`${AKTOOLS_BASE}/api/public/${functionName}`);
+  Object.entries(params ?? {}).forEach(([key, value]) => {
+    url.searchParams.set(key, value);
+  });
+  const res = await fetch(url.toString(), {
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    throw await errorFromResponse(res);
+  }
+  const text = await res.text();
+  try {
+    return text ? JSON.parse(text) : ({} as T);
+  } catch {
+    throw new ApiError(`HTTP ${res.status}: invalid JSON response`, res.status);
+  }
+}
+
+function cleanAktoolsText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+}
+
+function normalizeFinanceNewsRows(rows: unknown): FinanceNewsResponse {
+  if (!Array.isArray(rows)) {
+    throw new ApiError("AKTools news response is not a list", 200);
+  }
+  return {
+    items: rows.flatMap((row) => {
+      if (!row || typeof row !== "object") return [];
+      const record = row as Record<string, unknown>;
+      const summary = cleanAktoolsText(record.summary);
+      const url = cleanAktoolsText(record.url);
+      if (!summary || !url) return [];
+      return [{
+        tag: cleanAktoolsText(record.tag) || "财经",
+        summary,
+        url,
+      }];
+    }),
+  };
+}
+
+function normalizeAktoolsCell(value: unknown): string | number | boolean | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+  return String(value);
+}
+
+function normalizeStockHotRows(rows: unknown): Pick<StockHotSection, "columns" | "rows"> {
+  if (!Array.isArray(rows)) return { columns: [], rows: [] };
+  const records = rows
+    .slice(0, STOCK_HOT_PREVIEW_LIMIT)
+    .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object" && !Array.isArray(row));
+  const columns = records[0] ? Object.keys(records[0]) : [];
+  return {
+    columns,
+    rows: records.map((record) =>
+      Object.fromEntries(
+        Object.entries(record).map(([key, value]) => [key, normalizeAktoolsCell(value)]),
+      ),
+    ),
+  };
+}
+
+const STOCK_HOT_SOURCES = [
+  {
+    id: "xq-deal",
+    title: "交易排行榜",
+    source: "雪球",
+    category: "股票热度-雪球",
+    function: "stock_hot_deal_xq",
+    params: { symbol: "最热门" },
+  },
+  {
+    id: "em-keyword",
+    title: "热门关键词",
+    source: "东方财富",
+    category: "热门关键词",
+    function: "stock_hot_keyword_em",
+    params: { symbol: "SZ000665" },
+  },
+] satisfies Array<{
+  id: string;
+  title: string;
+  source: string;
+  category: string;
+  function: string;
+  params?: Record<string, string>;
+}>;
+
+async function listFinanceNews(): Promise<FinanceNewsResponse> {
+  const rows = await aktoolsRequest<unknown>("stock_news_main_cx");
+  return normalizeFinanceNewsRows(rows);
+}
+
+async function getStockHot(): Promise<StockHotResponse> {
+  const sections = await Promise.all(
+    STOCK_HOT_SOURCES.map(async (source): Promise<StockHotSection> => {
+      const { params, ...sectionMeta } = source;
+      try {
+        const rows = await aktoolsRequest<unknown>(source.function, params);
+        return {
+          ...sectionMeta,
+          ...normalizeStockHotRows(rows),
+          error: null,
+        };
+      } catch (err) {
+        return {
+          ...sectionMeta,
+          columns: [],
+          rows: [],
+          error: err instanceof Error ? err.message : "AKTools stock hotness fetch failed",
+        };
+      }
+    }),
+  );
+
+  if (sections.length > 0 && sections.every((section) => section.error)) {
+    throw new Error(sections[0].error ?? "AKTools stock hotness fetch failed");
+  }
+
+  return { sections: sections.filter((section) => section.error || section.rows.length > 0) };
 }
 
 export interface UploadResult {
@@ -225,6 +358,10 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(body),
     }),
+
+  // News API
+  listFinanceNews,
+  getStockHot,
 };
 
 // --- Swarm types ---
@@ -957,6 +1094,31 @@ export interface MirrorInfo {
 export interface UpdateMirrorRequest {
   name: string;
   custom_index_url?: string;
+}
+
+export interface FinanceNewsItem {
+  tag: string;
+  summary: string;
+  url: string;
+}
+
+export interface FinanceNewsResponse {
+  items: FinanceNewsItem[];
+}
+
+export interface StockHotSection {
+  id: string;
+  title: string;
+  source: string;
+  category: string;
+  function: string;
+  columns: string[];
+  rows: Record<string, string | number | boolean | null>[];
+  error?: string | null;
+}
+
+export interface StockHotResponse {
+  sections: StockHotSection[];
 }
 
 export interface MessageItem {

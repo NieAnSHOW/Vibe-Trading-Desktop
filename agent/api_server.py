@@ -17,6 +17,7 @@ import signal
 import time
 import csv
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -143,6 +144,39 @@ class HealthResponse(BaseModel):
     status: str = Field(..., description="Service status")
     service: str = Field(..., description="Service name")
     timestamp: str = Field(..., description="Server timestamp")
+
+
+class FinanceNewsItem(BaseModel):
+    """Finance news row returned by AKShare stock_news_main_cx."""
+
+    tag: str
+    summary: str
+    url: str
+
+
+class FinanceNewsResponse(BaseModel):
+    """Finance news feed payload."""
+
+    items: List[FinanceNewsItem] = Field(default_factory=list)
+
+
+class StockHotSection(BaseModel):
+    """One AKShare stock hotness table preview."""
+
+    id: str
+    title: str
+    source: str
+    category: str
+    function: str
+    columns: List[str] = Field(default_factory=list)
+    rows: List[Dict[str, Any]] = Field(default_factory=list)
+    error: Optional[str] = None
+
+
+class StockHotResponse(BaseModel):
+    """Grouped stock hotness payload."""
+
+    sections: List[StockHotSection] = Field(default_factory=list)
 
 
 class LLMProviderOption(BaseModel):
@@ -516,6 +550,115 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _import_akshare():
+    import akshare as ak
+
+    return ak
+
+
+@dataclass(frozen=True)
+class StockHotSource:
+    id: str
+    title: str
+    source: str
+    category: str
+    function_name: str
+    kwargs: Dict[str, Any] = field(default_factory=dict)
+
+
+STOCK_HOT_PREVIEW_LIMIT = 20
+
+STOCK_HOT_SOURCES: tuple[StockHotSource, ...] = (
+    # StockHotSource("baidu-search", "热搜股票", "百度股市通", "热搜股票", "stock_hot_search_baidu", {"symbol": "A股", "date": datetime.now().strftime("%Y%m%d"), "time": "今日"}),
+    StockHotSource("em-keyword", "热门关键词", "东方财富", "热门关键词", "stock_hot_keyword_em", {"symbol": "SZ000665"}),
+    # StockHotSource("xq-deal", "交易排行榜", "雪球", "股票热度-雪球", "stock_hot_deal_xq", {"symbol": "最热门"}),
+    # StockHotSource("xq-follow", "关注排行榜", "雪球", "股票热度-雪球", "stock_hot_follow_xq", {"symbol": "最热门"}),
+    # StockHotSource("xq-tweet", "讨论排行榜", "雪球", "股票热度-雪球", "stock_hot_tweet_xq", {"symbol": "最热门"}),
+    # StockHotSource("xq-inner-trade", "内部交易", "雪球", "内部交易", "stock_inner_trade_xq"),
+)
+
+
+def _clean_news_value(value: Any) -> str:
+    if value is None:
+        return ""
+    try:
+        if value != value:
+            return ""
+    except Exception:
+        pass
+    return str(value).strip()
+
+
+def _normalize_finance_news_rows(frame: Any) -> List[FinanceNewsItem]:
+    rows = frame.to_dict(orient="records")
+    items: List[FinanceNewsItem] = []
+    for row in rows:
+        tag = _clean_news_value(row.get("tag"))
+        summary = _clean_news_value(row.get("summary"))
+        url = _clean_news_value(row.get("url"))
+        if not summary or not url:
+            continue
+        items.append(FinanceNewsItem(tag=tag or "财经", summary=summary, url=url))
+    return items
+
+
+def _json_safe_table_value(value: Any) -> Any:
+    if value is None:
+        return None
+    try:
+        if value != value:
+            return None
+    except Exception:
+        pass
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except Exception:
+            pass
+    if hasattr(value, "item"):
+        try:
+            return value.item()
+        except Exception:
+            pass
+    return value
+
+
+def _normalize_stock_hot_rows(frame: Any, limit: int = STOCK_HOT_PREVIEW_LIMIT) -> tuple[List[str], List[Dict[str, Any]]]:
+    if frame is None:
+        return [], []
+    columns = [str(column) for column in getattr(frame, "columns", [])]
+    records = frame.head(limit).to_dict(orient="records")
+    rows = [
+        {str(key): _json_safe_table_value(value) for key, value in record.items()}
+        for record in records
+    ]
+    return columns, rows
+
+
+def _build_stock_hot_section(ak: Any, source: StockHotSource) -> StockHotSection:
+    try:
+        frame = getattr(ak, source.function_name)(**source.kwargs)
+        columns, rows = _normalize_stock_hot_rows(frame)
+        return StockHotSection(
+            id=source.id,
+            title=source.title,
+            source=source.source,
+            category=source.category,
+            function=source.function_name,
+            columns=columns,
+            rows=rows,
+        )
+    except Exception as exc:
+        return StockHotSection(
+            id=source.id,
+            title=source.title,
+            source=source.source,
+            category=source.category,
+            function=source.function_name,
+            error=str(exc),
+        )
 
 
 # ----------------------------------------------------------------------------
@@ -1516,6 +1659,49 @@ async def health_check():
         service="Vibe-Trading API",
         timestamp=datetime.now().isoformat()
     )
+
+
+@app.get("/news/finance", response_model=FinanceNewsResponse)
+async def list_finance_news():
+    """Fetch selected finance news from AKShare."""
+    try:
+        ak = _import_akshare()
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "AKShare is not installed. Install it with "
+                "`pip install akshare --upgrade` in the Python runtime."
+            ),
+        ) from exc
+
+    try:
+        frame = ak.stock_news_main_cx()
+        return FinanceNewsResponse(items=_normalize_finance_news_rows(frame))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"AKShare news fetch failed: {exc}") from exc
+
+
+@app.get("/stock/hot", response_model=StockHotResponse)
+async def get_stock_hot():
+    """Fetch stock hotness tables from AKShare."""
+    try:
+        ak = _import_akshare()
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "AKShare is not installed. Install it with "
+                "`pip install akshare --upgrade` in the Python runtime."
+            ),
+        ) from exc
+
+    sections = await asyncio.gather(
+        *[asyncio.to_thread(_build_stock_hot_section, ak, source) for source in STOCK_HOT_SOURCES]
+    )
+    return StockHotResponse(sections=list(sections))
 
 
 @app.get("/correlation")

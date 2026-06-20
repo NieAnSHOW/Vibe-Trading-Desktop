@@ -17,13 +17,8 @@ import {
   Settings,
   Layers,
   Loader2,
-  ExternalLink,
-  RefreshCw,
-  X,
-  Globe2,
-  LineChart,
   Newspaper,
-  Search,
+  Flame,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,60 +29,27 @@ import { ConnectionBanner } from "@/components/layout/ConnectionBanner";
 
 // Bump on each release; one place keeps the footer in sync with package.json.
 const APP_VERSION = "v0.1.9";
-const WEB_UI_TAB_ID = "web-ui";
-const SHORTCUTS_TAB_ID = "shortcuts";
-
-type FixedTabId = typeof WEB_UI_TAB_ID | typeof SHORTCUTS_TAB_ID;
-type ActiveTabId = FixedTabId | `external-${string}`;
-
-type ExternalShortcut = {
-  id: string;
-  labelKey: string;
-  url: string;
-  descriptionKey: string;
-  icon: LucideIcon;
-};
-
-type ExternalTab = ExternalShortcut & {
-  tabId: `external-${string}`;
-  reloadKey: number;
-};
-
-const EXTERNAL_SHORTCUTS: ExternalShortcut[] = [
-  {
-    id: "tonghuashun",
-    labelKey: "layout.externalShortcuts.sites.tonghuashun.label",
-    url: "https://www.10jqka.com.cn/",
-    descriptionKey: "layout.externalShortcuts.sites.tonghuashun.description",
-    icon: LineChart,
-  },
-  {
-    id: "tencent-finance",
-    labelKey: "layout.externalShortcuts.sites.tencentFinance.label",
-    url: "https://stockapp.finance.qq.com/",
-    descriptionKey: "layout.externalShortcuts.sites.tencentFinance.description",
-    icon: Newspaper,
-  },
-  {
-    id: "eastmoney",
-    labelKey: "layout.externalShortcuts.sites.eastmoney.label",
-    url: "https://www.eastmoney.com/",
-    descriptionKey: "layout.externalShortcuts.sites.eastmoney.description",
-    icon: Search,
-  },
-  {
-    id: "sina-finance",
-    labelKey: "layout.externalShortcuts.sites.sinaFinance.label",
-    url: "https://finance.sina.com.cn/",
-    descriptionKey: "layout.externalShortcuts.sites.sinaFinance.description",
-    icon: Globe2,
-  },
-];
+const WEBUI_ROUTES = [
+  "/",
+  "/agent",
+  "/runtime",
+  "/alpha-zoo",
+  "/settings",
+  "/correlation",
+  "/runs",
+  "/compare",
+] as const;
 
 export function Layout() {
   const { t, i18n: i18nHook } = useTranslation();
 
-  const NAV = [
+  const MODULE_NAV: Array<{ to: string; icon: LucideIcon; label: string }> = [
+    { to: "/", icon: BarChart3, label: t("layout.home") },
+    { to: "/news", icon: Newspaper, label: t("layout.news") },
+    { to: "/stock-hot", icon: Flame, label: t("layout.stockHot") },
+  ];
+
+  const WEBUI_NAV: Array<{ to: string; icon: LucideIcon; label: string }> = [
     { to: "/", icon: BarChart3, label: t("layout.home") },
     { to: "/agent", icon: Bot, label: t("layout.agent") },
     { to: "/runtime", icon: Activity, label: t("layout.runtime") },
@@ -96,6 +58,9 @@ export function Layout() {
     { to: "/correlation", icon: BarChart3, label: t("layout.correlation") },
   ];
   const { pathname } = useLocation();
+  const isWebUiRoute = WEBUI_ROUTES.some((route) =>
+    route === "/" ? pathname === "/" : pathname.startsWith(route)
+  );
   const [searchParams] = useSearchParams();
   const { dark, toggle } = useDarkMode();
   const [sessions, setSessions] = useState<SessionItem[]>([]);
@@ -105,8 +70,6 @@ export function Layout() {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("qa-sidebar") === "collapsed"
   );
-  const [activeTab, setActiveTab] = useState<ActiveTabId>(WEB_UI_TAB_ID);
-  const [externalTabs, setExternalTabs] = useState<ExternalTab[]>([]);
 
   const activeSessionId = searchParams.get("session");
   const streamingSessionId = useAgentStore((s) => s.streamingSessionId);
@@ -162,59 +125,39 @@ export function Layout() {
     setRenameTarget(null);
   };
 
-  const openShortcut = (shortcut: ExternalShortcut) => {
-    const tabId = `external-${shortcut.id}` as const;
-    setExternalTabs((prev) =>
-      prev.some((tab) => tab.tabId === tabId)
-        ? prev
-        : [...prev, { ...shortcut, tabId, reloadKey: 0 }]
-    );
-    setActiveTab(tabId);
-  };
+  return (
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-card px-2">
+        <nav
+          aria-label={t("layout.moduleNavigation")}
+          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+        >
+          {MODULE_NAV.map(({ to, icon: Icon, label }) => {
+            const active = to === "/" ? isWebUiRoute : pathname.startsWith(to);
+            return (
+              <Link
+                key={to}
+                to={to}
+                className={cn(
+                  "inline-flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-sm transition-colors",
+                  active
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <Icon className="h-4 w-4" aria-hidden="true" />
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+      </header>
 
-  const refreshExternalTab = (tabId: ExternalTab["tabId"]) => {
-    setExternalTabs((prev) =>
-      prev.map((tab) =>
-        tab.tabId === tabId ? { ...tab, reloadKey: tab.reloadKey + 1 } : tab
-      )
-    );
-  };
-
-  const closeExternalTab = (tabId: ExternalTab["tabId"]) => {
-    setExternalTabs((prev) => prev.filter((tab) => tab.tabId !== tabId));
-    if (activeTab === tabId) {
-      setActiveTab(SHORTCUTS_TAB_ID);
-    }
-  };
-
-  const openExternalUrl = async (url: string) => {
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("open_external_url", { url });
-    } catch {
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
-  };
-
-  const fixedTabs: Array<{ id: FixedTabId; label: string; icon: LucideIcon }> =
-    [
-      {
-        id: WEB_UI_TAB_ID,
-        label: t("layout.desktopTabs.webUi"),
-        icon: BarChart3,
-      },
-      {
-        id: SHORTCUTS_TAB_ID,
-        label: t("layout.desktopTabs.shortcuts"),
-        icon: Globe2,
-      },
-    ];
-
-  const webUiPanel = (
-    <div
-      data-testid="web-ui-shell"
-      className="flex h-full w-full min-h-0 min-w-0 bg-background"
-    >
+      {isWebUiRoute ? (
+      <div
+        data-testid="web-ui-shell"
+        className="flex h-full w-full min-h-0 min-w-0 flex-1 bg-background"
+      >
       {/* Sidebar */}
       <aside
         className={cn(
@@ -224,7 +167,7 @@ export function Layout() {
       >
         {/* Nav */}
         <nav className={cn("space-y-0.5", collapsed ? "p-1" : "p-2")}>
-          {NAV.map(({ to, icon: Icon, label }) => {
+          {WEBUI_NAV.map(({ to, icon: Icon, label }) => {
             const text = label;
             return (
               <Link
@@ -466,181 +409,12 @@ export function Layout() {
         </main>
       </div>
     </div>
-  );
-
-  return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <header className="flex h-11 shrink-0 items-end gap-1 border-b bg-card px-2 pt-1">
-        <div
-          role="tablist"
-          aria-label="Desktop tabs"
-          className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto"
-        >
-          {fixedTabs.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === id}
-              onClick={() => setActiveTab(id)}
-              className={cn(
-                "flex h-9 shrink-0 items-center gap-2 rounded-t-md border px-3 text-sm transition-colors",
-                activeTab === id
-                  ? "border-b-background bg-background text-foreground font-medium"
-                  : "border-transparent bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <Icon className="h-4 w-4" aria-hidden="true" />
-              {label}
-            </button>
-          ))}
-          {externalTabs.map((tab) => {
-            const Icon = tab.icon;
-            const label = t(tab.labelKey);
-            return (
-              <div
-                key={tab.tabId}
-                className={cn(
-                  "group flex h-9 max-w-56 shrink-0 items-center rounded-t-md border text-sm transition-colors",
-                  activeTab === tab.tabId
-                    ? "border-b-background bg-background text-foreground font-medium"
-                    : "border-transparent bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === tab.tabId}
-                  onClick={() => setActiveTab(tab.tabId)}
-                  className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
-                >
-                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{label}</span>
-                </button>
-                <button
-                  type="button"
-                  aria-label={t("layout.externalShortcuts.close", { label })}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    closeExternalTab(tab.tabId);
-                  }}
-                  className="mr-2 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <X className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </header>
-
-      <section
-        data-testid="web-ui-tab-panel"
-        className={cn(
-          activeTab === WEB_UI_TAB_ID ? "flex" : "hidden",
-          "h-full w-full min-h-0 min-w-0 flex-1"
-        )}
-      >
-        {webUiPanel}
-      </section>
-
-      <section
-        data-testid="shortcuts-tab-panel"
-        className={cn(
-          activeTab === SHORTCUTS_TAB_ID ? "flex" : "hidden",
-          "h-full w-full min-h-0 min-w-0 flex-1 overflow-auto bg-background"
-        )}
-      >
-        <div className="mx-auto flex max-w-6xl flex-col gap-6 p-6">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">
-              {t("layout.externalShortcuts.title")}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t("layout.externalShortcuts.description")}
-            </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {EXTERNAL_SHORTCUTS.map((shortcut) => {
-              const Icon = shortcut.icon;
-              const label = t(shortcut.labelKey);
-              const description = t(shortcut.descriptionKey);
-              return (
-                <button
-                  key={shortcut.id}
-                  type="button"
-                  onClick={() => openShortcut(shortcut)}
-                  className="flex min-h-36 flex-col items-start gap-3 rounded-md border bg-card p-4 text-left transition-colors hover:border-primary/50 hover:bg-muted/40"
-                  aria-label={t("layout.externalShortcuts.open", { label })}
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
-                    <Icon className="h-5 w-5" aria-hidden="true" />
-                  </span>
-                  <span>
-                    <span className="block text-sm font-medium text-foreground">
-                      {label}
-                    </span>
-                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                      {description}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {externalTabs.map((tab) => {
-        const isActive = activeTab === tab.tabId;
-        const label = t(tab.labelKey);
-        return (
-          <section
-            key={tab.tabId}
-            data-testid={`external-tab-panel-${tab.id}`}
-            className={cn(
-              isActive ? "flex" : "hidden",
-              "h-full w-full min-h-0 min-w-0 flex-1 bg-background"
-            )}
-          >
-            <div className="flex h-full w-full min-h-0 min-w-0 flex-col">
-              <div className="flex h-11 shrink-0 items-center gap-2 border-b bg-card px-3">
-                <button
-                  type="button"
-                  onClick={() => refreshExternalTab(tab.tabId)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  title={t("layout.externalShortcuts.refresh", { label })}
-                  aria-label={t("layout.externalShortcuts.refresh", { label })}
-                >
-                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                </button>
-                <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border bg-background px-3 py-1.5 text-xs text-muted-foreground">
-                  <Globe2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{tab.url}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => openExternalUrl(tab.url)}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                  {t("layout.externalShortcuts.openExternally")}
-                </button>
-              </div>
-              <div className="border-b bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                {t("layout.externalShortcuts.embeddedHint")}
-              </div>
-              <iframe
-                key={`${tab.tabId}-${tab.reloadKey}`}
-                title={label}
-                src={tab.url}
-                className="min-h-0 flex-1 border-0 bg-background"
-                referrerPolicy="strict-origin-when-cross-origin"
-              />
-            </div>
-          </section>
-        );
-      })}
+      ) : null}
+      {!isWebUiRoute ? (
+        <main className="min-h-0 min-w-0 flex-1 overflow-auto bg-background">
+          <Outlet />
+        </main>
+      ) : null}
     </div>
   );
 }
