@@ -33,7 +33,7 @@ import { useAgentStore } from "@/stores/agent";
 import { ConnectionBanner } from "@/components/layout/ConnectionBanner";
 
 // Bump on each release; one place keeps the footer in sync with package.json.
-const APP_VERSION = "v0.1.9";
+const APP_VERSION = "v0.1.10";
 const WEB_UI_TAB_ID = "web-ui";
 const SHORTCUTS_TAB_ID = "shortcuts";
 
