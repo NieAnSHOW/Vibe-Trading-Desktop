@@ -1,10 +1,12 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  # 快速迭代期间暂停自动 CI/CD,仅保留手动触发;恢复时取消下方注释即可
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+  # pull_request:
+  #   branches: [main]
 
 jobs:
   test:

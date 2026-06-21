@@ -1,26 +1,27 @@
 name: Desktop Build
 
 on:
-  push:
-    branches: [main]
-    tags:
-      - 'v*.*.*'
-    paths:
-      - 'src-tauri/**'
-      - 'scripts/desktop/**'
-      - 'agent/**'
-      - 'frontend/**'
-      - '.github/workflows/desktop-build.yml'
-      - 'pyproject.toml'
-  pull_request:
-    paths:
-      - 'src-tauri/**'
-      - 'scripts/desktop/**'
-      - 'agent/**'
-      - 'frontend/**'
-      - '.github/workflows/desktop-build.yml'
-      - 'pyproject.toml'
+  # 快速迭代期间暂停自动 CI/CD,仅保留手动触发;恢复时取消下方注释即可
   workflow_dispatch:
+  # push:
+  #   branches: [main]
+  #   tags:
+  #     - 'v*.*.*'
+  #   paths:
+  #     - 'src-tauri/**'
+  #     - 'scripts/desktop/**'
+  #     - 'agent/**'
+  #     - 'frontend/**'
+  #     - '.github/workflows/desktop-build.yml'
+  #     - 'pyproject.toml'
+  # pull_request:
+  #   paths:
+  #     - 'src-tauri/**'
+  #     - 'scripts/desktop/**'
+  #     - 'agent/**'
+  #     - 'frontend/**'
+  #     - '.github/workflows/desktop-build.yml'
+  #     - 'pyproject.toml'
 
 permissions:
   contents: write
