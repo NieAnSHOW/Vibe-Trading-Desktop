@@ -3229,7 +3229,17 @@ def serve_main(argv: list[str] | None = None) -> int:
     print("=" * 50)
 
     try:
-        uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+        # timeout_graceful_shutdown: 收到 SIGTERM 后最多等待 N 秒强制结束。
+        # 桌面端退出时，Rust 侧 killpg(SIGTERM) 后会 wait() 子进程；若此处不设上限，
+        # uvicorn 默认 None 会无限等待活跃 SSE/keep-alive 连接关闭，导致 Python 进程
+        # 不退出、Tauri 主事件循环被 child.wait() 阻塞、应用窗口无法关闭（必须强制退出）。
+        uvicorn.run(
+            app,
+            host=args.host,
+            port=args.port,
+            log_level="info",
+            timeout_graceful_shutdown=5,
+        )
     finally:
         if vite_proc:
             vite_proc.terminate()

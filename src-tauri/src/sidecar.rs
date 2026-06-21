@@ -63,21 +63,52 @@ pub fn spawn(
         .map_err(|e| format!("spawn sidecar failed: {e}"))
 }
 
+/// SIGTERM 后回收 sidecar 的最长等待时间。超时则升级为 SIGKILL 兜底。
+///
+/// 5s 同时覆盖 Python 侧 uvicorn 的 `timeout_graceful_shutdown=5s`——正常情况下
+/// sidecar 会在此窗口内自行退出；若它卡住（graceful shutdown 等不到 SSE 连接关闭
+/// 等），SIGKILL 兜底确保 `terminate` 一定在此上限内返回。
+#[cfg(unix)]
+const TERMINATE_GRACE: Duration = Duration::from_secs(5);
+
 /// mac/unix: kill by process group (child.id() is the pgid, because it is the group leader).
 /// killpg sends SIGTERM to all processes in the group; we then wait for the leader to exit.
-/// No fallback child.kill() — avoids PID reuse race (killpg→wait is the canonical path).
+///
+/// 必须带超时兜底：若 sidecar 收到 SIGTERM 后不退出（uvicorn 默认 `timeout_graceful_shutdown=None`,
+/// 会无限等待活跃 SSE 连接关闭），`child.wait()` 会无限阻塞——而本函数运行在
+/// `RunEvent::ExitRequested` 回调即 Tauri 主事件循环线程上，一旦阻塞，应用窗口
+/// 无法关闭、进程无法退出，表现为「退出时卡死 / 必须强制退出」。
 #[cfg(unix)]
 pub fn terminate(child: &mut Child) {
     let pid = child.id() as i32;
     unsafe {
         libc::killpg(pid, libc::SIGTERM);
     }
-    // Wait for the group leader to exit. killpg is asynchronous but the kernel
-    // guarantees delivery before wait returns for a signaled process.
+    wait_or_kill(child, pid, TERMINATE_GRACE);
+}
+
+/// SIGTERM 之后限时轮询子进程；超时或异常则对整个进程组 SIGKILL 再回收。
+#[cfg(unix)]
+fn wait_or_kill(child: &mut Child, pid: i32, timeout: Duration) {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        match child.try_wait() {
+            Ok(Some(_)) => return,
+            Ok(None) => std::thread::sleep(Duration::from_millis(100)),
+            Err(_) => break,
+        }
+    }
+    // 超时兜底：SIGKILL 整个进程组（连同 sidecar fork 出的子孙进程），再回收僵尸。
+    unsafe {
+        libc::killpg(pid, libc::SIGKILL);
+    }
     let _ = child.wait();
 }
 
 /// Windows 进程清理：使用 kill + wait 确保进程终止。
+///
+/// `child.kill()` 即 `TerminateProcess`，同步立即结束句柄、`wait` 随即返回，
+/// 不存在 unix 那种 graceful-shutdown 卡住的可能，因此无需超时兜底。
 /// 后续可改进为 WinAPI Job Object（CreateJobObject / AssignProcessToJobObject），
 /// 以便内核级关联所有子孙进程，确保在异常退出时也无残留。
 #[cfg(windows)]
@@ -219,5 +250,44 @@ mod tests {
             "PIP_INDEX_URL must default to the Tsinghua mirror"
         );
         assert_eq!(trusted, None, "HTTPS mirror needs no trusted-host");
+    }
+
+    /// 回归测试：模拟一个「收到 SIGTERM 但拒绝退出」的 sidecar（复刻 uvicorn
+    /// 在 `timeout_graceful_shutdown=None` 下无限等待 SSE 关闭的场景），断言
+    /// `wait_or_kill` 会升级为 SIGKILL 并在有限时间内回收，而不是无限阻塞。
+    #[cfg(unix)]
+    #[test]
+    fn wait_or_kill_escalates_to_sigkill_when_sigterm_is_ignored() {
+        use std::os::unix::process::CommandExt;
+
+        // 复刻 build_cmd 的 setsid 语义：让子进程成为新 session/group 组长，
+        // 这样 child.id() == pgid，killpg 才能命中整个进程组。
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c").arg("trap '' TERM; sleep 30");
+        unsafe {
+            cmd.pre_exec(|| {
+                libc::setsid();
+                Ok(())
+            });
+        }
+        let mut child = cmd.spawn().expect("spawn sh");
+        let pid = child.id() as i32;
+
+        // 先发 SIGTERM（被 trap 忽略），再进入限时回收路径。
+        unsafe {
+            libc::killpg(pid, libc::SIGTERM);
+        }
+        let start = Instant::now();
+        super::wait_or_kill(&mut child, pid, Duration::from_secs(1));
+
+        // 必须已退出，且远早于 `sleep 30` 的自然结束 —— 证明 SIGKILL 兜底生效，
+        // 而非把 Tauri 主事件循环挂死。
+        let status = child.try_wait().expect("try_wait after kill");
+        assert!(status.is_some(), "sidecar 应被 SIGKILL 回收，而非继续挂起");
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "terminate 不应阻塞超过 5s，实际 {:?}",
+            start.elapsed()
+        );
     }
 }
