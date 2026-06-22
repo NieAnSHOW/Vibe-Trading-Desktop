@@ -337,18 +337,49 @@ vitest + jsdom，置于 `src/**/__tests__/`。
 
 ## 11. 后端配套任务（DYPNS，独立文件，不碰 sms.ts）
 
-目标：让 `/app/user/login/smsCode` 与 `/app/user/login/phone` 跑通，底层用阿里云 DYPNS（用户提供 SDK `@alicloud/dypnsapi20170525`）。
+阿里云 DYPNS（号码认证服务，SDK `@alicloud/dypnsapi20170525`）提供**发送 + 校验**两个配套接口。验证码由阿里云生成、通过短信下发，**阿里云在服务端维护"手机号 ↔ 验证码"映射**——后端不再自己生成、存储、比对验证码。这与原 `login.ts` 的"本地生成 + midwayCache 存 + 本地比对"逻辑根本不同，是该 service 的核心改造点。
 
-- 新增 `src/modules/user/service/dypnsSms.ts`：
-  - 封装 `SendSmsVerifyCode`（发送，验证码由阿里云生成）
-  - 封装 `CheckSmsVerifyCode`（校验手机号 + 验证码）
-  - 配置从后端 `.env` 读取：`DYPNS_ACCESS_KEY_ID` / `DYPNS_ACCESS_KEY_SECRET`（或走 `@alicloud/credentials`）、`DYPNS_SIGN_NAME`、`DYPNS_TEMPLATE_CODE`、`DYPNS_ENDPOINT`（默认 `dypnsapi.aliyuncs.com`）。**不写入仓库**。
-- 改造 `src/modules/user/service/login.ts`：
-  - `smsCode(phone, captchaId, code)`：保留图形验证码校验；发送短信改为调用 `dypnsSms.send(phone)`（替换原对 `sms.ts` 的调用）。
-  - `phoneVerifyCode(phone, smsCode)`：校验改为调用 `dypnsSms.check(phone, smsCode)`，通过则签发 token、首次则建号。
-  - **`src/modules/user/service/sms.ts` 保持原样，不动**。
+### 11.1 两个 DYPNS 接口
+
+| 接口 | 用途 | 关键入参 | 返回 |
+|---|---|---|---|
+| `SendSmsVerifyCode` | 发送短信验证码 | `PhoneNumber`、`SignName`、`TemplateCode`、`TemplateParam`（如 `{"code":"${code}","min":"5"}`，变量由阿里云填充）、`DuplicatePolicy?`、`SchemeName?` | `BizId` 等，**不返回验证码明文** |
+| `CheckSmsVerifyCode` | 校验用户输入的验证码 | `PhoneNumber`、`VerifyCode`（用户输入）、`SchemeName?` | `VerifyResult`（`PASS` / `NOT_PASS` 等），`BizId` |
+
+两者通过 `PhoneNumber` 关联；阿里云侧验证码有效期约 5 分钟。官方示例（JS）仅作参考，实现用 TypeScript import 写法（见 11.2）。
+
+### 11.2 新增 `src/modules/user/service/dypnsSms.ts`（TypeScript）
+
+依赖（后端 `package.json` 新增）：`@alicloud/dypnsapi20170525`、`@alicloud/openapi-client`、`@alicloud/tea-util`、`@alicloud/credentials`。
+
+凭据（二选一，均不进仓库）：
+- **默认链（推荐）**：`new Credential.default()` 走 `@alicloud/credentials` 默认链（env `ALIBABA_CLOUD_ACCESS_KEY_ID` / `ALIBABA_CLOUD_ACCESS_KEY_SECRET`，或 RAM Role / 实例元数据）。生产 ECS/容器友好。
+- **显式 AK 兜底**：读 `DYPNS_ACCESS_KEY_ID` / `DYPNS_ACCESS_KEY_SECRET`，构造 `Credential` 注入。本地开发便捷。
+
+配置：`DYPNS_SIGN_NAME`、`DYPNS_TEMPLATE_CODE`、`DYPNS_ENDPOINT`（默认 `dypnsapi.aliyuncs.com`）。
+
+接口草稿：
+
+```ts
+export class DypnsSmsService {
+  send(phone: string): Promise<void>;               // 调 SendSmsVerifyCode；失败抛 CoolCommException（含阿里云错误 message）
+  check(phone: string, code: string): Promise<boolean>;  // 调 CheckSmsVerifyCode；返回 VerifyResult === PASS
+}
+```
+
+错误处理：捕获阿里云异常，读取 `error.message` 与 `error.data.Recommend`（诊断地址），转换为 `CoolCommException` 抛出，避免吞异常。
+
+### 11.3 改造 `src/modules/user/service/login.ts`（不碰 `sms.ts`）
+
+- `smsCode(phone, captchaId, code)`：**保留图形验证码校验**（captcha）→ 调用 `dypnsSms.send(phone)`。**删除**原"本地 `_.random` 生成验证码 + `midwayCache.set('sms:'+phone, code)`"逻辑。
+- `phoneVerifyCode(phone, smsCode)`：调用 `dypnsSms.check(phone, smsCode)` → `true` 则签发 token、首次则建号；`false` 抛"验证码错误或已过期"。**删除**原"从 `midwayCache` 取验证码比对"逻辑。
+- **`src/modules/user/service/sms.ts` 原样保留**，不被引用（留给原插件体系，不删不动）。
+
+### 11.4 契约与边界
+
 - 前端契约不变（路径/入参/返回同第 4 节）。
-- 实现细节、依赖安装、凭据配置在 writing-plans 阶段展开；或由后端单独处理。
+- `SendSmsVerifyCode` 不返回验证码明文，故后端**无法**做"开发模式打印验证码"——开发期端到端需用真实手机号接收（用户已购 DYPNS 服务）。
+- 依赖安装、凭据配置、`@Module` 注册在 writing-plans 阶段展开；或后端单独处理。
 
 > 备选：若希望完全不改 `login.ts`，可改为新增独立端点（如 `/app/user/login/dypns/*`），前端 `apiUser` 切到新路径。本设计默认采用"新增 service + 改造 login.ts 调用点"，因契约最稳、前端最简。
 
@@ -377,7 +408,9 @@ const userApiTarget = env.VITE_USER_API_URL || "http://127.0.0.1:8001";
 
 ### 12.3 后端 env（cool-admin-midway）
 
-`DYPNS_ACCESS_KEY_ID` / `DYPNS_ACCESS_KEY_SECRET` / `DYPNS_SIGN_NAME` / `DYPNS_TEMPLATE_CODE` / `DYPNS_ENDPOINT?`。
+- 凭据（二选一）：默认链 `ALIBABA_CLOUD_ACCESS_KEY_ID` / `ALIBABA_CLOUD_ACCESS_KEY_SECRET`（推荐，走 `@alicloud/credentials`）；或显式 `DYPNS_ACCESS_KEY_ID` / `DYPNS_ACCESS_KEY_SECRET`。
+- 业务：`DYPNS_SIGN_NAME`、`DYPNS_TEMPLATE_CODE`、`DYPNS_ENDPOINT`（默认 `dypnsapi.aliyuncs.com`）。
+- 全部放后端 `.env`，**不进仓库**。
 
 ## 13. 实现顺序（建议）
 
@@ -396,7 +429,7 @@ const userApiTarget = env.VITE_USER_API_URL || "http://127.0.0.1:8001";
 
 ## 14. 风险与待确认
 
-- **DYPNS 验证码生成/校验语义**：`SendSmsVerifyCode` 由阿里云生成验证码，需配套 `CheckSmsVerifyCode` 校验；与原"本地生成存 cache + 自校验"不同，后端实现时需确认 SDK 版本的字段名与返回结构。
+- **DYPNS 验证码语义（已确认）**：发送用 `SendSmsVerifyCode`、校验用 `CheckSmsVerifyCode`，两者经 `PhoneNumber` 关联，验证码由阿里云生成与维护（后端不存）。剩余风险：SDK 版本的字段名（如 `VerifyResult` 取值、`TemplateParam` 占位符）与返回结构需在后端实现时对照实际响应核对。
 - **upload 返回结构**：cool-admin 通用上传返回 `data` 内字段以实际为准（预期 `url`），实现时需对齐，必要时前端兼容 `{url}` 与 `{data:{url}}`。
 - **CORS**：采用 vite proxy 后开发期无跨域；生产/独立部署若前端与后端不同源，需后端 CORS 放行。
 - **手机号脱敏**：后端 `person` 返回完整手机号，前端展示时脱敏。
