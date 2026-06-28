@@ -23,7 +23,7 @@ async function autoConfigLLM(token: string) {
     await api.updateLLMSettings({
       provider: "openai",
       model_name: "deepseek-v4-flash",
-      base_url: `https://maas.nieanshow.cn/v1`,
+      base_url: `${userApiBase}/v1`,
       api_key: token,
       temperature: 0,
       timeout_seconds: 120,
