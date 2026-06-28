@@ -1,3 +1,4 @@
+import { getConsent, setConsent } from "@/lib/telemetry";
 import i18n from "@/i18n";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Database, KeyRound, Loader2, LogIn, Package, RotateCcw, Save, Server, ShieldCheck, SlidersHorizontal, Zap } from "lucide-react";
@@ -49,6 +50,13 @@ export function Settings() {
   const [saving, setSaving] = useState(false);
   const [dataSaving, setDataSaving] = useState(false);
   const [settingsLoadError, setSettingsLoadError] = useState<string | null>(null);
+  const [usageDataOn, setUsageDataOn] = useState(getConsent());
+
+  const toggleUsageData = async (on: boolean) => {
+    setUsageDataOn(on);
+    await setConsent(on);
+    toast.success(on ? i18n.t("settings.usageData.on") : i18n.t("settings.usageData.off"));
+  };
 
   const navigate = useNavigate();
   const authStatus = useAuthStore((s) => s.status);
@@ -198,6 +206,21 @@ export function Settings() {
           <p className="max-w-3xl text-sm text-muted-foreground">{"Configure model credentials and market data source tokens for this local project."}</p>
         </div>
         {localApiAccessSection}
+        <div className="rounded-lg border bg-card p-5 shadow-sm">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-base font-semibold">{i18n.t("settings.usageData.title")}</h2>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={usageDataOn}
+              onClick={() => toggleUsageData(!usageDataOn)}
+              className={`relative h-6 w-11 rounded-full transition ${usageDataOn ? "bg-primary" : "bg-muted"}`}
+            >
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${usageDataOn ? "left-[22px]" : "left-0.5"}`} />
+            </button>
+          </div>
+          <p className="text-sm text-muted-foreground">{i18n.t("settings.usageData.description")}</p>
+        </div>
         <div className="flex min-h-32 items-center justify-center rounded-lg border bg-card p-5 text-sm text-muted-foreground">
           {settingsLoadError ? (
             <div className="text-center">
@@ -235,6 +258,23 @@ export function Settings() {
       </div>
 
       {localApiAccessSection}
+
+      {/* Usage data consent */}
+      <div className="rounded-lg border bg-card p-5 shadow-sm">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-base font-semibold">{i18n.t("settings.usageData.title")}</h2>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={usageDataOn}
+            onClick={() => toggleUsageData(!usageDataOn)}
+            className={`relative h-6 w-11 rounded-full transition ${usageDataOn ? "bg-primary" : "bg-muted"}`}
+          >
+            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${usageDataOn ? "left-[22px]" : "left-0.5"}`} />
+          </button>
+        </div>
+        <p className="text-sm text-muted-foreground">{i18n.t("settings.usageData.description")}</p>
+      </div>
 
       {/* VIP 登录状态 / 登录引导 */}
       {isAuthenticated ? (

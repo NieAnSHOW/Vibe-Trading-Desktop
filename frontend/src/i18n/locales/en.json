@@ -317,7 +317,13 @@
     "shellTools": "Shell Tools",
     "scheduler": "Scheduler",
     "sessionRuntime": "Session Runtime",
-    "flagsReadFrom": "Flags are read from {{env1}}, {{env2}}, and {{env3}} in {{env_path}}."
+    "flagsReadFrom": "Flags are read from {{env1}}, {{env2}}, and {{env3}} in {{env_path}}.",
+    "usageData": {
+      "title": "Usage Data",
+      "description": "Help us improve. We collect only anonymous usage stats (page views, feature counts) — never your conversations, queries, trades, or holdings. Buffered history uploads once on next launch, then stops.",
+      "on": "Anonymous usage stats on",
+      "off": "Usage data collection off"
+    }
   },
   "agent": {
     "connectionLostReconnect": "Connection lost, reconnecting…",

@@ -317,7 +317,13 @@
     "shellTools": "Shell 工具",
     "scheduler": "调度器 (Scheduler)",
     "sessionRuntime": "会话运行时",
-    "flagsReadFrom": "功能开关从 {{env_path}} 中的 {{env1}}、{{env2}} 和 {{env3}} 读取。"
+    "flagsReadFrom": "功能开关从 {{env_path}} 中的 {{env1}}、{{env2}} 和 {{env3}} 读取。",
+    "usageData": {
+      "title": "使用数据",
+      "description": "帮助我们改进产品。仅采集匿名使用统计（页面浏览、功能使用频次），绝不采集对话、查询、交易或持仓内容。已采集的历史数据会在下次启动上传一次后停止。",
+      "on": "已开启匿名使用统计",
+      "off": "已关闭使用数据采集"
+    }
   },
   "agent": {
     "connectionLostReconnect": "连接已断开，正在重连…",
