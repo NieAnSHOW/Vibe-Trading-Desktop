@@ -43,3 +43,14 @@ def test_sidecar_metrics_requires_no_auth(client):
     counters.reset_for_test()
     resp = client.get("/telemetry/sidecar-metrics")  # 不带任何 token / API key
     assert resp.status_code == 200
+
+
+def test_sidecar_metrics_since_incremental(client):
+    """§6.1：?since= 增量窗口——第二次调用仅返回新计数。"""
+    counters.reset_for_test()
+    counters.record_skill_call("a")
+    first = client.get("/telemetry/sidecar-metrics").json()
+    # snapshot 后窗口重置
+    counters.record_skill_call("b")
+    second = client.get("/telemetry/sidecar-metrics", params={"since": first["since"]}).json()
+    assert second["skill_calls"] == {"b": 1}
