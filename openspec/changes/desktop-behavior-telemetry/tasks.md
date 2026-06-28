@@ -12,7 +12,7 @@
 ## 2. 前端采集 SDK 与本地存储
 
 - [x] 2.1 实现 IndexedDB 封装层（native，无依赖）：写入、按日期查询、删除、`purgeOld(days)`；附单测。
-- [ ] 2.2 实现（匿名）设备 ID 的稳定生成与读取（localStorage `vibe_device_id`）。
+- [x] 2.2 实现（匿名）设备 ID 的稳定生成与读取（localStorage `vibe_device_id`）。
 - [ ] 2.3 实现采集 SDK 核心 `track(type, props)`：consent off ⇒ no-op；白名单校验（type 枚举 + props 字段过滤）→ 写入当天桶。
 - [ ] 2.4 接入关键 UI 埋点：路由切换、功能使用次数、会话起止/时长、前端错误（stack_hash）。
 
@@ -32,7 +32,7 @@
 ## 5. Settings 同意开关
 
 - [ ] 5.1 Settings 页新增「使用数据」开关卡片（默认开启）+ 一句隐私说明 + i18n（zh-CN/en）。
-- [ ] 5.2 开关状态持久化（meta + localStorage 双写）并接入采集层 gating。
+- [x] 5.2 开关状态持久化（meta + localStorage 双写）并接入采集层 gating。
 
 ## 6. 服务端端点（cool-admin-midway 跨仓）
 
