@@ -572,6 +572,20 @@ async def _reject_untrusted_loopback_host(request: Request, call_next):
     return await call_next(request)
 
 
+# ponytail: best-effort global error telemetry — must never affect requests
+@app.middleware("http")
+async def _telemetry_error_middleware(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        try:
+            from src.telemetry import counters  # noqa: PLC0415
+            counters.record_error(type(exc).__name__)
+        except Exception:
+            pass
+        raise
+
+
 # ----------------------------------------------------------------------------
 # SPA deep-link fallback
 # ----------------------------------------------------------------------------

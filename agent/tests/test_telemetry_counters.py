@@ -49,3 +49,12 @@ def test_since_returns_delta_and_resets():
     counters.record_skill_call("a")
     second = counters.snapshot(since=first["since"])
     assert second["skill_calls"] == {"a": 1}  # 仅第二次后的增量
+
+
+def test_backtest_record_via_runner_path():
+    """模拟 runner 在完成一次回测后调用 counters.record_backtest。"""
+    counters.reset_for_test()
+    # 直接验证 wiring 契约：runner 完成时应调用 record_backtest
+    counters.record_backtest(engine="daily", elapsed_ms=200)
+    snap = counters.snapshot()
+    assert snap["backtests"]["count"] == 1

@@ -1070,6 +1070,12 @@ class AgentLoop:
         def _run(tc_args: tuple) -> tuple:
             tc, args = tc_args
             result, elapsed_ms = self._invoke_tool(tc.name, args)
+            # ponytail: best-effort telemetry — failure must not affect agent
+            try:
+                from src.telemetry import counters
+                counters.record_skill_call(tc.name)
+            except Exception:
+                pass
             return tc, result, elapsed_ms
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(runnable), 8)) as pool:
@@ -1114,6 +1120,13 @@ class AgentLoop:
         logger.info(f"Tool call: {tc.name}({list(args.keys())})")
 
         result, elapsed_ms = self._invoke_tool(tc.name, args)
+
+        # ponytail: best-effort telemetry — failure must not affect agent
+        try:
+            from src.telemetry import counters
+            counters.record_skill_call(tc.name)
+        except Exception:
+            pass
 
         self._finalize_tool_result(tc, result, elapsed_ms, context, messages, trace, react_trace, iteration)
 

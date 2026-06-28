@@ -13,6 +13,7 @@ import inspect
 import json
 import logging
 import sys
+import time as _time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -525,12 +526,22 @@ def main(run_dir: Path) -> None:
     if source == "auto":
         loader = _AutoLoader(data_map)
 
+    # ponytail: best-effort telemetry timing around engine dispatch
+    _bt_start = _time.time()
+
     if engine_type == "options":
         from backtest.engines.options_portfolio import run_options_backtest
         run_options_backtest(config, loader, signal_engine, run_dir, bars_per_year=bars_per_year)
     else:
         market_engine = _create_market_engine(effective_source, config, codes)
         market_engine.run_backtest(config, loader, signal_engine, run_dir, bars_per_year=bars_per_year)
+
+    # ponytail: best-effort telemetry — failure must not affect backtest
+    try:
+        from src.telemetry import counters
+        counters.record_backtest(engine=engine_type, elapsed_ms=int((_time.time() - _bt_start) * 1000))
+    except Exception:
+        pass
 
 
 def _create_market_engine(source: str, config: dict, codes: List[str]):
