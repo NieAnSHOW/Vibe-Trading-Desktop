@@ -28,6 +28,16 @@ beforeEach(() => {
 });
 
 describe("Login page", () => {
+  it("renders the trustworthy desktop login context", async () => {
+    vi.spyOn(apiUser, "getCaptcha").mockResolvedValue({ captchaId: "c1", data: "<svg/>" });
+
+    renderLogin();
+
+    expect(await screen.findByText(/Research desk access|研究工作台访问/)).toBeInTheDocument();
+    expect(screen.getByText(/Mandate-gated broker actions|券商写入受 mandate 约束/)).toBeInTheDocument();
+    expect(screen.getByText(/Local session credentials|本地会话凭证/)).toBeInTheDocument();
+  });
+
   it("renders captcha on mount", async () => {
     vi.spyOn(apiUser, "getCaptcha").mockResolvedValue({ captchaId: "c1", data: "<svg/>" });
     renderLogin();

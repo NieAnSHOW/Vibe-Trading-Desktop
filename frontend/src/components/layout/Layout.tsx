@@ -125,6 +125,7 @@ export function Layout() {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("qa-sidebar") === "collapsed"
   );
+  const [isNarrowScreen, setIsNarrowScreen] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTabId>(WEB_UI_TAB_ID);
   const [externalTabs, setExternalTabs] = useState<ExternalTab[]>([]);
 
@@ -134,6 +135,14 @@ export function Layout() {
   useEffect(() => {
     localStorage.setItem("qa-sidebar", collapsed ? "collapsed" : "expanded");
   }, [collapsed]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 900px)");
+    const syncNarrowScreen = () => setIsNarrowScreen(mediaQuery.matches);
+    syncNarrowScreen();
+    mediaQuery.addEventListener("change", syncNarrowScreen);
+    return () => mediaQuery.removeEventListener("change", syncNarrowScreen);
+  }, []);
 
   const loadSessions = () => {
     api
@@ -229,6 +238,7 @@ export function Layout() {
         icon: Globe2,
       },
     ];
+  const sidebarCollapsed = collapsed || isNarrowScreen;
 
   const webUiPanel = (
     <div
@@ -237,13 +247,14 @@ export function Layout() {
     >
       {/* Sidebar */}
       <aside
+        data-testid="web-ui-sidebar"
         className={cn(
           "border-r bg-card flex flex-col shrink-0 transition-all duration-200",
-          collapsed ? "w-12" : "w-64"
+          sidebarCollapsed ? "w-12" : "w-64"
         )}
       >
         {/* Nav */}
-        <nav className={cn("space-y-0.5", collapsed ? "p-1" : "p-2")}>
+        <nav className={cn("space-y-0.5", sidebarCollapsed ? "p-1" : "p-2")}>
           {NAV.map(({ to, icon: Icon, label }) => {
             const text = label;
             return (
@@ -252,15 +263,15 @@ export function Layout() {
                 to={to}
                 className={cn(
                   "flex items-center rounded-md text-sm transition-colors",
-                  collapsed ? "justify-center p-2" : "gap-3 px-3 py-2",
+                  sidebarCollapsed ? "justify-center p-2" : "gap-3 px-3 py-2",
                   (to === "/" ? pathname === "/" : pathname.startsWith(to))
                     ? "bg-primary/10 text-primary font-medium"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
-                title={collapsed ? text : undefined}
+                title={sidebarCollapsed ? text : undefined}
               >
                 <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                {!collapsed && text}
+                {!sidebarCollapsed && text}
               </Link>
             );
           })}
@@ -270,17 +281,17 @@ export function Layout() {
             rel="noopener noreferrer"
             className={cn(
               "flex items-center rounded-md text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground",
-              collapsed ? "justify-center p-2" : "gap-3 px-3 py-2"
+              sidebarCollapsed ? "justify-center p-2" : "gap-3 px-3 py-2"
             )}
-            title={collapsed ? t("layout.docs") : undefined}
+            title={sidebarCollapsed ? t("layout.docs") : undefined}
           >
             <BookOpen className="h-4 w-4 shrink-0" aria-hidden="true" />
-            {!collapsed && t("layout.docs")}
+            {!sidebarCollapsed && t("layout.docs")}
           </a>
         </nav>
 
         {/* Sessions — hidden when collapsed */}
-        {!collapsed && (
+        {!sidebarCollapsed && (
           <div className="flex-1 overflow-auto border-t mt-2 flex flex-col">
             <div className="flex items-center justify-between px-4 py-2">
               <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -410,16 +421,16 @@ export function Layout() {
         )}
 
         {/* Spacer when collapsed */}
-        {collapsed && <div className="flex-1" />}
+        {sidebarCollapsed && <div className="flex-1" />}
 
         {/* Footer */}
         <div
           className={cn(
             "border-t",
-            collapsed ? "p-1 flex flex-col items-center gap-1" : "p-3 space-y-2"
+            sidebarCollapsed ? "p-1 flex flex-col items-center gap-1" : "p-3 space-y-2"
           )}
         >
-          {collapsed ? (
+          {sidebarCollapsed ? (
             <>
               <button
                 onClick={toggle}
@@ -432,13 +443,15 @@ export function Layout() {
                   <Moon className="h-3.5 w-3.5" />
                 )}
               </button>
-              <button
-                onClick={() => setCollapsed(false)}
-                className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
-                title={t("layout.expand")}
-              >
-                <ChevronsRight className="h-3.5 w-3.5" />
-              </button>
+              {!isNarrowScreen && (
+                <button
+                  onClick={() => setCollapsed(false)}
+                  className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+                  title={t("layout.expand")}
+                >
+                  <ChevronsRight className="h-3.5 w-3.5" />
+                </button>
+              )}
             </>
           ) : (
             <>

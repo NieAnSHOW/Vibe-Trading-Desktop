@@ -49,6 +49,25 @@ describe("Layout desktop tabs", () => {
     expect(container.querySelector('[data-testid="web-ui-outlet"]')).toHaveClass("min-h-0", "min-w-0", "overflow-auto");
   });
 
+  it("uses the compact sidebar width on narrow screens", () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("900px"),
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }));
+
+    const { container } = renderLayout();
+
+    expect(container.querySelector('[data-testid="web-ui-sidebar"]')).toHaveClass("w-12");
+    window.matchMedia = originalMatchMedia;
+  });
+
   it("shows shortcuts without the Web UI sidebar", async () => {
     const user = userEvent.setup();
     const { container } = renderLayout();
