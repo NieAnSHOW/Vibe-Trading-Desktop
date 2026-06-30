@@ -2775,7 +2775,7 @@ def _live_api_base() -> str:
     """Return the base URL of the running API server for runner-control calls.
 
     Mirrors :func:`cli.main._commit_mandate`: the base is read from
-    ``VIBE_TRADING_API_URL`` (falling back to ``http://127.0.0.1:8000``). The
+    ``VIBE_TRADING_API_URL`` (falling back to ``http://127.0.0.1:8899``). The
     persistent runner (SPEC §7.5) is controlled through the R6 surface endpoints
     (``POST /live/runner/start|stop`` / ``GET /live/status``), never from the
     agent loop, so the CLI only ever relays intent.
@@ -2783,7 +2783,7 @@ def _live_api_base() -> str:
     Returns:
         The API base URL with any trailing slash removed.
     """
-    return os.environ.get("VIBE_TRADING_API_URL", "http://127.0.0.1:8000").rstrip("/")
+    return os.environ.get("VIBE_TRADING_API_URL", "http://127.0.0.1:8899").rstrip("/")
 
 
 def _api_auth_headers() -> Dict[str, str]:
@@ -2879,7 +2879,7 @@ def _print_channels_status(payload: Dict[str, Any]) -> None:
     console.print(table)
     if payload.get("status") == "error":
         console.print(f"[yellow]API unavailable:[/yellow] {payload.get('error')}")
-        console.print("[dim]Start the backend with `vibe-trading serve --port 8000`, or inspect local config with this status output.[/dim]")
+        console.print("[dim]Start the backend with `vibe-trading serve --port 8899`, or inspect local config with this status output.[/dim]")
 
 
 def cmd_channels_status(*, json_mode: bool = False, local: bool = False) -> int:
@@ -2904,7 +2904,7 @@ def cmd_channels_start(*, json_mode: bool = False) -> int:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     elif payload.get("status") == "error":
         console.print(f"[red]Failed to start IM channels:[/red] {payload.get('error')}")
-        console.print("[dim]Run `vibe-trading serve --port 8000` first, or set VIBE_TRADING_API_URL.[/dim]")
+        console.print("[dim]Run `vibe-trading serve --port 8899` first, or set VIBE_TRADING_API_URL.[/dim]")
         return EXIT_RUN_FAILED
     else:
         console.print("[green]IM channels started.[/green]")
@@ -2919,7 +2919,7 @@ def cmd_channels_stop(*, json_mode: bool = False) -> int:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     elif payload.get("status") == "error":
         console.print(f"[red]Failed to stop IM channels:[/red] {payload.get('error')}")
-        console.print("[dim]Run `vibe-trading serve --port 8000` first, or set VIBE_TRADING_API_URL.[/dim]")
+        console.print("[dim]Run `vibe-trading serve --port 8899` first, or set VIBE_TRADING_API_URL.[/dim]")
         return EXIT_RUN_FAILED
     else:
         console.print("[green]IM channels stopped.[/green]")
@@ -4244,7 +4244,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     serve_parser = subparsers.add_parser("serve", help="Start the API server")
     serve_parser.add_argument("--host", default="0.0.0.0", help="Bind address")
-    serve_parser.add_argument("--port", type=int, default=8000, help="Listen port")
+    serve_parser.add_argument("--port", type=int, default=8899, help="Listen port")
     serve_parser.add_argument("--dev", action="store_true", help="Start the Vite dev server")
 
     provider_parser = subparsers.add_parser("provider", help="Manage OAuth providers")

@@ -1,0 +1,93 @@
+{
+  "channels": {
+    "send_progress": true,
+    "send_tool_hints": false,
+    "send_max_retries": 2,
+
+    "telegram": {
+      "enabled": false,
+      "token": "",
+      "mode": "polling",
+      "allow_from": [],
+      "group_policy": "mention",
+      "streaming": true
+    },
+
+    "feishu": {
+      "enabled": false,
+      "app_id": "",
+      "app_secret": "",
+      "encrypt_key": "",
+      "verification_token": "",
+      "domain": "feishu",
+      "group_policy": "mention",
+      "topic_isolation": true
+    },
+
+    "dingtalk": {
+      "enabled": false,
+      "client_id": "",
+      "client_secret": "",
+      "allow_from": []
+    },
+
+    "wecom": {
+      "enabled": false,
+      "bot_id": "",
+      "secret": "",
+      "allow_from": []
+    },
+
+    "weixin": {
+      "enabled": false,
+      "allow_from": [],
+      "token": ""
+    },
+
+    "slack": {
+      "enabled": false,
+      "mode": "socket",
+      "bot_token": "",
+      "app_token": "",
+      "group_policy": "mention",
+      "allow_from": []
+    },
+
+    "discord": {
+      "enabled": false,
+      "token": "",
+      "allow_from": [],
+      "allow_channels": [],
+      "group_policy": "mention",
+      "streaming": true
+    },
+
+    "websocket": {
+      "enabled": false,
+      "host": "127.0.0.1",
+      "port": 8765,
+      "path": "/",
+      "websocket_requires_token": true,
+      "token": "",
+      "allow_from": ["*"],
+      "streaming": true
+    },
+
+    "email": {
+      "enabled": false,
+      "consent_granted": false,
+      "imap_host": "",
+      "imap_port": 993,
+      "imap_username": "",
+      "imap_password": "",
+      "imap_mailbox": "INBOX",
+      "smtp_host": "",
+      "smtp_port": 587,
+      "smtp_username": "",
+      "smtp_password": "",
+      "from_address": "",
+      "poll_interval_seconds": 30,
+      "allow_from": []
+    }
+  }
+}

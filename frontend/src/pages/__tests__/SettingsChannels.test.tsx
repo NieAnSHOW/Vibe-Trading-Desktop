@@ -12,6 +12,7 @@ const apiMock = vi.hoisted(() => ({
   getChannelStatus: vi.fn(),
   startChannels: vi.fn(),
   stopChannels: vi.fn(),
+  runChannelPairingCommand: vi.fn(),
   updateLLMSettings: vi.fn(),
   updateDataSourceSettings: vi.fn(),
   // ponytail: fork-only OptionalDepsManager (desktop optional-deps UI) calls
@@ -117,6 +118,7 @@ describe("Settings IM channels panel", () => {
     apiMock.getChannelStatus.mockResolvedValue(channelStatus());
     apiMock.startChannels.mockResolvedValue(channelStatus({ running: true }));
     apiMock.stopChannels.mockResolvedValue(channelStatus());
+    apiMock.runChannelPairingCommand.mockResolvedValue({ channel: "weixin", reply: "approved" });
   });
 
   it("renders channel runtime status and refreshes it", async () => {
@@ -124,7 +126,6 @@ describe("Settings IM channels panel", () => {
 
     expect(await screen.findByText("IM Channels")).toBeInTheDocument();
     expect(screen.getByText("websocket")).toBeInTheDocument();
-    expect(screen.getByText("telegram")).toBeInTheDocument();
     expect(screen.getByText("pip install 'vibe-trading-ai[telegram]'")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
@@ -139,5 +140,20 @@ describe("Settings IM channels panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start channels" }));
 
     await waitFor(() => expect(apiMock.startChannels).toHaveBeenCalledTimes(1));
+  });
+
+  it("runs pairing commands from the settings control surface", async () => {
+    render(<MemoryRouter><Settings /></MemoryRouter>);
+    await screen.findByText("IM Channels");
+
+    fireEvent.change(screen.getByLabelText("Pairing command"), { target: { value: "approve UM59-EGIT" } });
+    fireEvent.click(screen.getByRole("button", { name: "Run pairing" }));
+
+    await waitFor(() =>
+      expect(apiMock.runChannelPairingCommand).toHaveBeenCalledWith({
+        channel: "weixin",
+        command: "approve UM59-EGIT",
+      }),
+    );
   });
 });

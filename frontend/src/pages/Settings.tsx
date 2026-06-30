@@ -53,6 +53,9 @@ export function Settings() {
   const [dataSaving, setDataSaving] = useState(false);
   const [channelRefreshing, setChannelRefreshing] = useState(false);
   const [channelAction, setChannelAction] = useState<"start" | "stop" | null>(null);
+  const [pairingChannel, setPairingChannel] = useState("weixin");
+  const [pairingCommand, setPairingCommand] = useState("");
+  const [pairingBusy, setPairingBusy] = useState(false);
   const [settingsLoadError, setSettingsLoadError] = useState<string | null>(null);
   const [usageDataOn, setUsageDataOn] = useState(getConsent());
   const [flushing, setFlushing] = useState(false);
@@ -135,6 +138,25 @@ export function Settings() {
       toast.error(`${action === "start" ? t("settings.channels.startFailed") : t("settings.channels.stopFailed")}: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setChannelAction(null);
+    }
+  };
+
+  const submitPairingCommand = async (event: FormEvent) => {
+    event.preventDefault();
+    const command = pairingCommand.trim();
+    if (!command) return;
+    setPairingBusy(true);
+    try {
+      const updated = await api.runChannelPairingCommand({
+        channel: pairingChannel.trim() || "weixin",
+        command,
+      });
+      toast.success(updated.reply);
+      setPairingCommand("");
+    } catch (error) {
+      toast.error(`Failed to run pairing command: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      setPairingBusy(false);
     }
   };
 
@@ -436,6 +458,38 @@ export function Settings() {
             </tbody>
           </table>
         </div>
+
+        <form onSubmit={submitPairingCommand} className="mt-4 grid gap-3 md:grid-cols-[180px_minmax(0,1fr)_auto]">
+          <label className="grid gap-2">
+            <span className={labelClass}>{"Channel"}</span>
+            <select
+              value={pairingChannel}
+              onChange={(event) => setPairingChannel(event.target.value)}
+              className={fieldClass}
+            >
+              {["weixin", "wecom", "telegram", "slack", "discord", "qq", "napcat", "feishu", "dingtalk"].map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-2">
+            <span className={labelClass}>{"Pairing command"}</span>
+            <input
+              value={pairingCommand}
+              onChange={(event) => setPairingCommand(event.target.value)}
+              className={fieldClass}
+              placeholder={"approve UM59-EGIT"}
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={pairingBusy || !pairingCommand.trim()}
+            className="inline-flex items-center justify-center gap-2 self-end rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {pairingBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquareMore className="h-4 w-4" />}
+            {"Run pairing"}
+          </button>
+        </form>
       </section>
 
       {/* VIP 登录状态 / 登录引导 */}

@@ -54,6 +54,40 @@ def test_channels_status_can_render_local_json(monkeypatch) -> None:
     assert _legacy.main(["channels", "status", "--local", "--json"]) == _legacy.EXIT_SUCCESS
 
 
+def test_channels_api_call_defaults_to_desktop_backend_port(monkeypatch) -> None:
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, str]:
+            return {"status": "ok"}
+
+    def fake_get(url, *, headers, timeout):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["timeout"] = timeout
+        return FakeResponse()
+
+    import httpx
+
+    monkeypatch.delenv("VIBE_TRADING_API_URL", raising=False)
+    monkeypatch.delenv("API_AUTH_KEY", raising=False)
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    assert _legacy._channels_api_call("GET", "/channels/status") == {"status": "ok"}
+    assert captured["url"] == "http://127.0.0.1:8899/channels/status"
+
+
+def test_serve_parser_defaults_to_desktop_backend_port() -> None:
+    parser = _legacy._build_parser()
+
+    serve = parser.parse_args(["serve"])
+
+    assert serve.port == 8899
+
+
 def test_channels_api_call_sends_configured_bearer_token(monkeypatch) -> None:
     captured = {}
 

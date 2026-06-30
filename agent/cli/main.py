@@ -1004,7 +1004,7 @@ def _commit_mandate(proposal: Dict[str, Any], selected_ordinal: int) -> Dict[str
     here because the user's keypress *is* the affirmative consent.
 
     The endpoint base URL is read from ``VIBE_TRADING_API_URL`` (falling back to
-    ``http://127.0.0.1:8000``); a per-request override is not accepted from the
+    ``http://127.0.0.1:8899``); a per-request override is not accepted from the
     proposal payload so the model cannot redirect the commit.
 
     Args:
@@ -1018,7 +1018,7 @@ def _commit_mandate(proposal: Dict[str, Any], selected_ordinal: int) -> Dict[str
     """
     import httpx
 
-    base = os.environ.get("VIBE_TRADING_API_URL", "http://127.0.0.1:8000").rstrip("/")
+    base = os.environ.get("VIBE_TRADING_API_URL", "http://127.0.0.1:8899").rstrip("/")
     body = {
         "proposal_id": proposal.get("proposal_id"),
         "selected_ordinal": selected_ordinal,
