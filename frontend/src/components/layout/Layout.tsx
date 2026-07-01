@@ -19,9 +19,6 @@ import {
   Settings,
   Layers,
   Loader2,
-  ExternalLink,
-  RefreshCw,
-  X,
   Globe2,
   LineChart,
   Newspaper,
@@ -38,11 +35,6 @@ import { ConnectionBanner } from "@/components/layout/ConnectionBanner";
 
 // Bump on each release; one place keeps the footer in sync with package.json.
 const APP_VERSION = "v0.1.10";
-const WEB_UI_TAB_ID = "web-ui";
-const SHORTCUTS_TAB_ID = "shortcuts";
-
-type FixedTabId = typeof WEB_UI_TAB_ID | typeof SHORTCUTS_TAB_ID;
-type ActiveTabId = FixedTabId | `external-${string}`;
 
 type ExternalShortcut = {
   id: string;
@@ -50,11 +42,6 @@ type ExternalShortcut = {
   url: string;
   descriptionKey: string;
   icon: LucideIcon;
-};
-
-type ExternalTab = ExternalShortcut & {
-  tabId: `external-${string}`;
-  reloadKey: number;
 };
 
 const EXTERNAL_SHORTCUTS: ExternalShortcut[] = [
@@ -106,16 +93,24 @@ export function Layout() {
   // ── telemetry: session_start, page_view, session_end ──
   const startedAtRef = useRef(Date.now());
   useEffect(() => {
-    try { track("session_start", {}); } catch {}
+    try {
+      track("session_start", {});
+    } catch {}
     const onHide = () => {
-      try { track("session_end", { duration_ms: Date.now() - startedAtRef.current }); } catch {}
+      try {
+        track("session_end", {
+          duration_ms: Date.now() - startedAtRef.current,
+        });
+      } catch {}
     };
     window.addEventListener("pagehide", onHide);
     return () => window.removeEventListener("pagehide", onHide);
   }, []);
 
   useEffect(() => {
-    try { track("page_view", { route: pathname }); } catch {}
+    try {
+      track("page_view", { route: pathname });
+    } catch {}
   }, [pathname]);
   const { dark, toggle } = useDarkMode();
   const [sessions, setSessions] = useState<SessionItem[]>([]);
@@ -125,8 +120,6 @@ export function Layout() {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("qa-sidebar") === "collapsed"
   );
-  const [activeTab, setActiveTab] = useState<ActiveTabId>(WEB_UI_TAB_ID);
-  const [externalTabs, setExternalTabs] = useState<ExternalTab[]>([]);
 
   const activeSessionId = searchParams.get("session");
   const streamingSessionId = useAgentStore((s) => s.streamingSessionId);
@@ -182,31 +175,6 @@ export function Layout() {
     setRenameTarget(null);
   };
 
-  const openShortcut = (shortcut: ExternalShortcut) => {
-    const tabId = `external-${shortcut.id}` as const;
-    setExternalTabs((prev) =>
-      prev.some((tab) => tab.tabId === tabId)
-        ? prev
-        : [...prev, { ...shortcut, tabId, reloadKey: 0 }]
-    );
-    setActiveTab(tabId);
-  };
-
-  const refreshExternalTab = (tabId: ExternalTab["tabId"]) => {
-    setExternalTabs((prev) =>
-      prev.map((tab) =>
-        tab.tabId === tabId ? { ...tab, reloadKey: tab.reloadKey + 1 } : tab
-      )
-    );
-  };
-
-  const closeExternalTab = (tabId: ExternalTab["tabId"]) => {
-    setExternalTabs((prev) => prev.filter((tab) => tab.tabId !== tabId));
-    if (activeTab === tabId) {
-      setActiveTab(SHORTCUTS_TAB_ID);
-    }
-  };
-
   const openExternalUrl = async (url: string) => {
     try {
       const { invoke } = await import("@tauri-apps/api/core");
@@ -216,25 +184,8 @@ export function Layout() {
     }
   };
 
-  const fixedTabs: Array<{ id: FixedTabId; label: string; icon: LucideIcon }> =
-    [
-      {
-        id: WEB_UI_TAB_ID,
-        label: t("layout.desktopTabs.webUi"),
-        icon: BarChart3,
-      },
-      {
-        id: SHORTCUTS_TAB_ID,
-        label: t("layout.desktopTabs.shortcuts"),
-        icon: Globe2,
-      },
-    ];
-
-  const webUiPanel = (
-    <div
-      data-testid="web-ui-shell"
-      className="flex h-full w-full min-h-0 min-w-0 bg-background"
-    >
+  return (
+    <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar */}
       <aside
         className={cn(
@@ -244,6 +195,13 @@ export function Layout() {
       >
         {/* Nav */}
         <nav className={cn("space-y-0.5", collapsed ? "p-1" : "p-2")}>
+          <UserMenu
+            collapsed={collapsed}
+            className={cn(
+              "flex w-full justify-between  items-center rounded-md text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground",
+              collapsed ? "justify-center p-2" : "gap-3 px-2 py-2"
+            )}
+          />
           {NAV.map(({ to, icon: Icon, label }) => {
             const text = label;
             return (
@@ -277,6 +235,35 @@ export function Layout() {
             <BookOpen className="h-4 w-4 shrink-0" aria-hidden="true" />
             {!collapsed && t("layout.docs")}
           </a>
+
+          {/* Divider before shortcuts */}
+          {!collapsed && (
+            <div className="pt-3 mt-1 border-t">
+              <span className="flex items-center gap-1.5 px-3 pb-1 text-xs font-medium text-muted-foreground">
+                <Globe2 className="h-3.5 w-3.5" />
+                {t("layout.externalShortcuts.title")}
+              </span>
+            </div>
+          )}
+          {EXTERNAL_SHORTCUTS.map((shortcut) => {
+            const Icon = shortcut.icon;
+            const label = t(shortcut.labelKey);
+            return (
+              <button
+                key={shortcut.id}
+                type="button"
+                onClick={() => openExternalUrl(shortcut.url)}
+                className={cn(
+                  "flex items-center rounded-md text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground w-full text-left",
+                  collapsed ? "justify-center p-2" : "gap-3 px-3 py-2"
+                )}
+                title={collapsed ? label : t(shortcut.descriptionKey)}
+              >
+                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {!collapsed && label}
+              </button>
+            );
+          })}
         </nav>
 
         {/* Sessions — hidden when collapsed */}
@@ -285,7 +272,7 @@ export function Layout() {
             <div className="flex items-center justify-between px-4 py-2">
               <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                 <MessageSquare className="h-3.5 w-3.5" />
-                {t('layout.sessions')}
+                {t("layout.sessions")}
               </span>
               <Link
                 to="/agent"
@@ -447,7 +434,11 @@ export function Layout() {
                   onClick={toggle}
                   className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                  {dark ? (
+                    <Sun className="h-3.5 w-3.5" />
+                  ) : (
+                    <Moon className="h-3.5 w-3.5" />
+                  )}
                   {dark ? t("layout.light") : t("layout.dark")}
                 </button>
                 <div className="flex items-center gap-1">
@@ -460,18 +451,21 @@ export function Layout() {
                   </button>
                 </div>
               </div>
+
               <div className="flex items-center justify-between">
-                <button
-                  onClick={() => {
-                    i18nHook.changeLanguage(
-                      i18nHook.language === "zh-CN" ? "en" : "zh-CN"
-                    );
-                  }}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Languages className="h-3.5 w-3.5" />
-                  {i18nHook.language === "zh-CN" ? "English" : "中文"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      i18nHook.changeLanguage(
+                        i18nHook.language === "zh-CN" ? "en" : "zh-CN"
+                      );
+                    }}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Languages className="h-3.5 w-3.5" />
+                    {i18nHook.language === "zh-CN" ? "English" : "中文"}
+                  </button>
+                </div>
                 <p className="text-xs text-muted-foreground/60">
                   {APP_VERSION}
                 </p>
@@ -494,185 +488,6 @@ export function Layout() {
           <Outlet />
         </main>
       </div>
-    </div>
-  );
-
-  return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <header className="flex h-11 shrink-0 items-end gap-1 border-b bg-card px-2 pt-1">
-        <div
-          role="tablist"
-          aria-label="Desktop tabs"
-          className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto"
-        >
-          {fixedTabs.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === id}
-              onClick={() => setActiveTab(id)}
-              className={cn(
-                "flex h-9 shrink-0 items-center gap-2 rounded-t-md border px-3 text-sm transition-colors",
-                activeTab === id
-                  ? "border-b-background bg-background text-foreground font-medium"
-                  : "border-transparent bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <Icon className="h-4 w-4" aria-hidden="true" />
-              {label}
-            </button>
-          ))}
-          {externalTabs.map((tab) => {
-            const Icon = tab.icon;
-            const label = t(tab.labelKey);
-            return (
-              <div
-                key={tab.tabId}
-                className={cn(
-                  "group flex h-9 max-w-56 shrink-0 items-center rounded-t-md border text-sm transition-colors",
-                  activeTab === tab.tabId
-                    ? "border-b-background bg-background text-foreground font-medium"
-                    : "border-transparent bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === tab.tabId}
-                  onClick={() => setActiveTab(tab.tabId)}
-                  className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
-                >
-                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{label}</span>
-                </button>
-                <button
-                  type="button"
-                  aria-label={t("layout.externalShortcuts.close", { label })}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    closeExternalTab(tab.tabId);
-                  }}
-                  className="mr-2 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <X className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-        <div className="flex shrink-0 items-center pl-2">
-          <UserMenu />
-        </div>
-      </header>
-
-      <section
-        data-testid="web-ui-tab-panel"
-        className={cn(
-          activeTab === WEB_UI_TAB_ID ? "flex" : "hidden",
-          "h-full w-full min-h-0 min-w-0 flex-1"
-        )}
-      >
-        {webUiPanel}
-      </section>
-
-      <section
-        data-testid="shortcuts-tab-panel"
-        className={cn(
-          activeTab === SHORTCUTS_TAB_ID ? "flex" : "hidden",
-          "h-full w-full min-h-0 min-w-0 flex-1 overflow-auto bg-background"
-        )}
-      >
-        <div className="mx-auto flex max-w-6xl flex-col gap-6 p-6">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">
-              {t("layout.externalShortcuts.title")}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t("layout.externalShortcuts.description")}
-            </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {EXTERNAL_SHORTCUTS.map((shortcut) => {
-              const Icon = shortcut.icon;
-              const label = t(shortcut.labelKey);
-              const description = t(shortcut.descriptionKey);
-              return (
-                <button
-                  key={shortcut.id}
-                  type="button"
-                  onClick={() => openShortcut(shortcut)}
-                  className="flex min-h-36 flex-col items-start gap-3 rounded-md border bg-card p-4 text-left transition-colors hover:border-primary/50 hover:bg-muted/40"
-                  aria-label={t("layout.externalShortcuts.open", { label })}
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
-                    <Icon className="h-5 w-5" aria-hidden="true" />
-                  </span>
-                  <span>
-                    <span className="block text-sm font-medium text-foreground">
-                      {label}
-                    </span>
-                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                      {description}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {externalTabs.map((tab) => {
-        const isActive = activeTab === tab.tabId;
-        const label = t(tab.labelKey);
-        return (
-          <section
-            key={tab.tabId}
-            data-testid={`external-tab-panel-${tab.id}`}
-            className={cn(
-              isActive ? "flex" : "hidden",
-              "h-full w-full min-h-0 min-w-0 flex-1 bg-background"
-            )}
-          >
-            <div className="flex h-full w-full min-h-0 min-w-0 flex-col">
-              <div className="flex h-11 shrink-0 items-center gap-2 border-b bg-card px-3">
-                <button
-                  type="button"
-                  onClick={() => refreshExternalTab(tab.tabId)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  title={t("layout.externalShortcuts.refresh", { label })}
-                  aria-label={t("layout.externalShortcuts.refresh", { label })}
-                >
-                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                </button>
-                <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border bg-background px-3 py-1.5 text-xs text-muted-foreground">
-                  <Globe2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{tab.url}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => openExternalUrl(tab.url)}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                  {t("layout.externalShortcuts.openExternally")}
-                </button>
-              </div>
-              <div className="border-b bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                {t("layout.externalShortcuts.embeddedHint")}
-              </div>
-              <iframe
-                key={`${tab.tabId}-${tab.reloadKey}`}
-                title={label}
-                src={tab.url}
-                className="min-h-0 flex-1 border-0 bg-background"
-                referrerPolicy="strict-origin-when-cross-origin"
-              />
-            </div>
-          </section>
-        );
-      })}
     </div>
   );
 }

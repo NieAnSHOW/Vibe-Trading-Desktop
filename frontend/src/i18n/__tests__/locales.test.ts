@@ -18,15 +18,7 @@ describe("i18n — shadow report PDF export", () => {
 
 describe("i18n — desktop external shortcuts", () => {
   const requiredPaths = [
-    "layout.desktopTabs.webUi",
-    "layout.desktopTabs.shortcuts",
     "layout.externalShortcuts.title",
-    "layout.externalShortcuts.description",
-    "layout.externalShortcuts.open",
-    "layout.externalShortcuts.close",
-    "layout.externalShortcuts.refresh",
-    "layout.externalShortcuts.openExternally",
-    "layout.externalShortcuts.embeddedHint",
     "layout.externalShortcuts.sites.tonghuashun.label",
     "layout.externalShortcuts.sites.tonghuashun.description",
     "layout.externalShortcuts.sites.tencentFinance.label",

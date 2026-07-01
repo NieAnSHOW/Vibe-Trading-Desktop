@@ -31,77 +31,39 @@ function renderLayout() {
   );
 }
 
-describe("Layout desktop tabs", () => {
-  it("starts on the Web UI tab with the existing sidebar and route outlet", () => {
+describe("Layout sidebar", () => {
+  it("renders the sidebar with nav links and route outlet", () => {
     renderLayout();
 
-    expect(screen.getByRole("tab", { name: /交易智能体/i })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("link", { name: /首页/i })).toBeInTheDocument();
     expect(screen.getByText("Dashboard route content")).toBeInTheDocument();
   });
 
-  it("keeps the Web UI panel constrained to the available tab body size", () => {
+  it("keeps the main area constrained", () => {
     const { container } = renderLayout();
 
-    expect(container.querySelector('[data-testid="web-ui-tab-panel"]')).toHaveClass("flex", "h-full", "w-full", "min-h-0", "min-w-0");
-    expect(container.querySelector('[data-testid="web-ui-shell"]')).toHaveClass("flex", "h-full", "w-full", "min-h-0", "min-w-0");
     expect(container.querySelector('[data-testid="web-ui-main"]')).toHaveClass("min-h-0", "min-w-0", "overflow-hidden");
     expect(container.querySelector('[data-testid="web-ui-outlet"]')).toHaveClass("min-h-0", "min-w-0", "overflow-auto");
   });
 
-  it("shows shortcuts without the Web UI sidebar", async () => {
-    const user = userEvent.setup();
-    const { container } = renderLayout();
+  it("renders external shortcut buttons in the sidebar", () => {
+    renderLayout();
 
-    await user.click(screen.getByRole("tab", { name: /快捷入口/i }));
-
-    expect(screen.getByRole("tab", { name: /快捷入口/i })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText(/打开常用的中国大陆金融资讯网站/i)).toBeInTheDocument();
-    expect(container.querySelector('[data-testid="web-ui-tab-panel"]')).toHaveClass("hidden");
-    expect(container.querySelector('[data-testid="shortcuts-tab-panel"]')).toHaveClass("flex");
+    expect(screen.getByRole("button", { name: /同花顺/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /腾讯财经/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /东方财富/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /新浪财经/i })).toBeInTheDocument();
   });
 
-  it("opens an external iframe tab from a shortcut and keeps it outside the Web UI sidebar", async () => {
-    const user = userEvent.setup();
-    const { container } = renderLayout();
-
-    await user.click(screen.getByRole("tab", { name: /快捷入口/i }));
-    await user.click(screen.getByRole("button", { name: /打开 同花顺/i }));
-
-    expect(screen.getByRole("tab", { name: /同花顺/i })).toHaveAttribute("aria-selected", "true");
-    expect(container.querySelector('[data-testid="web-ui-tab-panel"]')).toHaveClass("hidden");
-    expect(container.querySelector('[data-testid="external-tab-panel-tonghuashun"]')).toHaveClass("flex");
-
-    const iframe = screen.getByTitle("同花顺");
-    expect(iframe).toHaveAttribute("src", "https://www.10jqka.com.cn/");
-    expect(iframe).not.toHaveAttribute("sandbox");
-    expect(screen.getByRole("button", { name: /外部打开/i })).toBeInTheDocument();
-  });
-
-  it("opens the current external tab URL through the desktop shell", async () => {
+  it("opens external shortcut URL through the desktop shell", async () => {
     const user = userEvent.setup();
     renderLayout();
 
-    await user.click(screen.getByRole("tab", { name: /快捷入口/i }));
-    await user.click(screen.getByRole("button", { name: /打开 同花顺/i }));
-    await user.click(screen.getByRole("button", { name: /外部打开/i }));
+    await user.click(screen.getByRole("button", { name: /同花顺/i }));
 
     const { invoke } = await import("@tauri-apps/api/core");
     expect(invoke).toHaveBeenCalledWith("open_external_url", {
       url: "https://www.10jqka.com.cn/",
     });
-  });
-
-  it("closing an external tab returns to Shortcuts", async () => {
-    const user = userEvent.setup();
-    renderLayout();
-
-    await user.click(screen.getByRole("tab", { name: /快捷入口/i }));
-    await user.click(screen.getByRole("button", { name: /打开 同花顺/i }));
-
-    await user.click(screen.getByRole("button", { name: /关闭 同花顺/i }));
-
-    expect(screen.queryByRole("tab", { name: /同花顺/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /快捷入口/i })).toHaveAttribute("aria-selected", "true");
   });
 });
