@@ -1,0 +1,7 @@
+{
+  "files": ["frontend/index.html"],
+  "insertBefore": "</head>",
+  "commentSyntax": "<!--",
+  "devServer": { "command": "cd frontend && npm run dev", "url": "http://localhost:5899" },
+  "cspChecked": false
+}
