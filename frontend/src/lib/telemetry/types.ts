@@ -12,6 +12,7 @@ export const EVENT_TYPES = [
 export type EventType = (typeof EVENT_TYPES)[number];
 
 export const FEATURE_NAMES = [
+  // 核心功能
   "chat_send",
   "backtest_run",
   "report_view",
@@ -20,13 +21,26 @@ export const FEATURE_NAMES = [
   "correlation_view",
   "alpha_zoo_open",
   "runtime_open",
+  // 侧边栏导航
+  "nav_sidebar",
+  // 外部快捷方式
+  "external_shortcut",
+  // 侧边栏控件
+  "sidebar_toggle",
+  "theme_toggle",
+  "lang_toggle",
+  // 会话管理
+  "session_new",
+  "session_delete",
+  // 首页 CTA
+  "home_start_research",
 ] as const;
 export type FeatureName = (typeof FEATURE_NAMES)[number];
 
 /** 每个 EventType 允许出现在 props 的字段白名单；未列出 = 一律剔除。 */
 export const ALLOWED_PROPS: Record<EventType, readonly string[]> = {
   page_view: ["route"],
-  feature_use: ["name"],
+  feature_use: ["name", "nav_target", "shortcut_id"],
   session_start: [],
   session_end: ["duration_ms"],
   error: ["type", "stack_hash"],

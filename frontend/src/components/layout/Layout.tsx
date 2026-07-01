@@ -105,6 +105,9 @@ function NavLink({
           "text-muted-foreground hover:bg-muted hover:text-foreground"
         )}
         title={collapsed ? label : undefined}
+        onClick={() => {
+          try { track("feature_use", { nav_target: to }, { name: "nav_sidebar" }); } catch {}
+        }}
       >
         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
         {!collapsed && label}
@@ -123,6 +126,9 @@ function NavLink({
           : "text-muted-foreground hover:bg-muted hover:text-foreground"
       )}
       title={collapsed ? label : undefined}
+      onClick={() => {
+        try { track("feature_use", { nav_target: to }, { name: "nav_sidebar" }); } catch {}
+      }}
     >
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       {!collapsed && label}
@@ -290,7 +296,10 @@ export function Layout() {
                   <button
                     key={s.id}
                     type="button"
-                    onClick={() => openExternalUrl(s.url)}
+                    onClick={() => {
+                      try { track("feature_use", { shortcut_id: s.id }, { name: "external_shortcut" }); } catch {}
+                      openExternalUrl(s.url);
+                    }}
                     className="flex items-center gap-3 rounded-md pl-8 pr-3 py-1.5 text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground w-full text-left"
                     title={t(s.descriptionKey)}
                   >
@@ -305,7 +314,10 @@ export function Layout() {
               <button
                 key={s.id}
                 type="button"
-                onClick={() => openExternalUrl(s.url)}
+                onClick={() => {
+                  try { track("feature_use", { shortcut_id: s.id }, { name: "external_shortcut" }); } catch {}
+                  openExternalUrl(s.url);
+                }}
                 className="flex items-center justify-center p-2 w-full rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                 title={t(s.labelKey)}
               >
@@ -325,6 +337,9 @@ export function Layout() {
                 to="/agent"
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded"
                 title={t("layout.newChat")}
+                onClick={() => {
+                  try { track("feature_use", {}, { name: "session_new" }); } catch {}
+                }}
               >
                 <Plus className="h-3.5 w-3.5" />
               </Link>
@@ -390,7 +405,10 @@ export function Layout() {
                     {!isRenaming && isDeleting ? (
                       <div className="absolute right-0.5 flex items-center gap-0.5">
                         <button
-                          onClick={() => deleteSession(s.session_id)}
+                          onClick={() => {
+                            try { track("feature_use", {}, { name: "session_delete" }); } catch {}
+                            deleteSession(s.session_id);
+                          }}
                           className="p-1 text-danger hover:bg-danger/10 rounded text-[10px] font-medium"
                         >
                           {t("layout.confirm")}
@@ -449,14 +467,20 @@ export function Layout() {
           {collapsed ? (
             <>
               <button
-                onClick={toggle}
+                onClick={() => {
+                  try { track("feature_use", {}, { name: "theme_toggle" }); } catch {}
+                  toggle();
+                }}
                 className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
                 title={dark ? t("layout.light") : t("layout.dark")}
               >
                 {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
               </button>
               <button
-                onClick={() => setCollapsed(false)}
+                onClick={() => {
+                  try { track("feature_use", {}, { name: "sidebar_toggle" }); } catch {}
+                  setCollapsed(false);
+                }}
                 className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
                 title={t("layout.expand")}
               >
@@ -466,7 +490,10 @@ export function Layout() {
           ) : (
             <>
               <button
-                onClick={toggle}
+                onClick={() => {
+                  try { track("feature_use", {}, { name: "theme_toggle" }); } catch {}
+                  toggle();
+                }}
                 className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors rounded"
                 title={dark ? t("layout.light") : t("layout.dark")}
               >
@@ -475,6 +502,7 @@ export function Layout() {
 
               <button
                 onClick={() => {
+                  try { track("feature_use", {}, { name: "lang_toggle" }); } catch {}
                   i18nHook.changeLanguage(
                     i18nHook.language === "zh-CN" ? "en" : "zh-CN"
                   );
@@ -490,7 +518,10 @@ export function Layout() {
               </span>
 
               <button
-                onClick={() => setCollapsed(true)}
+                onClick={() => {
+                  try { track("feature_use", {}, { name: "sidebar_toggle" }); } catch {}
+                  setCollapsed(true);
+                }}
                 className="p-0.5 text-muted-foreground hover:text-foreground rounded transition-colors"
                 title={t("layout.collapse")}
               >

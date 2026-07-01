@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Bot, BarChart3, Zap, UserCircle2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { track } from "@/lib/telemetry";
 
 export function Home() {
   const { t } = useTranslation();
@@ -19,6 +20,9 @@ export function Home() {
         <p className="text-lg text-muted-foreground">{t("home.subtitle")}</p>
         <Link
           to="/agent"
+          onClick={() => {
+            try { track("feature_use", {}, { name: "home_start_research" }); } catch {}
+          }}
           className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-primary text-primary-foreground font-medium hover:opacity-90 transition"
         >
           {t("home.startResearch")} <ArrowRight className="h-4 w-4" />

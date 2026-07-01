@@ -5,7 +5,13 @@ import { ChevronDown, LogOut, User } from "lucide-react";
 import { useAuthStore } from "@/stores/auth";
 import { useTranslation } from "react-i18next";
 
-export function UserMenu({ className, collapsed }: { className?: string; collapsed?: boolean }) {
+export function UserMenu({
+  className,
+  collapsed,
+}: {
+  className?: string;
+  collapsed?: boolean;
+}) {
   const { t } = useTranslation();
   const status = useAuthStore((s) => s.status);
   const userInfo = useAuthStore((s) => s.userInfo);
@@ -24,9 +30,13 @@ export function UserMenu({ className, collapsed }: { className?: string; collaps
 
   if (status !== "authenticated") {
     return (
-      <Link to="/login" className={btnCls} title={collapsed ? t("userMenu.login") : undefined}>
+      <Link
+        to="/login"
+        className={btnCls}
+        title={collapsed ? t("userMenu.loginMsg") : undefined}
+      >
         <User className="h-3.5 w-3.5" />
-        {!collapsed && t("userMenu.login")}
+        {!collapsed && t("userMenu.loginMsg")}
       </Link>
     );
   }
@@ -36,10 +46,7 @@ export function UserMenu({ className, collapsed }: { className?: string; collaps
 
   if (collapsed) {
     return (
-      <span
-        className={btnCls}
-        title={name}
-      >
+      <span className={btnCls} title={name}>
         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[10px] text-primary">
           {initial}
         </span>

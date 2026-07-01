@@ -601,6 +601,9 @@ export function Agent() {
             showCard = true; // fetch failed → show link as fallback
           }
           if (showCard || shadowId) {
+            if (showCard && runMetrics) {
+              try { track("feature_use", {}, { name: "backtest_run" }); } catch {}
+            }
             s.addMessage({
               id: "", type: "run_complete", content: "", runId,
               metrics: showCard ? runMetrics : undefined,

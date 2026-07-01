@@ -821,6 +821,7 @@
     "login": "Login",
     "profile": "Profile",
     "logout": "Log out",
-    "guest": "Unnamed"
+    "guest": "Unnamed",
+    "loginMsg":"VIP Services"
   }
 }
