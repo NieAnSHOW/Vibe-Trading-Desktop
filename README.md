@@ -89,8 +89,9 @@
 
 ```bash
 # 后端（API on :8899）
+source .venv/bin/activate
 pip install -e ".[dev]"
-vibe-trading serve
+vibe-trading serve --port 8899
 
 # 前端（dev server on :5899，代理 API 到 :8899）
 cd frontend
