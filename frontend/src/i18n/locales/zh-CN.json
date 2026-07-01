@@ -3,6 +3,10 @@
     "version": "v0.1.10"
   },
   "layout": {
+    "section": {
+      "workspace": "工作区",
+      "tools": "工具"
+    },
     "home": "首页",
     "agent": "智能体",
     "runtime": "运行时",

@@ -13,7 +13,6 @@ import {
   Plus,
   Trash2,
   Pencil,
-  MessageSquare,
   ChevronsLeft,
   ChevronsRight,
   Settings,
@@ -75,32 +74,83 @@ const EXTERNAL_SHORTCUTS: ExternalShortcut[] = [
   },
 ];
 
+// ── nav link helper ──
+function NavLink({
+  to,
+  icon: Icon,
+  label,
+  collapsed,
+  isActive,
+  external,
+}: {
+  to: string;
+  icon: LucideIcon;
+  label: string;
+  collapsed: boolean;
+  isActive: boolean;
+  external?: boolean;
+}) {
+  const base =
+    "flex items-center rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary";
+
+  if (external) {
+    return (
+      <a
+        href={to}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={cn(
+          base,
+          collapsed ? "justify-center p-2" : "gap-3 px-3 py-2",
+          "text-muted-foreground hover:bg-muted hover:text-foreground"
+        )}
+        title={collapsed ? label : undefined}
+      >
+        <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+        {!collapsed && label}
+      </a>
+    );
+  }
+
+  return (
+    <Link
+      to={to}
+      className={cn(
+        base,
+        collapsed ? "justify-center p-2" : "gap-3 px-3 py-2",
+        isActive
+          ? "bg-primary/10 text-primary font-medium"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+      )}
+      title={collapsed ? label : undefined}
+    >
+      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+      {!collapsed && label}
+    </Link>
+  );
+}
+
+// ── section label ──
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-3 pt-4 pb-1 text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider select-none">
+      {children}
+    </div>
+  );
+}
+
 export function Layout() {
   const { t, i18n: i18nHook } = useTranslation();
-
-  const NAV = [
-    { to: "/", icon: BarChart3, label: t("layout.home") },
-    { to: "/agent", icon: Bot, label: t("layout.agent") },
-    { to: "/runtime", icon: Activity, label: t("layout.runtime") },
-    { to: "/reports", icon: FileText, label: t("layout.reports") },
-    { to: "/alpha-zoo", icon: Layers, label: t("layout.alphaZoo") },
-    { to: "/settings", icon: Settings, label: t("layout.settings") },
-    { to: "/correlation", icon: BarChart3, label: t("layout.correlation") },
-  ];
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
 
-  // ── telemetry: session_start, page_view, session_end ──
+  // ── telemetry ──
   const startedAtRef = useRef(Date.now());
   useEffect(() => {
-    try {
-      track("session_start", {});
-    } catch {}
+    try { track("session_start", {}); } catch {}
     const onHide = () => {
       try {
-        track("session_end", {
-          duration_ms: Date.now() - startedAtRef.current,
-        });
+        track("session_end", { duration_ms: Date.now() - startedAtRef.current });
       } catch {}
     };
     window.addEventListener("pagehide", onHide);
@@ -108,10 +158,9 @@ export function Layout() {
   }, []);
 
   useEffect(() => {
-    try {
-      track("page_view", { route: pathname });
-    } catch {}
+    try { track("page_view", { route: pathname }); } catch {}
   }, [pathname]);
+
   const { dark, toggle } = useDarkMode();
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
@@ -120,6 +169,7 @@ export function Layout() {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("qa-sidebar") === "collapsed"
   );
+  const [showExternal, setShowExternal] = useState(true);
 
   const activeSessionId = searchParams.get("session");
   const streamingSessionId = useAgentStore((s) => s.streamingSessionId);
@@ -136,8 +186,6 @@ export function Layout() {
       .finally(() => setSessionsLoading(false));
   };
 
-  // Load sessions on mount. Also refresh when navigating TO /agent or when
-  // the active session changes (covers new session creation from Agent).
   const isAgentPage = pathname.startsWith("/agent");
   useEffect(() => {
     loadSessions();
@@ -151,17 +199,12 @@ export function Layout() {
     try {
       await api.deleteSession(sid);
       setSessions((prev) => prev.filter((s) => s.session_id !== sid));
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
     setDeleteTarget(null);
   };
 
   const renameSession = async (sid: string) => {
-    if (!renameValue.trim()) {
-      setRenameTarget(null);
-      return;
-    }
+    if (!renameValue.trim()) { setRenameTarget(null); return; }
     try {
       await api.renameSession(sid, renameValue.trim());
       setSessions((prev) =>
@@ -169,9 +212,7 @@ export function Layout() {
           s.session_id === sid ? { ...s, title: renameValue.trim() } : s
         )
       );
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
     setRenameTarget(null);
   };
 
@@ -184,99 +225,105 @@ export function Layout() {
     }
   };
 
+  // ── route helpers ──
+  const isActive = (to: string) =>
+    to === "/" ? pathname === "/" : pathname.startsWith(to);
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar */}
       <aside
         className={cn(
           "border-r bg-card flex flex-col shrink-0 transition-all duration-200",
-          collapsed ? "w-12" : "w-64"
+          collapsed ? "w-12" : "w-60"
         )}
       >
-        {/* Nav */}
+        {/* ── top: user + primary nav ── */}
         <nav className={cn("space-y-0.5", collapsed ? "p-1" : "p-2")}>
           <UserMenu
             collapsed={collapsed}
             className={cn(
-              "flex w-full justify-between  items-center rounded-md text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground",
-              collapsed ? "justify-center p-2" : "gap-3 px-2 py-2"
+              "flex w-full justify-between items-center rounded-md text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground",
+              collapsed ? "justify-center p-2" : "gap-3 px-2 py-2 mb-0.5"
             )}
           />
-          {NAV.map(({ to, icon: Icon, label }) => {
-            const text = label;
-            return (
-              <Link
-                key={to}
-                to={to}
-                className={cn(
-                  "flex items-center rounded-md text-sm transition-colors",
-                  collapsed ? "justify-center p-2" : "gap-3 px-3 py-2",
-                  (to === "/" ? pathname === "/" : pathname.startsWith(to))
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-                title={collapsed ? text : undefined}
-              >
-                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                {!collapsed && text}
-              </Link>
-            );
-          })}
-          <a
-            href="https://agent.nieanshow.cn/column/04-ai-trading/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(
-              "flex items-center rounded-md text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground",
-              collapsed ? "justify-center p-2" : "gap-3 px-3 py-2"
-            )}
-            title={collapsed ? t("layout.docs") : undefined}
-          >
-            <BookOpen className="h-4 w-4 shrink-0" aria-hidden="true" />
-            {!collapsed && t("layout.docs")}
-          </a>
 
-          {/* Divider before shortcuts */}
+          {!collapsed && <SectionLabel>{t("layout.section.workspace")}</SectionLabel>}
+
+          <NavLink to="/" icon={BarChart3} label={t("layout.home")} collapsed={collapsed} isActive={isActive("/")} />
+          <NavLink to="/agent" icon={Bot} label={t("layout.agent")} collapsed={collapsed} isActive={isActive("/agent")} />
+          <NavLink to="/reports" icon={FileText} label={t("layout.reports")} collapsed={collapsed} isActive={isActive("/reports")} />
+          <NavLink to="/alpha-zoo" icon={Layers} label={t("layout.alphaZoo")} collapsed={collapsed} isActive={isActive("/alpha-zoo")} />
+
+          {!collapsed && <SectionLabel>{t("layout.section.tools")}</SectionLabel>}
+
+          <NavLink to="/correlation" icon={BarChart3} label={t("layout.correlation")} collapsed={collapsed} isActive={isActive("/correlation")} />
+          <NavLink to="/runtime" icon={Activity} label={t("layout.runtime")} collapsed={collapsed} isActive={isActive("/runtime")} />
+          <NavLink to="/settings" icon={Settings} label={t("layout.settings")} collapsed={collapsed} isActive={isActive("/settings")} />
+
+          {/* docs */}
+          <NavLink
+            to="https://agent.nieanshow.cn/column/04-ai-trading/"
+            icon={BookOpen}
+            label={t("layout.docs")}
+            collapsed={collapsed}
+            isActive={false}
+            external
+          />
+
+          {/* external — collapsible group */}
           {!collapsed && (
-            <div className="pt-3 mt-1 border-t">
-              <span className="flex items-center gap-1.5 px-3 pb-1 text-xs font-medium text-muted-foreground">
-                <Globe2 className="h-3.5 w-3.5" />
-                {t("layout.externalShortcuts.title")}
-              </span>
-            </div>
-          )}
-          {EXTERNAL_SHORTCUTS.map((shortcut) => {
-            const Icon = shortcut.icon;
-            const label = t(shortcut.labelKey);
-            return (
+            <>
               <button
-                key={shortcut.id}
                 type="button"
-                onClick={() => openExternalUrl(shortcut.url)}
-                className={cn(
-                  "flex items-center rounded-md text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground w-full text-left",
-                  collapsed ? "justify-center p-2" : "gap-3 px-3 py-2"
-                )}
-                title={collapsed ? label : t(shortcut.descriptionKey)}
+                onClick={() => setShowExternal((v) => !v)}
+                className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground"
               >
-                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                {!collapsed && label}
+                <Globe2 className="h-4 w-4 shrink-0" />
+                <span className="flex-1 text-left">{t("layout.externalShortcuts.title")}</span>
+                <span className={cn("text-[10px] text-muted-foreground/50 transition-transform", showExternal && "rotate-90")}>
+                  ▶
+                </span>
               </button>
-            );
-          })}
+              {showExternal &&
+                EXTERNAL_SHORTCUTS.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => openExternalUrl(s.url)}
+                    className="flex items-center gap-3 rounded-md pl-8 pr-3 py-1.5 text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground w-full text-left"
+                    title={t(s.descriptionKey)}
+                  >
+                    <s.icon className="h-4 w-4 shrink-0" />
+                    {t(s.labelKey)}
+                  </button>
+                ))}
+            </>
+          )}
+          {collapsed &&
+            EXTERNAL_SHORTCUTS.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => openExternalUrl(s.url)}
+                className="flex items-center justify-center p-2 w-full rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                title={t(s.labelKey)}
+              >
+                <s.icon className="h-4 w-4 shrink-0" />
+              </button>
+            ))}
         </nav>
 
-        {/* Sessions — hidden when collapsed */}
+        {/* ── middle: sessions ── */}
         {!collapsed && (
-          <div className="flex-1 overflow-auto border-t mt-2 flex flex-col">
-            <div className="flex items-center justify-between px-4 py-2">
-              <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <MessageSquare className="h-3.5 w-3.5" />
+          <div className="flex-1 overflow-hidden border-t mt-2 flex flex-col min-h-0">
+            <div className="flex items-center justify-between py-2 px-4">
+              <span className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider select-none">
                 {t("layout.sessions")}
               </span>
               <Link
                 to="/agent"
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded"
                 title={t("layout.newChat")}
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -287,26 +334,20 @@ export function Layout() {
               {sessionsLoading ? (
                 <div className="space-y-1.5 px-2 py-1">
                   {[1, 2, 3].map((i) => (
-                    <div
-                      key={i}
-                      className="h-7 rounded-md bg-muted/50 animate-pulse"
-                    />
+                    <div key={i} className="h-7 rounded-md bg-muted/50 animate-pulse" />
                   ))}
                 </div>
               ) : sessions.length === 0 ? (
-                <p className="px-3 py-2 text-xs text-muted-foreground/60">
+                <p className="px-3 py-4 text-center text-xs text-muted-foreground/50">
                   {t("layout.noSessions")}
                 </p>
               ) : null}
               {sessions.map((s) => {
-                const isActive = s.session_id === activeSessionId;
+                const active = s.session_id === activeSessionId;
                 const isDeleting = deleteTarget === s.session_id;
                 const isRenaming = renameTarget === s.session_id;
                 return (
-                  <div
-                    key={s.session_id}
-                    className="group relative flex items-center"
-                  >
+                  <div key={s.session_id} className="group relative flex items-center">
                     {isRenaming ? (
                       <input
                         autoFocus
@@ -323,10 +364,11 @@ export function Layout() {
                       <Link
                         to={`/agent?session=${s.session_id}`}
                         className={cn(
-                          "flex-1 min-w-0 pl-3 pr-14 py-1.5 rounded-md text-xs transition-colors truncate block border-l-2",
-                          isActive
-                            ? "border-l-primary bg-primary/10 text-primary font-medium"
-                            : "border-l-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
+                          "flex-1 min-w-0 pl-3 pr-14 py-1.5 rounded-md text-xs transition-colors truncate block",
+                          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
+                          active
+                            ? "bg-primary/10 text-primary font-medium"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
                         )}
                         title={s.title || s.session_id}
                       >
@@ -337,9 +379,7 @@ export function Layout() {
                             <span
                               className={cn(
                                 "h-1.5 w-1.5 rounded-full shrink-0",
-                                isActive
-                                  ? "bg-primary/70"
-                                  : "bg-muted-foreground/40"
+                                active ? "bg-primary/70" : "bg-muted-foreground/40"
                               )}
                             />
                           )}
@@ -399,11 +439,11 @@ export function Layout() {
         {/* Spacer when collapsed */}
         {collapsed && <div className="flex-1" />}
 
-        {/* Footer */}
+        {/* ── bottom: theme / lang / collapse ── */}
         <div
           className={cn(
             "border-t",
-            collapsed ? "p-1 flex flex-col items-center gap-1" : "p-3 space-y-2"
+            collapsed ? "p-1 flex flex-col items-center gap-1" : "px-3 py-2.5 flex items-center justify-between"
           )}
         >
           {collapsed ? (
@@ -413,11 +453,7 @@ export function Layout() {
                 className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
                 title={dark ? t("layout.light") : t("layout.dark")}
               >
-                {dark ? (
-                  <Sun className="h-3.5 w-3.5" />
-                ) : (
-                  <Moon className="h-3.5 w-3.5" />
-                )}
+                {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
               </button>
               <button
                 onClick={() => setCollapsed(false)}
@@ -429,47 +465,37 @@ export function Layout() {
             </>
           ) : (
             <>
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={toggle}
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {dark ? (
-                    <Sun className="h-3.5 w-3.5" />
-                  ) : (
-                    <Moon className="h-3.5 w-3.5" />
-                  )}
-                  {dark ? t("layout.light") : t("layout.dark")}
-                </button>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setCollapsed(true)}
-                    className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
-                    title={t("layout.collapse")}
-                  >
-                    <ChevronsLeft className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
+              <button
+                onClick={toggle}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors rounded"
+                title={dark ? t("layout.light") : t("layout.dark")}
+              >
+                {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+              </button>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      i18nHook.changeLanguage(
-                        i18nHook.language === "zh-CN" ? "en" : "zh-CN"
-                      );
-                    }}
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <Languages className="h-3.5 w-3.5" />
-                    {i18nHook.language === "zh-CN" ? "English" : "中文"}
-                  </button>
-                </div>
-                <p className="text-xs text-muted-foreground/60">
-                  {APP_VERSION}
-                </p>
-              </div>
+              <button
+                onClick={() => {
+                  i18nHook.changeLanguage(
+                    i18nHook.language === "zh-CN" ? "en" : "zh-CN"
+                  );
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors rounded"
+              >
+                <Languages className="h-3.5 w-3.5 inline -mt-px mr-0.5" />
+                {i18nHook.language === "zh-CN" ? "EN" : "中"}
+              </button>
+
+              <span className="text-[10px] text-muted-foreground/40 tabular-nums">
+                {APP_VERSION}
+              </span>
+
+              <button
+                onClick={() => setCollapsed(true)}
+                className="p-0.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+                title={t("layout.collapse")}
+              >
+                <ChevronsLeft className="h-3.5 w-3.5" />
+              </button>
             </>
           )}
         </div>

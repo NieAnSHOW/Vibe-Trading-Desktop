@@ -8,6 +8,10 @@
     "noEquityData": "No equity data"
   },
   "layout": {
+    "section": {
+      "workspace": "Workspace",
+      "tools": "Tools"
+    },
     "home": "Home",
     "agent": "Agent",
     "runtime": "Runtime",

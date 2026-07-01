@@ -3,7 +3,7 @@
     "version": "v0.1.10"
   },
   "layout": {
-    "home": "홈",
+    "section": { "workspace": "Workspace", "tools": "Tools" }, "home": "홈",
     "agent": "에이전트",
     "runtime": "런타임",
     "reports": "리포트",
@@ -699,7 +699,7 @@
     "pineScript": "Pine Script",
     "shadowReport": "섀도우 리포트"
   },
-  "home": {
+  "section": { "workspace": "Workspace", "tools": "Tools" }, "home": {
     "title": "AI 기반 퀀트 전략 리서치",
     "subtitle": "자연어로 거래 전략을 설명하세요. 에이전트가 코드를 생성하고, 백테스트를 실행하고, 최적화하는 모든 과정을 실시간으로 보여줍니다.",
     "startResearch": "리서치 시작",

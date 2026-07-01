@@ -3,7 +3,7 @@
     "version": "v0.1.10"
   },
   "layout": {
-    "home": "ホーム",
+    "section": { "workspace": "Workspace", "tools": "Tools" }, "home": "ホーム",
     "agent": "エージェント",
     "runtime": "ランタイム",
     "reports": "レポート",
@@ -699,7 +699,7 @@
     "pineScript": "Pine Script",
     "shadowReport": "シャドウレポート"
   },
-  "home": {
+  "section": { "workspace": "Workspace", "tools": "Tools" }, "home": {
     "title": "AI 駆動のクォント戦略リサーチ",
     "subtitle": "自然言語で取引戦略を記述してください。エージェントがコードを生成し、バックテストを実行し、最適化をリアルタイムで行います。",
     "startResearch": "リサーチを開始",

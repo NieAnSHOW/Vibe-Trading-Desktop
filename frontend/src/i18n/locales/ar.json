@@ -3,7 +3,7 @@
     "version": "v0.1.10"
   },
   "layout": {
-    "home": "الرئيسية",
+    "section": { "workspace": "Workspace", "tools": "Tools" }, "home": "الرئيسية",
     "agent": "الوكيل",
     "runtime": "وقت التشغيل",
     "reports": "التقارير",
@@ -699,7 +699,7 @@
     "pineScript": "Pine Script",
     "shadowReport": "تقرير الظلّ"
   },
-  "home": {
+  "section": { "workspace": "Workspace", "tools": "Tools" }, "home": {
     "title": "بحث استراتيجيات الكمّ مدعوم بالذكاء الاصطناعي",
     "subtitle": "صف استراتيجية تداول بلغة طبيعية. يُولِّد الوكيل الشفرة، ويُجري الاختبارات العكسية، ويُحسّن — كل ذلك في الوقت الفعلي.",
     "startResearch": "ابدأ البحث",
