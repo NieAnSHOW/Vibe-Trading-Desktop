@@ -196,6 +196,18 @@ def _read_input(prompt_session: Any, prompt_str: str = "> ") -> str:
     return Prompt.ask(f"[bold]{prompt_str}[/bold]")
 
 
+def _first_positional(argv: list[str]) -> str | None:
+    """Extract the first positional (non-flag) token from argv.
+
+    For serve/bootstrap fast-path dispatch in main(), so we don't need to
+    build the full parser (which pulls numpy via src.factors.cli_handlers).
+    """
+    for token in argv:
+        if not token.startswith("-"):
+            return token
+    return None
+
+
 def serve_main(argv: list[str] | None = None) -> int:
     """Delegate server startup to api_server."""
     from api_server import serve_main as api_serve_main
@@ -5160,6 +5172,23 @@ def cmd_dev(
 def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint returning a process exit code."""
     raw_argv = list(sys.argv[1:] if argv is None else argv)
+
+    # serve/bootstrap 使用自己的 argparse parser，不需要完整 _build_parser()
+    # 的所有 import（尤其是 src.factors → numpy）。快速路径：第一个位置参数
+    # 决定命令名，直接派发。
+    _cmd = _first_positional(raw_argv)
+    if _cmd == "serve":
+        return serve_main(raw_argv[1:])
+    if _cmd == "bootstrap":
+        from src.desktop_bootstrap.cli import run_bootstrap_cli
+        forwarded = []
+        try:
+            for token in raw_argv[1:]:
+                forwarded.append(token)
+        except Exception:  # noqa: BLE001
+            pass
+        return run_bootstrap_cli(forwarded)
+
     parser = _build_parser()
     try:
         args = parser.parse_args(raw_argv)
