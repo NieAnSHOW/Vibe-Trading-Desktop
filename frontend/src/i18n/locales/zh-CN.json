@@ -311,7 +311,10 @@
       "stoppedToast": "IM 通道已停止",
       "refreshFailed": "刷新 IM 通道失败",
       "startFailed": "启动 IM 通道失败",
-      "stopFailed": "停止 IM 通道失败"
+      "stopFailed": "停止 IM 通道失败",
+      "installDep": "安装依赖",
+      "depInstalled": "依赖已安装",
+      "depInstallFailed": "依赖安装失败"
     },
     "generation": "生成设置",
     "dataSourceSettings": "数据源设置",

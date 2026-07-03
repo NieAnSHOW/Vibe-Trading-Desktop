@@ -316,7 +316,10 @@
       "stoppedToast": "IM channels stopped",
       "refreshFailed": "Failed to refresh IM channels",
       "startFailed": "Failed to start IM channels",
-      "stopFailed": "Failed to stop IM channels"
+      "stopFailed": "Failed to stop IM channels",
+      "installDep": "Install Dependencies",
+      "depInstalled": "Dependencies Installed",
+      "depInstallFailed": "Install Failed"
     },
     "generation": "Generation",
     "dataSourceSettings": "Data Source Settings",

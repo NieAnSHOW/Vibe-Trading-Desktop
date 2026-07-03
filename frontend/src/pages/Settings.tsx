@@ -59,6 +59,8 @@ export function Settings() {
   const [settingsLoadError, setSettingsLoadError] = useState<string | null>(null);
   const [usageDataOn, setUsageDataOn] = useState(getConsent());
   const [flushing, setFlushing] = useState(false);
+  const [optionalDeps, setOptionalDeps] = useState<any>(null);
+  const [installingPkg, setInstallingPkg] = useState<string | null>(null);
 
   const toggleUsageData = async (on: boolean) => {
     setUsageDataOn(on);
@@ -92,13 +94,14 @@ export function Settings() {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([api.getLLMSettings(), api.getDataSourceSettings(), api.getChannelStatus()])
-      .then(([llmData, dataSourceData, channelData]) => {
+    Promise.all([api.getLLMSettings(), api.getDataSourceSettings(), api.getChannelStatus(), api.listOptionalDeps()])
+      .then(([llmData, dataSourceData, channelData, depsData]) => {
         if (!alive) return;
         setSettings(llmData);
         setForm(toForm(llmData));
         setDataSettings(dataSourceData);
         setChannelStatus(channelData);
+        setOptionalDeps(depsData);
         setSettingsLoadError(null);
       })
       .catch((error) => {
@@ -120,11 +123,48 @@ export function Settings() {
   const refreshChannelStatus = async () => {
     setChannelRefreshing(true);
     try {
-      setChannelStatus(await api.getChannelStatus());
+      const [channelData, depsData] = await Promise.all([api.getChannelStatus(), api.listOptionalDeps()]);
+      setChannelStatus(channelData);
+      setOptionalDeps(depsData);
     } catch (error) {
       toast.error(`${t("settings.channels.refreshFailed")}: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setChannelRefreshing(false);
+    }
+  };
+
+  const matchedPkg = (channelName: string, deps: any): string | undefined => {
+    if (!deps?.brokers) return undefined;
+    // ponytail: match channel name to optional-deps broker id (financial SDKs),
+    // not IM channels — wired for future overlap.
+    const entry = deps.brokers.find(
+      (b: any) =>
+        b.id?.toLowerCase() === channelName.toLowerCase() ||
+        b.package?.toLowerCase().includes(channelName.toLowerCase())
+    );
+    return entry?.package;
+  };
+
+  const installChannelDep = async (pkg: string) => {
+    setInstallingPkg(pkg);
+    try {
+      const { job_id } = await api.installOptionalDep(pkg);
+      await new Promise<void>((resolve, reject) => {
+        const es = new EventSource(api.optionalDepStatusUrl(job_id));
+        es.addEventListener("done", () => { es.close(); resolve(); });
+        es.addEventListener("failed", (ev) => {
+          es.close();
+          let message = t("settings.channels.depInstallFailed");
+          try { message = JSON.parse((ev as MessageEvent).data).error || message; } catch { /* default */ }
+          reject(new Error(message));
+        });
+      });
+      toast.success(t("settings.channels.depInstalled"));
+      await refreshChannelStatus();
+    } catch (error) {
+      toast.error(`${t("settings.channels.depInstallFailed")}: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      setInstallingPkg(null);
     }
   };
 
@@ -451,7 +491,20 @@ export function Settings() {
                     </div>
                   </td>
                   <td className="max-w-md px-3 py-2 align-top text-xs text-muted-foreground">
-                    {item.install_hint || item.error || t("settings.channels.noRecovery")}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span>{item.install_hint || item.error || t("settings.channels.noRecovery")}</span>
+                      {item.available === false && matchedPkg(item.name, optionalDeps) && (
+                        <button
+                          type="button"
+                          disabled={installingPkg !== null}
+                          onClick={() => installChannelDep(matchedPkg(item.name, optionalDeps)!)}
+                          className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {installingPkg === matchedPkg(item.name, optionalDeps) ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                          {t("settings.channels.installDep")}
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

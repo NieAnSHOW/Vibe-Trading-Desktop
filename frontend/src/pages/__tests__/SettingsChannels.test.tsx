@@ -19,6 +19,8 @@ const apiMock = vi.hoisted(() => ({
   // these; upstream's mock doesn't include them.
   listOptionalDeps: vi.fn(() => Promise.resolve({ brokers: [] })),
   getOptionalDepsMirror: vi.fn(() => Promise.resolve({})),
+  installOptionalDep: vi.fn(),
+  optionalDepStatusUrl: vi.fn((jobId: string) => `http://localhost:8899/optional-deps/status/${jobId}`),
 }));
 
 vi.mock("@/lib/api", async () => {
@@ -155,5 +157,33 @@ describe("Settings IM channels panel", () => {
         command: "approve UM59-EGIT",
       }),
     );
+  });
+
+  it("renders install dep button for unavailable channel matched to optional-deps broker", async () => {
+    apiMock.listOptionalDeps.mockResolvedValue({
+      brokers: [{ id: "telegram", label: "Telegram", package: "python-telegram-bot", description: "Telegram bot SDK", platforms: [], recommended_mirror: "tsinghua", installed: false, installed_version: "" }],
+    });
+
+    render(<MemoryRouter><Settings /></MemoryRouter>);
+    await screen.findByText("IM Channels");
+
+    expect(screen.getByText("Install Dependencies")).toBeInTheDocument();
+    expect(apiMock.listOptionalDeps).toHaveBeenCalled();
+  });
+
+  it("calls installOptionalDep when install dep button is clicked", async () => {
+    apiMock.listOptionalDeps.mockResolvedValue({
+      brokers: [{ id: "telegram", label: "Telegram", package: "python-telegram-bot", description: "Telegram bot SDK", platforms: [], recommended_mirror: "tsinghua", installed: false, installed_version: "" }],
+    });
+    apiMock.installOptionalDep.mockResolvedValue({ job_id: "job-1" });
+
+    render(<MemoryRouter><Settings /></MemoryRouter>);
+    await screen.findByText("IM Channels");
+
+    fireEvent.click(screen.getByText("Install Dependencies"));
+
+    await waitFor(() => {
+      expect(apiMock.installOptionalDep).toHaveBeenCalledWith("python-telegram-bot");
+    });
   });
 });
