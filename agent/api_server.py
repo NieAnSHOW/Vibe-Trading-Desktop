@@ -22,8 +22,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request, Security, UploadFile, status
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -1716,6 +1717,56 @@ async def update_data_source_settings(payload: UpdateDataSourceSettingsRequest):
             os.environ.pop("TUSHARE_TOKEN", None)
 
     return _build_data_source_settings_response(_read_settings_env_values())
+
+
+# ============================================================================
+# User-API reverse proxy
+# ============================================================================
+# The SPA's auth calls (login / captcha / SMS / user-info) target a separate
+# cool-admin backend via the ``/user-api`` prefix. Vite proxies that prefix in
+# dev (vite.config.ts); production/desktop builds have no Vite layer, so FastAPI
+# reverse-proxies it to the same target here. Same-origin request → no browser
+# CORS, which matters because the upstream does not send CORS headers.
+_USER_API_URL = os.getenv("USER_API_URL", "https://trading-server.nieanshow.cn").rstrip("/")
+
+# RFC 7230 §6.1 hop-by-hop headers — a proxy must not forward them; the peer
+# regenerates them per connection. ``content-length`` is dropped too because
+# httpx/Starlette recompute it from the body bytes they actually send.
+_USER_API_DROP_HEADERS = frozenset({
+    "host", "connection", "keep-alive", "proxy-authenticate",
+    "proxy-authorization", "te", "trailers", "transfer-encoding",
+    "upgrade", "content-length",
+})
+
+
+@app.api_route(
+    "/user-api/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+)
+async def proxy_user_api(path: str, request: Request):
+    """Reverse-proxy ``/user-api/*`` to the cool-admin user backend."""
+    target = f"{_USER_API_URL}/{path}"
+    if request.url.query:
+        target = f"{target}?{request.url.query}"
+    fwd = [(k, v) for k, v in request.headers.items() if k.lower() not in _USER_API_DROP_HEADERS]
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            upstream = await client.request(
+                request.method, target, headers=fwd, content=await request.body()
+            )
+    except httpx.HTTPError as exc:
+        return JSONResponse(
+            {"detail": f"user-api proxy error: {exc}"},
+            status_code=status.HTTP_502_BAD_GATEWAY,
+        )
+    # ``content-encoding`` is dropped: httpx has already decompressed the body,
+    # so forwarding it would make the framed length mismatch. Starlette's
+    # ``Response`` takes a dict (it calls ``.items()``), not a list of pairs.
+    resp_headers = {
+        k: v for k, v in upstream.headers.items()
+        if k.lower() not in _USER_API_DROP_HEADERS and k.lower() != "content-encoding"
+    }
+    return Response(upstream.content, status_code=upstream.status_code, headers=resp_headers)
 
 
 @app.get("/health", response_model=HealthResponse)

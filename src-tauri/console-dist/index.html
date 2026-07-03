@@ -381,6 +381,14 @@
         background: hsl(var(--line));
         border-radius: 4px;
       }
+      /* 控制台独立版本号;data-console-version 由 console-version.mjs 维护。 */
+      .console-version {
+        margin-top: 18px;
+        text-align: center;
+        font-size: 11px;
+        letter-spacing: 0.02em;
+        color: hsl(var(--ink-dim) / 0.6);
+      }
 
       @media (prefers-reduced-motion: reduce) {
         *,
@@ -473,6 +481,12 @@
         <button id="btnClear" class="log-clear" type="button">清空</button>
       </div>
       <div id="log" role="log" aria-live="polite"></div>
+
+      <footer
+        class="console-version"
+        id="consoleVersion"
+        data-console-version="v0.1.0"
+      ></footer>
     </main>
 
     <script type="module">
@@ -482,6 +496,9 @@
         hintEl = $("hint"),
         hintText = $("hintText");
       let port = null;
+
+      // 控制台独立版本号(独立于 app release 版本),由 scripts/desktop/console-version.mjs 维护。
+      $("consoleVersion").textContent = `控制台 ${$("consoleVersion").dataset.consoleVersion}`;
 
       function log(line) {
         const atBottom =
