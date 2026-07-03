@@ -208,6 +208,11 @@ export function Settings() {
     try {
       const { login_id, qr_image } = await api.startWeixinLogin();
       setWeixinQr({ loginId: login_id, image: qr_image });
+      // qr_image 实为微信扫码跳转链接(非图片二进制);新页签打开让用户在微信侧完成扫码,
+      // 本页弹窗仅做"等待登录"轮询。async await 后 window.open 可能被浏览器拦弹窗,modal 内有兜底按钮。
+      if (qr_image?.startsWith("http")) {
+        window.open(qr_image, "_blank", "noopener,noreferrer");
+      }
     } catch (error) {
       toast.error(`获取微信二维码失败: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
@@ -921,8 +926,20 @@ export function Settings() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setWeixinQr(null)}>
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-semibold mb-4">微信扫码登录</h3>
-            <img src={weixinQr.image} alt="微信二维码" className="w-48 h-48 mx-auto" />
-            <p className="text-sm text-gray-500 mt-3 text-center">请使用微信扫描二维码</p>
+            <div className="flex flex-col items-center gap-3 py-4">
+              <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
+              <p className="text-sm text-gray-500 text-center">
+                请在已打开的页面完成微信扫码登录<br />本窗口会自动检测登录状态…
+              </p>
+              {weixinQr.image?.startsWith("http") && (
+                <button
+                  onClick={() => window.open(weixinQr.image, "_blank", "noopener,noreferrer")}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  未弹出页面?点此重新打开登录链接
+                </button>
+              )}
+            </div>
             <button onClick={() => setWeixinQr(null)} className="mt-4 w-full rounded-md border px-3 py-2 text-sm">取消</button>
           </div>
         </div>
