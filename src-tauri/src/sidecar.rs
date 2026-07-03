@@ -62,6 +62,9 @@ pub fn spawn(
     sessions_dir: &Path,
 ) -> Result<Child, String> {
     let mut cmd = build_cmd(python, runtime_agent, port, runtime_libs, sessions_dir);
+    // ponytail: kill stale listener before bind, else await_health may
+    // connect to a leftover sidecar from a killed previous session.
+    crate::port::kill_listener_on_port(port);
     cmd.spawn()
         .map_err(|e| format!("spawn sidecar failed: {e}"))
 }

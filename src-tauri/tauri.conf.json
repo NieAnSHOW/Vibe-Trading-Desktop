@@ -9,7 +9,14 @@
   },
   "app": {
     "withGlobalTauri": true,
-    "windows": [],
+    "windows": [
+      {
+        "title": "Vibe Trading",
+        "width": 620,
+        "height": 760,
+        "resizable": false
+      }
+    ],
     "security": {
       "csp": null
     }

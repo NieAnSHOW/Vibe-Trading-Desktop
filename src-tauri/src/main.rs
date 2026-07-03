@@ -2,7 +2,7 @@
 mod resources; mod version; mod runtime_dir; mod port; mod sidecar; mod console;
 
 use std::sync::{Arc, Mutex};
-use tauri::{RunEvent, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Manager, RunEvent};
 
 type SharedChild = console::SharedChild;
 
@@ -25,10 +25,8 @@ fn main() {
             let handle = app.handle().clone();
             let res = resources::Resources::resolve(&handle)
                 .map_err(|e| format!("resources: {e}"))?;
-            let win = WebviewWindowBuilder::new(
-                &handle, "main",
-                WebviewUrl::App("index.html".into()))
-                .title("Vibe Trading").inner_size(1280.0, 832.0).build()?;
+            let win = app.get_webview_window("main")
+                .expect("main window (defined in tauri.conf.json)");
 
             let shared = shared_setup.clone();
             std::thread::spawn(move || {
