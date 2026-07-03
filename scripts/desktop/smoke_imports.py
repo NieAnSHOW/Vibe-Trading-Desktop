@@ -4,16 +4,8 @@
 import sys
 from types import SimpleNamespace
 
-MODULES = [
-    "numpy",
-    "scipy",
-    "sklearn",
-    "duckdb",
-    "pandas",
-    "PIL",
-    "matplotlib",
-    "stockstats",
-]
+# 单一真源: src.desktop_bootstrap.smoke.SMOKE_MODULES, 避免两处清单漂移
+from src.desktop_bootstrap.smoke import SMOKE_MODULES as MODULES
 
 
 def _smoke_a_stock_data() -> None:
