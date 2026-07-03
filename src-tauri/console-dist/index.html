@@ -246,6 +246,14 @@
       .btn-ghost:hover:not(:disabled) {
         background: hsl(var(--line));
       }
+      .btn-danger {
+        background: hsl(var(--bad));
+        color: hsl(0 0% 100%);
+        border-color: transparent;
+      }
+      .btn-danger:hover:not(:disabled) {
+        background: hsl(0 78% 52%);
+      }
       button:disabled {
         opacity: 0.4;
         cursor: not-allowed;
@@ -265,6 +273,46 @@
         to {
           transform: rotate(360deg);
         }
+      }
+
+      /* Confirm dialog (native <dialog>) */
+      dialog.confirm {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        margin: 0;
+        background: hsl(var(--surface-1));
+        color: hsl(var(--ink));
+        border: 1px solid hsl(var(--line));
+        border-radius: var(--radius);
+        padding: 20px 22px;
+        max-width: 380px;
+        box-shadow: 0 22px 55px hsl(0 0% 0% / 0.55);
+      }
+      dialog.confirm::backdrop {
+        background: hsl(0 0% 0% / 0.55);
+        backdrop-filter: blur(2px);
+      }
+      dialog.confirm h3 {
+        font-size: 15.5px;
+        font-weight: 650;
+        margin-bottom: 9px;
+      }
+      dialog.confirm p {
+        font-size: 13.5px;
+        color: hsl(var(--ink-dim));
+        line-height: 1.55;
+      }
+      dialog.confirm p b {
+        color: hsl(var(--bad-fg));
+        font-weight: 600;
+      }
+      dialog.confirm .confirm-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 18px;
       }
 
       /* Error */
@@ -402,6 +450,19 @@
         <button id="btnLogs" class="btn-ghost">打开日志目录</button>
       </div>
 
+      <dialog id="confirmStop" class="confirm">
+        <form method="dialog">
+          <h3>确认停止服务？</h3>
+          <p>
+            停止将中断后端进程，<b>请确保当前没有正在执行的任务</b>（回测、研究、实盘等）。
+          </p>
+          <div class="confirm-actions">
+            <button value="cancel" class="btn-ghost">取消</button>
+            <button value="ok" class="btn-danger" type="submit">确认停止</button>
+          </div>
+        </form>
+      </dialog>
+
       <div id="err"></div>
 
       <div class="log-head">
@@ -477,7 +538,11 @@
         const b = $("envBadge");
         b.className = "badge " + info.cls;
         b.innerHTML = `<span class="dot"></span>${info.txt}`;
-        $("btnStart").disabled = env !== "ready" || port !== null;
+        // Don't fight the busy() spinner: while an action is mid-flight the
+        // button's disabled state is owned by busy() until it resolves.
+        const startBtn = $("btnStart");
+        if (!startBtn.classList.contains("busy"))
+          startBtn.disabled = env !== "ready" || port !== null;
         if (info.hint && port === null) {
           hintText.innerHTML = info.hint;
           hintEl.hidden = false;
@@ -488,7 +553,12 @@
         const b = $("svcBadge");
         b.className = "badge " + (running ? "ok live" : "warn");
         b.innerHTML = `<span class="dot"></span>${running ? "运行中" : "已停止"}`;
-        $("btnStop").disabled = !running;
+        const stopBtn = $("btnStop");
+        if (!stopBtn.classList.contains("busy")) {
+          // Red while the service is up — stopping interrupts live work.
+          stopBtn.className = running ? "btn-danger" : "btn-ghost";
+          stopBtn.disabled = !running;
+        }
         $("btnOpen").disabled = !running;
         if (running) hintEl.hidden = true;
       }
@@ -535,13 +605,21 @@
           try {
             port = await invoke("console_start_service");
             renderSvc(true);
-            $("btnStart").disabled = true;
             hintEl.hidden = true;
+            // 服务就绪后自动打开 WebUI
+            await invoke("console_open_webui", { port });
           } catch (e) {
             setErr(e);
           }
+        }).finally(() => {
+          // busy() restores the pre-click disabled state; re-assert the real
+          // terminal state — locked once running, re-enabled if start failed.
+          $("btnStart").disabled = port !== null;
         });
-      $("btnStop").onclick = () =>
+      const confirmStop = $("confirmStop");
+      $("btnStop").onclick = () => confirmStop.showModal();
+      confirmStop.addEventListener("close", () => {
+        if (confirmStop.returnValue !== "ok") return;
         busy($("btnStop"), "停止中", async () => {
           try {
             await invoke("console_stop_service");
@@ -552,6 +630,7 @@
             setErr(e);
           }
         });
+      });
       $("btnOpen").onclick = async () => {
         if (port !== null)
           try {
