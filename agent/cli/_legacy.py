@@ -4261,6 +4261,11 @@ def _build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--port", type=int, default=8899, help="Listen port")
     serve_parser.add_argument("--dev", action="store_true", help="Start the Vite dev server")
 
+    bootstrap_parser = subparsers.add_parser("bootstrap", help="Create ~/.vibe-trading/venv and install backend deps")
+    bootstrap_parser.add_argument("--sse", action="store_true", help="Emit SSE frames (desktop console)")
+    bootstrap_parser.add_argument("--mirror", default=None, help="tsinghua|aliyun|official|custom|off")
+    bootstrap_parser.add_argument("--index-url", default=None, help="Custom index url (with --mirror custom)")
+
     provider_parser = subparsers.add_parser("provider", help="Manage OAuth providers")
     provider_subparsers = provider_parser.add_subparsers(dest="provider_command")
     login_parser = provider_subparsers.add_parser("login", help="Authenticate with an OAuth provider")

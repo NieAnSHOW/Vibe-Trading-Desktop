@@ -172,3 +172,54 @@ def run_uninstall(
 def default_python_executable() -> str:
     """Return the interpreter to use for pip. Defaults to ``sys.executable``."""
     return sys.executable
+
+
+def build_requirements_args(
+    python: str,
+    requirements: str,
+    index_url: str,
+    trusted_host: str,
+) -> list:
+    """Build argv for ``python -m pip install -r <requirements>`` into the venv.
+
+    Unlike ``build_pip_args``, this installs into the interpreter's own
+    site-packages (no ``--target``) — ``python`` is the venv interpreter, so
+    packages land in the venv. Mirror/trusted-host reuse the same resolution.
+    """
+    args = [
+        python, "-m", "pip", "install", "-r", str(requirements),
+        "--no-input", "--disable-pip-version-check",
+    ]
+    if index_url:
+        args += ["--index-url", index_url]
+    if trusted_host:
+        args += ["--trusted-host", trusted_host]
+    return args
+
+
+def run_requirements_install(
+    python: str,
+    requirements: str,
+    index_url: str,
+    trusted_host: str,
+):
+    """Run ``pip install -r`` and yield stdout lines (mirrors run_install).
+
+    Re-invoking after a failure resumes: pip skips already-satisfied
+    requirements and reuses its download cache.
+    Raises CalledProcessError on non-zero exit.
+    """
+    import subprocess
+    args = build_requirements_args(python, requirements, index_url, trusted_host)
+    proc = subprocess.Popen(  # noqa: S603
+        args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
+    )
+    assert proc.stdout is not None
+    try:
+        for line in proc.stdout:
+            yield line.rstrip("\n")
+    finally:
+        proc.stdout.close()
+        rc = proc.wait()
+        if rc != 0:
+            raise subprocess.CalledProcessError(rc, args)
