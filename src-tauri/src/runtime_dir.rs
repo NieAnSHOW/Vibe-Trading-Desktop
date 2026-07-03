@@ -85,6 +85,11 @@ pub fn prepare(
     // copy_dir_recursive 无关——libs 永远是用户拥有的数据，不来自 bundle 模板）。
     fs::create_dir_all(&layout.runtime_libs)
         .map_err(|e| format!("create runtime_libs {:?}: {e}", layout.runtime_libs))?;
+    // 会话/日志目录在 home 根层，属用户数据：始终确保存在，升级不清空。
+    // (venv 由 vibe-trading bootstrap 创建；这里只确保父目录 home 就绪。)
+    for dir in [&layout.sessions_dir, &layout.logs_dir] {
+        fs::create_dir_all(dir).map_err(|e| format!("create {dir:?}: {e}"))?;
+    }
 
     if let Some(frontend_dist) = bundle_frontend_dist {
         if frontend_dist.exists() {

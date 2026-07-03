@@ -25,6 +25,17 @@ def run_bootstrap_cli(argv: Optional[list[str]] = None) -> int:
 
     home = get_runtime_root()
     requirements = Path(__file__).resolve().parents[2] / "requirements.txt"
+    # 桌面 venv 排除 weasyprint(需要 native cairo/pango,不可靠跨平台)。
+    # 复制临时文件剔除 weasyprint 行,不修改原 requirements.txt。
+    # ponytail: 与 install-deps.sh 一致。
+    import tempfile
+    _lines = requirements.read_text(encoding="utf-8").splitlines()
+    _filtered = [ln for ln in _lines if "weasyprint" not in ln]
+    if len(_filtered) != len(_lines):
+        _tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8")
+        _tmp.write("\n".join(_filtered))
+        _tmp.close()
+        requirements = Path(_tmp.name)
     # Mirror: CLI arg > persisted config > default tsinghua
     cfg = load_mirror_config()
     if args.mirror:
