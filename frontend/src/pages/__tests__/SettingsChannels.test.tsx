@@ -15,6 +15,8 @@ const apiMock = vi.hoisted(() => ({
   runChannelPairingCommand: vi.fn(),
   updateLLMSettings: vi.fn(),
   updateDataSourceSettings: vi.fn(),
+  startWeixinLogin: vi.fn(),
+  weixinLoginStatus: vi.fn(),
   // ponytail: fork-only OptionalDepsManager (desktop optional-deps UI) calls
   // these; upstream's mock doesn't include them.
   listOptionalDeps: vi.fn(() => Promise.resolve({ brokers: [] })),
@@ -121,6 +123,8 @@ describe("Settings IM channels panel", () => {
     apiMock.startChannels.mockResolvedValue(channelStatus({ running: true }));
     apiMock.stopChannels.mockResolvedValue(channelStatus());
     apiMock.runChannelPairingCommand.mockResolvedValue({ channel: "weixin", reply: "approved" });
+    apiMock.startWeixinLogin.mockResolvedValue({ login_id: "qid-1", qr_image: "data:image/png;base64,AAAA" });
+    apiMock.weixinLoginStatus.mockResolvedValue({ status: "wait" });
   });
 
   it("renders channel runtime status and refreshes it", async () => {
@@ -185,5 +189,72 @@ describe("Settings IM channels panel", () => {
     await waitFor(() => {
       expect(apiMock.installOptionalDep).toHaveBeenCalledWith("python-telegram-bot");
     });
+  });
+
+  it("renders WeChat QR login button and displays QR modal", async () => {
+    const chStatus = channelStatus();
+    chStatus.channels.weixin = {
+      name: "weixin",
+      display_name: "WeChat",
+      configured: true,
+      enabled: true,
+      available: true,
+      loaded: true,
+      running: false,
+      error: "",
+      install_hint: "",
+    };
+    apiMock.getChannelStatus.mockResolvedValue(chStatus);
+
+    render(<MemoryRouter><Settings /></MemoryRouter>);
+    await screen.findByText("IM Channels");
+
+    // Assert QR login button is rendered
+    expect(screen.getByText("扫码登录")).toBeInTheDocument();
+
+    // Click the QR login button
+    fireEvent.click(screen.getByText("扫码登录"));
+    await waitFor(() => expect(apiMock.startWeixinLogin).toHaveBeenCalledTimes(1));
+
+    // Assert QR image is displayed
+    expect(await screen.findByAltText("微信二维码")).toBeInTheDocument();
+    expect(screen.getByText("请使用微信扫描二维码")).toBeInTheDocument();
+
+    // Close modal
+    fireEvent.click(screen.getByText("取消"));
+    await waitFor(() => expect(screen.queryByAltText("微信二维码")).not.toBeInTheDocument());
+  });
+
+  it("closes QR modal and refreshes status on confirmed login", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const chStatus = channelStatus();
+    chStatus.channels.weixin = {
+      name: "weixin",
+      display_name: "WeChat",
+      configured: true,
+      enabled: true,
+      available: true,
+      loaded: true,
+      running: false,
+      error: "",
+      install_hint: "",
+    };
+    apiMock.getChannelStatus.mockResolvedValue(chStatus);
+    apiMock.weixinLoginStatus.mockResolvedValue({ status: "confirmed" });
+
+    render(<MemoryRouter><Settings /></MemoryRouter>);
+    await screen.findByText("IM Channels");
+
+    fireEvent.click(screen.getByText("扫码登录"));
+    expect(await screen.findByAltText("微信二维码")).toBeInTheDocument();
+
+    // Advance past one polling interval; confirmed status closes the modal
+    await vi.advanceTimersByTimeAsync(2500);
+
+    await waitFor(() => expect(screen.queryByAltText("微信二维码")).not.toBeInTheDocument());
+    // getChannelStatus was called: once on mount, + at least one refresh after confirmed
+    expect(apiMock.getChannelStatus.mock.calls.length).toBeGreaterThanOrEqual(2);
+
+    vi.useRealTimers();
   });
 });

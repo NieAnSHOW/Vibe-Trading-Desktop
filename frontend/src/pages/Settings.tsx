@@ -1,7 +1,7 @@
 import { getConsent, setConsent, flushNow } from "@/lib/telemetry";
 import i18n from "@/i18n";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Database, KeyRound, Loader2, LogIn, MessageSquareMore, Package, Play, RefreshCw, RotateCcw, Save, Server, ShieldCheck, SlidersHorizontal, Square, Upload, Zap } from "lucide-react";
+import { Database, KeyRound, Loader2, LogIn, MessageSquareMore, Package, Play, QrCode, RefreshCw, RotateCcw, Save, Server, ShieldCheck, SlidersHorizontal, Square, Upload, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { api, isAuthRequiredError, type ChannelRuntimeStatus, type DataSourceSettings, type LLMProviderOption, type LLMSettings } from "@/lib/api";
@@ -61,6 +61,10 @@ export function Settings() {
   const [flushing, setFlushing] = useState(false);
   const [optionalDeps, setOptionalDeps] = useState<any>(null);
   const [installingPkg, setInstallingPkg] = useState<string | null>(null);
+
+  // WeChat QR login state
+  const [weixinQr, setWeixinQr] = useState<{ loginId: string; image: string } | null>(null);
+  const [weixinPolling, setWeixinPolling] = useState(false);
 
   const toggleUsageData = async (on: boolean) => {
     setUsageDataOn(on);
@@ -199,6 +203,45 @@ export function Settings() {
       setPairingBusy(false);
     }
   };
+
+  const startWeixinQrLogin = async () => {
+    try {
+      const { login_id, qr_image } = await api.startWeixinLogin();
+      setWeixinQr({ loginId: login_id, image: qr_image });
+    } catch (error) {
+      toast.error(`获取微信二维码失败: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  };
+
+  // Poll WeChat QR login status
+  useEffect(() => {
+    if (!weixinQr) return;
+    setWeixinPolling(true);
+    const id = setInterval(async () => {
+      try {
+        const { status } = await api.weixinLoginStatus(weixinQr.loginId);
+        if (status === "confirmed") {
+          clearInterval(id);
+          setWeixinQr(null);
+          setWeixinPolling(false);
+          toast.success("微信登录成功");
+          await refreshChannelStatus();
+        } else if (status === "expired") {
+          clearInterval(id);
+          setWeixinQr(null);
+          setWeixinPolling(false);
+          toast.error("二维码已过期，请重新获取");
+        }
+        // wait / scaned_but_redirect: continue polling
+      } catch {
+        // network error during poll: keep trying
+      }
+    }, 2000);
+    return () => {
+      clearInterval(id);
+      setWeixinPolling(false);
+    };
+  }, [weixinQr]);
 
   const providers = settings?.providers ?? [];
   const selectedProvider = useMemo<LLMProviderOption | undefined>(
@@ -502,6 +545,17 @@ export function Settings() {
                         >
                           {installingPkg === matchedPkg(item.name, optionalDeps) ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                           {t("settings.channels.installDep")}
+                        </button>
+                      )}
+                      {name === "weixin" && item.enabled && (
+                        <button
+                          type="button"
+                          disabled={weixinPolling}
+                          onClick={startWeixinQrLogin}
+                          className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {weixinPolling ? <Loader2 className="h-3 w-3 animate-spin" /> : <QrCode className="h-3 w-3" />}
+                          扫码登录
                         </button>
                       )}
                     </div>
@@ -861,6 +915,18 @@ export function Settings() {
         </p>
         <OptionalDepsManager />
       </section>
+
+      {/* WeChat QR login modal */}
+      {weixinQr && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setWeixinQr(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">微信扫码登录</h3>
+            <img src={weixinQr.image} alt="微信二维码" className="w-48 h-48 mx-auto" />
+            <p className="text-sm text-gray-500 mt-3 text-center">请使用微信扫描二维码</p>
+            <button onClick={() => setWeixinQr(null)} className="mt-4 w-full rounded-md border px-3 py-2 text-sm">取消</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1771,6 +1771,32 @@ async def channels_pairing_command(payload: ChannelPairingCommandRequest):
     }
 
 
+@app.post("/channels/weixin/login/start", dependencies=[Depends(require_auth)])
+async def weixin_login_start():
+    """Begin WeChat QR login; returns {login_id, qr_image} for in-page scan."""
+    runtime = _get_channel_runtime()
+    manager = runtime.manager
+    if manager is None:
+        raise HTTPException(status_code=400, detail="weixin channel unavailable; enable it first")
+    adapter = manager.get_channel("weixin")
+    if adapter is None:
+        raise HTTPException(status_code=400, detail="weixin channel unavailable; enable it first")
+    return await adapter.begin_qr_login()
+
+
+@app.get("/channels/weixin/login/status", dependencies=[Depends(require_auth)])
+async def weixin_login_status(login_id: str = Query(...)):
+    """Poll WeChat QR login status for the given login_id."""
+    runtime = _get_channel_runtime()
+    manager = runtime.manager
+    if manager is None:
+        raise HTTPException(status_code=400, detail="weixin channel unavailable")
+    adapter = manager.get_channel("weixin")
+    if adapter is None:
+        raise HTTPException(status_code=400, detail="weixin channel unavailable")
+    return await adapter.poll_qr_login(login_id)
+
+
 @app.get("/correlation")
 async def get_correlation_matrix(
     codes: str = Query(..., description="Comma-separated asset codes, e.g. BTC-USDT,ETH-USDT,SPY"),

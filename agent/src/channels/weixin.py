@@ -324,6 +324,18 @@ class WeixinChannel(BaseChannel):
     # QR Code Login  (matches login-qr.ts)
     # ------------------------------------------------------------------
 
+    def _ensure_client(self) -> None:
+        """Lazily create httpx client for QR login when not yet started.
+
+        ponytail: no explicit close; replaced by start() or GC'd on exit.
+        """
+        if self._client is not None:
+            return
+        self._client = httpx.AsyncClient(
+            timeout=httpx.Timeout(60, connect=30),
+            follow_redirects=True,
+        )
+
     async def _fetch_qr_code(self) -> tuple[str, str]:
         """Fetch a fresh QR code. Returns (qrcode_id, scan_url)."""
         data = await self._api_get(
@@ -337,75 +349,93 @@ class WeixinChannel(BaseChannel):
             raise RuntimeError(f"Failed to get QR code from WeChat API: {data}")
         return qrcode_id, (qrcode_img_content or qrcode_id)
 
+    async def begin_qr_login(self) -> dict:
+        """Start a QR login. Returns {login_id, qr_image}.
+
+        Reused by both the terminal _qr_login loop and the REST endpoint so the
+        WebUI and CLI share one implementation (channel-management-ui 6.3).
+        """
+        self._ensure_client()
+        qrcode_id, scan_url = await self._fetch_qr_code()
+        self._active_qr_base = self.config.base_url
+        return {"login_id": qrcode_id, "qr_image": scan_url}
+
+    async def poll_qr_login(self, login_id: str) -> dict:
+        """Poll one QR status tick. Returns {status}.
+
+        status in {wait, scaned_but_redirect, confirmed, expired}.
+        On 'confirmed' persists the bot token via _save_state (same as terminal flow).
+        """
+        self._ensure_client()
+        base = getattr(self, "_active_qr_base", self.config.base_url)
+        data = await self._api_get_with_base(
+            base_url=base,
+            endpoint="ilink/bot/get_qrcode_status",
+            params={"qrcode": login_id},
+            auth=False,
+        )
+        status = (data or {}).get("status", "wait")
+        result: dict[str, Any] = {"status": status}
+        if status == "scaned_but_redirect":
+            host = str((data or {}).get("redirect_host", "") or "").strip()
+            if host:
+                self._active_qr_base = host if host.startswith("http") else f"https://{host}"
+        if status == "confirmed":
+            token = data.get("bot_token", "")
+            bot_id = data.get("ilink_bot_id", "")
+            user_id = data.get("ilink_user_id", "")
+            if token:
+                self._token = token
+                if data.get("baseurl"):
+                    self.config.base_url = data["baseurl"]
+                self._save_state()
+                self.logger.info(
+                    "login successful! bot_id=%s user_id=%s",
+                    bot_id,
+                    user_id,
+                )
+                result["token"] = token
+        return result
+
     async def _qr_login(self) -> bool:
         """Perform QR code login flow. Returns True on success."""
         try:
             refresh_count = 0
-            qrcode_id, scan_url = await self._fetch_qr_code()
-            self._print_qr_code(scan_url)
-            current_poll_base_url = self.config.base_url
+            result = await self.begin_qr_login()
+            qrcode_id = result["login_id"]
+            self._print_qr_code(result["qr_image"])
 
             while self._running:
                 try:
-                    status_data = await self._api_get_with_base(
-                        base_url=current_poll_base_url,
-                        endpoint="ilink/bot/get_qrcode_status",
-                        params={"qrcode": qrcode_id},
-                        auth=False,
-                    )
+                    result = await self.poll_qr_login(qrcode_id)
                 except Exception as e:
                     if self._is_retryable_qr_poll_error(e):
                         await asyncio.sleep(1)
                         continue
                     raise
 
-                if not isinstance(status_data, dict):
-                    await asyncio.sleep(1)
-                    continue
-
-                status = status_data.get("status", "")
+                status = result["status"]
                 if status == "confirmed":
-                    token = status_data.get("bot_token", "")
-                    bot_id = status_data.get("ilink_bot_id", "")
-                    base_url = status_data.get("baseurl", "")
-                    user_id = status_data.get("ilink_user_id", "")
-                    if token:
-                        self._token = token
-                        if base_url:
-                            self.config.base_url = base_url
-                        self._save_state()
-                        self.logger.info(
-                            "login successful! bot_id={} user_id={}",
-                            bot_id,
-                            user_id,
-                        )
+                    if result.get("token"):
                         return True
-                    else:
-                        self.logger.error("Login confirmed but no bot_token in response")
-                        return False
+                    self.logger.error("Login confirmed but no bot_token in response")
+                    return False
                 elif status == "scaned_but_redirect":
-                    redirect_host = str(status_data.get("redirect_host", "") or "").strip()
-                    if redirect_host:
-                        if redirect_host.startswith("http://") or redirect_host.startswith("https://"):
-                            redirected_base = redirect_host
-                        else:
-                            redirected_base = f"https://{redirect_host}"
-                        if redirected_base != current_poll_base_url:
-                            current_poll_base_url = redirected_base
+                    pass  # poll_qr_login already updated _active_qr_base
                 elif status == "expired":
                     refresh_count += 1
                     if refresh_count > MAX_QR_REFRESH_COUNT:
                         self.logger.warning(
-                            "QR code expired too many times ({}/{}), giving up.",
-                            refresh_count - 1,
+                            "QR code expired too many times (%s/%s), giving up.",
+                            refresh_count,
                             MAX_QR_REFRESH_COUNT,
                         )
                         return False
-                    qrcode_id, scan_url = await self._fetch_qr_code()
-                    current_poll_base_url = self.config.base_url
-                    self._print_qr_code(scan_url)
+                    result = await self.begin_qr_login()
+                    qrcode_id = result["login_id"]
+                    self._print_qr_code(result["qr_image"])
                     continue
-                # status == "wait" — keep polling
+                # status == "wait" - keep polling
 
                 await asyncio.sleep(1)
 
@@ -451,11 +481,7 @@ class WeixinChannel(BaseChannel):
         if self._token or self._load_state():
             return True
 
-        # Initialize HTTP client for the login flow
-        self._client = httpx.AsyncClient(
-            timeout=httpx.Timeout(60, connect=30),
-            follow_redirects=True,
-        )
+        self._ensure_client()
         self._running = True  # Enable polling loop in _qr_login()
         try:
             return await self._qr_login()

@@ -152,6 +152,12 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  // WeChat QR login (channel-management-ui 6.3)
+  startWeixinLogin: () =>
+    request<{ login_id: string; qr_image: string }>("/channels/weixin/login/start", { method: "POST" }),
+  weixinLoginStatus: (loginId: string) =>
+    request<{ status: string }>(`/channels/weixin/login/status?login_id=${encodeURIComponent(loginId)}`),
+
   // Alpha Zoo API
   listAlphas: (params: AlphaListParams = {}) => {
     const q = new URLSearchParams();
