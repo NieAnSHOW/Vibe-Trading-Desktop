@@ -52,6 +52,34 @@ pub fn build_bootstrap_cmd(tier0_python: &Path, runtime_agent: &Path) -> std::pr
     cmd
 }
 
+/// 渠道名只允许小写字母/数字/连字符/下划线。channel 来自前端并拼进 pip extras,
+/// 是信任边界输入,必须校验以防构造怪异 extras 名(如空串、空格、路径片段)。
+pub fn validate_channel(channel: &str) -> Result<(), String> {
+    let ok = !channel.is_empty()
+        && channel
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_');
+    if ok {
+        Ok(())
+    } else {
+        Err(format!("非法渠道名: {channel}"))
+    }
+}
+
+/// 构造 `pip install 'vibe-trading-ai[<channel>]'` 子进程命令(用 venv 解释器)。
+/// --no-input 防止 pip 在非交互环境下因依赖冲突提示而卡死。
+pub fn build_channel_dep_cmd(venv_python: &Path, channel: &str) -> std::process::Command {
+    let mut cmd = std::process::Command::new(venv_python);
+    cmd.arg("-m")
+        .arg("pip")
+        .arg("install")
+        .arg("--no-input")
+        .arg(format!("vibe-trading-ai[{channel}]"))
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    cmd
+}
+
 // ── Tauri IPC 命令 ──────────────────────────────────────────────────
 
 #[derive(serde::Serialize)]
@@ -170,6 +198,43 @@ pub fn console_start_channels(port: u16) -> Result<String, String> {
     Ok(body)
 }
 
+/// 安装单个消息渠道的可选依赖:用 venv 解释器 spawn
+/// `pip install --no-input 'vibe-trading-ai[<channel>]'`,逐行 emit "channeldep://progress"。
+/// pip 进度几乎全走 stderr,故 stdout/stderr 各开一线程转发,避免日志空白。
+#[tauri::command]
+pub async fn console_install_channel_dep(
+    app: AppHandle,
+    channel: String,
+) -> Result<(), String> {
+    validate_channel(&channel)?;
+    let layout = Layout::from_home()?;
+    if !layout.venv_python.exists() {
+        return Err("环境未就绪,请先完成依赖安装".into());
+    }
+    let mut child = build_channel_dep_cmd(&layout.venv_python, &channel)
+        .spawn()
+        .map_err(|e| format!("spawn pip: {e}"))?;
+    let stdout = child.stdout.take().ok_or("no pip stdout")?;
+    let stderr = child.stderr.take().ok_or("no pip stderr")?;
+    let app_out = app.clone();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            let _ = app_out.emit("channeldep://progress", line);
+        }
+    });
+    let app_err = app.clone();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+            let _ = app_err.emit("channeldep://progress", line);
+        }
+    });
+    std::thread::spawn(move || {
+        let code = child.wait().ok().and_then(|s| s.code());
+        let _ = app.emit("channeldep://exit", code);
+    });
+    Ok(())
+}
+
 /// 在文件管理器打开 ~/.vibe-trading/logs/。
 #[tauri::command]
 pub fn console_open_logs() -> Result<(), String> {
@@ -268,6 +333,32 @@ mod tests {
         assert!(
             has_pythonpath,
             "bootstrap 子进程须设 PYTHONPATH 指向 runtime agent"
+        );
+    }
+
+    #[test]
+    fn validate_channel_accepts_known_channels() {
+        for ok in ["telegram", "slack", "discord", "weixin", "wecom", "qq", "napcat", "feishu", "dingtalk"] {
+            assert!(validate_channel(ok).is_ok(), "{ok} 应合法");
+        }
+    }
+
+    #[test]
+    fn validate_channel_rejects_injection_and_garbage() {
+        for bad in ["", "tel egram", "tel;egram", "../etc", "Telegram", "a$b", "with space"] {
+            assert!(validate_channel(bad).is_err(), "{bad:?} 应被拒");
+        }
+    }
+
+    #[test]
+    fn channel_dep_cmd_installs_extra_with_no_input() {
+        let cmd = build_channel_dep_cmd(Path::new("/v/bin/python3"), "telegram");
+        let args: Vec<&str> = cmd.get_args().map(|a| a.to_str().unwrap()).collect();
+        let joined = args.join(" ");
+        assert!(joined.contains("--no-input"), "args: {joined}");
+        assert!(
+            joined.contains("vibe-trading-ai[telegram]"),
+            "args: {joined}"
         );
     }
 }

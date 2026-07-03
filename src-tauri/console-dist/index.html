@@ -261,6 +261,20 @@
       button.busy {
         pointer-events: none;
       }
+      select.channel-select {
+        font: inherit;
+        font-size: 13.5px;
+        padding: 8px 10px;
+        border-radius: 9px;
+        background: hsl(var(--surface-2));
+        color: hsl(var(--ink));
+        border: 1px solid hsl(var(--line));
+        cursor: pointer;
+      }
+      select.channel-select:focus-visible {
+        outline: 2px solid hsl(var(--brand));
+        outline-offset: 2px;
+      }
       .spinner {
         width: 13px;
         height: 13px;
@@ -458,6 +472,20 @@
         <button id="btnChannels" class="btn-ghost" disabled>
           启动消息渠道
         </button>
+        <select id="selChannel" class="channel-select" aria-label="消息渠道">
+          <option value="weixin">weixin</option>
+          <option value="wecom">wecom</option>
+          <option value="telegram">telegram</option>
+          <option value="slack">slack</option>
+          <option value="discord">discord</option>
+          <option value="qq">qq</option>
+          <option value="napcat">napcat</option>
+          <option value="feishu">feishu</option>
+          <option value="dingtalk">dingtalk</option>
+        </select>
+        <button id="btnInstallChannel" class="btn-ghost" disabled>
+          安装渠道依赖
+        </button>
         <button id="btnLogs" class="btn-ghost">打开日志目录</button>
       </div>
 
@@ -563,6 +591,10 @@
         const startBtn = $("btnStart");
         if (!startBtn.classList.contains("busy"))
           startBtn.disabled = env !== "ready" || port !== null;
+        // 渠道依赖安装只依赖 venv 就绪,与是否启动服务无关。
+        const chDepBtn = $("btnInstallChannel");
+        if (chDepBtn && !chDepBtn.classList.contains("busy"))
+          chDepBtn.disabled = env !== "ready";
         if (info.hint && port === null) {
           hintText.innerHTML = info.hint;
           hintEl.hidden = false;
@@ -610,6 +642,11 @@
           renderSvc(true);
           $("btnStart").disabled = true;
           hintEl.hidden = true;
+        });
+        listen("channeldep://progress", (ev) => log(ev.payload));
+        listen("channeldep://exit", (ev) => {
+          log("渠道依赖安装退出码: " + ev.payload);
+          refresh();
         });
       }
 
@@ -684,6 +721,18 @@
               msg = body;
             }
             log(msg);
+          } catch (e) {
+            setErr(e);
+          }
+        });
+      };
+      $("btnInstallChannel").onclick = () => {
+        const channel = $("selChannel").value;
+        busy($("btnInstallChannel"), "安装中", async () => {
+          setErr("");
+          log(`安装渠道依赖 [${channel}]…`);
+          try {
+            await invoke("console_install_channel_dep", { channel });
           } catch (e) {
             setErr(e);
           }
