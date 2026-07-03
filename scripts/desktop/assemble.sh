@@ -55,6 +55,12 @@ fi
 printf '%s\n' "$VERSION_MARKER" > "$BUILD/VERSION"
 echo "VERSION → $VERSION_MARKER"
 
-echo "=== Assembly complete ==="
+echo "=== Assembly complete (Tier 0 runtime + agent source + frontend/dist + .env seed) ==="
 echo "Contents of $BUILD:"
 du -sh "$BUILD"/*
+echo ""
+echo "=== Bundle size recording ==="
+echo "Tier 0 site-packages size:"
+du -sh "$RUNTIME/lib"/*/site-packages 2>/dev/null || du -sh "$RUNTIME/Lib"/*/site-packages 2>/dev/null || echo "(site-packages not found at expected paths)"
+echo "Total runtime size:"
+du -sh "$RUNTIME"

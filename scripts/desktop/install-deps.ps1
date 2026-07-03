@@ -1,30 +1,20 @@
 # scripts/desktop/install-deps.ps1 <runtime_dir>
-# 用 uv 把 agent/requirements.txt(排除 weasyprint)装进内嵌运行时的 site-packages。
+# 只把 Tier 0 最小核心(requirements-tier0.txt)装进内嵌运行时的 site-packages。
+# 重型依赖(pandas/scipy/...)不再进 bundle,改由首次运行 vibe-trading bootstrap
+# 装到 ~/.vibe-trading/venv(设计三层依赖 / python-runtime-bundling delta)。
 $ErrorActionPreference = "Stop"
 $Runtime = $args[0]; if (-not $Runtime) { throw "usage: install-deps.ps1 <runtime_dir>" }
 $Py = "$Runtime\python.exe"
-$ReqSrc = "agent\requirements.txt"
+$ReqSrc = "scripts\desktop\requirements-tier0.txt"
 
 uv --version 2>$null; if ($LASTEXITCODE -ne 0) { throw "uv not found; install via 'pip install uv' or astral installer" }
 
-$tmpReq = New-TemporaryFile
-Get-Content $ReqSrc | Where-Object { $_ -notmatch '^\s*weasyprint' } | Set-Content -Encoding utf8 $tmpReq
+Write-Host "Installing Tier 0 core deps into embedded runtime (heavy deps deferred to venv bootstrap)"
+uv pip install --python $Py -r $ReqSrc
 
-Write-Host "Installing deps into embedded runtime (weasyprint excluded)"
-uv pip install --python $Py -r $tmpReq
-Remove-Item $tmpReq
+Write-Host "Done. Installed packages:"
+& $Py -m pip list 2>$null | Select-Object -First 40
 
-Write-Host "Done. Checking weasyprint absent:"
-$previousErrorActionPreference = $ErrorActionPreference
-try {
-  $ErrorActionPreference = "Continue"
-  & $Py -m pip show weasyprint 1>$null 2>$null
-  $pipShowWeasyprintExit = $LASTEXITCODE
-} finally {
-  $ErrorActionPreference = $previousErrorActionPreference
-}
-if ($pipShowWeasyprintExit -ne 0) { Write-Host "weasyprint absent (OK)" }
-
-Write-Host "Running embedded runtime smoke checks"
+Write-Host "Running Tier 0 smoke checks (serve entry-chain importable, no heavy pkgs)"
 $env:PYTHONPATH = "agent"
-& $Py scripts\desktop\smoke_imports.py
+& $Py scripts\desktop\smoke_tier0.py

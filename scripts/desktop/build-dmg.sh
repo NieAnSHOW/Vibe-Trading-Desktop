@@ -143,13 +143,13 @@ ok "agent / frontend / VERSION 资源模板已刷新"
 PY_VER="$("$PY_RUNTIME" --version 2>&1)"
 ok "运行时: $PY_VER"
 
-section "嵌入式 Python 冒烟检查"
-log "PYTHONPATH=agent $PY_RUNTIME scripts/desktop/smoke_imports.py"
-( cd "$ROOT" && PYTHONPATH=agent "$PY_RUNTIME" scripts/desktop/smoke_imports.py ) || {
-    err "嵌入式 Python 冒烟检查失败，请重新运行 install-deps.sh"
+section "嵌入式 Python 冒烟检查 (Tier 0)"
+log "PYTHONPATH=agent $PY_RUNTIME scripts/desktop/smoke_tier0.py"
+( cd "$ROOT" && PYTHONPATH=agent "$PY_RUNTIME" scripts/desktop/smoke_tier0.py ) || {
+    err "嵌入式 Python Tier 0 冒烟检查失败，请重新运行 install-deps.sh"
     exit 2
 }
-ok "嵌入式 Python 冒烟检查通过"
+ok "嵌入式 Python Tier 0 冒烟检查通过"
 
 # ── 强制刷新 VERSION 标记 ─────────────────────────────────────
 # 每次构建必须生成唯一 VERSION，否则 runtime_dir::prepare() 会因版本
