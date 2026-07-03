@@ -49,6 +49,15 @@ pub fn build_bootstrap_cmd(tier0_python: &Path, runtime_agent: &Path) -> std::pr
         .env("PYTHONDONTWRITEBYTECODE", "1")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
+
+    // 从 GUI 应用 spawn 控制台子进程时,Windows 会为其分配新控制台,
+    // 表现为弹出空白命令窗口。CREATE_NO_WINDOW 抑制该行为(与 sidecar 一致)。
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
     cmd
 }
 
@@ -77,6 +86,15 @@ pub fn build_channel_dep_cmd(venv_python: &Path, channel: &str) -> std::process:
         .arg(format!("vibe-trading-ai[{channel}]"))
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
+
+    // 从 GUI 应用 spawn 控制台子进程时,Windows 会为其分配新控制台,
+    // 表现为弹出空白命令窗口。CREATE_NO_WINDOW 抑制该行为(与 sidecar 一致)。
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
     cmd
 }
 
