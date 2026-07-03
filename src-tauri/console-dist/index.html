@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vibe Trading 控制台</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #0e0f13; color: #e6e6e6; min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; padding: 32px 16px;
+    }
+    .card { width: min(640px, 100%); }
+    h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+    .sub { font-size: 13px; color: #8a8f9a; margin-bottom: 20px; }
+    .row { display: flex; align-items: center; gap: 12px; margin: 10px 0; flex-wrap: wrap; }
+    .badge { padding: 3px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; }
+    .ok { background: #1f6f3f; } .warn { background: #8a6d1f; } .bad { background: #7a2a2a; }
+    button {
+      padding: 8px 18px; background: #5b8cff; border: 0; border-radius: 6px;
+      color: #fff; cursor: pointer; font-size: 13px; font-weight: 500;
+    }
+    button:hover { background: #4a7ae8; }
+    button:disabled { background: #33384a; cursor: not-allowed; }
+    button.secondary { background: #33384a; }
+    button.secondary:hover { background: #464c5e; }
+    #log {
+      margin-top: 16px; height: 260px; overflow: auto; background: #07080b;
+      border-radius: 6px; padding: 10px; font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+      white-space: pre-wrap; word-break: break-all;
+    }
+    #err { color: #ff8080; font-size: 13px; margin-top: 4px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Vibe Trading</h1>
+    <p class="sub">桌面运行环境控制台</p>
+
+    <div class="row">环境状态: <span id="envBadge" class="badge warn">检测中...</span></div>
+    <div class="row">服务状态: <span id="svcBadge" class="badge warn">已停止</span></div>
+
+    <div class="row">
+      <button id="btnInstall">安装 / 修复依赖</button>
+      <button id="btnStart" disabled>启动服务</button>
+      <button id="btnStop" disabled class="secondary">停止</button>
+      <button id="btnOpen" disabled class="secondary">在浏览器打开 WebUI</button>
+      <button id="btnLogs" class="secondary">打开日志目录</button>
+    </div>
+
+    <div id="err"></div>
+    <div id="log"></div>
+  </div>
+
+  <script type="module">
+    const { invoke } = window.__TAURI__.core;
+    const { listen } = window.__TAURI__.event;
+
+    const $ = (id) => document.getElementById(id);
+    const logEl = $("log"), errEl = $("err");
+    let port = null;
+
+    function log(line) { logEl.textContent += line + "\n"; logEl.scrollTop = logEl.scrollHeight; }
+    function setErr(m) { errEl.textContent = m || ""; }
+
+    function renderEnv(env) {
+      const b = $("envBadge");
+      const map = {
+        ready: ["就绪","ok"],
+        incomplete: ["依赖不全","warn"],
+        not_installed: ["未安装","bad"]
+      };
+      const [txt, cls] = map[env] || ["未知","warn"];
+      b.textContent = txt; b.className = "badge " + cls;
+      $("btnStart").disabled = (env !== "ready") || (port !== null);
+    }
+
+    function renderSvc(running) {
+      const b = $("svcBadge");
+      b.textContent = running ? "运行中" : "已停止";
+      b.className = "badge " + (running ? "ok" : "warn");
+      $("btnStop").disabled = !running;
+      $("btnOpen").disabled = !running;
+    }
+
+    async function refresh() {
+      try {
+        const s = await invoke("console_status");
+        renderEnv(s.env); renderSvc(s.service_running);
+        setErr("");
+      } catch(e) { setErr(String(e)); }
+    }
+
+    listen("bootstrap://progress", (ev) => log(ev.payload));
+    listen("bootstrap://exit", (ev) => { log("bootstrap 退出码: " + ev.payload); refresh(); });
+    listen("service://started", (ev) => { port = ev.payload; renderSvc(true); $("btnStart").disabled = true; });
+
+    $("btnInstall").onclick = async () => { setErr(""); log("开始安装依赖..."); try { await invoke("console_bootstrap"); } catch(e) { setErr(String(e)); } };
+    $("btnStart").onclick = async () => { setErr(""); try { port = await invoke("console_start_service"); renderSvc(true); } catch(e) { setErr(String(e)); } };
+    $("btnStop").onclick = async () => { try { await invoke("console_stop_service"); port = null; renderSvc(false); await refresh(); } catch(e) { setErr(String(e)); } };
+    $("btnOpen").onclick = async () => { if (port !== null) await invoke("console_open_webui", { port }); };
+    $("btnLogs").onclick = async () => { try { await invoke("console_open_logs"); } catch(e) { setErr(String(e)); } };
+
+    refresh();
+    setInterval(refresh, 3000);
+  </script>
+</body>
+</html>
