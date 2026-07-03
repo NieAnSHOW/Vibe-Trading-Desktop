@@ -1822,6 +1822,45 @@ async def channels_pairing_command(payload: ChannelPairingCommandRequest):
     }
 
 
+async def _weixin_connectivity_probe(base_url: str) -> dict:
+    """在 sidecar 进程内诊断到 base_url 的连通性(ConnectError 定位用)。
+
+    begin_qr_login/poll_qr_login 抛 httpx 异常时调用,在同一进程内重新解析 DNS
+    并尝试连接,把结果写进 detail —— 无需用户手动跑脚本,就能在报错时刻拿到
+    sidecar 进程看到的真实网络状态(目标域名、DNS 是否 fake-ip、直连能否连通、
+    是否有继承的代理环境变量),一次性区分 DNS 缓存/代理/进程网络/base_url 错误。
+    """
+    import socket as _socket
+    from urllib.parse import urlparse
+
+    out: dict = {"base_url": base_url}
+    proxy_env = {
+        k: os.environ[k]
+        for k in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+                  "http_proxy", "https_proxy", "all_proxy", "no_proxy")
+        if os.environ.get(k)
+    }
+    out["proxy_env"] = proxy_env or "(none)"
+    host = urlparse(base_url).hostname or base_url
+    try:
+        infos = _socket.getaddrinfo(host, 443)
+        out["dns"] = sorted({i[4][0] for i in infos})
+    except Exception as e:  # noqa: BLE001
+        out["dns_err"] = f"{type(e).__name__}: {e}"
+    for label, trust in (("direct", False), ("default_env", True)):
+        try:
+            async with httpx.AsyncClient(timeout=8, trust_env=trust) as c:
+                r = await c.get(base_url, headers={"User-Agent": "vibe-probe"})
+                out[f"probe_{label}"] = f"HTTP {r.status_code}"
+        except Exception as e:  # noqa: BLE001
+            cause = e.__cause__ or e.__context__
+            msg = f"{type(e).__name__}: {e}"
+            if cause and cause is not e:
+                msg += f" [cause: {type(cause).__name__}: {cause}]"
+            out[f"probe_{label}"] = "FAIL " + msg
+    return out
+
+
 @app.post("/channels/weixin/login/start", dependencies=[Depends(require_auth)])
 async def weixin_login_start():
     """Begin WeChat QR login; returns {login_id, qr_image} for in-page scan."""
@@ -1832,7 +1871,24 @@ async def weixin_login_start():
     adapter = manager.get_channel("weixin")
     if adapter is None:
         raise HTTPException(status_code=400, detail="weixin channel unavailable; enable it first")
-    return await adapter.begin_qr_login()
+    try:
+        return await adapter.begin_qr_login()
+    except httpx.HTTPError as exc:
+        probe = await _weixin_connectivity_probe(adapter.config.base_url)
+        logger.exception(
+            "WeChat QR login request failed to %s; in-process probe=%s",
+            adapter.config.base_url, probe,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"微信登录连接失败 {type(exc).__name__}: {exc} | 进程内诊断: {probe}",
+        )
+    except Exception as exc:  # noqa: BLE001 - surface adapter failure with a readable cause
+        logger.exception("WeChat QR login failed")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"微信登录失败: {type(exc).__name__}: {exc}",
+        )
 
 
 @app.get("/channels/weixin/login/status", dependencies=[Depends(require_auth)])
@@ -1845,7 +1901,24 @@ async def weixin_login_status(login_id: str = Query(...)):
     adapter = manager.get_channel("weixin")
     if adapter is None:
         raise HTTPException(status_code=400, detail="weixin channel unavailable")
-    return await adapter.poll_qr_login(login_id)
+    try:
+        return await adapter.poll_qr_login(login_id)
+    except httpx.HTTPError as exc:
+        probe = await _weixin_connectivity_probe(adapter.config.base_url)
+        logger.exception(
+            "WeChat QR login status poll failed to %s; in-process probe=%s",
+            adapter.config.base_url, probe,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"微信登录状态查询失败 {type(exc).__name__}: {exc} | 进程内诊断: {probe}",
+        )
+    except Exception as exc:  # noqa: BLE001 - surface adapter failure with a readable cause
+        logger.exception("WeChat QR login status poll failed")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"微信登录状态查询失败: {type(exc).__name__}: {exc}",
+        )
 
 
 @app.get("/correlation")
