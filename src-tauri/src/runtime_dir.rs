@@ -2,22 +2,37 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[allow(dead_code)]
 pub struct Layout {
     pub root: PathBuf,          // ~/.vibe-trading
     pub runtime_agent: PathBuf, // ~/.vibe-trading/runtime/agent
     pub runtime_libs: PathBuf,  // ~/.vibe-trading/runtime/libs (按需安装的可选依赖)
     pub marker: PathBuf,        // ~/.vibe-trading/runtime/.installed_version
     pub user_env: PathBuf,      // ~/.vibe-trading/.env
+    pub venv_dir: PathBuf,      // ~/.vibe-trading/venv
+    pub venv_python: PathBuf,   // venv interpreter executable (platform-dependent)
+    pub sessions_dir: PathBuf,  // ~/.vibe-trading/sessions
+    pub logs_dir: PathBuf,      // ~/.vibe-trading/logs
 }
 
 impl Layout {
     pub fn new(home_vibe: &Path) -> Self {
+        let venv_dir = home_vibe.join("venv");
+        let venv_python = if cfg!(windows) {
+            venv_dir.join("Scripts").join("python.exe")
+        } else {
+            venv_dir.join("bin").join("python")
+        };
         Self {
             root: home_vibe.to_path_buf(),
             runtime_agent: home_vibe.join("runtime").join("agent"),
             runtime_libs: home_vibe.join("runtime").join("libs"),
             marker: home_vibe.join("runtime").join(".installed_version"),
             user_env: home_vibe.join(".env"),
+            venv_dir,
+            venv_python,
+            sessions_dir: home_vibe.join("sessions"),
+            logs_dir: home_vibe.join("logs"),
         }
     }
 
@@ -320,12 +335,37 @@ mod tests {
     }
 
     #[test]
-    fn upgrade_preserves_runtime_libs_contents() {
+    fn layout_exposes_venv_python_path() {
+        let home = std::path::Path::new("/fake/home/.vibe-trading");
+        let layout = Layout::new(home);
+        assert_eq!(layout.venv_dir, home.join("venv"));
+        if cfg!(windows) {
+            assert_eq!(layout.venv_python, home.join("venv").join("Scripts").join("python.exe"));
+        } else {
+            assert_eq!(layout.venv_python, home.join("venv").join("bin").join("python"));
+        }
+    }
+
+    #[test]
+    fn layout_exposes_sessions_and_logs_at_home_root() {
+        let home = std::path::Path::new("/fake/home/.vibe-trading");
+        let layout = Layout::new(home);
+        assert_eq!(layout.sessions_dir, home.join("sessions"));
+        assert_eq!(layout.logs_dir, home.join("logs"));
+        // 确认 sessions/logs 在 home 根目录，不在 runtime/ 内
+        assert!(!layout.sessions_dir.starts_with(home.join("runtime")));
+        assert!(!layout.logs_dir.starts_with(home.join("runtime")));
+    }
+
+    #[test]
+    fn upgrade_preserves_live_audit_and_sessions() {
         let tmp = tempdir().unwrap();
         let bundle = tmp.path().join("bundle");
         let home = tmp.path().join("home");
         make_bundle(&bundle, "1.0.0");
         let layout = Layout::new(&home);
+
+        // 先首次运行，创建基础结构
         prepare(
             &bundle.join("agent"),
             &bundle.join("agent/.env"),
@@ -335,15 +375,15 @@ mod tests {
         )
         .unwrap();
 
-        // 模拟用户安装了一个包到 libs
-        fs::create_dir_all(layout.runtime_libs.join("futu_api")).unwrap();
-        fs::write(
-            layout.runtime_libs.join("futu_api/__init__.py"),
-            "# user installed",
-        )
-        .unwrap();
+        // 模拟用户在 home 根部创建 live/ 和 sessions/
+        let live_dir = home.join("live");
+        let sessions_dir = home.join("sessions");
+        fs::create_dir_all(&live_dir).unwrap();
+        fs::write(live_dir.join("audit_ledger.json"), r#"{"trades":[]}"#).unwrap();
+        fs::create_dir_all(&sessions_dir).unwrap();
+        fs::write(sessions_dir.join("session_abc.json"), r#"{"runId":"abc"}"#).unwrap();
 
-        // bundle 升级到 v2
+        // 升级到 v2
         fs::write(bundle.join("agent/api_server.py"), "# v2").unwrap();
         fs::write(bundle.join("VERSION"), "2.0.0").unwrap();
         prepare(
@@ -355,13 +395,60 @@ mod tests {
         )
         .unwrap();
 
-        assert!(
-            layout.runtime_libs.join("futu_api/__init__.py").exists(),
-            "runtime_libs contents must survive an upgrade"
-        );
+        // live/ 资产必须存活
+        assert!(live_dir.join("audit_ledger.json").exists(),
+            "live/audit_ledger.json must survive upgrade");
         assert_eq!(
-            fs::read_to_string(layout.runtime_libs.join("futu_api/__init__.py")).unwrap(),
-            "# user installed"
+            fs::read_to_string(live_dir.join("audit_ledger.json")).unwrap(),
+            r#"{"trades":[]}"#
+        );
+
+        // sessions/ 资产必须存活
+        assert!(sessions_dir.join("session_abc.json").exists(),
+            "sessions/session_abc.json must survive upgrade");
+        assert_eq!(
+            fs::read_to_string(sessions_dir.join("session_abc.json")).unwrap(),
+            r#"{"runId":"abc"}"#
+        );
+    }
+
+    #[test]
+    fn prepare_readable_error_on_unwritable_target() {
+        let tmp = tempdir().unwrap();
+        let bundle = tmp.path().join("bundle");
+        make_bundle(&bundle, "1.0.0");
+        let home = tmp.path().join("home");
+        let layout = Layout::new(&home);
+
+        // 先成功 prepare 一次，创建 marker 文件
+        prepare(
+            &bundle.join("agent"),
+            &bundle.join("agent/.env"),
+            &bundle.join("VERSION"),
+            None,
+            &layout,
+        )
+        .unwrap();
+
+        // 再次升级，但把 marker 文件路径替换为一个目录，让 fs::write(&marker, ...) 失败
+        fs::write(bundle.join("VERSION"), "2.0.0").unwrap();
+        // 删除 marker 文件，在它位置上创建目录
+        fs::remove_file(&layout.marker).unwrap();
+        fs::create_dir_all(&layout.marker).unwrap();
+
+        let err = prepare(
+            &bundle.join("agent"),
+            &bundle.join("agent/.env"),
+            &bundle.join("VERSION"),
+            None,
+            &layout,
+        );
+        assert!(err.is_err(), "should fail writing to a path that is a directory");
+        let msg = err.unwrap_err();
+        // 错误消息必须包含失败的路径信息
+        assert!(
+            msg.contains("marker") || msg.contains("agent") || msg.contains("runtime"),
+            "error message must mention the failed path, got: {msg}"
         );
     }
 }

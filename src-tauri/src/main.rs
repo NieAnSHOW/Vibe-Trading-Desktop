@@ -112,7 +112,7 @@ fn boot(
         port::kill_listener_on_port(p);
     }
     // D7: 启动 sidecar(PYTHONPATH 指向可写副本)
-    let mut child = sidecar::spawn(&res.runtime_python, &layout.runtime_agent, p, &layout.runtime_libs)?;
+    let mut child = sidecar::spawn(&res.runtime_python, &layout.runtime_agent, p, &layout.runtime_libs, &layout.sessions_dir)?;
     // D8: 门控
     match sidecar::await_health(&mut child, p) {
         sidecar::Ready::Ok => {

@@ -13,6 +13,7 @@ pub fn build_cmd(
     runtime_agent: &Path,
     port: u16,
     runtime_libs: &Path,
+    sessions_dir: &Path,
 ) -> std::process::Command {
     let mut cmd = Command::new(python);
     cmd.arg("-c")
@@ -26,6 +27,7 @@ pub fn build_cmd(
         .env("PYTHONPATH", runtime_agent)
         .env("PYTHONDONTWRITEBYTECODE", "1")
         .env("VIBE_RUNTIME_LIBS", runtime_libs)
+        .env("VIBE_SESSIONS_DIR", sessions_dir)
         // Default pip mirror: Tsinghua (HTTPS) so first-run installs are fast
         // on CN networks. The Python side (optional_deps.mirror) can override
         // per-install via --index-url; this is just the process default.
@@ -57,8 +59,9 @@ pub fn spawn(
     runtime_agent: &Path,
     port: u16,
     runtime_libs: &Path,
+    sessions_dir: &Path,
 ) -> Result<Child, String> {
-    let mut cmd = build_cmd(python, runtime_agent, port, runtime_libs);
+    let mut cmd = build_cmd(python, runtime_agent, port, runtime_libs, sessions_dir);
     cmd.spawn()
         .map_err(|e| format!("spawn sidecar failed: {e}"))
 }
@@ -155,7 +158,7 @@ mod tests {
     fn spawn_command_has_expected_args() {
         let python = Path::new("/fake/python3");
         let agent = Path::new("/fake/agent");
-        let cmd = build_cmd(python, agent, 8899, Path::new("/fake/libs"));
+        let cmd = build_cmd(python, agent, 8899, Path::new("/fake/libs"), Path::new("/fake/sessions"));
 
         // Verify the program path is set correctly
         assert_eq!(cmd.get_program(), "/fake/python3");
@@ -188,7 +191,7 @@ mod tests {
     fn build_cmd_includes_serve_args() {
         let python = Path::new("/fake/python3");
         let agent = Path::new("/fake/agent");
-        let cmd = build_cmd(python, agent, 8899, Path::new("/fake/libs"));
+        let cmd = build_cmd(python, agent, 8899, Path::new("/fake/libs"), Path::new("/fake/sessions"));
 
         let args: Vec<&str> = cmd.get_args().map(|a| a.to_str().unwrap()).collect();
         let args_str = args.join(" ");
@@ -214,7 +217,7 @@ mod tests {
         let python = Path::new("/fake/python3");
         let agent = Path::new("/fake/agent");
         let libs = Path::new("/fake/libs");
-        let cmd = build_cmd(python, agent, 8899, libs);
+        let cmd = build_cmd(python, agent, 8899, libs, Path::new("/fake/sessions"));
 
         let mut found = false;
         for (key, val) in cmd.get_envs() {
@@ -232,7 +235,7 @@ mod tests {
         let python = Path::new("/fake/python3");
         let agent = Path::new("/fake/agent");
         let libs = Path::new("/fake/libs");
-        let cmd = build_cmd(python, agent, 8899, libs);
+        let cmd = build_cmd(python, agent, 8899, libs, Path::new("/fake/sessions"));
 
         let mut index = None;
         let mut trusted = None;
@@ -250,6 +253,25 @@ mod tests {
             "PIP_INDEX_URL must default to the Tsinghua mirror"
         );
         assert_eq!(trusted, None, "HTTPS mirror needs no trusted-host");
+    }
+
+    #[test]
+    fn build_cmd_injects_sessions_dir_env() {
+        let python = Path::new("/fake/python3");
+        let agent = Path::new("/fake/agent");
+        let libs = Path::new("/fake/libs");
+        let sessions = Path::new("/fake/home/.vibe-trading/sessions");
+        let cmd = build_cmd(python, agent, 8899, libs, sessions);
+
+        let mut found = false;
+        for (key, val) in cmd.get_envs() {
+            if key.to_str() == Some("VIBE_SESSIONS_DIR")
+                && val.and_then(|v| v.to_str()) == Some("/fake/home/.vibe-trading/sessions")
+            {
+                found = true;
+            }
+        }
+        assert!(found, "VIBE_SESSIONS_DIR not set to sessions path");
     }
 
     /// 回归测试：模拟一个「收到 SIGTERM 但拒绝退出」的 sidecar（复刻 uvicorn
