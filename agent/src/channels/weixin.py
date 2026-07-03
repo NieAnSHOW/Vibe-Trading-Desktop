@@ -491,10 +491,21 @@ class WeixinChannel(BaseChannel):
             except httpx.TimeoutException:
                 # Normal for long-poll, just retry
                 continue
-            except Exception:
+            except Exception as err:
                 if not self._running:
                     break
-                self.logger.exception("WeChat poll loop error")
+                # ilinkai's LB drops idle keep-alive connections, so the next
+                # poll's reconnect can fail at the TLS handshake ("TLS/SSL
+                # connection has been closed (EOF)") or mid-read. Those surface
+                # as httpx.TransportError — expected reconnects, not faults, so
+                # log them quietly. Everything else (HTTP 5xx, protocol/API
+                # errors) keeps the full ERROR traceback.
+                if isinstance(err, httpx.TransportError):
+                    self.logger.warning(
+                        "WeChat poll transient network error, reconnecting: %s", err
+                    )
+                else:
+                    self.logger.exception("WeChat poll loop error")
                 consecutive_failures += 1
                 if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
                     consecutive_failures = 0

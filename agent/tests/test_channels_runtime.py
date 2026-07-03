@@ -170,6 +170,52 @@ def test_channel_manager_skips_enabled_adapter_when_lazy_sdk_missing(monkeypatch
     assert status["install_hint"] == "pip install 'vibe-trading-ai[discord]'"
 
 
+def test_weixin_poll_loop_treats_transport_error_as_transient(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A TLS/transport error mid long-poll is an expected reconnect, not a fault.
+
+    ilinkai's LB closes idle keep-alive connections, so the next poll's TLS
+    handshake can see an EOF -> httpx.ConnectError (a TransportError, but NOT a
+    TimeoutException). It must be retried quietly, never surfaced as an ERROR
+    'WeChat poll loop error' traceback.
+    """
+    import logging
+
+    import httpx
+
+    import src.channels.weixin as weixin_mod
+    from src.channels.weixin import WeixinChannel
+
+    # Neutralise retry/backoff sleeps so the loop spins instantly.
+    monkeypatch.setattr(weixin_mod, "RETRY_DELAY_S", 0)
+    monkeypatch.setattr(weixin_mod, "BACKOFF_DELAY_S", 0)
+
+    channel = WeixinChannel({"enabled": True, "token": "fake-token"}, MessageBus())
+
+    calls = {"n": 0}
+
+    async def fake_poll_once() -> None:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            # _running is still True here -> the except branch runs to completion.
+            raise httpx.ConnectError("TLS/SSL connection has been closed (EOF) (_ssl.c:992)")
+        channel._running = False  # 2nd iteration: stop the loop cleanly.
+
+    monkeypatch.setattr(channel, "_poll_once", fake_poll_once)
+
+    async def scenario() -> None:
+        await channel.start()
+        if channel._client is not None:
+            await channel._client.aclose()
+
+    with caplog.at_level(logging.INFO):
+        asyncio.run(scenario())
+
+    assert "WeChat poll loop error" not in caplog.text
+    assert "transient network error" in caplog.text
+
+
 def test_websocket_turn_wall_accepts_optional_chat_id() -> None:
     assert websocket_turn_wall_started_at("chat-1") is None
     mark_websocket_turn_started("chat-1", 123.0)
