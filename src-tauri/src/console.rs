@@ -5,6 +5,7 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::Child;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, State};
 
@@ -145,6 +146,30 @@ pub fn console_open_webui(port: u16) -> Result<(), String> {
     crate::open_url_with_system(&url)
 }
 
+/// 构造本地 backend 的消息渠道启动 URL。
+pub fn channels_start_url(port: u16) -> String {
+    format!("http://127.0.0.1:{port}/channels/start")
+}
+
+/// 启动消息渠道:转发 POST /channels/start 到正在运行的 backend。
+/// 等价于 `vibe-trading channels start`。backend 对 loopback 免 auth,无需鉴权头。
+#[tauri::command]
+pub fn console_start_channels(port: u16) -> Result<String, String> {
+    let resp = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("构建 HTTP 客户端: {e}"))?
+        .post(channels_start_url(port))
+        .send()
+        .map_err(|e| format!("调用 /channels/start 失败: {e}"))?;
+    let status = resp.status();
+    let body = resp.text().map_err(|e| format!("读取响应: {e}"))?;
+    if !status.is_success() {
+        return Err(format!("后端返回 {status}: {body}"));
+    }
+    Ok(body)
+}
+
 /// 在文件管理器打开 ~/.vibe-trading/logs/。
 #[tauri::command]
 pub fn console_open_logs() -> Result<(), String> {
@@ -215,6 +240,14 @@ mod tests {
         fs::write(&layout.venv_python, "#!/bin/sh\n").unwrap();
         fs::write(layout.venv_dir.join(".requirements_hash"), "deadbeef").unwrap();
         assert_eq!(compute_env_status(&layout), EnvStatus::Ready);
+    }
+
+    #[test]
+    fn channels_start_url_targets_local_backend() {
+        assert_eq!(
+            channels_start_url(8899),
+            "http://127.0.0.1:8899/channels/start"
+        );
     }
 
     #[test]

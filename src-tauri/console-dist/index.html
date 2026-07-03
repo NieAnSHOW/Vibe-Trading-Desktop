@@ -447,6 +447,9 @@
         <button id="btnOpen" class="btn-ghost" disabled>
           在浏览器打开 WebUI
         </button>
+        <button id="btnChannels" class="btn-ghost" disabled>
+          启动消息渠道
+        </button>
         <button id="btnLogs" class="btn-ghost">打开日志目录</button>
       </div>
 
@@ -560,6 +563,10 @@
           stopBtn.disabled = !running;
         }
         $("btnOpen").disabled = !running;
+        // 启动消息渠道依赖正在运行的 backend,且 busy() 期间不被轮询覆盖。
+        const channelsBtn = $("btnChannels");
+        if (!channelsBtn.classList.contains("busy"))
+          channelsBtn.disabled = !running;
         if (running) hintEl.hidden = true;
       }
 
@@ -638,6 +645,32 @@
           } catch (e) {
             setErr(e);
           }
+      };
+      // 等价于 `vibe-trading channels start`:转发 POST /channels/start 到 backend。
+      $("btnChannels").onclick = () => {
+        if (port === null) return;
+        busy($("btnChannels"), "启动中", async () => {
+          setErr("");
+          log("启动消息渠道…");
+          try {
+            const body = await invoke("console_start_channels", { port });
+            let msg;
+            try {
+              const data = JSON.parse(body);
+              const up = Object.entries(data.channels || {})
+                .filter(([, v]) => v && v.running)
+                .map(([k]) => k);
+              msg = up.length
+                ? `消息渠道已启动，运行中: ${up.join(", ")}`
+                : "消息渠道已启动（无适配器运行，请检查 channels 配置）";
+            } catch {
+              msg = body;
+            }
+            log(msg);
+          } catch (e) {
+            setErr(e);
+          }
+        });
       };
       $("btnLogs").onclick = async () => {
         try {

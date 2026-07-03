@@ -19,6 +19,7 @@ fn main() {
             console::console_start_service,
             console::console_stop_service,
             console::console_open_webui,
+            console::console_start_channels,
             console::console_open_logs
         ])
         .setup(move |app| {
