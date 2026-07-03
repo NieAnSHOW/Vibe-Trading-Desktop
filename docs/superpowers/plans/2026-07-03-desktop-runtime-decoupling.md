@@ -2,6 +2,7 @@
 change: desktop-runtime-decoupling
 design-doc: docs/superpowers/specs/2026-07-03-desktop-runtime-decoupling-design.md
 base-ref: 7e3747eae75b3509638395e718cfbaf78e73e386
+archived-with: 2026-07-03-desktop-runtime-decoupling
 ---
 
 # 桌面运行时解耦 实施计划
@@ -14,6 +15,7 @@ base-ref: 7e3747eae75b3509638395e718cfbaf78e73e386
 
 **Tech Stack:** Python 3.12(stdlib `venv` + `pip`、FastAPI、pytest)、Rust(Tauri v2、`cargo test`)、React 19 + Vite + TypeScript(vitest)、Bash / PowerShell 装配脚本。
 
+archived-with: 2026-07-03-desktop-runtime-decoupling
 ---
 
 ## 文件结构

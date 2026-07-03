@@ -3,7 +3,7 @@
 ## Purpose
 为桌面端提供用户行为埋点能力：客户端在前端采集 UI 事件、在 Python sidecar 产出脱敏聚合指标，按本地日期分桶存入 IndexedDB，并在用户隔天再次启动应用时批量上传到 VIP 用户服务器（cool-admin-midway :8001）。支持未登录匿名上传，由服务端盖戳登录用户身份；严格脱敏，绝不采集 prompt/查询/交易内容。
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: 前端采集 UI 交互事件
 桌面客户端 SHALL 在前端提供统一埋点接口采集 UI 交互事件（页面浏览、功能使用、会话起止、错误），事件通过显式白名单枚举，属性仅允许枚举值与聚合数字。

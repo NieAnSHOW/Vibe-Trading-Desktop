@@ -1,18 +1,6 @@
-# python-runtime-bundling Specification
+# python-runtime-bundling delta
 
-## Purpose
-TBD - created by archiving change tauri-desktop-client. Update Purpose after archive.
-## Requirements
-### Requirement: 可重定位的内嵌 Python 运行时
-打包流程 SHALL 产出一份自包含、可重定位的 Python 运行时(基于 python-build-standalone),使其在被放置到应用资源目录的任意安装路径后仍能正常运行,不依赖用户机器上预装的 Python。
-
-#### Scenario: 无系统 Python 的机器上运行
-- **WHEN** 应用安装在一台未安装任何 Python 的全新机器上
-- **THEN** 应用使用内嵌运行时启动后端,无需用户安装 Python 或任何依赖
-
-#### Scenario: 运行时随安装路径迁移
-- **WHEN** 内嵌运行时被安装到不同的目标路径(不同用户名 / 安装目录)
-- **THEN** 运行时仍能正确解析自身路径并启动,不因绝对路径写死而失败
+## MODIFIED Requirements
 
 ### Requirement: 预装全部后端依赖(排除 weasyprint)
 打包流程 SHALL 仅将能拉起桌面控制台与 `serve` 空转所需的 **Tier 0 最小核心依赖**预装进内嵌运行时(至少 fastapi / uvicorn / pydantic / langchain 等 serve 入口链路顶层依赖),SHALL NOT 再将整个 `agent/requirements.txt` 预装进 bundle。重型后端依赖(pandas / numpy / scipy / scikit-learn / matplotlib / duckdb / ccxt / akshare / tushare 等)SHALL 由首次运行时 bootstrap 安装进用户目录 venv(见 desktop-runtime-bootstrap),不随 bundle 分发。weasyprint 及其系统原生库仍 SHALL 排除。
@@ -29,13 +17,6 @@ TBD - created by archiving change tauri-desktop-client. Update Purpose after arc
 - **WHEN** 用户完成首次 bootstrap 后使用回测/行情/图表等功能
 - **THEN** 所需重型包从 `~/.vibe-trading/venv` 导入并正常工作,而非从 bundle
 
-### Requirement: 原生扩展可重定位性验证
-打包流程 SHALL 验证带原生扩展的关键依赖(至少包括 numpy、scipy、scikit-learn、duckdb、pandas、Pillow)在内嵌运行时迁移到目标路径后可成功导入。
-
-#### Scenario: 关键原生包导入冒烟测试
-- **WHEN** 在打包产物(或等价的迁移路径)中执行导入冒烟测试
-- **THEN** 上述每个包均能成功 `import` 且基本调用不报动态库链接错误(如 BLAS / rpath 问题)
-
 ### Requirement: 回测子进程使用内嵌 Python 自包含
 回测执行会以子进程方式选取解释器(`agent/src/core/runner.py` 在找不到项目 `.venv` 时回退到 `sys.executable`)。桌面运行模式下,后端 SHALL 以 `~/.vibe-trading/venv` 的解释器运行,使回测子进程经 `sys.executable` 回退时选中的即为该 venv 解释器,从而自包含加载全部所需依赖。
 
@@ -43,3 +24,8 @@ TBD - created by archiving change tauri-desktop-client. Update Purpose after arc
 - **WHEN** 在桌面运行模式(sidecar 由 venv 解释器启动)触发一次回测
 - **THEN** 回测子进程使用 venv 解释器成功加载 pandas/numpy/scipy 等依赖并完成执行,不因缺失依赖或解释器不可用而失败
 
+## REMOVED Requirements
+
+### Requirement: 资源装配与裁剪
+**Reason**: 该 requirement 以"内嵌运行时预装全部依赖"为前提描述资源装配;依赖三层化后,bundle 不再装配全量 site-packages,装配范围与裁剪策略由本 delta 的 Tier 0 requirement 与 desktop-runtime-bootstrap 共同重新定义,原表述已不成立。
+**Migration**: 资源装配改为:bundle 装配 Tier 0 运行时 + agent 源码 + frontend/dist + .env 种子;重型依赖不再进 bundle,改由首次运行 bootstrap 到 `~/.vibe-trading/venv`。裁剪(测试/`__pycache__`/`*.dist-info`)仍适用于 Tier 0 运行时。

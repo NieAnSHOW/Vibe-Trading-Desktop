@@ -1,8 +1,7 @@
-# desktop-shell Specification
+# desktop-shell delta
 
-## Purpose
-TBD - created by archiving change tauri-desktop-client. Update Purpose after archive.
-## Requirements
+## MODIFIED Requirements
+
 ### Requirement: 应用启动时编排 Python 后端 sidecar
 桌面应用 SHALL 在环境就绪(venv 已 bootstrap 且冒烟验证通过)后,使用 `~/.vibe-trading/venv` 的解释器拉起 Python 后端作为 sidecar 子进程,通过 `vibe-trading serve` 入口启动 FastAPI 服务。桌面应用 SHALL NOT 用内嵌 webview 承载业务 Web UI;业务 UI 改由系统默认浏览器访问 `http://127.0.0.1:<port>`(见 desktop-control-console)。启动服务前若环境未就绪,SHALL 引导用户先完成依赖 bootstrap。
 
@@ -17,42 +16,6 @@ TBD - created by archiving change tauri-desktop-client. Update Purpose after arc
 #### Scenario: 环境未就绪时不启动服务
 - **WHEN** venv 未 bootstrap 或冒烟未通过时尝试启动服务
 - **THEN** 应用不启动 serve,转而引导用户先完成依赖安装
-
-### Requirement: 动态端口分配
-桌面应用 SHALL 为后端动态选取一个可用的本机端口,而非固定使用 8899,以规避端口冲突。
-
-#### Scenario: 默认端口被占用
-- **WHEN** 启动时 8899 或首选端口已被其他进程占用
-- **THEN** 应用自动选取另一个空闲端口并以该端口启动后端,应用仍正常启动
-
-#### Scenario: webview 与后端端口一致
-- **WHEN** 后端在动态选取的端口 `<port>` 上就绪
-- **THEN** webview 加载的地址与该 `<port>` 一致,前端 API 请求(同源相对路径)指向同一后端
-
-### Requirement: 后端仅绑定本机回环地址
-桌面运行模式下,后端 SHALL 绑定 `127.0.0.1`,不得绑定 `0.0.0.0` 或对外暴露端口。
-
-#### Scenario: 后端不对局域网暴露
-- **WHEN** 应用启动后端
-- **THEN** 后端监听地址为 `127.0.0.1:<port>`,同一网络中的其他设备无法访问该后端
-
-### Requirement: 退出时清理 sidecar 进程
-桌面应用 SHALL 在主窗口关闭或应用退出时干净终止 Python sidecar 子进程及其派生进程,不留残留进程。
-
-#### Scenario: 关闭应用终止后端
-- **WHEN** 用户关闭应用主窗口
-- **THEN** Python sidecar 进程被终止,关闭后系统中不存在由本应用启动的残留 Python 后端进程
-
-#### Scenario: 异常退出也清理
-- **WHEN** 应用进程异常终止(崩溃或被强制结束)
-- **THEN** 在平台能力允许范围内,sidecar 子进程随之终止(如通过进程组 / Job Object 关联),不长期残留
-
-### Requirement: 启动失败的可见错误处理
-当后端在超时时间内未能就绪时,桌面应用 SHALL 向用户显示可读的错误信息,而非静默卡在加载态或崩溃。
-
-#### Scenario: 后端就绪超时
-- **WHEN** Python sidecar 启动后,健康检查在约定超时时间内始终未通过
-- **THEN** 应用展示明确的启动失败提示(含可定位问题的基本信息),并提供退出途径
 
 ### Requirement: 首启与升级时准备可写运行目录
 桌面应用 SHALL 在启动后端前把只读 bundle 中的后端代码复制到可写运行目录并以该副本启动后端。会话数据(会话 JSONL 与 `sessions.db`)当前物理位于 `runtime/agent/sessions/`,SHALL 迁出 `runtime/` 到不随运行时重建而清除的位置,使推倒重建 `runtime/` 不影响会话。升级/重构刷新时,SHALL 仅推倒重建运行时/派生目录(`runtime/`、`cache/`、`fonts/`、`logs/`、`history`、`app/`),并 SHALL 保留全部用户资产(`.env`、`live/` 实盘授权与审计账本、`channels/`+`pairing.json`、`memory/`、`shadow_accounts/`、券商配置 json、`runs/`、`workspace/`、`uploads/`)与会话数据。
@@ -80,4 +43,3 @@ TBD - created by archiving change tauri-desktop-client. Update Purpose after arc
 #### Scenario: 可写目录准备失败的可读错误
 - **WHEN** 准备可写运行目录失败(如磁盘空间不足或权限不足)
 - **THEN** 控制台展示可读的错误信息(含失败路径与原因),而非静默崩溃或卡在加载态
-
