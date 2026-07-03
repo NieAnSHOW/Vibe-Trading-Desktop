@@ -26,7 +26,7 @@ from urllib.parse import quote
 
 import httpx
 import logging; logger = logging.getLogger(__name__)
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from src.channels.bus.events import OutboundMessage
 from src.channels.bus.queue import MessageBus
@@ -124,6 +124,17 @@ class WeixinConfig(BaseModel):
     enabled: bool = False
     allow_from: list[str] = Field(default_factory=list)
     base_url: str = "https://ilinkai.weixin.qq.com"
+
+    @field_validator("base_url", mode="after")
+    @classmethod
+    def _fallback_placeholder_base_url(cls, v: str) -> str:
+        # example.com/.org/.net 是 RFC 2606 保留的示例域名;配置文件常残留这类占位值
+        # 或空串,直接用会让所有请求 DNS 失败(ConnectError [Errno 8] nodename...)。
+        # 检测到时回退到真实的 ilinkai 服务地址,避免占位配置导致扫码登录不可用。
+        if not v or not v.strip() or any(d in v for d in ("example.com", "example.org", "example.net")):
+            return "https://ilinkai.weixin.qq.com"
+        return v
+
     cdn_base_url: str = "https://novac2c.cdn.weixin.qq.com/c2c"
     route_tag: str | int | None = None
     token: str = ""  # Manually set token, or obtained via QR login
@@ -328,12 +339,16 @@ class WeixinChannel(BaseChannel):
         """Lazily create httpx client for QR login when not yet started.
 
         ponytail: no explicit close; replaced by start() or GC'd on exit.
+        trust_env=False 直连腾讯 ilinkai 服务(国内域名);否则桌面端 sidecar 会继承
+        代理软件的 HTTP(S)_PROXY 环境变量,经代理访问 ilinkai.weixin.qq.com 必然
+        ConnectError(All connection attempts failed)。
         """
         if self._client is not None:
             return
         self._client = httpx.AsyncClient(
             timeout=httpx.Timeout(60, connect=30),
             follow_redirects=True,
+            trust_env=False,
         )
 
     async def _fetch_qr_code(self) -> tuple[str, str]:
@@ -497,6 +512,7 @@ class WeixinChannel(BaseChannel):
         self._client = httpx.AsyncClient(
             timeout=httpx.Timeout(self._next_poll_timeout_s + 10, connect=30),
             follow_redirects=True,
+            trust_env=False,  # 直连腾讯 ilinkai,绕过继承的系统代理(同 _ensure_client)
         )
 
         if self.config.token:

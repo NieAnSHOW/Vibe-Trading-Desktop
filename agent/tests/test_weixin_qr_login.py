@@ -79,3 +79,26 @@ def test_poll_qr_login_scaned_but_redirect_updates_base(monkeypatch):
     res2 = asyncio.run(ch.poll_qr_login("qid-1"))
     assert res2["status"] == "wait"
     assert call_count == 2
+
+
+def test_weixin_client_ignores_system_proxy(monkeypatch):
+    """桌面端 sidecar 继承代理软件的 HTTP(S)_PROXY 时,经代理访问腾讯 ilinkai 会
+    ConnectError;weixin client 必须 trust_env=False 直连国内腾讯服务。"""
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:9999")
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:9999")
+    ch = WeixinChannel({"enabled": True}, MessageBus())
+    ch._ensure_client()
+    assert ch._client is not None
+    assert ch._client.trust_env is False
+
+
+def test_weixin_config_falls_back_placeholder_base_url():
+    """配置文件带占位 base_url(example.com / 空)时,fallback 到真实 ilinkai,
+    避免 DNS 失败导致 QR login ConnectError。"""
+    from src.channels.weixin import WeixinConfig
+
+    assert WeixinConfig(base_url="https://custom.example.com").base_url == "https://ilinkai.weixin.qq.com"
+    assert WeixinConfig(base_url="").base_url == "https://ilinkai.weixin.qq.com"
+    assert WeixinConfig(base_url="https://example.org/x").base_url == "https://ilinkai.weixin.qq.com"
+    # 合法自定义 base_url 保留(私有部署等)
+    assert WeixinConfig(base_url="https://my.private-ilink.com").base_url == "https://my.private-ilink.com"
