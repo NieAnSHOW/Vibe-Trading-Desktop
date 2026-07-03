@@ -60,8 +60,8 @@ The desktop app bundles three artifacts into the Tauri resource bundle (see `src
 ```bash
 # Full pipeline (stages into .desktop-build/):
 bash scripts/desktop/fetch-runtime.sh     # download embedded Python 3.12 runtime (macOS/Linux)
-bash scripts/desktop/install-deps.sh <runtime_dir>   # `uv pip install` agent deps into the runtime's site-packages (excludes weasyprint — native cairo/pango deps don't bundle)
-bash scripts/desktop/assemble.sh          # stage agent code + .env + VERSION into .desktop-build/
+bash scripts/desktop/install-deps.sh <runtime_dir>   # `uv pip install` Tier 0 deps only (requirements-tier0.txt) into site-packages
+bash scripts/desktop/assemble.sh          # stage agent code + .env + VERSION into .desktop-build/, then run smoke_tier0.py
 
 # End-to-end packaging (auto-runs assemble.sh if .desktop-build/ is not ready):
 bash scripts/desktop/build-dmg.sh         # macOS .dmg (validates toolchain, rebuilds frontend, cargo tauri build, smoke-checks .app/.dmg)
@@ -71,7 +71,11 @@ bash scripts/desktop/build-dmg.sh         # macOS .dmg (validates toolchain, reb
 node scripts/desktop/sync-version.mjs <vX.Y.Z>
 ```
 
-`uv` is a prerequisite for `install-deps.sh`. **Note:** `install-deps.sh` deliberately excludes `weasyprint` from the bundled runtime — shadow-account **PDF** reports will not render in desktop builds (HTML reports still work). `.desktop-build/` is git-ignored staging; never commit it. CI release builds run via `.github/workflows/desktop-build.yml` (tag-driven).
+`uv` is a prerequisite for `install-deps.sh`. **Note:** `install-deps.sh` now installs **only Tier 0** (`requirements-tier0.txt`, ~15 lightweight packages) instead of the full `requirements.txt`. Heavy dependencies (pandas, scipy, scikit-learn, duckdb, etc.) are installed at first-run bootstrap into `~/.vibe-trading/venv/` via `vibe-trading bootstrap`. See `docs/desktop/README.md` for the three-tier dependency model.
+
+`weasyprint` is excluded from the bundle (native cairo/pango deps don't bundle) — shadow-account **PDF** reports will not render in desktop builds (HTML reports still work). Note: the bootstrap CLI (`agent/src/desktop_bootstrap/cli.py`) reads `agent/requirements.txt` directly and does **not** filter weasyprint, so bootstrap will attempt to install it into `venv`. If the system lacks cairo/pango libraries (e.g., missing `brew install` on macOS), weasyprint will fail at runtime but only PDF report generation is affected — all other functionality works fine.
+
+`.desktop-build/` is git-ignored staging; never commit it. CI release builds run via `.github/workflows/desktop-build.yml` (tag-driven).
 
 ### Distribution on macOS (MVP)
 
@@ -110,12 +114,16 @@ bash scripts/desktop/build-dmg.sh
 
 ### Data Flow (Desktop Mode)
 
-1. Tauri app starts → shows `loading.html`
+1. Tauri app starts → shows desktop console UI
 2. Rust resolves bundled resources (Python runtime, agent code, frontend dist)
 3. On first run or version bump, agent code copies to `~/.vibe-trading/runtime/agent/`
-4. Rust picks a free port, spawns Python sidecar: `python3 -c "import cli; cli.main(['serve', ...])"` with `PYTHONPATH` set
-5. Health-check polls `GET /health` (up to 60s), then navigates webview to `http://127.0.0.1:<port>/`
-6. On exit, sidecar process group killed via `killpg(SIGTERM)`
+4. Rust checks `~/.vibe-trading/venv/` status:
+   - If venv missing or incomplete, shows "Not Installed" / "Incomplete" state
+   - If `.requirements_hash` marker present and smoke passed, shows "Ready"
+5. User clicks "Install / Fix Dependencies" → Rust spawns `vibe-trading bootstrap --sse` using Tier 0 runtime's Python (not venv), streaming progress back to console UI. Bootstrap creates venv in `~/.vibe-trading/venv/`, pip-installs the full `requirements.txt`, writes a hash marker, and runs smoke validation
+6. When "Ready" and user clicks "Start Service" → Rust spawns serve from the venv Python (`~/.vibe-trading/venv/bin/python` / `Scripts/python.exe`). Health-check polls `GET /health` (up to 60s). On success, "Open WebUI in Browser" button becomes active
+7. "Open WebUI in Browser" opens `http://127.0.0.1:<port>/` in the system default browser (the Tauri webview is the console, not the business UI)
+8. On exit, sidecar process group killed via `killpg(SIGTERM)`
 
 ### Backend Key Paths
 
