@@ -3672,16 +3672,54 @@ def _has_root_route(routes: Any) -> bool:
     return any(getattr(route, "path", None) == "/" for route in routes)
 
 
-def serve_main(argv: list[str] | None = None) -> int:
-    """Start the API server from CLI-style arguments."""
+def _build_serve_parser() -> "argparse.ArgumentParser":
+    """Build the argument parser for ``serve_main``.
+
+    Extracted so unit tests can verify flags without triggering the full server
+    startup (uvicorn, Vite subprocess, etc.).
+    """
     import argparse
-    import subprocess
-    import uvicorn
 
     parser = argparse.ArgumentParser(description="Vibe-Trading Server")
     parser.add_argument("--port", type=int, default=8000, help="Listen port (default 8000)")
     parser.add_argument("--host", default="0.0.0.0", help="Bind address")
     parser.add_argument("--dev", action="store_true", help="Dev mode: spawn Vite on :5173")
+    parser.add_argument("--open", action="store_true", help="Open the WebUI in the default browser once healthy")
+    return parser
+
+
+def _should_open_browser(open_flag: bool) -> bool:
+    """Whether serve should open the system browser after boot."""
+    return bool(open_flag)
+
+
+def _open_browser_when_healthy(port: int) -> None:
+    """Background thread: poll /health, then open the default browser."""
+    import threading
+    import time
+    import urllib.request
+    import webbrowser
+
+    def _worker() -> None:
+        for _ in range(120):
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=1) as r:
+                    if r.status == 200:
+                        webbrowser.open(f"http://127.0.0.1:{port}/")
+                        return
+            except Exception:  # noqa: BLE001
+                pass
+            time.sleep(0.5)
+
+    threading.Thread(target=_worker, daemon=True, name="vibe-open-browser").start()
+
+
+def serve_main(argv: list[str] | None = None) -> int:
+    """Start the API server from CLI-style arguments."""
+    import subprocess
+    import uvicorn
+
+    parser = _build_serve_parser()
     try:
         args = parser.parse_args(argv)
     except SystemExit as exc:
@@ -3709,6 +3747,9 @@ def serve_main(argv: list[str] | None = None) -> int:
     else:
         print(f"[warn] No frontend build found at {frontend_dist}")
         print("[warn] Run: cd frontend && npm run build")
+
+    if _should_open_browser(args.open):
+        _open_browser_when_healthy(args.port)
 
     print("=" * 50)
     print("  Vibe-Trading Server")

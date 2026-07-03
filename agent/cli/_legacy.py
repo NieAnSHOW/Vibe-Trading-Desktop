@@ -4260,6 +4260,7 @@ def _build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--host", default="0.0.0.0", help="Bind address")
     serve_parser.add_argument("--port", type=int, default=8899, help="Listen port")
     serve_parser.add_argument("--dev", action="store_true", help="Start the Vite dev server")
+    serve_parser.add_argument("--open", action="store_true", help="Open the WebUI in the default browser once healthy")
 
     bootstrap_parser = subparsers.add_parser("bootstrap", help="Create ~/.vibe-trading/venv and install backend deps")
     bootstrap_parser.add_argument("--sse", action="store_true", help="Emit SSE frames (desktop console)")
