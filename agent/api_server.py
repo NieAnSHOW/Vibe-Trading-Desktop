@@ -43,7 +43,8 @@ for _s in ("stdout", "stderr"):
         _r(encoding="utf-8", errors="replace")
 
 RUNS_DIR = Path(__file__).resolve().parent / "runs"
-SESSIONS_DIR = Path(__file__).resolve().parent / "sessions"
+from src.config.sessions_dir import resolve_sessions_dir
+SESSIONS_DIR = resolve_sessions_dir(Path(__file__).resolve().parent / "sessions")
 UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
 AGENT_DIR = Path(__file__).resolve().parent
 ENV_PATH = AGENT_DIR / ".env"

@@ -51,11 +51,13 @@ from rich.text import Text
 
 from cli.theme import get_console
 
+from src.config.sessions_dir import resolve_sessions_dir
+
 console = get_console()
 AGENT_DIR = Path(__file__).resolve().parents[1]
 RUNS_DIR = AGENT_DIR / "runs"
 SWARM_DIR = AGENT_DIR / ".swarm" / "runs"
-SESSIONS_DIR = AGENT_DIR / "sessions"
+SESSIONS_DIR = resolve_sessions_dir(AGENT_DIR / "sessions")
 UPLOADS_DIR = AGENT_DIR / "uploads"
 
 EXIT_SUCCESS = 0
