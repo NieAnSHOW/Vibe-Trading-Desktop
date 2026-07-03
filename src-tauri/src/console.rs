@@ -1,0 +1,240 @@
+//! 桌面控制台 IPC —— 环境/服务状态、启停服务、bootstrap 转发、打开 WebUI/日志。
+//! 逻辑尽量做成纯函数(可 cargo 测);Tauri command 是薄壳(设计 D3)。
+
+use std::io::{BufRead, BufReader};
+use std::path::Path;
+use std::process::Child;
+use std::sync::{Arc, Mutex};
+
+use tauri::{AppHandle, Emitter, State};
+
+use crate::runtime_dir::Layout;
+
+pub type SharedChild = Arc<Mutex<Option<Child>>>;
+
+// ── 纯函数(状态判定、命令构造) ──────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EnvStatus {
+    NotInstalled,
+    Incomplete,
+    Ready,
+}
+
+/// 依据磁盘上的 venv 解释器与 bootstrap hash marker 判定环境状态。
+pub fn compute_env_status(layout: &Layout) -> EnvStatus {
+    if !layout.venv_python.exists() {
+        return EnvStatus::NotInstalled;
+    }
+    let marker = layout.venv_dir.join(".requirements_hash");
+    if marker.exists() {
+        EnvStatus::Ready
+    } else {
+        EnvStatus::Incomplete
+    }
+}
+
+/// 构造 `vibe-trading bootstrap --sse` 子进程命令。
+/// bootstrap 用 bundle 的 Tier 0 python 执行(此时 venv 尚不存在),它内部再建 venv。
+pub fn build_bootstrap_cmd(tier0_python: &Path, runtime_agent: &Path) -> std::process::Command {
+    let mut cmd = std::process::Command::new(tier0_python);
+    cmd.arg("-c")
+        .arg("import cli,sys; raise SystemExit(cli.main(sys.argv[1:]))")
+        .arg("bootstrap")
+        .arg("--sse")
+        .current_dir(runtime_agent)
+        .env("PYTHONPATH", runtime_agent)
+        .env("PYTHONDONTWRITEBYTECODE", "1")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    cmd
+}
+
+// ── Tauri IPC 命令 ──────────────────────────────────────────────────
+
+#[derive(serde::Serialize)]
+pub struct StatusReport {
+    pub env: EnvStatus,
+    pub service_running: bool,
+    pub port: Option<u16>,
+}
+
+/// 环境 + 服务状态快照,供控制台首屏与轮询。
+#[tauri::command]
+pub fn console_status(state: State<'_, SharedChild>) -> Result<StatusReport, String> {
+    let layout = Layout::from_home()?;
+    let running = state.lock().unwrap().is_some();
+    Ok(StatusReport {
+        env: compute_env_status(&layout),
+        service_running: running,
+        port: None,
+    })
+}
+
+/// 触发依赖 bootstrap:spawn `vibe-trading bootstrap --sse`,逐行 emit "bootstrap://progress"。
+#[tauri::command]
+pub async fn console_bootstrap(app: AppHandle) -> Result<(), String> {
+    let layout = Layout::from_home()?;
+    let res = crate::resources::Resources::resolve(&app)
+        .map_err(|e| format!("resources: {e}"))?;
+    let mut child = build_bootstrap_cmd(&res.runtime_python, &layout.runtime_agent)
+        .spawn()
+        .map_err(|e| format!("spawn bootstrap: {e}"))?;
+    let stdout = child.stdout.take().ok_or("no bootstrap stdout")?;
+    let app2 = app.clone();
+    std::thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines().map_while(Result::ok) {
+            let _ = app2.emit("bootstrap://progress", line);
+        }
+        let code = child.wait().ok().and_then(|s| s.code());
+        let _ = app2.emit("bootstrap://exit", code);
+    });
+    Ok(())
+}
+
+/// 启动服务:环境未就绪时拒绝;否则用 venv 解释器 spawn serve + 健康门控。
+#[tauri::command]
+pub fn console_start_service(
+    app: AppHandle,
+    state: State<'_, SharedChild>,
+) -> Result<u16, String> {
+    let layout = Layout::from_home()?;
+    if compute_env_status(&layout) != EnvStatus::Ready {
+        return Err("环境未就绪,请先完成依赖安装".into());
+    }
+    if state.lock().unwrap().is_some() {
+        return Err("服务已在运行".into());
+    }
+    let port = crate::port::pick_free_port()?;
+    let mut child = crate::sidecar::spawn(
+        &layout.venv_python,
+        &layout.runtime_agent,
+        port,
+        &layout.runtime_libs,
+        &layout.sessions_dir,
+    )?;
+    match crate::sidecar::await_health(&mut child, port) {
+        crate::sidecar::Ready::Ok => {
+            state.lock().unwrap().replace(child);
+            let _ = app.emit("service://started", port);
+            Ok(port)
+        }
+        crate::sidecar::Ready::ProcessExited(c) => {
+            Err(format!("后端提前退出(退出码 {c:?})"))
+        }
+        crate::sidecar::Ready::Timeout => Err("后端 120 秒内未就绪".into()),
+    }
+}
+
+/// 停止服务:干净回收 sidecar 进程组。
+#[tauri::command]
+pub fn console_stop_service(state: State<'_, SharedChild>) -> Result<(), String> {
+    if let Some(mut child) = state.lock().unwrap().take() {
+        crate::sidecar::terminate(&mut child);
+    }
+    Ok(())
+}
+
+/// 在系统默认浏览器打开 WebUI。
+#[tauri::command]
+pub fn console_open_webui(port: u16) -> Result<(), String> {
+    let url = format!("http://127.0.0.1:{port}/");
+    crate::validate_external_url(&url)?;
+    crate::open_url_with_system(&url)
+}
+
+/// 在文件管理器打开 ~/.vibe-trading/logs/。
+#[tauri::command]
+pub fn console_open_logs() -> Result<(), String> {
+    let layout = Layout::from_home()?;
+    std::fs::create_dir_all(&layout.logs_dir)
+        .map_err(|e| format!("mkdir logs: {e}"))?;
+    open_path_in_file_manager(&layout.logs_dir)
+}
+
+#[cfg(target_os = "macos")]
+fn open_path_in_file_manager(p: &Path) -> Result<(), String> {
+    std::process::Command::new("open")
+        .arg(p)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("open logs: {e}"))
+}
+
+#[cfg(target_os = "windows")]
+fn open_path_in_file_manager(p: &Path) -> Result<(), String> {
+    std::process::Command::new("explorer")
+        .arg(p)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("open logs: {e}"))
+}
+
+#[cfg(target_os = "linux")]
+fn open_path_in_file_manager(p: &Path) -> Result<(), String> {
+    std::process::Command::new("xdg-open")
+        .arg(p)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("open logs: {e}"))
+}
+
+// ── 测试 ────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn env_status_not_installed_when_no_venv() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join(".vibe-trading");
+        let layout = crate::runtime_dir::Layout::new(&home);
+        assert_eq!(compute_env_status(&layout), EnvStatus::NotInstalled);
+    }
+
+    #[test]
+    fn env_status_incomplete_when_venv_without_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join(".vibe-trading");
+        let layout = crate::runtime_dir::Layout::new(&home);
+        fs::create_dir_all(layout.venv_python.parent().unwrap()).unwrap();
+        fs::write(&layout.venv_python, "#!/bin/sh\n").unwrap();
+        assert_eq!(compute_env_status(&layout), EnvStatus::Incomplete);
+    }
+
+    #[test]
+    fn env_status_ready_when_venv_and_marker_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join(".vibe-trading");
+        let layout = crate::runtime_dir::Layout::new(&home);
+        fs::create_dir_all(layout.venv_python.parent().unwrap()).unwrap();
+        fs::write(&layout.venv_python, "#!/bin/sh\n").unwrap();
+        fs::write(layout.venv_dir.join(".requirements_hash"), "deadbeef").unwrap();
+        assert_eq!(compute_env_status(&layout), EnvStatus::Ready);
+    }
+
+    #[test]
+    fn bootstrap_cmd_runs_cli_bootstrap_sse() {
+        let cmd = build_bootstrap_cmd(Path::new("/rt/bin/python3"), Path::new("/rt/agent"));
+        let args: Vec<&str> = cmd.get_args().map(|a| a.to_str().unwrap()).collect();
+        let joined = args.join(" ");
+        assert!(joined.contains("bootstrap"), "args: {joined}");
+        assert!(joined.contains("--sse"), "args: {joined}");
+        let mut has_pythonpath = false;
+        for (k, v) in cmd.get_envs() {
+            if k.to_str() == Some("PYTHONPATH")
+                && v.and_then(|x| x.to_str()) == Some("/rt/agent")
+            {
+                has_pythonpath = true;
+            }
+        }
+        assert!(
+            has_pythonpath,
+            "bootstrap 子进程须设 PYTHONPATH 指向 runtime agent"
+        );
+    }
+}

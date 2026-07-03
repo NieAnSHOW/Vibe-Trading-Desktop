@@ -1,11 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-mod resources; mod version; mod runtime_dir; mod port; mod sidecar;
+mod resources; mod version; mod runtime_dir; mod port; mod sidecar; mod console;
 
 use std::sync::{Arc, Mutex};
-use std::process::Child;
 use tauri::{RunEvent, WebviewUrl, WebviewWindowBuilder};
 
-type SharedChild = Arc<Mutex<Option<Child>>>;
+type SharedChild = console::SharedChild;
 
 fn main() {
     let shared: SharedChild = Arc::new(Mutex::new(None));
@@ -13,7 +12,15 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
-        .invoke_handler(tauri::generate_handler![open_external_url])
+        .invoke_handler(tauri::generate_handler![
+            open_external_url,
+            console::console_status,
+            console::console_bootstrap,
+            console::console_start_service,
+            console::console_stop_service,
+            console::console_open_webui,
+            console::console_open_logs
+        ])
         .setup(move |app| {
             let handle = app.handle().clone();
             // D3: 窗口先开,加载本地加载页(frontendDist 的 index.html,带 logo + spinner)
@@ -41,6 +48,7 @@ fn main() {
             });
             Ok(())
         })
+        .manage(shared.clone())
         .build(tauri::generate_context!())
         .expect("build tauri app")
         .run(move |_app, event| {
@@ -58,7 +66,7 @@ fn open_external_url(url: String) -> Result<(), String> {
     open_url_with_system(&url)
 }
 
-fn validate_external_url(url: &str) -> Result<(), String> {
+pub fn validate_external_url(url: &str) -> Result<(), String> {
     let parsed = tauri::Url::parse(url).map_err(|_| "invalid url".to_string())?;
     match parsed.scheme() {
         "http" | "https" => Ok(()),
@@ -67,7 +75,7 @@ fn validate_external_url(url: &str) -> Result<(), String> {
 }
 
 #[cfg(target_os = "macos")]
-fn open_url_with_system(url: &str) -> Result<(), String> {
+pub fn open_url_with_system(url: &str) -> Result<(), String> {
     std::process::Command::new("open")
         .arg(url)
         .spawn()
@@ -76,7 +84,7 @@ fn open_url_with_system(url: &str) -> Result<(), String> {
 }
 
 #[cfg(target_os = "windows")]
-fn open_url_with_system(url: &str) -> Result<(), String> {
+pub fn open_url_with_system(url: &str) -> Result<(), String> {
     std::process::Command::new("cmd")
         .args(["/C", "start", "", url])
         .spawn()
@@ -85,7 +93,7 @@ fn open_url_with_system(url: &str) -> Result<(), String> {
 }
 
 #[cfg(target_os = "linux")]
-fn open_url_with_system(url: &str) -> Result<(), String> {
+pub fn open_url_with_system(url: &str) -> Result<(), String> {
     std::process::Command::new("xdg-open")
         .arg(url)
         .spawn()
