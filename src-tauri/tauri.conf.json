@@ -5,10 +5,10 @@
   "identifier": "ai.vibetrading.desktop",
   "build": {
     "frontendDist": "./console-dist",
-    "devUrl": "http://127.0.0.1:5899/",
     "beforeDevCommand": "cd frontend && npm run dev"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [],
     "security": {
       "csp": null

@@ -131,4 +131,18 @@ mod tests {
         assert!(validate_external_url("javascript:alert(1)").is_err());
         assert!(validate_external_url("not a url").is_err());
     }
+
+    // console-dist/index.html 顶层执行 `window.__TAURI__.core`;Tauri v2 仅在
+    // app.withGlobalTauri=true 时注入 window.__TAURI__(默认 false)。缺此项时
+    // module script 抛 TypeError 中断 —— 环境徽标卡在"检测中...",按钮不绑定。
+    #[test]
+    fn tauri_conf_enables_global_tauri_for_console() {
+        let cfg: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("parse tauri.conf.json");
+        assert_eq!(
+            cfg["app"]["withGlobalTauri"],
+            serde_json::Value::Bool(true),
+            "app.withGlobalTauri 须为 true,否则控制台 HTML 拿不到 window.__TAURI__"
+        );
+    }
 }
