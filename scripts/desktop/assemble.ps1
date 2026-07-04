@@ -12,6 +12,17 @@ npm ci
 npm run build
 Pop-Location
 
+# 1.1) 前端产物入台到 .desktop-build\frontend\dist
+# dev 模式(cargo tauri dev)下 resources.rs 从这里取 res.frontend_dist,
+# runtime_dir::prepare 每次启动都复制到 runtime 目录给 Python sidecar serve。
+# release 由 tauri.conf.json bundle.resources 直接打包仓库根 frontend/dist,不走这里。
+# 漏掉这一步 → .desktop-build\frontend\dist 不存在 → runtime_dir::prepare 跳过复制
+# → Python 永远 serve runtime 里的旧 dist,dev 前端不更新。
+Write-Host "=== Staging frontend/dist to .desktop-build\ ==="
+if (Test-Path "$Build\frontend") { Remove-Item -Recurse -Force "$Build\frontend" }
+New-Item -ItemType Directory -Force -Path "$Build\frontend" | Out-Null
+Copy-Item -Path "$Root\frontend\dist" -Destination "$Build\frontend" -Recurse -Force
+
 # 2) 运行时须已由 fetch-runtime.ps1 + install-deps.ps1 准备好
 Write-Host "=== Checking runtime ==="
 if (-not (Test-Path "$Runtime\python.exe")) { throw "runtime missing; run fetch-runtime.ps1 + install-deps.ps1 first" }

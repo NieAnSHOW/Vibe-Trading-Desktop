@@ -10,6 +10,17 @@ RUNTIME="$BUILD/python-runtime"
 echo "=== Building frontend ==="
 ( cd "$ROOT/frontend" && npm ci && npm run build )
 
+# 1.1) 前端产物入台到 .desktop-build/frontend/dist
+# dev 模式(cargo tauri dev)下 resources.rs 从这里取 res.frontend_dist,
+# runtime_dir::prepare 每次启动都把它复制到 runtime 目录给 Python sidecar serve。
+# release 由 tauri.conf.json bundle.resources 直接打包仓库根 frontend/dist,不走这里。
+# 漏掉这一步 → .desktop-build/frontend/dist 不存在 → runtime_dir::prepare 跳过复制
+# → Python 永远 serve runtime 里的旧 dist,dev 前端不更新。
+echo "=== Staging frontend/dist to .desktop-build/ ==="
+rm -rf "$BUILD/frontend"
+mkdir -p "$BUILD/frontend/dist"
+cp -R "$ROOT/frontend/dist/." "$BUILD/frontend/dist/"
+
 # 2) 运行时须已由 fetch-runtime.sh + install-deps.sh 准备好
 echo "=== Checking runtime ==="
 [ -x "$RUNTIME/bin/python3" ] || { echo "runtime missing; run fetch-runtime.sh + install-deps.sh first"; exit 1; }

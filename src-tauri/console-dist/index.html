@@ -289,6 +289,72 @@
         }
       }
 
+      /* Install progress — shown only while bootstrap is running. Stage label
+         on the left, percentage on the right; the bar underneath advances by
+         stage (venv → installing → smoke → done) with a gentle asymptotic
+         creep inside the long "installing" stage so it never looks frozen. */
+      #progress[hidden] {
+        display: none;
+      }
+      #progress {
+        margin-top: 16px;
+        background: hsl(var(--surface-1));
+        border: 1px solid hsl(var(--line));
+        border-radius: var(--radius);
+        padding: 14px 16px;
+      }
+      .progress-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+      }
+      .progress-stage {
+        font-size: 13px;
+        font-weight: 550;
+        color: hsl(var(--ink));
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .progress-pct {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: hsl(var(--brand));
+        font-variant-numeric: tabular-nums;
+      }
+      .progress-track {
+        height: 7px;
+        border-radius: 999px;
+        background: hsl(var(--line));
+        overflow: hidden;
+      }
+      .progress-fill {
+        height: 100%;
+        width: 0%;
+        border-radius: 999px;
+        background: linear-gradient(
+          90deg,
+          hsl(var(--brand)),
+          hsl(var(--brand-strong))
+        );
+        transition: width 0.4s var(--ease);
+      }
+      /* Failed → bar turns red so a glance conveys the outcome. */
+      #progress.failed .progress-fill {
+        background: hsl(var(--bad));
+      }
+      #progress.failed .progress-pct {
+        color: hsl(var(--bad-fg));
+      }
+      /* Done → bar turns green. */
+      #progress.done .progress-fill {
+        background: hsl(var(--ok));
+      }
+      #progress.done .progress-pct {
+        color: hsl(var(--ok-fg));
+      }
+
       /* Confirm dialog (native <dialog>) */
       dialog.confirm {
         position: fixed;
@@ -458,7 +524,7 @@
           <line x1="12" y1="8" x2="12.01" y2="8" />
         </svg>
         <span id="hintText"
-          >运行环境如果处于“就绪”的状态，点击“启动服务”即可使用</span
+          >首次安装可能需要 5 - 20 分钟，保证良好网络，请勿安装时退出</span
         >
       </div>
 
@@ -469,10 +535,10 @@
         <button id="btnOpen" class="btn-ghost" disabled>
           在浏览器打开 WebUI
         </button>
-        <button id="btnChannels" class="btn-ghost" disabled>
+        <!-- <button id="btnChannels" class="btn-ghost" disabled>
           启动消息渠道
-        </button>
-        <select id="selChannel" class="channel-select" aria-label="消息渠道">
+        </button> -->
+        <!-- <select id="selChannel" class="channel-select" aria-label="消息渠道">
           <option value="weixin">weixin</option>
           <option value="wecom">wecom</option>
           <option value="telegram">telegram</option>
@@ -485,8 +551,20 @@
         </select>
         <button id="btnInstallChannel" class="btn-ghost" disabled>
           安装渠道依赖
-        </button>
+        </button> -->
         <button id="btnLogs" class="btn-ghost">打开日志目录</button>
+      </div>
+
+      <div id="progress" hidden>
+        <div class="progress-meta">
+          <span id="progressStage" class="progress-stage">
+            <span class="spinner"></span>准备中…
+          </span>
+          <span id="progressPct" class="progress-pct">0%</span>
+        </div>
+        <div class="progress-track">
+          <div id="progressFill" class="progress-fill"></div>
+        </div>
       </div>
 
       <dialog id="confirmStop" class="confirm">
@@ -497,7 +575,24 @@
           </p>
           <div class="confirm-actions">
             <button value="cancel" class="btn-ghost">取消</button>
-            <button value="ok" class="btn-danger" type="submit">确认停止</button>
+            <button value="ok" class="btn-danger" type="submit">
+              确认停止
+            </button>
+          </div>
+        </form>
+      </dialog>
+
+      <dialog id="confirmClose" class="confirm">
+        <form method="dialog">
+          <h3>确认关闭客户端？</h3>
+          <p id="confirmCloseText">
+            后端服务仍在运行，<b>关闭客户端将终止服务并中断正在执行的任务</b>（回测、研究、实盘等）。确认要关闭吗？
+          </p>
+          <div class="confirm-actions">
+            <button value="cancel" class="btn-ghost" autofocus>取消</button>
+            <button value="ok" class="btn-danger" type="submit">
+              确认关闭
+            </button>
           </div>
         </form>
       </dialog>
@@ -526,7 +621,8 @@
       let port = null;
 
       // 控制台独立版本号(独立于 app release 版本),由 scripts/desktop/console-version.mjs 维护。
-      $("consoleVersion").textContent = `控制台 ${$("consoleVersion").dataset.consoleVersion}`;
+      $("consoleVersion").textContent =
+        `控制台 ${$("consoleVersion").dataset.consoleVersion}`;
 
       function log(line) {
         const atBottom =
@@ -536,6 +632,61 @@
       }
       function setErr(m) {
         errEl.textContent = m ? String(m) : "";
+      }
+
+      // ── 安装进度条 ──────────────────────────────────────────────────
+      // bootstrap 阶段序列: venv → installing → smoke → done。每个阶段有一个
+      // 基准百分比;installing 是耗时主体(下载/编译几十个包),没有精确进度,
+      // 故在其区间内随日志行「渐近爬升」——每收到一行往目标逼近一小步,永不倒退、
+      // 永不到 100%,让用户看到持续推进而非卡死。
+      const progressEl = $("progress"),
+        progStageEl = $("progressStage"),
+        progPctEl = $("progressPct"),
+        progFillEl = $("progressFill");
+      const STAGE = {
+        venv: { base: 5, ceil: 15, label: "创建虚拟环境" },
+        installing: { base: 15, ceil: 92, label: "安装依赖包" },
+        smoke: { base: 93, ceil: 98, label: "校验关键依赖" },
+        done: { base: 100, ceil: 100, label: "安装完成" },
+        failed: { base: 100, ceil: 100, label: "安装失败" },
+      };
+      let progPct = 0;
+
+      function setProgress(pct, stageLabel, spinning) {
+        progPct = Math.max(progPct, Math.min(100, pct)); // 单调不倒退
+        progFillEl.style.width = progPct + "%";
+        progPctEl.textContent = Math.round(progPct) + "%";
+        progStageEl.innerHTML =
+          (spinning ? `<span class="spinner"></span>` : "") + stageLabel;
+      }
+
+      function startProgress() {
+        progPct = 0;
+        progressEl.hidden = false;
+        progressEl.classList.remove("done", "failed");
+        setProgress(2, "准备中…", true);
+      }
+
+      function advanceProgress(stage, message) {
+        const s = STAGE[stage];
+        if (!s) return; // installing 期间 pip 行的 stage 仍是 installing,命中下面分支
+        if (stage === "installing") {
+          // 渐近逼近 ceil:每行走「剩余距离」的一小部分,越接近越慢。
+          const target = s.ceil;
+          const next = progPct + (target - progPct) * 0.06;
+          setProgress(Math.max(next, s.base), s.label, true);
+        } else if (stage === "done") {
+          progressEl.classList.add("done");
+          setProgress(100, s.label, false);
+        } else if (stage === "failed") {
+          progressEl.classList.add("failed");
+          // 失败时百分比停在当前位置(不强推 100),配合红色轨道传达中断。
+          setProgress(progPct, s.label, false);
+          progPctEl.textContent = "已中断";
+        } else {
+          // venv / smoke:直接跳到该阶段基准。
+          setProgress(s.base, s.label, true);
+        }
       }
 
       // Tauri IPC may not be injected yet (or at all, if opened outside the app shell).
@@ -592,9 +743,9 @@
         if (!startBtn.classList.contains("busy"))
           startBtn.disabled = env !== "ready" || port !== null;
         // 渠道依赖安装只依赖 venv 就绪,与是否启动服务无关。
-        const chDepBtn = $("btnInstallChannel");
-        if (chDepBtn && !chDepBtn.classList.contains("busy"))
-          chDepBtn.disabled = env !== "ready";
+        // const chDepBtn = $("btnInstallChannel");
+        // if (chDepBtn && !chDepBtn.classList.contains("busy"))
+        //   chDepBtn.disabled = env !== "ready";
         if (info.hint && port === null) {
           hintText.innerHTML = info.hint;
           hintEl.hidden = false;
@@ -613,9 +764,9 @@
         }
         $("btnOpen").disabled = !running;
         // 启动消息渠道依赖正在运行的 backend,且 busy() 期间不被轮询覆盖。
-        const channelsBtn = $("btnChannels");
-        if (!channelsBtn.classList.contains("busy"))
-          channelsBtn.disabled = !running;
+        // const channelsBtn = $("btnChannels");
+        // if (!channelsBtn.classList.contains("busy"))
+        //   channelsBtn.disabled = !running;
         if (running) hintEl.hidden = true;
       }
 
@@ -632,9 +783,19 @@
 
       if (window.__TAURI__?.event?.listen) {
         const { listen } = window.__TAURI__.event;
-        listen("bootstrap://progress", (ev) => log(ev.payload));
+        // 结构化进度事件: { stage, message, ok }。日志照常打印 message,
+        // 同时驱动进度条按阶段推进。
+        listen("bootstrap://event", (ev) => {
+          const { stage, message, ok } = ev.payload || {};
+          if (message) log(`[${stage}] ${message}`);
+          advanceProgress(stage, message);
+          if (ok === false) setErr(message || "依赖安装失败");
+        });
         listen("bootstrap://exit", (ev) => {
           log("bootstrap 退出码: " + ev.payload);
+          // 退出码非 0 且进度条未标失败时,补一次失败态(防御:末帧丢失)。
+          if (ev.payload !== 0 && !progressEl.classList.contains("done"))
+            advanceProgress("failed", "");
           refresh();
         });
         listen("service://started", (ev) => {
@@ -642,6 +803,10 @@
           renderSvc(true);
           $("btnStart").disabled = true;
           hintEl.hidden = true;
+        });
+        // 后端运行中/安装中时关闭窗口 → Rust 拦截并发此事件,弹二次确认框。
+        listen("app://close-requested", (ev) => {
+          openCloseConfirm(ev.payload || {});
         });
         listen("channeldep://progress", (ev) => log(ev.payload));
         listen("channeldep://exit", (ev) => {
@@ -654,10 +819,12 @@
         busy($("btnInstall"), "安装中", async () => {
           setErr("");
           log("开始安装依赖…");
+          startProgress();
           try {
             await invoke("console_bootstrap");
           } catch (e) {
             setErr(e);
+            advanceProgress("failed", "");
           }
         });
       $("btnStart").onclick = () =>
@@ -692,6 +859,32 @@
           }
         });
       });
+
+      // 关闭确认:Rust 在服务运行中/安装中拦截关闭并发 app://close-requested。
+      // 用户点「确认关闭」→ 告知 Rust 放行 → 再次请求关闭窗口(此次不再被拦截)。
+      const confirmClose = $("confirmClose");
+      function openCloseConfirm(payload) {
+        const txt = $("confirmCloseText");
+        if (payload.installing) {
+          txt.innerHTML =
+            "依赖仍在安装中，<b>关闭客户端将中断安装</b>，下次需要重新安装。确认要关闭吗？";
+        } else {
+          txt.innerHTML =
+            "后端服务仍在运行，<b>关闭客户端将终止服务并中断正在执行的任务</b>（回测、研究、实盘等）。确认要关闭吗？";
+        }
+        if (!confirmClose.open) confirmClose.showModal();
+      }
+      confirmClose.addEventListener("close", async () => {
+        if (confirmClose.returnValue !== "ok") return;
+        try {
+          await invoke("console_confirm_close");
+          // 放行标志已置位;再次触发关闭,Rust 这次会直接放行。
+          const win = window.__TAURI__?.window?.getCurrentWindow?.();
+          if (win) await win.close();
+        } catch (e) {
+          setErr(e);
+        }
+      });
       $("btnOpen").onclick = async () => {
         if (port !== null)
           try {
@@ -701,43 +894,43 @@
           }
       };
       // 等价于 `vibe-trading channels start`:转发 POST /channels/start 到 backend。
-      $("btnChannels").onclick = () => {
-        if (port === null) return;
-        busy($("btnChannels"), "启动中", async () => {
-          setErr("");
-          log("启动消息渠道…");
-          try {
-            const body = await invoke("console_start_channels", { port });
-            let msg;
-            try {
-              const data = JSON.parse(body);
-              const up = Object.entries(data.channels || {})
-                .filter(([, v]) => v && v.running)
-                .map(([k]) => k);
-              msg = up.length
-                ? `消息渠道已启动，运行中: ${up.join(", ")}`
-                : "消息渠道已启动（无适配器运行，请检查 channels 配置）";
-            } catch {
-              msg = body;
-            }
-            log(msg);
-          } catch (e) {
-            setErr(e);
-          }
-        });
-      };
-      $("btnInstallChannel").onclick = () => {
-        const channel = $("selChannel").value;
-        busy($("btnInstallChannel"), "安装中", async () => {
-          setErr("");
-          log(`安装渠道依赖 [${channel}]…`);
-          try {
-            await invoke("console_install_channel_dep", { channel });
-          } catch (e) {
-            setErr(e);
-          }
-        });
-      };
+      // $("btnChannels").onclick = () => {
+      //   if (port === null) return;
+      //   busy($("btnChannels"), "启动中", async () => {
+      //     setErr("");
+      //     log("启动消息渠道…");
+      //     try {
+      //       const body = await invoke("console_start_channels", { port });
+      //       let msg;
+      //       try {
+      //         const data = JSON.parse(body);
+      //         const up = Object.entries(data.channels || {})
+      //           .filter(([, v]) => v && v.running)
+      //           .map(([k]) => k);
+      //         msg = up.length
+      //           ? `消息渠道已启动，运行中: ${up.join(", ")}`
+      //           : "消息渠道已启动（无适配器运行，请检查 channels 配置）";
+      //       } catch {
+      //         msg = body;
+      //       }
+      //       log(msg);
+      //     } catch (e) {
+      //       setErr(e);
+      //     }
+      //   });
+      // };
+      // $("btnInstallChannel").onclick = () => {
+      //   const channel = $("selChannel").value;
+      //   busy($("btnInstallChannel"), "安装中", async () => {
+      //     setErr("");
+      //     log(`安装渠道依赖 [${channel}]…`);
+      //     try {
+      //       await invoke("console_install_channel_dep", { channel });
+      //     } catch (e) {
+      //       setErr(e);
+      //     }
+      //   });
+      // };
       $("btnLogs").onclick = async () => {
         try {
           await invoke("console_open_logs");

@@ -4,6 +4,7 @@
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::Child;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -13,6 +14,14 @@ use crate::runtime_dir::Layout;
 
 pub type SharedChild = Arc<Mutex<Option<Child>>>;
 
+/// 依赖安装(bootstrap)进行中标志。关闭拦截据此判断是否需要二次确认。
+pub struct InstallingFlag(pub Arc<AtomicBool>);
+/// 关闭已确认标志:用户在二次确认框点「确认关闭」后置真,放行下一次 CloseRequested。
+pub struct CloseConfirmed(pub Arc<AtomicBool>);
+
+/// 窗口关闭需要拦截时,发给前端(触发二次确认框)的事件名。
+pub const CLOSE_REQUESTED_EVENT: &str = "app://close-requested";
+
 // ── 纯函数(状态判定、命令构造) ──────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
@@ -21,6 +30,47 @@ pub enum EnvStatus {
     NotInstalled,
     Incomplete,
     Ready,
+}
+
+/// bootstrap 进度事件:由 `--sse` 帧解析而来,发给前端驱动进度条 + 日志。
+/// `stage` 取值 venv | installing | smoke | done | failed;`message` 是该阶段的
+/// 人类可读行(installing 阶段即 pip 的原始 stdout 行)。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct ProgressEvent {
+    pub stage: String,
+    pub message: String,
+    pub ok: bool,
+}
+
+/// 解析 `--sse` 输出的一个 data 行的 JSON,提取 stage/message/ok。
+///
+/// bootstrap 的 SSE 帧形如:
+/// ```text
+/// event: progress
+/// data: {"stage": "installing", "message": "Collecting pandas"}
+///
+/// event: done
+/// data: {"ok": true, "message": "environment ready"}
+/// ```
+/// 我们只关心 `data:` 行的 JSON;`event:` 名与 data 里的 stage 语义重复,
+/// 且 done/failed 的 data 不含 stage,故解析时用 `event_name` 兜底 stage。
+/// 返回 None 表示该 data 行不是合法 JSON(理论上不会发生,防御性跳过)。
+pub fn parse_sse_data(event_name: &str, data_json: &str) -> Option<ProgressEvent> {
+    let v: serde_json::Value = serde_json::from_str(data_json).ok()?;
+    // progress 帧 data 内带 stage;done/failed 帧不带,退回 event 名。
+    let stage = v
+        .get("stage")
+        .and_then(|s| s.as_str())
+        .unwrap_or(event_name)
+        .to_string();
+    let message = v
+        .get("message")
+        .and_then(|s| s.as_str())
+        .unwrap_or("")
+        .to_string();
+    // 缺省 ok=true;仅 failed 帧显式带 ok=false。
+    let ok = v.get("ok").and_then(|b| b.as_bool()).unwrap_or(true);
+    Some(ProgressEvent { stage, message, ok })
 }
 
 /// 依据磁盘上的 venv 解释器与 bootstrap hash marker 判定环境状态。
@@ -119,9 +169,17 @@ pub fn console_status(state: State<'_, SharedChild>) -> Result<StatusReport, Str
     })
 }
 
-/// 触发依赖 bootstrap:spawn `vibe-trading bootstrap --sse`,逐行 emit "bootstrap://progress"。
+/// 触发依赖 bootstrap:spawn `vibe-trading bootstrap --sse`,把 SSE 帧解析为
+/// 结构化进度事件 emit 到 "bootstrap://event"(前端据 stage 驱动进度条 + 日志)。
+///
+/// bootstrap 的 stdout 是标准 SSE 流(`event:`/`data:` 两行 + 空行分隔一帧)。
+/// 逐行累积,遇空行组帧解析:比逐行透传干净(前端拿不到 `event:`/`data:` 噪声),
+/// 也让进度条能按 stage 推进。
 #[tauri::command]
-pub async fn console_bootstrap(app: AppHandle) -> Result<(), String> {
+pub async fn console_bootstrap(
+    app: AppHandle,
+    installing: State<'_, InstallingFlag>,
+) -> Result<(), String> {
     let layout = Layout::from_home()?;
     let res = crate::resources::Resources::resolve(&app)
         .map_err(|e| format!("resources: {e}"))?;
@@ -129,13 +187,39 @@ pub async fn console_bootstrap(app: AppHandle) -> Result<(), String> {
         .spawn()
         .map_err(|e| format!("spawn bootstrap: {e}"))?;
     let stdout = child.stdout.take().ok_or("no bootstrap stdout")?;
+    // 安装期间置位:关闭窗口时据此弹「安装未完成」确认。
+    let flag = installing.0.clone();
+    flag.store(true, Ordering::SeqCst);
     let app2 = app.clone();
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
+        // 累积一帧的 event 名与 data JSON,遇空行(帧边界)组装并 emit。
+        let mut event_name = String::new();
+        let mut data_json = String::new();
         for line in reader.lines().map_while(Result::ok) {
-            let _ = app2.emit("bootstrap://progress", line);
+            if let Some(rest) = line.strip_prefix("event:") {
+                event_name = rest.trim().to_string();
+            } else if let Some(rest) = line.strip_prefix("data:") {
+                data_json = rest.trim().to_string();
+            } else if line.is_empty() {
+                // 帧结束:解析并派发,随后重置累积器。
+                if !data_json.is_empty() {
+                    if let Some(ev) = parse_sse_data(&event_name, &data_json) {
+                        let _ = app2.emit("bootstrap://event", ev);
+                    }
+                }
+                event_name.clear();
+                data_json.clear();
+            }
+        }
+        // 末帧无尾随空行时的兜底派发。
+        if !data_json.is_empty() {
+            if let Some(ev) = parse_sse_data(&event_name, &data_json) {
+                let _ = app2.emit("bootstrap://event", ev);
+            }
         }
         let code = child.wait().ok().and_then(|s| s.code());
+        flag.store(false, Ordering::SeqCst);
         let _ = app2.emit("bootstrap://exit", code);
     });
     Ok(())
@@ -251,6 +335,18 @@ pub async fn console_install_channel_dep(
         let _ = app.emit("channeldep://exit", code);
     });
     Ok(())
+}
+
+/// 关闭窗口时是否需要二次确认:服务运行中或依赖安装中都需要提醒用户。
+/// 纯函数,便于单测覆盖「运行中/安装中/空闲」三态。
+pub fn needs_close_confirmation(service_running: bool, installing: bool) -> bool {
+    service_running || installing
+}
+
+/// 用户在二次确认框点「确认关闭」后调用:置位放行标志,随后前端再触发关闭。
+#[tauri::command]
+pub fn console_confirm_close(confirmed: State<'_, CloseConfirmed>) {
+    confirmed.0.store(true, Ordering::SeqCst);
 }
 
 /// 在文件管理器打开 ~/.vibe-trading/logs/。
@@ -378,5 +474,45 @@ mod tests {
             joined.contains("vibe-trading-ai[telegram]"),
             "args: {joined}"
         );
+    }
+
+    #[test]
+    fn parse_sse_progress_frame_extracts_stage_and_message() {
+        let ev = parse_sse_data("progress", r#"{"stage": "installing", "message": "Collecting pandas"}"#)
+            .expect("progress 帧应解析成功");
+        assert_eq!(ev.stage, "installing");
+        assert_eq!(ev.message, "Collecting pandas");
+        assert!(ev.ok, "progress 帧默认 ok=true");
+    }
+
+    #[test]
+    fn parse_sse_done_frame_falls_back_to_event_name_for_stage() {
+        // done/failed 帧的 data 不带 stage,应退回 event 名。
+        let ev = parse_sse_data("done", r#"{"ok": true, "message": "environment ready"}"#)
+            .expect("done 帧应解析成功");
+        assert_eq!(ev.stage, "done");
+        assert_eq!(ev.message, "environment ready");
+        assert!(ev.ok);
+    }
+
+    #[test]
+    fn parse_sse_failed_frame_preserves_ok_false() {
+        let ev = parse_sse_data("failed", r#"{"ok": false, "message": "deps incomplete: numpy"}"#)
+            .expect("failed 帧应解析成功");
+        assert_eq!(ev.stage, "failed");
+        assert!(!ev.ok, "failed 帧须保留 ok=false 供前端标红");
+    }
+
+    #[test]
+    fn parse_sse_rejects_non_json_data() {
+        assert!(parse_sse_data("progress", "not json").is_none());
+    }
+
+    #[test]
+    fn close_confirmation_required_when_running_or_installing() {
+        assert!(needs_close_confirmation(true, false), "运行中应确认");
+        assert!(needs_close_confirmation(false, true), "安装中应确认");
+        assert!(needs_close_confirmation(true, true), "同时进行更应确认");
+        assert!(!needs_close_confirmation(false, false), "空闲直接关闭");
     }
 }
