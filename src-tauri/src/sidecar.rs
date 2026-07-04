@@ -28,6 +28,10 @@ pub fn build_cmd(
         .env("PYTHONDONTWRITEBYTECODE", "1")
         .env("VIBE_RUNTIME_LIBS", runtime_libs)
         .env("VIBE_SESSIONS_DIR", sessions_dir)
+        // 桌面 sidecar 启动时自动恢复 enabled IM 渠道(复用磁盘 token),避免
+        // "启停服务→微信 poll 循环随进程被杀→重启后渠道不自动起→前端要求重新扫码"。
+        // CLI 直接 `vibe-trading serve` 不经此函数,行为不受影响。
+        .env("VIBE_TRADING_CHANNELS_AUTO_START", "1")
         // Default pip mirror: Tsinghua (HTTPS) so first-run installs are fast
         // on CN networks. The Python side (optional_deps.mirror) can override
         // per-install via --index-url; this is just the process default.
@@ -275,6 +279,24 @@ mod tests {
             }
         }
         assert!(found, "VIBE_SESSIONS_DIR not set to sessions path");
+    }
+
+    #[test]
+    fn build_cmd_injects_channels_autostart() {
+        // 桌面 sidecar 必须自动恢复 IM 渠道:启停服务会杀进程,若启动时不
+        // autostart,微信 poll 循环不会恢复 → 前端判定需重新扫码(磁盘 token 仍在)。
+        let python = Path::new("/fake/python3");
+        let agent = Path::new("/fake/agent");
+        let cmd = build_cmd(python, agent, 8899, Path::new("/fake/libs"), Path::new("/fake/sessions"));
+        let mut found = false;
+        for (key, val) in cmd.get_envs() {
+            if key.to_str() == Some("VIBE_TRADING_CHANNELS_AUTO_START")
+                && val.and_then(|v| v.to_str()) == Some("1")
+            {
+                found = true;
+            }
+        }
+        assert!(found, "VIBE_TRADING_CHANNELS_AUTO_START=1 not injected");
     }
 
     /// 回归测试：模拟一个「收到 SIGTERM 但拒绝退出」的 sidecar（复刻 uvicorn

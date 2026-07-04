@@ -507,6 +507,12 @@
             ><span class="dot"></span>已停止</span
           >
         </div>
+        <div class="status-row">
+          <span class="status-label">消息渠道</span>
+          <span id="chBadge" class="badge warn"
+            ><span class="dot"></span>未运行</span
+          >
+        </div>
       </div>
 
       <div id="hint" class="hint" hidden>
@@ -770,11 +776,48 @@
         if (running) hintEl.hidden = true;
       }
 
+      // 渲染消息渠道状态。channelsData = /channels/status 返回的 .channels 字段;
+      // 服务未运行时传 null → "未运行"。
+      function renderCh(channelsData) {
+        const b = $("chBadge");
+        const wx = channelsData && channelsData.weixin;
+        let cls = "warn",
+          text = "未运行";
+        if (wx) {
+          if (wx.health === "expired") {
+            cls = "bad live";
+            text = "登录失效 · 需重新扫码";
+          } else if (wx.running) {
+            cls = "ok live";
+            text = "运行中";
+          } else if (wx.enabled || wx.loaded) {
+            cls = "warn";
+            text = "未登录";
+          } else {
+            cls = "warn";
+            text = "未启用";
+          }
+        }
+        b.className = "badge " + cls;
+        b.innerHTML = `<span class="dot"></span>${text}`;
+      }
+
       async function refresh() {
         try {
           const s = await invoke("console_status");
           renderEnv(s.env);
           renderSvc(s.service_running);
+          // 服务运行时才拉渠道状态(避免对未启动的 backend 发请求)。
+          if (s.service_running && port != null) {
+            try {
+              const raw = await invoke("console_channels_status", { port });
+              renderCh(JSON.parse(raw).channels);
+            } catch (_) {
+              renderCh(null);
+            }
+          } else {
+            renderCh(null);
+          }
           setErr("");
         } catch (e) {
           setErr(e);
@@ -803,6 +846,8 @@
           renderSvc(true);
           $("btnStart").disabled = true;
           hintEl.hidden = true;
+          // 服务刚起 → 渠道在后台恢复,立即拉一次,3s 轮询会逐步更新到"运行中"。
+          refresh();
         });
         // 后端运行中/安装中时关闭窗口 → Rust 拦截并发此事件,弹二次确认框。
         listen("app://close-requested", (ev) => {

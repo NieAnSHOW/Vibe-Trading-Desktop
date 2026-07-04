@@ -235,3 +235,14 @@ class BaseChannel(ABC):
     def is_running(self) -> bool:
         """Check if the channel is running."""
         return self._running
+
+    @property
+    def health_state(self) -> str:
+        """连接健康度,供控制台状态展示。
+
+        - ``ok``:正常运行
+        - ``expired``:凭证在服务端失效(如 bot_token 过期),需重新登录
+
+        子类按需 override;默认 ``ok``。
+        """
+        return "ok"

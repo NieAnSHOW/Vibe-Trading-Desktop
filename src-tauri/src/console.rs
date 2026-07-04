@@ -300,6 +300,30 @@ pub fn console_start_channels(port: u16) -> Result<String, String> {
     Ok(body)
 }
 
+/// 构造本地 backend 的消息渠道状态 URL。
+pub fn channels_status_url(port: u16) -> String {
+    format!("http://127.0.0.1:{port}/channels/status")
+}
+
+/// 消息渠道状态:转发 GET /channels/status,供控制台展示运行/未登录/失效。
+/// backend 对 loopback 免 auth,无需鉴权头。服务未运行时由调用方决定不触发。
+#[tauri::command]
+pub fn console_channels_status(port: u16) -> Result<String, String> {
+    let resp = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("构建 HTTP 客户端: {e}"))?
+        .get(channels_status_url(port))
+        .send()
+        .map_err(|e| format!("调用 /channels/status 失败: {e}"))?;
+    let status = resp.status();
+    let body = resp.text().map_err(|e| format!("读取响应: {e}"))?;
+    if !status.is_success() {
+        return Err(format!("后端返回 {status}: {body}"));
+    }
+    Ok(body)
+}
+
 /// 安装单个消息渠道的可选依赖:用 venv 解释器 spawn
 /// `pip install --no-input 'vibe-trading-ai[<channel>]'`,逐行 emit "channeldep://progress"。
 /// pip 进度几乎全走 stderr,故 stdout/stderr 各开一线程转发,避免日志空白。

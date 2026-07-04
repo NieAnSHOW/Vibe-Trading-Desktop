@@ -587,6 +587,16 @@ class WeixinChannel(BaseChannel):
             await self._client.aclose()
             self._client = None
         self._save_state()
+
+    @property
+    def health_state(self) -> str:
+        """``expired`` 当 session 被 ilinkai 判定过期(errcode -14)进入暂停窗口。
+
+        poll 循环仍在跑(``running=True``),但 bot_token 已失效,收发静默失败。
+        控制台据此标红提示"需重新扫码",而非假装正常运行。
+        """
+        return "expired" if self._session_pause_remaining_s() > 0 else "ok"
+
     # ------------------------------------------------------------------
     # Polling  (matches monitor.ts monitorWeixinProvider)
     # ------------------------------------------------------------------

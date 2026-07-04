@@ -30,6 +30,7 @@ fn main() {
             console::console_stop_service,
             console::console_open_webui,
             console::console_start_channels,
+            console::console_channels_status,
             console::console_install_channel_dep,
             console::console_confirm_close,
             console::console_open_logs

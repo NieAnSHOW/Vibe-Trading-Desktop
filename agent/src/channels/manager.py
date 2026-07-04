@@ -510,6 +510,7 @@ class ChannelManager:
                     "enabled": True,
                     "loaded": True,
                     "running": channel.is_running,
+                    "health": channel.health_state,
                     "display_name": getattr(channel, "display_name", name),
                 }
             )

@@ -7,6 +7,14 @@ use std::path::PathBuf;
 // For a proper unit-test approach, we use the module's exported functions
 // by including the module source via a path attribute.
 
+// sidecar::spawn() 调 crate::port::kill_listener_on_port;test crate 根没有 port
+// 模块,补一个空桩让 include 整个 sidecar.rs 时编译通过(e44a44cb 引入该调用后,
+// 此 test crate 编译即断)。测试从不调用 spawn,桩实现留空即可。
+mod port {
+    #[allow(dead_code)]
+    pub fn kill_listener_on_port(_port: u16) {}
+}
+
 #[path = "../src/sidecar.rs"]
 mod sidecar;
 
