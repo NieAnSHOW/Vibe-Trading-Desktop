@@ -1902,7 +1902,21 @@ async def weixin_login_status(login_id: str = Query(...)):
     if adapter is None:
         raise HTTPException(status_code=400, detail="weixin channel unavailable")
     try:
-        return await adapter.poll_qr_login(login_id)
+        result = await adapter.poll_qr_login(login_id)
+        # 扫码换新 bot 后,正在运行的 poll 循环仍绑在旧 token 上。此处(协调层,
+        # 在 REST 请求上下文而非 poll 循环 task 内)驱动 restart,避免 task 自
+        # cancel 竞态。用 adapter 的 _pending_reconnect 标志保证幂等:前端每 2s
+        # 轮询会多次拿到 confirmed,但只在首次 token 变化时重启一次。
+        if result.get("status") == "confirmed" and getattr(adapter, "_pending_reconnect", False):
+            adapter._pending_reconnect = False
+            # 若运行时尚未启动(用户先扫码、从未点 Start),先整体启动;
+            # 否则只重启 weixin 单通道以加载新 token。
+            if not runtime._running:
+                await runtime.start(start_manager=True)
+            else:
+                await manager.restart_channel("weixin")
+            result["reconnected"] = True
+        return result
     except httpx.HTTPError as exc:
         probe = await _weixin_connectivity_probe(adapter.config.base_url)
         logger.exception(

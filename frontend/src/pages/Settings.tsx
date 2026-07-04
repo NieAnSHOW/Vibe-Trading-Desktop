@@ -230,6 +230,8 @@ export function Settings() {
           setWeixinQr(null);
           setWeixinPolling(false);
           toast.success("微信登录成功");
+          // 后端在 login/status 确认时已自动重启 weixin 通道加载新身份;
+          // 前端只需刷新状态展示。
           await refreshChannelStatus();
         } else if (status === "expired") {
           clearInterval(id);

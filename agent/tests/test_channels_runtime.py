@@ -53,6 +53,9 @@ class FakeSessionService:
         parent_attempt_id: str | None = None,
     ) -> dict[str, str]:
         del include_shell_tools, parent_attempt_id
+        # Mirror real SessionService: reject unknown session ids (service.py raises ValueError).
+        if self.get_session(session_id) is None:
+            raise ValueError(f"Session {session_id} not found")
         self.sent.append((session_id, content))
         attempt_id = f"attempt-{len(self.sent)}"
         self.messages[session_id].append(
@@ -140,6 +143,74 @@ def test_channel_manager_status_includes_every_configured_adapter() -> None:
     if not status["slack"]["loaded"]:
         assert status["slack"]["error"]
         assert status["slack"]["install_hint"].startswith("pip install")
+
+
+def test_manager_restart_channel_swaps_task(monkeypatch: pytest.MonkeyPatch) -> None:
+    """restart_channel 必须停掉旧 start() task 再起新 task —— 扫码换 token 后
+    正在运行的 poll 循环仍绑旧身份,只有重启才会加载新 token。"""
+    from src.channels.base import BaseChannel
+
+    class FakePollChannel(BaseChannel):
+        name = "fake"
+        display_name = "Fake"
+
+        def __init__(self, config, bus):
+            super().__init__(config, bus)
+            self.start_count = 0
+            self.stop_count = 0
+
+        async def start(self) -> None:
+            self.start_count += 1
+            self._running = True
+            try:
+                while self._running:  # mimic weixin's blocking poll loop
+                    await asyncio.sleep(0.01)
+            except asyncio.CancelledError:
+                raise
+
+        async def stop(self) -> None:
+            self.stop_count += 1
+            self._running = False
+
+        async def send(self, msg) -> None:  # pragma: no cover - unused
+            pass
+
+    async def scenario() -> None:
+        manager = ChannelManager({}, MessageBus())
+        ch = FakePollChannel({"enabled": True}, manager.bus)
+        manager.channels["fake"] = ch
+        # 模拟已启动:手动建立初始 start() task,如同 start_all 所为
+        manager._channel_tasks["fake"] = asyncio.create_task(manager._start_channel("fake", ch))
+        await asyncio.sleep(0.02)
+        assert ch.is_running is True
+        first_task = manager._channel_tasks["fake"]
+
+        ok = await manager.restart_channel("fake")
+        assert ok is True
+        assert ch.stop_count == 1  # 旧循环被停
+        assert ch.start_count == 2  # 新循环起来
+        assert manager._channel_tasks["fake"] is not first_task  # 换了 task
+        assert first_task.done()  # 旧 task 已终结
+        assert ch.is_running is True
+
+        # cleanup
+        ch._running = False
+        cur = manager._channel_tasks["fake"]
+        cur.cancel()
+        try:
+            await cur
+        except asyncio.CancelledError:
+            pass
+
+    asyncio.run(scenario())
+
+
+def test_manager_restart_channel_unknown_returns_false() -> None:
+    async def scenario() -> None:
+        manager = ChannelManager({}, MessageBus())
+        assert await manager.restart_channel("nope") is False
+
+    asyncio.run(scenario())
 
 
 def test_registry_marks_lazy_sdk_adapter_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -308,6 +379,65 @@ def test_channel_runtime_routes_inbound_to_session_and_outbound(tmp_path: Path) 
                 "session_id": "session-1",
             },
         )
+
+    asyncio.run(scenario())
+
+
+def test_channel_runtime_rebuilds_session_when_mapped_id_is_stale(tmp_path: Path) -> None:
+    """A persisted session map may point at a session id that no longer exists in
+    the store (e.g. the store's base_dir changed between runs). The runtime must
+    detect the stale id, transparently create a fresh session, overwrite the map,
+    and still deliver a normal reply instead of surfacing "Session ... not found".
+    """
+
+    async def scenario() -> None:
+        import json
+
+        from src.channels.runtime import ChannelRuntime
+
+        session_map_path = tmp_path / "channel_sessions.json"
+        # Pre-seed the map with a dead id the fake service has never created.
+        session_map_path.write_text(
+            json.dumps({"websocket:chat-1": "dead-session-id"}), encoding="utf-8"
+        )
+
+        bus = MessageBus()
+        service = FakeSessionService()
+        runtime = ChannelRuntime(
+            bus=bus,
+            session_service=service,
+            manager=None,
+            session_map_path=session_map_path,
+            reply_timeout_s=1,
+            poll_interval_s=0.01,
+        )
+        await runtime.start(start_manager=False)
+        try:
+            await bus.publish_inbound(
+                InboundMessage(
+                    channel="websocket",
+                    sender_id="user-1",
+                    chat_id="chat-1",
+                    content="hello again",
+                )
+            )
+            outbound = await asyncio.wait_for(bus.consume_outbound(), timeout=1)
+        finally:
+            await runtime.stop()
+
+        # A fresh session was created and used, not the stale id.
+        assert len(service.created) == 1
+        new_id = service.created[0].session_id
+        assert new_id != "dead-session-id"
+        assert service.sent == [(new_id, "hello again")]
+
+        # The reply is a normal agent response, not a runtime error.
+        assert outbound.content == "agent reply: hello again"
+        assert not outbound.metadata.get("error")
+
+        # The map was healed on disk so the dead id never resurfaces.
+        persisted = json.loads(session_map_path.read_text(encoding="utf-8"))
+        assert persisted["websocket:chat-1"] == new_id
 
     asyncio.run(scenario())
 

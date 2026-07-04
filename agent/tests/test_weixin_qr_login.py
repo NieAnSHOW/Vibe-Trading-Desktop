@@ -54,6 +54,53 @@ def test_poll_qr_login_confirmed_persists_token(monkeypatch, tmp_path):
     assert ch.config.base_url == "https://wx.example.com"
 
 
+def test_poll_qr_login_confirmed_new_token_resets_loop_state(monkeypatch, tmp_path):
+    """扫码换新 bot 后必须:同步 config.token(否则 restart 会用旧 token 重连)、
+    清空 get_updates_buf 游标(旧 bot 游标对新身份无意义)、置 _pending_reconnect
+    让协调层重启 poll 循环。这是"扫码成功但连接无效"故障的根因修复。"""
+    ch = WeixinChannel({"enabled": True, "state_dir": str(tmp_path), "token": "old-tok"}, MessageBus())
+    ch = _make_adapter(monkeypatch, ch)
+    # 模拟通道已用旧 token 跑过、带着旧游标
+    ch._token = "old-tok"
+    ch._get_updates_buf = "old-cursor"
+
+    async def fake_poll(**kw):
+        return {
+            "status": "confirmed",
+            "bot_token": "new-tok",
+            "ilink_bot_id": "bot-new",
+            "ilink_user_id": "user-new",
+        }
+
+    monkeypatch.setattr(ch, "_api_get_with_base", fake_poll)
+    res = asyncio.run(ch.poll_qr_login("qid-1"))
+
+    assert res["status"] == "confirmed"
+    assert res.get("token_changed") is True
+    assert ch._token == "new-tok"
+    assert ch.config.token == "new-tok"  # start() 首选 token 来源必须同步
+    assert ch._get_updates_buf == ""  # 旧游标已清空
+    assert ch._pending_reconnect is True  # 请求协调层重启
+
+
+def test_poll_qr_login_confirmed_same_token_no_reconnect(monkeypatch, tmp_path):
+    """幂等:前端每 2s 轮询会多次拿到 confirmed。token 未变时不得重复请求重连。"""
+    ch = WeixinChannel({"enabled": True, "state_dir": str(tmp_path), "token": "tok-abc"}, MessageBus())
+    ch = _make_adapter(monkeypatch, ch)
+    ch._token = "tok-abc"
+    ch._get_updates_buf = "live-cursor"
+
+    async def fake_poll(**kw):
+        return {"status": "confirmed", "bot_token": "tok-abc", "ilink_bot_id": "b", "ilink_user_id": "u"}
+
+    monkeypatch.setattr(ch, "_api_get_with_base", fake_poll)
+    res = asyncio.run(ch.poll_qr_login("qid-1"))
+
+    assert res.get("token_changed") is False
+    assert ch._pending_reconnect is False  # 未请求重连
+    assert ch._get_updates_buf == "live-cursor"  # 活跃游标保留
+
+
 def test_poll_qr_login_scaned_but_redirect_updates_base(monkeypatch):
     ch = WeixinChannel({"enabled": True}, MessageBus())
     ch = _make_adapter(monkeypatch, ch)

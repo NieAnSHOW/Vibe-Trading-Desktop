@@ -58,6 +58,8 @@ class ChannelManager:
         self._dispatch_task: asyncio.Task | None = None
         self._origin_reply_fingerprints: dict[tuple[str, str, str], str] = {}
         self._status: dict[str, dict[str, Any]] = {}
+        # per-channel start() task 句柄,支持单个 channel 的独立重启(扫码换 token 后)
+        self._channel_tasks: dict[str, asyncio.Task] = {}
 
         self._init_channels()
 
@@ -221,12 +223,53 @@ class ChannelManager:
         tasks = []
         for name, channel in self.channels.items():
             logger.info("Starting %s channel...", name)
-            tasks.append(asyncio.create_task(self._start_channel(name, channel)))
+            task = asyncio.create_task(self._start_channel(name, channel))
+            self._channel_tasks[name] = task
+            tasks.append(task)
 
         await asyncio.gather(*tasks, return_exceptions=True)
         for name, channel in self.channels.items():
             self._status.setdefault(name, {})
             self._status[name]["running"] = channel.is_running
+
+    async def restart_channel(self, name: str) -> bool:
+        """Stop and re-start a single channel's long-running task.
+
+        Used after WeChat QR re-login swaps the bot identity: the live poll
+        loop is still bound to the old token, so it must be torn down and
+        re-started to pick up the new credentials. Idempotent and safe to call
+        while ``start_all`` is running — it only touches the one channel.
+
+        Returns True if the channel was restarted, False if unknown.
+        """
+        channel = self.channels.get(name)
+        if channel is None:
+            logger.warning("restart_channel: unknown channel %s", name)
+            return False
+
+        logger.info("restart_channel(%s): stopping current loop", name)
+        old_task = self._channel_tasks.get(name)
+        try:
+            await channel.stop()
+        except Exception:
+            logger.exception("restart_channel: error stopping %s", name)
+        if old_task is not None and not old_task.done():
+            old_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await old_task
+
+        new_task = asyncio.create_task(self._start_channel(name, channel))
+        self._channel_tasks[name] = new_task
+        # 让新 start() 跑到进入 poll 循环(start 内部在建立连接后才 await),
+        # 这样调用方拿到的 is_running 反映真实状态。
+        await asyncio.sleep(0)
+        self._status.setdefault(name, {})
+        self._status[name]["running"] = channel.is_running
+        logger.info(
+            "restart_channel(%s): restarted, running=%s",
+            name, channel.is_running,
+        )
+        return True
 
     async def stop_all(self) -> None:
         """Stop all channels and the dispatcher."""

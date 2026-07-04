@@ -155,8 +155,18 @@ class ChannelRuntime:
     def _session_for(self, msg: InboundMessage) -> str:
         key = msg.session_key
         existing = self._session_map.get(key)
-        if existing:
+        if existing and self._session_exists(existing):
             return existing
+        if existing:
+            # The mapped session id no longer resolves in the store (e.g. the
+            # store's base_dir changed between runs, or the session was pruned).
+            # Drop the stale mapping and fall through to create a fresh session
+            # so the user keeps chatting instead of hitting "Session ... not found".
+            logger.warning(
+                "Channel session map entry %s -> %s is stale; recreating session",
+                key,
+                existing,
+            )
         session = self.session_service.create_session(
             title=f"{msg.channel}:{msg.chat_id}",
             config={"channel": msg.channel, "channel_chat_id": msg.chat_id},
@@ -165,6 +175,14 @@ class ChannelRuntime:
         self._session_map[key] = session_id
         self._save_session_map()
         return session_id
+
+    def _session_exists(self, session_id: str) -> bool:
+        """Return True when the session id still resolves in the backing store."""
+        try:
+            return self.session_service.get_session(session_id) is not None
+        except Exception:  # noqa: BLE001 - a broken store lookup must not wedge routing
+            logger.exception("Failed to verify channel session %s", session_id)
+            return False
 
     async def _wait_for_reply(self, session_id: str, attempt_id: str | None) -> Message:
         deadline = time.monotonic() + self.config.reply_timeout_s

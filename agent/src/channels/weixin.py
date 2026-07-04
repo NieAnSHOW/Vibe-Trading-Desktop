@@ -178,6 +178,8 @@ class WeixinChannel(BaseChannel):
         self._typing_tickets: dict[str, dict[str, Any]] = {}
         self._context_token_at: dict[str, float] = {}
         self._pending_tool_hints: dict[str, list[str]] = {}
+        # 扫码换新 bot 后,poll_qr_login 置此标志请求协调层重启 poll 循环。
+        self._pending_reconnect: bool = False
 
     # ------------------------------------------------------------------
     # State persistence
@@ -400,16 +402,30 @@ class WeixinChannel(BaseChannel):
             bot_id = data.get("ilink_bot_id", "")
             user_id = data.get("ilink_user_id", "")
             if token:
+                token_changed = token != self._token
                 self._token = token
+                # config.token 是 start() 的首选 token 来源(`if self.config.token`)。
+                # 扫码换新 bot 后必须同步覆盖,否则任何 restart 都会用旧 config.token
+                # 重连,回到"旧身份轮询"的故障态。
+                self.config.token = token
                 if data.get("baseurl"):
                     self.config.base_url = data["baseurl"]
+                if token_changed:
+                    # 新 bot 身份的更新游标与旧 bot 无关;沿用旧 get_updates_buf 会让
+                    # 新身份的 getupdates 从错误的位置拉取。清空,让重连从头开始。
+                    self._get_updates_buf = ""
+                    # 标记需要重连:正在运行的 poll 循环仍绑在旧身份上,协调层
+                    # (api_server login/status)据此重启循环以加载新 token。
+                    self._pending_reconnect = True
                 self._save_state()
                 self.logger.info(
-                    "login successful! bot_id=%s user_id=%s",
+                    "login successful! bot_id=%s user_id=%s token_changed=%s",
                     bot_id,
                     user_id,
+                    token_changed,
                 )
                 result["token"] = token
+                result["token_changed"] = token_changed
         return result
 
     async def _qr_login(self) -> bool:
@@ -515,8 +531,13 @@ class WeixinChannel(BaseChannel):
             trust_env=False,  # 直连腾讯 ilinkai,绕过继承的系统代理(同 _ensure_client)
         )
 
+        # token 来源优先级:config.token(扫码确认时已同步为新 token) > 内存 _token
+        # (QR 登录后) > 磁盘 state > 阻塞式 _qr_login。扫码换 bot 后重启走前两个
+        # 分支,不会再进阻塞登录。
         if self.config.token:
             self._token = self.config.token
+        elif self._token:
+            pass  # 复用 QR 登录已设的内存 token
         elif not self._load_state():
             if not await self._qr_login():
                 self.logger.error("login failed. Run 'vibe-trading channels login weixin' to authenticate.")
