@@ -404,6 +404,10 @@ class WeixinChannel(BaseChannel):
             if token:
                 token_changed = token != self._token
                 self._token = token
+                # 扫码成功 = 拿到全新有效凭证,会话恢复。必须清掉旧 token 触发的
+                # 1 小时 pause 窗口,否则 health_state 仍报 "expired"(Settings 一直
+                # 标红),且 _poll_once 会继续 sleep(pause) 不拉消息。
+                self._session_pause_until = 0.0
                 # config.token 是 start() 的首选 token 来源(`if self.config.token`)。
                 # 扫码换新 bot 后必须同步覆盖,否则任何 restart 都会用旧 config.token
                 # 重连,回到"旧身份轮询"的故障态。

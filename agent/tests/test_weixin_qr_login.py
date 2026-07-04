@@ -1,5 +1,6 @@
 """微信 QR 登录拆分 -- begin/poll 可被 REST 与终端共用(channel-management-ui 6.3)。"""
 import asyncio
+import time
 import pytest
 from src.channels.bus.queue import MessageBus
 from src.channels.weixin import WeixinChannel
@@ -99,6 +100,34 @@ def test_poll_qr_login_confirmed_same_token_no_reconnect(monkeypatch, tmp_path):
     assert res.get("token_changed") is False
     assert ch._pending_reconnect is False  # 未请求重连
     assert ch._get_updates_buf == "live-cursor"  # 活跃游标保留
+
+
+def test_poll_qr_login_confirmed_clears_session_pause(monkeypatch, tmp_path):
+    """扫码成功拿到新 token = 会话已恢复有效。必须立即清掉上一个失效 token
+    留下的 1 小时 pause 窗口,否则:health_state 仍报 "expired"(Settings 一直
+    标红"登录失效"),且 _poll_once 会继续 sleep(remaining) 不拉消息 —— 即
+    "扫码成功、account.json 已更新、但仍收不到消息"的故障。"""
+    ch = WeixinChannel({"enabled": True, "state_dir": str(tmp_path), "token": "old-tok"}, MessageBus())
+    ch = _make_adapter(monkeypatch, ch)
+    ch._token = "old-tok"
+    # 模拟 errcode -14 触发的暂停窗口(还有 1 小时才自然超时)
+    ch._session_pause_until = time.time() + 3600
+    assert ch.health_state == "expired"  # 前置:确实处于失效态
+
+    async def fake_poll(**kw):
+        return {
+            "status": "confirmed",
+            "bot_token": "new-tok",
+            "ilink_bot_id": "bot-new",
+            "ilink_user_id": "user-new",
+        }
+
+    monkeypatch.setattr(ch, "_api_get_with_base", fake_poll)
+    asyncio.run(ch.poll_qr_login("qid-1"))
+
+    assert ch._session_pause_until == 0.0
+    assert ch._session_pause_remaining_s() == 0
+    assert ch.health_state == "ok"
 
 
 def test_poll_qr_login_scaned_but_redirect_updates_base(monkeypatch):

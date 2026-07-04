@@ -538,9 +538,15 @@ export function Settings() {
                       <span className={`rounded-full px-2 py-0.5 text-xs ${item.loaded ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
                         {item.loaded ? t("settings.channels.loaded") : t("settings.channels.notLoaded")}
                       </span>
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${item.running ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
-                        {item.running ? t("settings.channels.running") : t("settings.channels.stopped")}
-                      </span>
+                      {item.health === "expired" ? (
+                        <span className="rounded-full px-2 py-0.5 text-xs bg-destructive/10 text-destructive">
+                          {t("settings.channels.loginExpired")}
+                        </span>
+                      ) : (
+                        <span className={`rounded-full px-2 py-0.5 text-xs ${item.running ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
+                          {item.running ? t("settings.channels.running") : t("settings.channels.stopped")}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="max-w-md px-3 py-2 align-top text-xs text-muted-foreground">

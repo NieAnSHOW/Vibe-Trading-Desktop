@@ -319,7 +319,8 @@
       "stopFailed": "Failed to stop IM channels",
       "installDep": "Install Dependencies",
       "depInstalled": "Dependencies Installed",
-      "depInstallFailed": "Install Failed"
+      "depInstallFailed": "Install Failed",
+      "loginExpired": "Login expired · rescan required"
     },
     "generation": "Generation",
     "dataSourceSettings": "Data Source Settings",

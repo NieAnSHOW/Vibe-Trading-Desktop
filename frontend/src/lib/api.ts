@@ -323,6 +323,7 @@ export interface ChannelAdapterStatus {
   available: boolean;
   loaded: boolean;
   running: boolean;
+  health?: string;
   error?: string;
   install_hint?: string;
 }

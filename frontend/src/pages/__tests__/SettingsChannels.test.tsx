@@ -177,6 +177,36 @@ describe("Settings IM channels panel", () => {
     await waitFor(() => expect(screen.queryByText("微信扫码登录")).not.toBeInTheDocument());
   });
 
+  it("flags weixin login-expired when health=expired despite poll loop running", async () => {
+    // 复现 bug: bot_token 失效时 poll 循环仍在空转(running=true),
+    // 后端给出 health="expired"。WebUI 必须据此显示「登录失效」,
+    // 而不是用绿色 running badge 误报在线(与 desktop console 口径一致)。
+    apiMock.getChannelStatus.mockResolvedValue(channelStatus({
+      running: true,
+      channels: {
+        weixin: {
+          name: "weixin",
+          display_name: "WeChat",
+          configured: true,
+          enabled: true,
+          available: true,
+          loaded: true,
+          running: true,
+          health: "expired",
+          error: "",
+          install_hint: "",
+        },
+      },
+    }));
+
+    render(<MemoryRouter><Settings /></MemoryRouter>);
+    await screen.findByText("IM Channels");
+
+    expect(await screen.findByText("Login expired · rescan required")).toBeInTheDocument();
+    // 恢复动作(扫码)在该行仍可用
+    expect(screen.getByText("扫码登录")).toBeInTheDocument();
+  });
+
   it("closes QR modal and refreshes status on confirmed login", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     apiMock.weixinLoginStatus.mockResolvedValue({ status: "confirmed" });

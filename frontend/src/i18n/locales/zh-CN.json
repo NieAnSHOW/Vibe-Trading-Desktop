@@ -314,7 +314,8 @@
       "stopFailed": "停止 IM 通道失败",
       "installDep": "安装依赖",
       "depInstalled": "依赖已安装",
-      "depInstallFailed": "依赖安装失败"
+      "depInstallFailed": "依赖安装失败",
+      "loginExpired": "登录失效 · 需重新扫码"
     },
     "generation": "生成设置",
     "dataSourceSettings": "数据源设置",
