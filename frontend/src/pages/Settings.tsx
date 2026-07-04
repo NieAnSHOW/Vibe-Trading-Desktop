@@ -53,7 +53,6 @@ export function Settings() {
   const [dataSaving, setDataSaving] = useState(false);
   const [channelRefreshing, setChannelRefreshing] = useState(false);
   const [channelAction, setChannelAction] = useState<"start" | "stop" | null>(null);
-  const [pairingChannel, setPairingChannel] = useState("weixin");
   const [pairingCommand, setPairingCommand] = useState("");
   const [pairingBusy, setPairingBusy] = useState(false);
   const [settingsLoadError, setSettingsLoadError] = useState<string | null>(null);
@@ -191,8 +190,9 @@ export function Settings() {
     if (!command) return;
     setPairingBusy(true);
     try {
+      // ponytail: 仅微信开放,pairing 命令固定走 weixin
       const updated = await api.runChannelPairingCommand({
-        channel: pairingChannel.trim() || "weixin",
+        channel: "weixin",
         command,
       });
       toast.success(updated.reply);
@@ -408,7 +408,10 @@ export function Settings() {
   const tushareStatus = dataSettings.tushare_token_configured
     ? "Configured"
     : "Leave blank to keep the current token";
-  const channelRows = Object.entries(channelStatus.channels ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  // ponytail: 仅展示微信渠道。其他 IM 渠道暂不开放,不在 WebUI 中露出。
+  const channelRows = Object.entries(channelStatus.channels ?? {})
+    .filter(([name]) => name === "weixin")
+    .sort(([a], [b]) => a.localeCompare(b));
   const channelEnabledCount = channelRows.filter(([, item]) => item.enabled).length;
   const channelLoadedCount = channelRows.filter(([, item]) => item.loaded).length;
   const channelUnavailableCount = channelRows.filter(([, item]) => item.available === false).length;
@@ -571,19 +574,8 @@ export function Settings() {
           </table>
         </div>
 
-        <form onSubmit={submitPairingCommand} className="mt-4 grid gap-3 md:grid-cols-[180px_minmax(0,1fr)_auto]">
-          <label className="grid gap-2">
-            <span className={labelClass}>{"Channel"}</span>
-            <select
-              value={pairingChannel}
-              onChange={(event) => setPairingChannel(event.target.value)}
-              className={fieldClass}
-            >
-              {["weixin", "wecom", "telegram", "slack", "discord", "qq", "napcat", "feishu", "dingtalk"].map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
-          </label>
+        {/* ponytail: 仅微信开放,channel 固定 weixin,不再展示渠道选择器 */}
+        <form onSubmit={submitPairingCommand} className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
           <label className="grid gap-2">
             <span className={labelClass}>{"Pairing command"}</span>
             <input

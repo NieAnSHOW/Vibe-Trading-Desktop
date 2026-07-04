@@ -85,9 +85,10 @@ function channelStatus(overrides = {}) {
     outbound_queue: 0,
     session_count: 0,
     channels: {
-      websocket: {
-        name: "websocket",
-        display_name: "WebSocket",
+      // ponytail: WebUI 仅展示微信渠道(其他 IM 渠道暂不开放),mock 反映这个默认现实
+      weixin: {
+        name: "weixin",
+        display_name: "WeChat",
         configured: true,
         enabled: true,
         available: true,
@@ -95,17 +96,6 @@ function channelStatus(overrides = {}) {
         running: false,
         error: "",
         install_hint: "",
-      },
-      telegram: {
-        name: "telegram",
-        display_name: "Telegram",
-        configured: true,
-        enabled: false,
-        available: false,
-        loaded: false,
-        running: false,
-        error: "ModuleNotFoundError",
-        install_hint: "pip install 'vibe-trading-ai[telegram]'",
       },
     },
     ...overrides,
@@ -131,8 +121,10 @@ describe("Settings IM channels panel", () => {
     render(<MemoryRouter><Settings /></MemoryRouter>);
 
     expect(await screen.findByText("IM Channels")).toBeInTheDocument();
-    expect(screen.getByText("websocket")).toBeInTheDocument();
-    expect(screen.getByText("pip install 'vibe-trading-ai[telegram]'")).toBeInTheDocument();
+    // ponytail: 仅微信在 WebUI 露出,其他渠道(如 telegram)不渲染。
+    // 断言 display_name "WeChat"(weixin 文本在表格 + pairing 下拉各出现一次,不唯一)
+    expect(screen.getByText("WeChat")).toBeInTheDocument();
+    expect(screen.queryByText("telegram")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
 
@@ -163,95 +155,42 @@ describe("Settings IM channels panel", () => {
     );
   });
 
-  it("renders install dep button for unavailable channel matched to optional-deps broker", async () => {
-    apiMock.listOptionalDeps.mockResolvedValue({
-      brokers: [{ id: "telegram", label: "Telegram", package: "python-telegram-bot", description: "Telegram bot SDK", platforms: [], recommended_mirror: "tsinghua", installed: false, installed_version: "" }],
-    });
-
-    render(<MemoryRouter><Settings /></MemoryRouter>);
-    await screen.findByText("IM Channels");
-
-    expect(screen.getByText("Install Dependencies")).toBeInTheDocument();
-    expect(apiMock.listOptionalDeps).toHaveBeenCalled();
-  });
-
-  it("calls installOptionalDep when install dep button is clicked", async () => {
-    apiMock.listOptionalDeps.mockResolvedValue({
-      brokers: [{ id: "telegram", label: "Telegram", package: "python-telegram-bot", description: "Telegram bot SDK", platforms: [], recommended_mirror: "tsinghua", installed: false, installed_version: "" }],
-    });
-    apiMock.installOptionalDep.mockResolvedValue({ job_id: "job-1" });
-
-    render(<MemoryRouter><Settings /></MemoryRouter>);
-    await screen.findByText("IM Channels");
-
-    fireEvent.click(screen.getByText("Install Dependencies"));
-
-    await waitFor(() => {
-      expect(apiMock.installOptionalDep).toHaveBeenCalledWith("python-telegram-bot");
-    });
-  });
+  // ponytail: 删除的两个 install-dep 用例测的是 IM 渠道表格里非微信渠道的「安装依赖」
+  // 按钮——WebUI 现仅展示微信(微信无可选 SDK 依赖,永不触发该按钮),该 UI 路径不可达。
+  // matchedPkg/installChannelDep 代码保留,待未来开放其他渠道时复用。
 
   it("renders WeChat QR login button and displays QR modal", async () => {
-    const chStatus = channelStatus();
-    chStatus.channels.weixin = {
-      name: "weixin",
-      display_name: "WeChat",
-      configured: true,
-      enabled: true,
-      available: true,
-      loaded: true,
-      running: false,
-      error: "",
-      install_hint: "",
-    };
-    apiMock.getChannelStatus.mockResolvedValue(chStatus);
-
     render(<MemoryRouter><Settings /></MemoryRouter>);
     await screen.findByText("IM Channels");
 
-    // Assert QR login button is rendered
+    // 扫码登录按钮在微信行渲染
     expect(screen.getByText("扫码登录")).toBeInTheDocument();
 
-    // Click the QR login button
     fireEvent.click(screen.getByText("扫码登录"));
     await waitFor(() => expect(apiMock.startWeixinLogin).toHaveBeenCalledTimes(1));
 
-    // Assert QR image is displayed
-    expect(await screen.findByAltText("微信二维码")).toBeInTheDocument();
-    expect(screen.getByText("请使用微信扫描二维码")).toBeInTheDocument();
+    // ponytail: modal 为「等待轮询」UI(commit 9a2c93e),不再是二维码图片
+    expect(await screen.findByText("微信扫码登录")).toBeInTheDocument();
+    expect(screen.getByText(/请在已打开的页面完成微信扫码登录/)).toBeInTheDocument();
 
-    // Close modal
     fireEvent.click(screen.getByText("取消"));
-    await waitFor(() => expect(screen.queryByAltText("微信二维码")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText("微信扫码登录")).not.toBeInTheDocument());
   });
 
   it("closes QR modal and refreshes status on confirmed login", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const chStatus = channelStatus();
-    chStatus.channels.weixin = {
-      name: "weixin",
-      display_name: "WeChat",
-      configured: true,
-      enabled: true,
-      available: true,
-      loaded: true,
-      running: false,
-      error: "",
-      install_hint: "",
-    };
-    apiMock.getChannelStatus.mockResolvedValue(chStatus);
     apiMock.weixinLoginStatus.mockResolvedValue({ status: "confirmed" });
 
     render(<MemoryRouter><Settings /></MemoryRouter>);
     await screen.findByText("IM Channels");
 
     fireEvent.click(screen.getByText("扫码登录"));
-    expect(await screen.findByAltText("微信二维码")).toBeInTheDocument();
+    expect(await screen.findByText("微信扫码登录")).toBeInTheDocument();
 
     // Advance past one polling interval; confirmed status closes the modal
     await vi.advanceTimersByTimeAsync(2500);
 
-    await waitFor(() => expect(screen.queryByAltText("微信二维码")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText("微信扫码登录")).not.toBeInTheDocument());
     // getChannelStatus was called: once on mount, + at least one refresh after confirmed
     expect(apiMock.getChannelStatus.mock.calls.length).toBeGreaterThanOrEqual(2);
 
