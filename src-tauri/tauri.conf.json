@@ -5,7 +5,8 @@
   "identifier": "ai.vibetrading.desktop",
   "build": {
     "frontendDist": "./console-dist",
-    "beforeDevCommand": "cd frontend && npm run dev"
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "cd ../console-app && pnpm dev"
   },
   "app": {
     "withGlobalTauri": true,

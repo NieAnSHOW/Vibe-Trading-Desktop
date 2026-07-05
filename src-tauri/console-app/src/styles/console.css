@@ -52,16 +52,12 @@ body::before {
       hsl(var(--brand) / 0.14),
       transparent 70%
     ),
-    radial-gradient(
-      50% 40% at 90% 8%,
-      hsl(217 90% 60% / 0.06),
-      transparent 70%
-    );
+    radial-gradient(50% 40% at 90% 8%, hsl(217 90% 60% / 0.06), transparent 70%);
 }
 .console {
   position: relative;
   z-index: 1;
-  width: min(560px, 100%);
+  width: 580px;
 }
 
 /* Header */
@@ -184,7 +180,9 @@ h1 {
 }
 /* `.hint` 的 display:flex 会盖过浏览器默认的 [hidden]{display:none},
    导致 hidden 属性失效——必须显式声明 .hint[hidden] 才藏得住。 */
-.hint[hidden] { display: none; }
+.hint[hidden] {
+  display: none;
+}
 .hint b {
   color: hsl(var(--ink));
   font-weight: 600;
@@ -482,8 +480,13 @@ dialog.confirm .confirm-actions {
 }
 
 /* Vue 重构新增 */
-.hint[hidden] { display: none !important; }
+.hint[hidden] {
+  display: none !important;
+}
 .console-version-text {
-  margin-top: 18px; text-align: center; font-size: 11px;
-  letter-spacing: 0.02em; color: hsl(0 0% 60% / 0.6);
+  margin-top: 18px;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: hsl(0 0% 60% / 0.6);
 }
