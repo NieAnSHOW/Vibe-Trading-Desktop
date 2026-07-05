@@ -288,9 +288,8 @@ pub fn console_start_service(
     if state.lock().unwrap().is_some() {
         return Err(ServiceStartError::AlreadyRunning);
     }
-    // 启动前校验 token：过期则 ensure_session_valid 内部尝试 refresh；失败返 LoginExpired
-    let _session = auth::ensure_session_valid(&auth_state, &layout)
-        .map_err(|_| ServiceStartError::LoginExpired)?;
+    // 启动前尝试刷新登录态（静默；未登录不阻塞———用户可自行配 .env）
+    let _ = auth::ensure_session_valid(&auth_state, &layout);
 
     let port = crate::port::pick_free_port()
         .map_err(|e| ServiceStartError::Other { message: e })?;

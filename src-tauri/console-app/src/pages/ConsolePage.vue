@@ -113,7 +113,7 @@ async function onStart() {
     } catch (e: any) {
       if (e?.variant === "LoginExpired") {
         authStore.clear();
-        router.replace("/login");
+        setErr("登录已过期，请重新登录");
         return;
       }
       setErr(e?.message || String(e));
@@ -194,12 +194,9 @@ let unlistens: UnlistenFn[] = [];
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 onMounted(async () => {
-  // 恢复登录态：从 Rust 内存或 .env 读 token；未登录则跳 /login。
+  // 恢复登录态（静默，不阻塞）
   await authStore.refresh();
-  if (!authStore.authenticated) {
-    router.replace("/login");
-    return;
-  }
+
   unlistens = await Promise.all([
     onBootstrapEvent((e: BootstrapEvent) => {
       if (e.message) log(`[${e.stage}] ${e.message}`);
@@ -248,9 +245,16 @@ onUnmounted(() => {
           <p class="sub">桌面运行环境控制台</p>
         </div>
       </div>
-      <AppButton variant="ghost" :disabled="!running" @click="onOpenWebui">
-        在浏览器打开 WebUI
-      </AppButton>
+      <div style="display:flex;align-items:center;gap:8px">
+        <template v-if="authStore.authenticated && authStore.userInfo">
+          <span style="font-size:12px;color:#666">{{ authStore.userInfo.nickName || authStore.userInfo.phone || '已登录' }}</span>
+          <AppButton variant="ghost" @click="authStore.clear()">退出登录</AppButton>
+        </template>
+        <AppButton v-else variant="ghost" @click="router.push('/login')">登录</AppButton>
+        <AppButton variant="ghost" :disabled="!running" @click="onOpenWebui">
+          在浏览器打开 WebUI
+        </AppButton>
+      </div>
     </div>
 
     <!-- status -->

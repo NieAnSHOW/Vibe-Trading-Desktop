@@ -203,6 +203,7 @@ onUnmounted(() => {
         >
           {{ submitBusy.busy.value ? "登录中…" : "登录" }}
         </button>
+        <button class="skip-btn" @click="router.replace('/')">跳过登录</button>
       </div>
 
       <div v-else class="form">
@@ -232,6 +233,7 @@ onUnmounted(() => {
         >
           {{ submitBusy.busy.value ? "登录中…" : "登录" }}
         </button>
+        <button class="skip-btn" @click="router.replace('/')">跳过登录</button>
       </div>
 
       <p v-if="err" class="err">{{ err }}</p>
@@ -345,6 +347,17 @@ label {
 .submit:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+.skip-btn {
+  width: 100%;
+  padding: 8px;
+  background: transparent;
+  color: #666;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  margin-top: 4px;
 }
 .err {
   color: #dc2626;
