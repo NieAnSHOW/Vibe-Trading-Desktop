@@ -1,15 +1,23 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { ref, onErrorCaptured } from "vue";
+
+const errMsg = ref("");
+onErrorCaptured((e) => {
+  errMsg.value = String(e);
+  return false; // 阻止向上抛
+});
+</script>
 
 <template>
-  <div class="console-skeleton">控制台重构中…</div>
+  <div v-if="errMsg" class="fatal">
+    控制台发生错误：{{ errMsg }}
+  </div>
+  <router-view v-else />
 </template>
 
 <style>
-.console-skeleton {
-  padding: 32px;
-  font-family: -apple-system, "PingFang SC", sans-serif;
-  color: #e6e6e6;
-  background: #0e0f13;
-  min-height: 100vh;
+.fatal {
+  padding: 24px; color: #ff8080; font-family: ui-monospace, Menlo, monospace;
+  background: #0e0f13; min-height: 100vh;
 }
 </style>

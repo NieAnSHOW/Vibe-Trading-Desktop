@@ -1,0 +1,489 @@
+:root {
+  --bg: 220 24% 4%;
+  --surface-1: 220 20% 8%;
+  --surface-2: 220 20% 12%;
+  --line: 220 18% 18%;
+  --ink: 220 12% 93%;
+  --ink-dim: 220 10% 66%;
+  --brand: 27 90% 54%;
+  --brand-strong: 27 92% 47%;
+  --on-brand: 26 48% 13%;
+  --ok: 145 62% 50%;
+  --ok-fg: 145 58% 66%;
+  --warn: 38 92% 55%;
+  --warn-fg: 40 95% 66%;
+  --bad: 0 75% 60%;
+  --bad-fg: 0 88% 74%;
+  --radius: 12px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html {
+  color-scheme: dark;
+}
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  background: hsl(var(--bg));
+  color: hsl(var(--ink));
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 40px 20px 32px;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+/* Warm ambient wash — carries the brand's "温暖/安心" on the app's front door.
+ Purposeful, not decorative glass; kept subtle so log text stays crisp. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(
+      60% 45% at 50% -8%,
+      hsl(var(--brand) / 0.14),
+      transparent 70%
+    ),
+    radial-gradient(
+      50% 40% at 90% 8%,
+      hsl(217 90% 60% / 0.06),
+      transparent 70%
+    );
+}
+.console {
+  position: relative;
+  z-index: 1;
+  width: min(560px, 100%);
+}
+
+/* Header */
+.head {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 6px;
+  justify-content: space-between;
+}
+.mark {
+  flex: none;
+  width: 60px;
+  height: 60px;
+  border-radius: 10px;
+  filter: drop-shadow(0 5px 14px hsl(var(--brand) / 0.22));
+}
+h1 {
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.sub {
+  font-size: 13px;
+  color: hsl(var(--ink-dim));
+  margin-top: 1px;
+}
+
+/* Status card */
+.status {
+  margin-top: 22px;
+  background: hsl(var(--surface-1));
+  border: 1px solid hsl(var(--line));
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+}
+.status-row + .status-row {
+  border-top: 1px solid hsl(var(--line));
+}
+.status-label {
+  font-size: 13.5px;
+  color: hsl(var(--ink-dim));
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 11px 4px 9px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 550;
+  border: 1px solid transparent;
+}
+.badge .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.badge.ok {
+  background: hsl(var(--ok) / 0.14);
+  color: hsl(var(--ok-fg));
+  border-color: hsl(var(--ok) / 0.28);
+}
+.badge.ok .dot {
+  background: hsl(var(--ok));
+}
+.badge.warn {
+  background: hsl(var(--warn) / 0.14);
+  color: hsl(var(--warn-fg));
+  border-color: hsl(var(--warn) / 0.28);
+}
+.badge.warn .dot {
+  background: hsl(var(--warn));
+}
+.badge.bad {
+  background: hsl(var(--bad) / 0.14);
+  color: hsl(var(--bad-fg));
+  border-color: hsl(var(--bad) / 0.28);
+}
+.badge.bad .dot {
+  background: hsl(var(--bad));
+}
+/* Live pulse only while a process is genuinely in flight */
+.badge.live .dot {
+  animation: pulse 1.4s var(--ease) infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.7);
+  }
+}
+
+/* Guidance: teaches the next action for the current env state */
+.hint {
+  margin-top: 12px;
+  font-size: 13px;
+  color: hsl(var(--ink-dim));
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: hsl(var(--surface-1) / 0.6);
+  border: 1px solid hsl(var(--line));
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+}
+/* `.hint` 的 display:flex 会盖过浏览器默认的 [hidden]{display:none},
+   导致 hidden 属性失效——必须显式声明 .hint[hidden] 才藏得住。 */
+.hint[hidden] { display: none; }
+.hint b {
+  color: hsl(var(--ink));
+  font-weight: 600;
+}
+.hint svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  color: hsl(var(--brand));
+}
+
+/* Actions — 三组语义分层: 准备 / 服务生命周期 / 入口与工具。
+   组内紧贴(8px)成对, 组间稍松(12px)建立节奏, 不再 flex-wrap 平铺
+   导致换行点随宽度漂移。 */
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+.action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 11px 4px 9px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 550;
+  border: 1px solid transparent;
+  transition:
+    background 0.16s var(--ease),
+    border-color 0.16s var(--ease),
+    transform 0.12s var(--ease),
+    opacity 0.16s var(--ease);
+}
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+button:focus-visible {
+  outline: 2px solid hsl(var(--brand));
+  outline-offset: 2px;
+}
+.btn-primary {
+  background: hsl(var(--brand));
+  color: hsl(var(--on-brand));
+}
+.btn-primary:hover:not(:disabled) {
+  background: hsl(var(--brand-strong));
+}
+.btn-ghost {
+  background: hsl(var(--surface-2));
+  color: hsl(var(--ink));
+  border-color: hsl(var(--line));
+}
+.btn-ghost:hover:not(:disabled) {
+  background: hsl(var(--line));
+}
+.btn-danger {
+  background: hsl(var(--bad));
+  color: hsl(0 0% 100%);
+  border-color: transparent;
+}
+.btn-danger:hover:not(:disabled) {
+  background: hsl(0 78% 52%);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+button.busy {
+  pointer-events: none;
+}
+select.channel-select {
+  font: inherit;
+  font-size: 13.5px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: hsl(var(--surface-2));
+  color: hsl(var(--ink));
+  border: 1px solid hsl(var(--line));
+  cursor: pointer;
+}
+select.channel-select:focus-visible {
+  outline: 2px solid hsl(var(--brand));
+  outline-offset: 2px;
+}
+.spinner {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Install progress — shown only while bootstrap is running. Stage label
+   on the left, percentage on the right; the bar underneath advances by
+   stage (venv → installing → smoke → done) with a gentle asymptotic
+   creep inside the long "installing" stage so it never looks frozen. */
+#progress[hidden] {
+  display: none;
+}
+#progress {
+  margin-top: 16px;
+  background: hsl(var(--surface-1));
+  border: 1px solid hsl(var(--line));
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.progress-stage {
+  font-size: 13px;
+  font-weight: 550;
+  color: hsl(var(--ink));
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.progress-pct {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: hsl(var(--brand));
+  font-variant-numeric: tabular-nums;
+}
+.progress-track {
+  height: 7px;
+  border-radius: 999px;
+  background: hsl(var(--line));
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    hsl(var(--brand)),
+    hsl(var(--brand-strong))
+  );
+  transition: width 0.4s var(--ease);
+}
+/* Failed → bar turns red so a glance conveys the outcome. */
+#progress.failed .progress-fill {
+  background: hsl(var(--bad));
+}
+#progress.failed .progress-pct {
+  color: hsl(var(--bad-fg));
+}
+/* Done → bar turns green. */
+#progress.done .progress-fill {
+  background: hsl(var(--ok));
+}
+#progress.done .progress-pct {
+  color: hsl(var(--ok-fg));
+}
+
+/* Confirm dialog (native <dialog>) */
+dialog.confirm {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  background: hsl(var(--surface-1));
+  color: hsl(var(--ink));
+  border: 1px solid hsl(var(--line));
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  max-width: 380px;
+  box-shadow: 0 22px 55px hsl(0 0% 0% / 0.55);
+}
+dialog.confirm::backdrop {
+  background: hsl(0 0% 0% / 0.55);
+  backdrop-filter: blur(2px);
+}
+dialog.confirm h3 {
+  font-size: 15.5px;
+  font-weight: 650;
+  margin-bottom: 9px;
+}
+dialog.confirm p {
+  font-size: 13.5px;
+  color: hsl(var(--ink-dim));
+  line-height: 1.55;
+}
+dialog.confirm p b {
+  color: hsl(var(--bad-fg));
+  font-weight: 600;
+}
+dialog.confirm .confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+/* Error */
+#err:not(:empty) {
+  margin-top: 13px;
+  font-size: 13px;
+  color: hsl(var(--bad-fg));
+  padding: 10px 13px;
+  border-radius: 9px;
+  background: hsl(var(--bad) / 0.1);
+  border: 1px solid hsl(var(--bad) / 0.3);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Log */
+.log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 20px 0 8px;
+}
+.log-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: hsl(var(--ink-dim));
+}
+.log-clear {
+  font-size: 12px;
+  color: hsl(var(--ink-dim));
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+.log-clear:hover {
+  color: hsl(var(--ink));
+}
+#log {
+  height: 120px;
+  overflow: auto;
+  background: hsl(var(--bg));
+  color: hsl(var(--ink-dim));
+  border: 1px solid hsl(var(--line));
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  font:
+    12px/1.65 ui-monospace,
+    "SF Mono",
+    "JetBrains Mono",
+    Menlo,
+    monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+#log:empty::after {
+  content: "等待操作输出…";
+  color: hsl(var(--ink-dim) / 0.55);
+}
+#log::-webkit-scrollbar {
+  width: 8px;
+}
+#log::-webkit-scrollbar-thumb {
+  background: hsl(var(--line));
+  border-radius: 4px;
+}
+/* 控制台独立版本号;data-console-version 由 console-version.mjs 维护。 */
+.console-version {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: hsl(var(--ink-dim) / 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Vue 重构新增 */
+.hint[hidden] { display: none !important; }
+.console-version-text {
+  margin-top: 18px; text-align: center; font-size: 11px;
+  letter-spacing: 0.02em; color: hsl(0 0% 60% / 0.6);
+}
