@@ -75,15 +75,12 @@ const installBusy = useBusy();
 const startBusy = useBusy();
 const stopBusy = useBusy();
 
-const showInstallBtn = computed(
-  () => envState.value !== "ready" && !installBusy.busy.value,
-);
-const showStartBtn = computed(
-  () => serviceRunning.value === false && !startBusy.busy.value,
-);
-const showStopBtn = computed(
-  () => serviceRunning.value === true && !stopBusy.busy.value,
-);
+// busy 期间按钮保留显示，由 AppButton 的 :busy 接管(spinner + disabled)。
+// 服务真正 ready 后 serviceRunning 翻转，按钮才在此切换——否则最长 120s
+// (sidecar await_health)内两个按钮都消失，看起来像假死。
+const showInstallBtn = computed(() => envState.value !== "ready");
+const showStartBtn = computed(() => serviceRunning.value === false);
+const showStopBtn = computed(() => serviceRunning.value === true);
 const btnStartDisabled = computed(
   () => envState.value !== "ready" || port.value !== null || startBusy.busy.value,
 );

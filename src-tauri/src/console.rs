@@ -276,7 +276,7 @@ pub async fn console_bootstrap(
 /// 启动服务：先校验登录态（过期则尝试 refresh，失败返 LoginExpired），
 /// 再 spawn serve + 健康门控。
 #[tauri::command]
-pub fn console_start_service(
+pub async fn console_start_service(
     app: AppHandle,
     state: State<'_, SharedChild>,
     auth_state: State<'_, AuthState>,
@@ -301,9 +301,20 @@ pub fn console_start_service(
         &layout.sessions_dir,
     )
     .map_err(|e| ServiceStartError::SpawnFailed { message: e })?;
-    match crate::sidecar::await_health(&mut child, port) {
+
+    // await_health 是同步阻塞(reqwest::blocking + thread::sleep,最长 120s)。
+    // 甩到阻塞线程池执行——否则会卡死 Tauri main thread,整个窗口假死、
+    // 前端 spinner 也转不动(对照 console_bootstrap 用 async + 后台线程,从不卡)。
+    let shared = state.inner().clone();
+    let (ready, child) = tauri::async_runtime::spawn_blocking(move || {
+        let ready = crate::sidecar::await_health(&mut child, port);
+        (ready, child)
+    })
+    .await
+    .map_err(|e| ServiceStartError::Other { message: e.to_string() })?;
+    match ready {
         crate::sidecar::Ready::Ok => {
-            state.lock().unwrap().replace(child);
+            shared.lock().unwrap().replace(child);
             let _ = app.emit("service://started", port);
             Ok(port)
         }
@@ -443,9 +454,13 @@ pub fn console_auth_status(
 
 /// 停止服务:干净回收 sidecar 进程组。
 #[tauri::command]
-pub fn console_stop_service(state: State<'_, SharedChild>) -> Result<(), String> {
-    if let Some(mut child) = state.lock().unwrap().take() {
-        crate::sidecar::terminate(&mut child);
+pub async fn console_stop_service(state: State<'_, SharedChild>) -> Result<(), String> {
+    // 单独语句取走 child,确保 MutexGuard 不跨 await(Future 须 Send)。
+    let child = state.lock().unwrap().take();
+    if let Some(mut child) = child {
+        // terminate 内部 child.wait() 同步等子进程退出;甩到阻塞线程池避免卡 main thread。
+        let _ = tauri::async_runtime::spawn_blocking(move || crate::sidecar::terminate(&mut child))
+            .await;
     }
     Ok(())
 }

@@ -41,15 +41,15 @@ export const useBootstrapStore = defineStore("bootstrap", () => {
     setProgress(2, "准备中…", true);
   }
 
-  function advance(stage: BootstrapStage, message: string) {
+  function advance(stage: BootstrapStage, _message: string) {
     const s = STAGE[stage];
     if (!s) return;
     if (stage === "installing") {
       // 渐近逼近 ceil:每步行剩余距离的 6%,越接近越慢。
       const target = s.ceil;
       const next = pct.value + (target - pct.value) * 0.06;
-      setProgress(Math.max(next, s.base), message ? s.label : stageLabel.value, true);
-      if (message) stageLabel.value = message;
+      // ponytail: 进度条只显示阶段状态("安装依赖包"),不显示具体包名;明细走 ConsolePage 日志区
+      setProgress(Math.max(next, s.base), s.label, true);
     } else if (stage === "done") {
       state.value = "done";
       setProgress(100, s.label, false);
