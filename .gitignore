@@ -54,6 +54,7 @@ docs/
 !wiki/docs/
 !wiki/docs/**
 !docs/desktop/
+!docs/superpowers/
 release/
 docs/screenshots/agent-run.png
 docs/screenshots/boot.png
