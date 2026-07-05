@@ -1,7 +1,7 @@
 import { Suspense, lazy, type ComponentType } from "react";
 import { createBrowserRouter } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
-import { RequireAuth } from "@/components/auth/RequireAuth";
+
 
 const Home = lazy(() => import("@/pages/Home").then((m) => ({ default: m.Home })));
 const Agent = lazy(() => import("@/pages/Agent").then((m) => ({ default: m.Agent })));
@@ -26,8 +26,8 @@ const Correlation = lazy(() =>
 const AlphaZoo = lazy(() =>
   import("@/pages/AlphaZoo").then((m) => ({ default: m.AlphaZoo })),
 );
-const Login = lazy(() => import("@/pages/auth/Login").then((m) => ({ default: m.Login })));
-const Profile = lazy(() => import("@/pages/profile/Profile").then((m) => ({ default: m.Profile })));
+
+
 
 function PageLoader() {
   return (
@@ -46,7 +46,6 @@ function wrap(Component: ComponentType) {
 }
 
 export const router = createBrowserRouter([
-  { path: "/login", element: wrap(Login) },
   {
     element: <Layout />,
     children: [
@@ -62,10 +61,6 @@ export const router = createBrowserRouter([
       { path: "/alpha-zoo/bench", element: wrap(AlphaZoo) },
       { path: "/alpha-zoo/compare", element: wrap(AlphaZoo) },
       { path: "/alpha-zoo/:alphaId", element: wrap(AlphaZoo) },
-      {
-        element: <RequireAuth />,
-        children: [{ path: "/profile", element: wrap(Profile) }],
-      },
     ],
   },
 ]);

@@ -1,14 +1,12 @@
 import { getConsent, setConsent, flushNow } from "@/lib/telemetry";
 import i18n from "@/i18n";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Database, KeyRound, Loader2, LogIn, MessageSquareMore, Package, Play, QrCode, RefreshCw, RotateCcw, Save, Server, ShieldCheck, SlidersHorizontal, Square, Upload, Zap } from "lucide-react";
+import { Database, KeyRound, Loader2, MessageSquareMore, Package, Play, QrCode, RefreshCw, RotateCcw, Save, Server, SlidersHorizontal, Square, Upload } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { api, isAuthRequiredError, type ChannelRuntimeStatus, type DataSourceSettings, type LLMProviderOption, type LLMSettings } from "@/lib/api";
 import { getApiAuthKey, setApiAuthKey } from "@/lib/apiAuth";
 import { OptionalDepsManager } from "@/components/settings/OptionalDepsManager";
-import { useAuthStore } from "@/stores/auth";
-import { useNavigate } from "react-router-dom";
 
 interface LLMFormState {
   provider: string;
@@ -89,11 +87,6 @@ export function Settings() {
       setFlushing(false);
     }
   };
-
-  const navigate = useNavigate();
-  const authStatus = useAuthStore((s) => s.status);
-  const userInfo = useAuthStore((s) => s.userInfo);
-  const isAuthenticated = authStatus === "authenticated";
 
   useEffect(() => {
     let alive = true;
@@ -605,56 +598,11 @@ export function Settings() {
       </section>
 
       {/* VIP 登录状态 / 登录引导 */}
-      {isAuthenticated ? (
-        <div className="rounded-lg border bg-card p-5 shadow-sm">
-          <div className="flex items-start gap-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/10">
-              <ShieldCheck className="h-5 w-5 text-emerald-500" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base font-semibold">VIP 已激活</h2>
-                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600">
-                  已登录
-                </span>
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {userInfo?.nickName ? `${userInfo.nickName}，` : ""}LLM 已通过 VIP 服务自动配置为高速模型，无需手动设置。
-              </p>
-              <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-                <Zap className="h-3.5 w-3.5 text-amber-500" />
-                <span>使用 Maas 加速端点 · deepseek-v4-flash</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-lg border bg-card p-5 shadow-sm">
-          <div className="flex items-start gap-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
-              <Zap className="h-5 w-5 text-primary" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h2 className="text-base font-semibold">登录获取 VIP 模型加速</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                登录后自动配置高速 LLM 端点，无需手动填写 API Key 和模型参数。
-              </p>
-              <button
-                type="button"
-                onClick={() => navigate("/login")}
-                className="mt-3 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-              >
-                <LogIn className="h-4 w-4" />
-                前往登录
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <div className="rounded-lg border bg-card p-5 shadow-sm">
+        <div>账户管理已移至桌面控制台</div>
+      </div>
 
-      {/* LLM Settings — 仅未登录时可见 */}
-      {!isAuthenticated && (
-        <>
+      {/* LLM Settings */}
           <div className="space-y-2">
             <h2 className="text-lg font-semibold tracking-tight">{"LLM Settings"}</h2>
             <p className="max-w-3xl text-sm text-muted-foreground">{"Choose the model used by the agent and save it to the project-local agent/.env file."}</p>
@@ -830,8 +778,6 @@ export function Settings() {
               </div>
             </section>
           </form>
-        </>
-      )}
 
       <form onSubmit={submitDataSources} className="rounded-lg border bg-card p-5 shadow-sm">
         <div className="mb-5 space-y-1">

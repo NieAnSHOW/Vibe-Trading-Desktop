@@ -46,11 +46,6 @@ export default defineConfig(({ mode }) => {
         "^/runs/[^/]+/?$": apiProxyWithHtmlFallback,
         "/runs": apiProxy,
         "/correlation": apiProxyWithHtmlFallback,
-        "/user-api": {
-          target: env.VITE_USER_API_URL || "http://127.0.0.1:8001",
-          changeOrigin: true,
-          rewrite: (p: string) => p.replace(/^\/user-api/, ""),
-        },
         "^/alpha(?:/|$)": apiProxy,
       },
     },

@@ -27,7 +27,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDarkMode } from "@/hooks/useDarkMode";
-import { UserMenu } from "@/components/layout/UserMenu";
 import { api, type SessionItem } from "@/lib/api";
 import { useAgentStore } from "@/stores/agent";
 import { ConnectionBanner } from "@/components/layout/ConnectionBanner";
@@ -246,14 +245,6 @@ export function Layout() {
       >
         {/* ── top: user + primary nav ── */}
         <nav className={cn("space-y-0.5", collapsed ? "p-1" : "p-2")}>
-          <UserMenu
-            collapsed={collapsed}
-            className={cn(
-              "flex w-full justify-between items-center rounded-md text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground",
-              collapsed ? "justify-center p-2" : "gap-3 px-2 py-2 mb-0.5"
-            )}
-          />
-
           {!collapsed && <SectionLabel>{t("layout.section.workspace")}</SectionLabel>}
 
           <NavLink to="/" icon={BarChart3} label={t("layout.home")} collapsed={collapsed} isActive={isActive("/")} />
