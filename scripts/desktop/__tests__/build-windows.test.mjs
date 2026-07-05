@@ -28,3 +28,16 @@ test("Windows dependency temp requirements are written as UTF-8", () => {
     "uv requires requirements files to be UTF-8, not Windows PowerShell's default encoding"
   );
 });
+
+test("Windows build assembles console app without requiring Bash", () => {
+  assert.doesNotMatch(
+    script,
+    /&\s+bash\b.*build-console\.sh/,
+    "Windows build should not require bash to build console-app"
+  );
+  assert.match(
+    script,
+    /build-console\.ps1/,
+    "Windows build should call the PowerShell console-app build script"
+  );
+});
