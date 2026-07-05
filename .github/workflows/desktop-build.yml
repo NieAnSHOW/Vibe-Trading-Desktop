@@ -154,6 +154,16 @@ jobs:
           echo "Running embedded runtime smoke checks"
           PYTHONPATH=agent "$PY" scripts/desktop/smoke_imports.py
 
+      - name: Build Console UI (macOS)
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: bash scripts/desktop/build-console.sh
+
+      - name: Build Console UI (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: bash scripts/desktop/build-console.sh
+
       - name: Assemble Desktop Resources (macOS)
         if: matrix.os == 'macos-latest'
         shell: bash

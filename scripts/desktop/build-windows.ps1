@@ -75,6 +75,9 @@ function Invoke-Step1Runtime {
 
 function Invoke-Step2Assemble {
   Write-Step 2 "Assemble"
+  # Build console-app Vue project first
+  & bash "$PSScriptRoot/build-console.sh"
+  if ($LASTEXITCODE -ne 0) { throw "[FAILED] build-console.sh exited $LASTEXITCODE" }
   & "$DesktopScripts\assemble.ps1"
   if ($LASTEXITCODE -ne 0) { throw "[FAILED] step 2: assemble exited $LASTEXITCODE" }
   Write-Host "Assembly complete (.desktop-build populated)" -ForegroundColor Green

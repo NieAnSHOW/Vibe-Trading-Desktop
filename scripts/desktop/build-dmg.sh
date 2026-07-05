@@ -133,6 +133,11 @@ if [ "$resources_ok" -ne 1 ]; then
 fi
 
 section "刷新桌面资源模板"
+log "bash scripts/desktop/build-console.sh"
+if ! bash "$ROOT/scripts/desktop/build-console.sh"; then
+    err "build-console.sh 失败。"
+    exit 2
+fi
 log "bash scripts/desktop/assemble.sh"
 if ! bash "$ROOT/scripts/desktop/assemble.sh"; then
     err "assemble.sh 失败。请先确认 python-runtime 已准备好。"

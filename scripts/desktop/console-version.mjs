@@ -7,7 +7,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const INDEX_PATH = "src-tauri/console-dist/index.html";
+// 源文件改为 console-app/index.html(Vite 源);构建后锚点带到 console-dist 产物。
+const INDEX_PATH = "src-tauri/console-app/index.html";
 const ANCHOR_RE = /data-console-version="(v?(\d+\.\d+\.\d+))"/;
 const SEMVER_RE = /^v?(\d+)\.(\d+)\.(\d+)$/;
 

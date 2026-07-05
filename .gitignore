@@ -97,6 +97,9 @@ wiki/alpha-library/content/
 src-tauri/target/
 .desktop-build/
 
+# Tauri console 产物(console-app 构建生成)
+src-tauri/console-dist/
+
 # Tauri generated artifacts
 # Regenerated on every build by tauri_build::build() (see src-tauri/build.rs).
 src-tauri/gen/
