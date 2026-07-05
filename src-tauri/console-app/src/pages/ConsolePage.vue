@@ -3,6 +3,9 @@ import { onMounted, onUnmounted, ref, computed } from "vue";
 import { storeToRefs } from "pinia";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
+import { useAuthStore } from "../stores/auth";
+import { useRouter } from "vue-router";
+
 import { useEnvStore } from "../stores/env";
 import { useServiceStore } from "../stores/service";
 import { useBootstrapStore } from "../stores/bootstrap";
@@ -38,6 +41,8 @@ const env = useEnvStore();
 const service = useServiceStore();
 const bootstrap = useBootstrapStore();
 const channels = useChannelsStore();
+const authStore = useAuthStore();
+const router = useRouter();
 
 const { env: envState, port, serviceRunning } = storeToRefs(env);
 const { running } = storeToRefs(service);
@@ -105,8 +110,13 @@ async function onStart() {
       const p = await service.start();
       env.setPort(p);
       hintHidden.value = true;
-    } catch (e) {
-      setErr(e);
+    } catch (e: any) {
+      if (e?.variant === "LoginExpired") {
+        authStore.clear();
+        router.replace("/login");
+        return;
+      }
+      setErr(e?.message || String(e));
     }
   });
 }
@@ -184,6 +194,12 @@ let unlistens: UnlistenFn[] = [];
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 onMounted(async () => {
+  // 恢复登录态：从 Rust 内存或 .env 读 token；未登录则跳 /login。
+  await authStore.refresh();
+  if (!authStore.authenticated) {
+    router.replace("/login");
+    return;
+  }
   unlistens = await Promise.all([
     onBootstrapEvent((e: BootstrapEvent) => {
       if (e.message) log(`[${e.stage}] ${e.message}`);
