@@ -1,4 +1,8 @@
-import { getConsent, setConsent, flushNow } from "@/lib/telemetry";
+import {
+  getConsent,
+  setConsent,
+  // flushNow
+} from "@/lib/telemetry";
 import i18n from "@/i18n";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
@@ -15,7 +19,7 @@ import {
   Server,
   SlidersHorizontal,
   Square,
-  Upload,
+  // Upload,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -84,7 +88,7 @@ export function Settings() {
     null,
   );
   const [usageDataOn, setUsageDataOn] = useState(getConsent());
-  const [flushing, setFlushing] = useState(false);
+  // const [flushing, setFlushing] = useState(false);
   const [optionalDeps, setOptionalDeps] = useState<any>(null);
   const [installingPkg, setInstallingPkg] = useState<string | null>(null);
 
@@ -104,27 +108,27 @@ export function Settings() {
   };
 
   // 手动触发一次埋点上传（含当天），用于验证上传通路；正常流程是隔天启动自动 flush。
-  const handleTestUpload = async () => {
-    setFlushing(true);
-    try {
-      const { uploaded, retained } = await flushNow({ forceAll: true });
-      if (uploaded > 0) {
-        toast.success(
-          `已上传 ${uploaded} 个埋点批次${retained ? `,${retained} 个保留重试` : ""}`,
-        );
-      } else if (retained > 0) {
-        toast.error(`上传失败,${retained} 个批次保留待重试`);
-      } else {
-        toast.info("没有待上传的埋点数据");
-      }
-    } catch (error) {
-      toast.error(
-        `上传失败:${error instanceof Error ? error.message : "Unknown error"}`,
-      );
-    } finally {
-      setFlushing(false);
-    }
-  };
+  // const handleTestUpload = async () => {
+  //   setFlushing(true);
+  //   try {
+  //     const { uploaded, retained } = await flushNow({ forceAll: true });
+  //     if (uploaded > 0) {
+  //       toast.success(
+  //         `已上传 ${uploaded} 个埋点批次${retained ? `,${retained} 个保留重试` : ""}`,
+  //       );
+  //     } else if (retained > 0) {
+  //       toast.error(`上传失败,${retained} 个批次保留待重试`);
+  //     } else {
+  //       toast.info("没有待上传的埋点数据");
+  //     }
+  //   } catch (error) {
+  //     toast.error(
+  //       `上传失败:${error instanceof Error ? error.message : "Unknown error"}`,
+  //     );
+  //   } finally {
+  //     setFlushing(false);
+  //   }
+  // };
 
   useEffect(() => {
     let alive = true;
