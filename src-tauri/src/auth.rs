@@ -155,6 +155,125 @@ pub fn now_secs() -> i64 {
         .unwrap_or(0)
 }
 
+// ── .env 原子写（tmp→fsync→rename；unix 权限 0600）──
+
+pub fn write_env_atomic(path: &Path, content: &str) -> Result<(), AuthError> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| AuthError::EnvWrite { message: "no parent dir".into() })?;
+    fs::create_dir_all(parent)
+        .map_err(|e| AuthError::EnvWrite { message: format!("mkdir {:?}: {e}", parent) })?;
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "env".into());
+    let tmp = parent.join(format!(".{file_name}.tmp"));
+
+    #[cfg(unix)]
+    {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp)
+            .map_err(|e| AuthError::EnvWrite { message: format!("open tmp: {e}") })?;
+        f.write_all(content.as_bytes())
+            .map_err(|e| AuthError::EnvWrite { message: format!("write tmp: {e}") })?;
+        f.sync_all()
+            .map_err(|e| AuthError::EnvWrite { message: format!("fsync tmp: {e}") })?;
+    }
+    #[cfg(not(unix))]
+    {
+        fs::write(&tmp, content)
+            .map_err(|e| AuthError::EnvWrite { message: format!("write tmp: {e}") })?;
+    }
+
+    fs::rename(&tmp, path)
+        .map_err(|e| AuthError::EnvWrite { message: format!("rename tmp: {e}") })?;
+    Ok(())
+}
+
+/// 把登录 session 写进 layout.user_env 的 7 个 key，其余 key 不动。
+pub fn write_env_token_section(layout: &Layout, sess: &UserSession) -> Result<(), AuthError> {
+    let path = &layout.user_env;
+    let content = fs::read_to_string(path).unwrap_or_default();
+    let updates = vec![
+        (ENV_KEY_PROVIDER.to_string(), "openai".to_string()),
+        (ENV_KEY_MODEL.to_string(), default_model()),
+        (ENV_KEY_BASE_URL.to_string(), maas_base_url()),
+        (ENV_KEY_API_KEY.to_string(), sess.token.clone()),
+        (ENV_KEY_REFRESH.to_string(), sess.refresh_token.clone()),
+        (ENV_KEY_EXPIRE.to_string(), sess.expire_at.to_string()),
+        (
+            ENV_KEY_REFRESH_EXPIRE.to_string(),
+            sess.refresh_expire_at.to_string(),
+        ),
+    ];
+    let new_content = rewrite_env_keys(&content, &updates);
+    write_env_atomic(path, &new_content)
+}
+
+/// 从 layout.user_env 读回 session（重启恢复用）。userInfo 读不到，留 None。
+pub fn read_env_token_section(layout: &Layout) -> Option<UserSession> {
+    let content = fs::read_to_string(&layout.user_env).ok()?;
+    let map = parse_env_to_map(&content);
+    let token = map.get(ENV_KEY_API_KEY)?.trim();
+    if token.is_empty() {
+        return None;
+    }
+    let refresh_token = map.get(ENV_KEY_REFRESH)?.trim().to_string();
+    let expire_at = map.get(ENV_KEY_EXPIRE)?.trim().parse::<i64>().ok()?;
+    let refresh_expire_at = map
+        .get(ENV_KEY_REFRESH_EXPIRE)
+        ?.trim()
+        .parse::<i64>()
+        .ok()?;
+    Some(UserSession {
+        token: token.to_string(),
+        refresh_token,
+        expire_at,
+        refresh_expire_at,
+        user_info: None,
+    })
+}
+
+// ── cool-admin 响应解析 ──
+/// cool-admin 统一包装 {code, data, message}，code==1000 成功。
+#[derive(Debug, serde::Deserialize)]
+struct CoolResponse {
+    pub code: i64,
+    #[serde(default)]
+    pub data: Option<serde_json::Value>,
+    #[serde(default)]
+    pub message: Option<String>,
+}
+
+/// 把 cool-admin 响应体解析为 data；code!=1000 或解析失败转 AuthError。
+pub fn parse_cool_response<T: serde::de::DeserializeOwned>(text: &str) -> Result<T, AuthError> {
+    let resp: CoolResponse = serde_json::from_str(text).map_err(|e| {
+        AuthError::Network {
+            message: format!("解析响应失败: {e}"),
+        }
+    })?;
+    if resp.code != 1000 {
+        return Err(AuthError::Api {
+            code: resp.code,
+            message: resp
+                .message
+                .unwrap_or_else(|| format!("code={}", resp.code)),
+        });
+    }
+    let data = resp.data.ok_or_else(|| AuthError::Network {
+        message: "响应缺 data 字段".into(),
+    })?;
+    serde_json::from_value(data).map_err(|e| AuthError::Network {
+        message: format!("解析 data 字段失败: {e}"),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,5 +343,117 @@ mod tests {
     fn default_model_falls_back_to_deepseek() {
         std::env::remove_var("VIBE_DEFAULT_MODEL");
         assert_eq!(default_model(), "deepseek-v4-flash");
+    }
+
+    #[test]
+    fn write_env_atomic_roundtrips_content() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join(".env");
+        write_env_atomic(&path, "A=1\nB=2\n").unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "A=1\nB=2\n");
+    }
+
+    #[test]
+    fn write_env_atomic_creates_parent_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("nested/deep/.env");
+        write_env_atomic(&path, "X=1\n").unwrap();
+        assert!(path.exists());
+    }
+
+    #[test]
+    fn write_token_section_preserves_other_keys() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join(".vibe-trading");
+        fs::create_dir_all(&home).unwrap();
+        let layout = Layout::new(&home);
+        // 预置其他 provider 配置
+        fs::write(&layout.user_env, "OPENROUTER_API_KEY=xxx\nTUSHARE_TOKEN=t\n").unwrap();
+
+        let sess = UserSession {
+            token: "tok".into(),
+            refresh_token: "rt".into(),
+            expire_at: 1700000000,
+            refresh_expire_at: 1700000100,
+            user_info: None,
+        };
+        write_env_token_section(&layout, &sess).unwrap();
+
+        let after = fs::read_to_string(&layout.user_env).unwrap();
+        assert!(after.contains("OPENROUTER_API_KEY=xxx"), "其他 provider 须保留");
+        assert!(after.contains("TUSHARE_TOKEN=t"));
+        assert!(after.contains("OPENAI_API_KEY=tok"));
+        assert!(after.contains("OPENAI_BASE_URL=https://maas.nieanshow.cn/v1"));
+        assert!(after.contains("LANGCHAIN_MODEL_NAME=deepseek-v4-flash"));
+        assert!(after.contains("USER_REFRESH_TOKEN=rt"));
+        assert!(after.contains("USER_TOKEN_EXPIRE=1700000000"));
+    }
+
+    #[test]
+    fn read_token_section_roundtrips_after_write() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join(".vibe-trading");
+        fs::create_dir_all(&home).unwrap();
+        let layout = Layout::new(&home);
+        let sess = UserSession {
+            token: "tok".into(),
+            refresh_token: "rt".into(),
+            expire_at: 1700000000,
+            refresh_expire_at: 1700000100,
+            user_info: None,
+        };
+        write_env_token_section(&layout, &sess).unwrap();
+
+        let got = read_env_token_section(&layout).expect("应读到 session");
+        assert_eq!(got.token, "tok");
+        assert_eq!(got.refresh_token, "rt");
+        assert_eq!(got.expire_at, 1700000000);
+        assert_eq!(got.refresh_expire_at, 1700000100);
+        assert!(got.user_info.is_none(), "恢复时不带 userInfo");
+    }
+
+    #[test]
+    fn read_token_section_returns_none_when_no_token() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join(".vibe-trading");
+        fs::create_dir_all(&home).unwrap();
+        let layout = Layout::new(&home);
+        // 无任何 LLM key
+        fs::write(&layout.user_env, "OTHER=1\n").unwrap();
+        assert!(read_env_token_section(&layout).is_none());
+    }
+
+    #[test]
+    fn read_token_section_returns_none_when_file_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        assert!(read_env_token_section(&layout).is_none());
+    }
+
+    #[test]
+    fn parse_cool_response_unwraps_data_on_success() {
+        let text = r#"{"code":1000,"data":{"captchaId":"c1","data":"svg"}}"#;
+        let c: Captcha = parse_cool_response(text).unwrap();
+        assert_eq!(c.captcha_id, "c1");
+        assert_eq!(c.data, "svg");
+    }
+
+    #[test]
+    fn parse_cool_response_maps_non_1000_to_api_error() {
+        let text = r#"{"code":1001,"message":"验证码错误"}"#;
+        let err = parse_cool_response::<Captcha>(text).unwrap_err();
+        match err {
+            AuthError::Api { code, message } => {
+                assert_eq!(code, 1001);
+                assert_eq!(message, "验证码错误");
+            }
+            other => panic!("期望 Api，得到 {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_cool_response_maps_bad_json_to_network_error() {
+        let err = parse_cool_response::<Captcha>("not json").unwrap_err();
+        assert!(matches!(err, AuthError::Network { .. }));
     }
 }
