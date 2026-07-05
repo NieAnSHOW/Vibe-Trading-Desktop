@@ -10,17 +10,23 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::runtime_dir::Layout;
 
-// ── 可覆盖配置（默认值与 frontend/src/pages/auth/Login.tsx 对齐）──
-
+// ── 可覆盖配置 ──
+// 业务接口（captcha/sms/login/person...），独立于大模型 MaaS 接口。
+// 默认值与 frontend/src/pages/auth/Login.tsx 对齐。
 pub fn user_api_url() -> String {
-    std::env::var("VIBE_USER_API_URL").unwrap_or_else(|_| "https://maas.nieanshow.cn".into())
+    std::env::var("VIBE_USER_API_URL")
+        .unwrap_or_else(|_| "https://trading-server.nieanshow.cn".into())
 }
 pub fn default_model() -> String {
     std::env::var("VIBE_DEFAULT_MODEL").unwrap_or_else(|_| "deepseek-v4-flash".into())
 }
-/// maas 的 OpenAI 兼容端点 = {USER_API_URL}/v1
+/// MaaS（大模型）接口根，独立于业务接口。登录成功后写入 webui .env 作为 OPENAI_BASE_URL。
+pub fn maas_api_url() -> String {
+    std::env::var("VIBE_MAAS_API_URL").unwrap_or_else(|_| "https://maas.nieanshow.cn".into())
+}
+/// maas 的 OpenAI 兼容端点 = {MAAS_API_URL}/v1
 pub fn maas_base_url() -> String {
-    format!("{}/v1", user_api_url())
+    format!("{}/v1", maas_api_url())
 }
 
 // ── .env 中由本模块管辖的 key（其余 key 不动）──
@@ -498,14 +504,20 @@ mod tests {
     }
 
     #[test]
+    fn user_api_url_defaults_to_business_server() {
+        std::env::remove_var("VIBE_USER_API_URL");
+        assert_eq!(user_api_url(), "https://trading-server.nieanshow.cn");
+    }
+
+    #[test]
     fn maas_base_url_appends_v1() {
         // 默认值
-        std::env::remove_var("VIBE_USER_API_URL");
+        std::env::remove_var("VIBE_MAAS_API_URL");
         assert_eq!(maas_base_url(), "https://maas.nieanshow.cn/v1");
         // 覆盖
-        std::env::set_var("VIBE_USER_API_URL", "https://example.com");
+        std::env::set_var("VIBE_MAAS_API_URL", "https://example.com");
         assert_eq!(maas_base_url(), "https://example.com/v1");
-        std::env::remove_var("VIBE_USER_API_URL");
+        std::env::remove_var("VIBE_MAAS_API_URL");
     }
 
     #[test]
