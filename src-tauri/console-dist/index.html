@@ -189,6 +189,9 @@
         gap: 9px;
         align-items: flex-start;
       }
+      /* `.hint` 的 display:flex 会盖过浏览器默认的 [hidden]{display:none},
+         导致 hidden 属性失效——必须显式声明 .hint[hidden] 才藏得住。 */
+      .hint[hidden] { display: none; }
       .hint b {
         color: hsl(var(--ink));
         font-weight: 600;
@@ -777,10 +780,8 @@
         // const chDepBtn = $("btnInstallChannel");
         // if (chDepBtn && !chDepBtn.classList.contains("busy"))
         //   chDepBtn.disabled = env !== "ready";
-        if (info.hint && env !== "ready") {
-          hintText.innerHTML = info.hint;
-          hintEl.hidden = false;
-        } else hintEl.hidden = true;
+        // 未就绪(未安装 / 依赖不全)时展示安装耗时提示,环境就绪后隐藏。
+        hintEl.hidden = env === "ready";
       }
 
       function renderSvc(running) {
