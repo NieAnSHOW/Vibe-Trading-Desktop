@@ -1,0 +1,35 @@
+import { invoke } from "@tauri-apps/api/core";
+import type { StatusReport } from "./types";
+
+// 与 src-tauri/src/console.rs 的 #[tauri::command] 一一对应。
+// 所有命令透传 invoke;Rust 侧 camelCase ↔ snake_case 由 Tauri 自动转换。
+
+export const consoleStatus = (): Promise<StatusReport> =>
+  invoke<StatusReport>("console_status");
+
+export const consoleBootstrap = (): Promise<void> =>
+  invoke<void>("console_bootstrap");
+
+export const consoleStartService = (): Promise<number> =>
+  invoke<number>("console_start_service");
+
+export const consoleStopService = (): Promise<void> =>
+  invoke<void>("console_stop_service");
+
+export const consoleOpenWebui = (port: number): Promise<void> =>
+  invoke<void>("console_open_webui", { port });
+
+export const consoleOpenLogs = (): Promise<void> =>
+  invoke<void>("console_open_logs");
+
+export const consoleStartChannels = (port: number): Promise<string> =>
+  invoke<string>("console_start_channels", { port });
+
+export const consoleChannelsStatus = (port: number): Promise<string> =>
+  invoke<string>("console_channels_status", { port });
+
+export const consoleInstallChannelDep = (channel: string): Promise<void> =>
+  invoke<void>("console_install_channel_dep", { channel });
+
+export const consoleConfirmClose = (): Promise<void> =>
+  invoke<void>("console_confirm_close");
