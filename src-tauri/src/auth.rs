@@ -274,6 +274,175 @@ pub fn parse_cool_response<T: serde::de::DeserializeOwned>(text: &str) -> Result
     })
 }
 
+// ── cool-admin 客户端（同步 reqwest::blocking）──
+// 端点与 frontend/src/lib/apiUser.ts 完全对齐；Authorization 裸 token（无 Bearer）。
+
+const HTTP_TIMEOUT_SECS: u64 = 30;
+
+fn http_client() -> Result<reqwest::blocking::Client, AuthError> {
+    reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SECS))
+        .build()
+        .map_err(|e| AuthError::Network { message: format!("build client: {e}") })
+}
+
+fn endpoint(path: &str) -> String {
+    format!("{}{}", user_api_url(), path)
+}
+
+pub fn fetch_captcha() -> Result<Captcha, AuthError> {
+    let url = endpoint("/app/user/login/captcha?width=120&height=40");
+    let text = http_client()?
+        .get(&url)
+        .send()
+        .map_err(|e| AuthError::Network { message: format!("captcha: {e}") })?
+        .text()
+        .map_err(|e| AuthError::Network { message: format!("captcha body: {e}") })?;
+    parse_cool_response(&text)
+}
+
+pub fn send_sms(phone: &str, captcha_id: &str, code: &str) -> Result<(), AuthError> {
+    let url = endpoint("/app/user/login/smsCode");
+    let body = serde_json::json!({ "phone": phone, "captchaId": captcha_id, "code": code });
+    let text = http_client()?
+        .post(&url)
+        .json(&body)
+        .send()
+        .map_err(|e| AuthError::Network { message: format!("sms: {e}") })?
+        .text()
+        .map_err(|e| AuthError::Network { message: format!("sms body: {e}") })?;
+    parse_cool_response::<serde_json::Value>(&text).map(|_| ())
+}
+
+/// 把 cool-admin 返回的相对秒 expire 转成绝对 epoch 秒。
+pub fn session_from_login(raw: LoginRaw, user_info: Option<UserInfo>) -> UserSession {
+    let now = now_secs();
+    UserSession {
+        token: raw.token,
+        refresh_token: raw.refresh_token,
+        expire_at: now + raw.expire,
+        refresh_expire_at: now + raw.refresh_expire,
+        user_info,
+    }
+}
+
+pub fn login_by_phone(phone: &str, sms_code: &str) -> Result<LoginRaw, AuthError> {
+    let url = endpoint("/app/user/login/phone");
+    let body = serde_json::json!({ "phone": phone, "smsCode": sms_code });
+    let text = http_client()?
+        .post(&url)
+        .json(&body)
+        .send()
+        .map_err(|e| AuthError::Network { message: format!("login phone: {e}") })?
+        .text()
+        .map_err(|e| AuthError::Network { message: format!("login phone body: {e}") })?;
+    parse_cool_response(&text)
+}
+
+pub fn login_by_password(phone: &str, password: &str) -> Result<LoginRaw, AuthError> {
+    let url = endpoint("/app/user/login/password");
+    let body = serde_json::json!({ "phone": phone, "password": password });
+    let text = http_client()?
+        .post(&url)
+        .json(&body)
+        .send()
+        .map_err(|e| AuthError::Network { message: format!("login pwd: {e}") })?
+        .text()
+        .map_err(|e| AuthError::Network { message: format!("login pwd body: {e}") })?;
+    parse_cool_response(&text)
+}
+
+pub fn refresh_token(rt: &str) -> Result<LoginRaw, AuthError> {
+    let url = endpoint("/app/user/login/refreshToken");
+    let body = serde_json::json!({ "refreshToken": rt });
+    let text = http_client()?
+        .post(&url)
+        .json(&body)
+        .send()
+        .map_err(|e| AuthError::Network { message: format!("refresh: {e}") })?
+        .text()
+        .map_err(|e| AuthError::Network { message: format!("refresh body: {e}") })?;
+    parse_cool_response(&text)
+}
+
+pub fn set_password(token: &str, password: &str) -> Result<(), AuthError> {
+    let url = endpoint("/app/user/info/setPassword");
+    let body = serde_json::json!({ "password": password });
+    let text = http_client()?
+        .post(&url)
+        .header("Authorization", token)
+        .json(&body)
+        .send()
+        .map_err(|e| AuthError::Network { message: format!("set pwd: {e}") })?
+        .text()
+        .map_err(|e| AuthError::Network { message: format!("set pwd body: {e}") })?;
+    parse_cool_response::<serde_json::Value>(&text).map(|_| ())
+}
+
+pub fn fetch_user_info(token: &str) -> Result<UserInfo, AuthError> {
+    let url = endpoint("/app/user/info/person");
+    let text = http_client()?
+        .get(&url)
+        .header("Authorization", token)
+        .send()
+        .map_err(|e| AuthError::Network { message: format!("userinfo: {e}") })?
+        .text()
+        .map_err(|e| AuthError::Network { message: format!("userinfo body: {e}") })?;
+    parse_cool_response(&text)
+}
+
+// ── 会话校验：纯决策 + IO 包装 ──
+
+pub enum SessionAction {
+    Valid,
+    NeedsRefresh,
+    Expired,
+}
+
+/// 纯函数：依据当前时间戳决定动作（便于单测，不依赖系统时钟副作用）。
+pub fn decide_session_action(now: i64, sess: &UserSession) -> SessionAction {
+    if now < sess.expire_at {
+        SessionAction::Valid
+    } else if now < sess.refresh_expire_at {
+        SessionAction::NeedsRefresh
+    } else {
+        SessionAction::Expired
+    }
+}
+
+/// 启动服务前调：校验内存 session；过期则尝试 refresh（成功后重写 .env）。
+/// refresh 失败或 refreshExpire 已到则返回 LoginExpired。
+pub fn ensure_session_valid(
+    state: &AuthState,
+    layout: &Layout,
+) -> Result<UserSession, AuthError> {
+    let sess = state
+        .0
+        .lock()
+        .unwrap()
+        .clone()
+        .or_else(|| read_env_token_section(layout))
+        .ok_or(AuthError::NotAuthenticated)?;
+    match decide_session_action(now_secs(), &sess) {
+        SessionAction::Valid => Ok(sess),
+        SessionAction::NeedsRefresh => {
+            let raw = refresh_token(&sess.refresh_token)?;
+            // refresh 未必返回新 userInfo，沿用旧 session 的 userInfo（若有）
+            let mut new_sess = session_from_login(raw, sess.user_info.clone());
+            // userInfo 缺失则尝试补全（旧 session 恢复时 user_info 为 None 时仍可工作）
+            if new_sess.user_info.is_none() {
+                if let Ok(info) = fetch_user_info(&new_sess.token) {
+                    new_sess.user_info = Some(info);
+                }
+            }
+            write_env_token_section(layout, &new_sess)?;
+            *state.0.lock().unwrap() = Some(new_sess.clone());
+            Ok(new_sess)
+        }
+        SessionAction::Expired => Err(AuthError::LoginExpired),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -455,5 +624,48 @@ mod tests {
     fn parse_cool_response_maps_bad_json_to_network_error() {
         let err = parse_cool_response::<Captcha>("not json").unwrap_err();
         assert!(matches!(err, AuthError::Network { .. }));
+    }
+
+    // ── decide_session_action + ensure_session_valid 测试 ──
+
+    fn sample_session(expire_at: i64, refresh_expire_at: i64) -> UserSession {
+        UserSession {
+            token: "t".into(),
+            refresh_token: "r".into(),
+            expire_at,
+            refresh_expire_at,
+            user_info: None,
+        }
+    }
+
+    #[test]
+    fn decide_action_valid_before_expire() {
+        let sess = sample_session(1000, 2000);
+        assert!(matches!(decide_session_action(999, &sess), SessionAction::Valid));
+        assert!(matches!(decide_session_action(0, &sess), SessionAction::Valid));
+    }
+
+    #[test]
+    fn decide_action_needs_refresh_between_expire_and_refresh_expire() {
+        let sess = sample_session(1000, 2000);
+        assert!(matches!(decide_session_action(1000, &sess), SessionAction::NeedsRefresh));
+        assert!(matches!(decide_session_action(1999, &sess), SessionAction::NeedsRefresh));
+    }
+
+    #[test]
+    fn decide_action_expired_after_refresh_expire() {
+        let sess = sample_session(1000, 2000);
+        assert!(matches!(decide_session_action(2000, &sess), SessionAction::Expired));
+        assert!(matches!(decide_session_action(5000, &sess), SessionAction::Expired));
+    }
+
+    #[test]
+    fn ensure_session_valid_returns_not_authenticated_when_empty() {
+        use std::sync::Mutex;
+        let state = AuthState(Mutex::new(None));
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        let err = ensure_session_valid(&state, &layout).unwrap_err();
+        assert!(matches!(err, AuthError::NotAuthenticated));
     }
 }
