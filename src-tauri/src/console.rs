@@ -10,6 +10,9 @@ use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, State};
 
+use crate::auth::{
+    self, AuthError, AuthState, Captcha, LoginRaw, UserInfo, UserSession,
+};
 use crate::runtime_dir::Layout;
 
 pub type SharedChild = Arc<Mutex<Option<Child>>>;
@@ -157,6 +160,51 @@ pub struct StatusReport {
     pub port: Option<u16>,
 }
 
+/// 登录命令返回给前端的结构（不含 token）。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginResultView {
+    pub user_info: UserInfo,
+    pub has_password: bool,
+    pub expire_at: i64, // epoch 秒
+}
+
+/// console_auth_status 返回。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthStatusView {
+    pub authenticated: bool,
+    pub user_info: Option<UserInfo>,
+    pub expire_at: Option<i64>,
+}
+
+/// console_start_service 的错误（LoginExpired 让前端跳登录页）。
+#[derive(Debug, serde::Serialize)]
+#[serde(tag = "variant")]
+pub enum ServiceStartError {
+    EnvNotReady,
+    AlreadyRunning,
+    LoginExpired,
+    SpawnFailed { message: String },
+    HealthTimeout,
+    ProcessExited { code: Option<i32> },
+    Other { message: String },
+}
+
+impl std::fmt::Display for ServiceStartError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EnvNotReady => write!(f, "环境未就绪，请先完成依赖安装"),
+            Self::AlreadyRunning => write!(f, "服务已在运行"),
+            Self::LoginExpired => write!(f, "登录已过期，请重新登录"),
+            Self::SpawnFailed { message } => write!(f, "启动失败: {message}"),
+            Self::HealthTimeout => write!(f, "后端 120 秒内未就绪"),
+            Self::ProcessExited { code } => write!(f, "后端提前退出（退出码 {code:?}）"),
+            Self::Other { message } => write!(f, "{message}"),
+        }
+    }
+}
+
 /// 环境 + 服务状态快照,供控制台首屏与轮询。
 #[tauri::command]
 pub fn console_status(state: State<'_, SharedChild>) -> Result<StatusReport, String> {
@@ -225,37 +273,161 @@ pub async fn console_bootstrap(
     Ok(())
 }
 
-/// 启动服务:环境未就绪时拒绝;否则用 venv 解释器 spawn serve + 健康门控。
+/// 启动服务：先校验登录态（过期则尝试 refresh，失败返 LoginExpired），
+/// 再 spawn serve + 健康门控。
 #[tauri::command]
 pub fn console_start_service(
     app: AppHandle,
     state: State<'_, SharedChild>,
-) -> Result<u16, String> {
-    let layout = Layout::from_home()?;
+    auth_state: State<'_, AuthState>,
+) -> Result<u16, ServiceStartError> {
+    let layout = Layout::from_home().map_err(|e| ServiceStartError::Other { message: e })?;
     if compute_env_status(&layout) != EnvStatus::Ready {
-        return Err("环境未就绪,请先完成依赖安装".into());
+        return Err(ServiceStartError::EnvNotReady);
     }
     if state.lock().unwrap().is_some() {
-        return Err("服务已在运行".into());
+        return Err(ServiceStartError::AlreadyRunning);
     }
-    let port = crate::port::pick_free_port()?;
+    // 启动前校验 token：过期则 ensure_session_valid 内部尝试 refresh；失败返 LoginExpired
+    let _session = auth::ensure_session_valid(&auth_state, &layout)
+        .map_err(|_| ServiceStartError::LoginExpired)?;
+
+    let port = crate::port::pick_free_port()
+        .map_err(|e| ServiceStartError::Other { message: e })?;
     let mut child = crate::sidecar::spawn(
         &layout.venv_python,
         &layout.runtime_agent,
         port,
         &layout.runtime_libs,
         &layout.sessions_dir,
-    )?;
+    )
+    .map_err(|e| ServiceStartError::SpawnFailed { message: e })?;
     match crate::sidecar::await_health(&mut child, port) {
         crate::sidecar::Ready::Ok => {
             state.lock().unwrap().replace(child);
             let _ = app.emit("service://started", port);
             Ok(port)
         }
-        crate::sidecar::Ready::ProcessExited(c) => {
-            Err(format!("后端提前退出(退出码 {c:?})"))
-        }
-        crate::sidecar::Ready::Timeout => Err("后端 120 秒内未就绪".into()),
+        crate::sidecar::Ready::ProcessExited(c) => Err(ServiceStartError::ProcessExited { code: c }),
+        crate::sidecar::Ready::Timeout => Err(ServiceStartError::HealthTimeout),
+    }
+}
+
+fn into_view(sess: UserSession) -> LoginResultView {
+    LoginResultView {
+        user_info: sess.user_info.expect("登录后必有 userInfo"),
+        has_password: true, // 占位；真实 hasPassword 见下方命令
+        expire_at: sess.expire_at,
+    }
+}
+
+#[tauri::command]
+pub fn console_login_captcha() -> Result<Captcha, AuthError> {
+    auth::fetch_captcha()
+}
+
+#[tauri::command]
+pub fn console_login_send_sms(phone: String, captcha_id: String, code: String) -> Result<(), AuthError> {
+    auth::send_sms(&phone, &captcha_id, &code)
+}
+
+/// 登录通用收尾：调 cool-admin 拿 raw → 写 .env → fetch userInfo → 缓存 → 返 view。
+fn finalize_login(
+    raw: LoginRaw,
+    has_password: bool,
+    layout: &Layout,
+    auth_state: &AuthState,
+) -> Result<LoginResultView, AuthError> {
+    let info = fetch_user_info_or_default(&raw.token);
+    let mut sess = auth::session_from_login(raw, Some(info.clone()));
+    auth::write_env_token_section(layout, &sess)?;
+    sess.user_info = Some(info.clone());
+    *auth_state.0.lock().unwrap() = Some(sess.clone());
+    Ok(LoginResultView {
+        user_info: info,
+        has_password,
+        expire_at: sess.expire_at,
+    })
+}
+
+/// userInfo 拉取失败时用占位（不阻塞登录主流程，与原 Login.tsx 容错一致）。
+fn fetch_user_info_or_default(token: &str) -> UserInfo {
+    auth::fetch_user_info(token).unwrap_or(UserInfo {
+        id: 0,
+        unionid: None,
+        avatar_url: None,
+        nick_name: None,
+        phone: None,
+        gender: 0,
+        status: 1,
+        login_type: 2,
+        description: None,
+    })
+}
+
+#[tauri::command]
+pub fn console_login_by_phone(
+    phone: String,
+    sms_code: String,
+    auth_state: State<'_, AuthState>,
+) -> Result<LoginResultView, AuthError> {
+    let layout = Layout::from_home()
+        .map_err(|e| AuthError::EnvWrite { message: e })?;
+    let raw = auth::login_by_phone(&phone, &sms_code)?;
+    let has_password = raw.has_password;
+    finalize_login(raw, has_password, &layout, &auth_state)
+}
+
+#[tauri::command]
+pub fn console_login_by_password(
+    phone: String,
+    password: String,
+    auth_state: State<'_, AuthState>,
+) -> Result<LoginResultView, AuthError> {
+    let layout = Layout::from_home()
+        .map_err(|e| AuthError::EnvWrite { message: e })?;
+    let raw = auth::login_by_password(&phone, &password)?;
+    let has_password = raw.has_password;
+    finalize_login(raw, has_password, &layout, &auth_state)
+}
+
+#[tauri::command]
+pub fn console_login_set_password(
+    password: String,
+    auth_state: State<'_, AuthState>,
+) -> Result<(), AuthError> {
+    let token = auth_state
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|s| s.token.clone())
+        .ok_or(AuthError::NotAuthenticated)?;
+    auth::set_password(&token, &password)
+}
+
+#[tauri::command]
+pub fn console_auth_status(
+    auth_state: State<'_, AuthState>,
+) -> Result<AuthStatusView, AuthError> {
+    let layout = Layout::from_home()
+        .map_err(|e| AuthError::EnvWrite { message: e })?;
+    // 内存空则从 .env 恢复（不调网络）
+    let mut guard = auth_state.0.lock().unwrap();
+    if guard.is_none() {
+        *guard = auth::read_env_token_section(&layout);
+    }
+    match guard.clone() {
+        Some(sess) => Ok(AuthStatusView {
+            authenticated: true,
+            user_info: sess.user_info,
+            expire_at: Some(sess.expire_at),
+        }),
+        None => Ok(AuthStatusView {
+            authenticated: false,
+            user_info: None,
+            expire_at: None,
+        }),
     }
 }
 

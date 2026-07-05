@@ -10,6 +10,7 @@ type SharedChild = console::SharedChild;
 fn main() {
     let shared: SharedChild = Arc::new(Mutex::new(None));
     let shared_setup = shared.clone();
+    let auth_state = auth::AuthState(std::sync::Mutex::new(None));
 
     // 关闭门控用的两个共享标志:
     // - installing:bootstrap 进行中(console::console_bootstrap 维护)
@@ -33,10 +34,17 @@ fn main() {
             console::console_channels_status,
             console::console_install_channel_dep,
             console::console_confirm_close,
-            console::console_open_logs
+            console::console_open_logs,
+            console::console_login_captcha,
+            console::console_login_send_sms,
+            console::console_login_by_phone,
+            console::console_login_by_password,
+            console::console_login_set_password,
+            console::console_auth_status
         ])
         .manage(console::InstallingFlag(installing))
         .manage(console::CloseConfirmed(close_confirmed))
+        .manage(auth_state)
         .on_window_event(move |window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 // 用户已确认关闭 → 放行(复位标志以免影响后续)。
