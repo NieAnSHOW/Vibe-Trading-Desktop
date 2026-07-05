@@ -1,10 +1,32 @@
 import { getConsent, setConsent, flushNow } from "@/lib/telemetry";
 import i18n from "@/i18n";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Database, KeyRound, Loader2, MessageSquareMore, Package, Play, QrCode, RefreshCw, RotateCcw, Save, Server, SlidersHorizontal, Square, Upload } from "lucide-react";
+import {
+  Database,
+  KeyRound,
+  Loader2,
+  MessageSquareMore,
+  Package,
+  Play,
+  QrCode,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Server,
+  SlidersHorizontal,
+  Square,
+  Upload,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { api, isAuthRequiredError, type ChannelRuntimeStatus, type DataSourceSettings, type LLMProviderOption, type LLMSettings } from "@/lib/api";
+import {
+  api,
+  isAuthRequiredError,
+  type ChannelRuntimeStatus,
+  type DataSourceSettings,
+  type LLMProviderOption,
+  type LLMSettings,
+} from "@/lib/api";
 import { getApiAuthKey, setApiAuthKey } from "@/lib/apiAuth";
 import { OptionalDepsManager } from "@/components/settings/OptionalDepsManager";
 
@@ -38,8 +60,11 @@ function toForm(settings: LLMSettings): LLMFormState {
 export function Settings() {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<LLMSettings | null>(null);
-  const [dataSettings, setDataSettings] = useState<DataSourceSettings | null>(null);
-  const [channelStatus, setChannelStatus] = useState<ChannelRuntimeStatus | null>(null);
+  const [dataSettings, setDataSettings] = useState<DataSourceSettings | null>(
+    null,
+  );
+  const [channelStatus, setChannelStatus] =
+    useState<ChannelRuntimeStatus | null>(null);
   const [form, setForm] = useState<LLMFormState | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [localApiKey, setLocalApiKeyState] = useState(() => getApiAuthKey());
@@ -50,23 +75,32 @@ export function Settings() {
   const [saving, setSaving] = useState(false);
   const [dataSaving, setDataSaving] = useState(false);
   const [channelRefreshing, setChannelRefreshing] = useState(false);
-  const [channelAction, setChannelAction] = useState<"start" | "stop" | null>(null);
+  const [channelAction, setChannelAction] = useState<"start" | "stop" | null>(
+    null,
+  );
   const [pairingCommand, setPairingCommand] = useState("");
   const [pairingBusy, setPairingBusy] = useState(false);
-  const [settingsLoadError, setSettingsLoadError] = useState<string | null>(null);
+  const [settingsLoadError, setSettingsLoadError] = useState<string | null>(
+    null,
+  );
   const [usageDataOn, setUsageDataOn] = useState(getConsent());
   const [flushing, setFlushing] = useState(false);
   const [optionalDeps, setOptionalDeps] = useState<any>(null);
   const [installingPkg, setInstallingPkg] = useState<string | null>(null);
 
   // WeChat QR login state
-  const [weixinQr, setWeixinQr] = useState<{ loginId: string; image: string } | null>(null);
+  const [weixinQr, setWeixinQr] = useState<{
+    loginId: string;
+    image: string;
+  } | null>(null);
   const [weixinPolling, setWeixinPolling] = useState(false);
 
   const toggleUsageData = async (on: boolean) => {
     setUsageDataOn(on);
     await setConsent(on);
-    toast.success(on ? i18n.t("settings.usageData.on") : i18n.t("settings.usageData.off"));
+    toast.success(
+      on ? i18n.t("settings.usageData.on") : i18n.t("settings.usageData.off"),
+    );
   };
 
   // 手动触发一次埋点上传（含当天），用于验证上传通路；正常流程是隔天启动自动 flush。
@@ -75,14 +109,18 @@ export function Settings() {
     try {
       const { uploaded, retained } = await flushNow({ forceAll: true });
       if (uploaded > 0) {
-        toast.success(`已上传 ${uploaded} 个埋点批次${retained ? `,${retained} 个保留重试` : ""}`);
+        toast.success(
+          `已上传 ${uploaded} 个埋点批次${retained ? `,${retained} 个保留重试` : ""}`,
+        );
       } else if (retained > 0) {
         toast.error(`上传失败,${retained} 个批次保留待重试`);
       } else {
         toast.info("没有待上传的埋点数据");
       }
     } catch (error) {
-      toast.error(`上传失败:${error instanceof Error ? error.message : "Unknown error"}`);
+      toast.error(
+        `上传失败:${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     } finally {
       setFlushing(false);
     }
@@ -90,7 +128,12 @@ export function Settings() {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([api.getLLMSettings(), api.getDataSourceSettings(), api.getChannelStatus(), api.listOptionalDeps()])
+    Promise.all([
+      api.getLLMSettings(),
+      api.getDataSourceSettings(),
+      api.getChannelStatus(),
+      api.listOptionalDeps(),
+    ])
       .then(([llmData, dataSourceData, channelData, depsData]) => {
         if (!alive) return;
         setSettings(llmData);
@@ -101,7 +144,8 @@ export function Settings() {
         setSettingsLoadError(null);
       })
       .catch((error) => {
-        const message = error instanceof Error ? error.message : "Unknown error";
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
         setSettingsLoadError(message);
         if (isAuthRequiredError(error)) {
           toast.error(message);
@@ -113,17 +157,24 @@ export function Settings() {
       .finally(() => {
         if (alive) setLoading(false);
       });
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const refreshChannelStatus = async () => {
     setChannelRefreshing(true);
     try {
-      const [channelData, depsData] = await Promise.all([api.getChannelStatus(), api.listOptionalDeps()]);
+      const [channelData, depsData] = await Promise.all([
+        api.getChannelStatus(),
+        api.listOptionalDeps(),
+      ]);
       setChannelStatus(channelData);
       setOptionalDeps(depsData);
     } catch (error) {
-      toast.error(`${t("settings.channels.refreshFailed")}: ${error instanceof Error ? error.message : "Unknown error"}`);
+      toast.error(
+        `${t("settings.channels.refreshFailed")}: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     } finally {
       setChannelRefreshing(false);
     }
@@ -136,7 +187,7 @@ export function Settings() {
     const entry = deps.brokers.find(
       (b: any) =>
         b.id?.toLowerCase() === channelName.toLowerCase() ||
-        b.package?.toLowerCase().includes(channelName.toLowerCase())
+        b.package?.toLowerCase().includes(channelName.toLowerCase()),
     );
     return entry?.package;
   };
@@ -147,18 +198,27 @@ export function Settings() {
       const { job_id } = await api.installOptionalDep(pkg);
       await new Promise<void>((resolve, reject) => {
         const es = new EventSource(api.optionalDepStatusUrl(job_id));
-        es.addEventListener("done", () => { es.close(); resolve(); });
+        es.addEventListener("done", () => {
+          es.close();
+          resolve();
+        });
         es.addEventListener("failed", (ev) => {
           es.close();
           let message = t("settings.channels.depInstallFailed");
-          try { message = JSON.parse((ev as MessageEvent).data).error || message; } catch { /* default */ }
+          try {
+            message = JSON.parse((ev as MessageEvent).data).error || message;
+          } catch {
+            /* default */
+          }
           reject(new Error(message));
         });
       });
       toast.success(t("settings.channels.depInstalled"));
       await refreshChannelStatus();
     } catch (error) {
-      toast.error(`${t("settings.channels.depInstallFailed")}: ${error instanceof Error ? error.message : "Unknown error"}`);
+      toast.error(
+        `${t("settings.channels.depInstallFailed")}: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     } finally {
       setInstallingPkg(null);
     }
@@ -167,11 +227,20 @@ export function Settings() {
   const setChannelsRunning = async (action: "start" | "stop") => {
     setChannelAction(action);
     try {
-      const updated = action === "start" ? await api.startChannels() : await api.stopChannels();
+      const updated =
+        action === "start"
+          ? await api.startChannels()
+          : await api.stopChannels();
       setChannelStatus(updated);
-      toast.success(action === "start" ? t("settings.channels.started") : t("settings.channels.stoppedToast"));
+      toast.success(
+        action === "start"
+          ? t("settings.channels.started")
+          : t("settings.channels.stoppedToast"),
+      );
     } catch (error) {
-      toast.error(`${action === "start" ? t("settings.channels.startFailed") : t("settings.channels.stopFailed")}: ${error instanceof Error ? error.message : "Unknown error"}`);
+      toast.error(
+        `${action === "start" ? t("settings.channels.startFailed") : t("settings.channels.stopFailed")}: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     } finally {
       setChannelAction(null);
     }
@@ -191,7 +260,9 @@ export function Settings() {
       toast.success(updated.reply);
       setPairingCommand("");
     } catch (error) {
-      toast.error(`Failed to run pairing command: ${error instanceof Error ? error.message : "Unknown error"}`);
+      toast.error(
+        `Failed to run pairing command: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     } finally {
       setPairingBusy(false);
     }
@@ -207,7 +278,9 @@ export function Settings() {
         window.open(qr_image, "_blank", "noopener,noreferrer");
       }
     } catch (error) {
-      toast.error(`获取微信二维码失败: ${error instanceof Error ? error.message : "Unknown error"}`);
+      toast.error(
+        `获取微信二维码失败: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     }
   };
 
@@ -294,7 +367,9 @@ export function Settings() {
       setClearApiKey(false);
       toast.success("LLM settings saved");
     } catch (error) {
-      toast.error(`Failed to save LLM settings: ${error instanceof Error ? error.message : "Unknown error"}`);
+      toast.error(
+        `Failed to save LLM settings: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     } finally {
       setSaving(false);
     }
@@ -313,20 +388,29 @@ export function Settings() {
       setClearTushareToken(false);
       toast.success("Data source settings saved");
     } catch (error) {
-      toast.error(`Failed to save data source settings: ${error instanceof Error ? error.message : "Unknown error"}`);
+      toast.error(
+        `Failed to save data source settings: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     } finally {
       setDataSaving(false);
     }
   };
 
   const localApiAccessSection = (
-    <form onSubmit={submitLocalApiKey} className="rounded-lg border bg-card p-5 shadow-sm">
+    <form
+      onSubmit={submitLocalApiKey}
+      className="rounded-lg border bg-card p-5 shadow-sm"
+    >
       <div className="mb-4 space-y-1">
         <div className="flex items-center gap-2">
           <KeyRound className="h-4 w-4 text-primary" />
           <h2 className="text-base font-semibold">{"Local API access"}</h2>
         </div>
-        <p className="text-sm text-muted-foreground">{"For remote or private Web UI deployments, enter the server API key once in this browser. Localhost use can stay blank."}</p>
+        <p className="text-sm text-muted-foreground">
+          {
+            "For remote or private Web UI deployments, enter the server API key once in this browser. Localhost use can stay blank."
+          }
+        </p>
       </div>
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
         <label className="grid gap-2">
@@ -336,7 +420,9 @@ export function Settings() {
             value={localApiKey}
             onChange={(event) => setLocalApiKeyState(event.target.value)}
             className={fieldClass}
-            placeholder={"Stored only in this browser. Leave blank to clear it."}
+            placeholder={
+              "Stored only in this browser. Leave blank to clear it."
+            }
             autoComplete="current-password"
           />
         </label>
@@ -348,7 +434,9 @@ export function Settings() {
           {i18n.t("settings.save")}
         </button>
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">{"Stored only in this browser. Leave blank to clear it."}</p>
+      <p className="mt-2 text-xs text-muted-foreground">
+        {"Stored only in this browser. Leave blank to clear it."}
+      </p>
     </form>
   );
 
@@ -356,13 +444,21 @@ export function Settings() {
     return (
       <div className="mx-auto max-w-5xl space-y-6 p-6">
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">{"Settings"}</h1>
-          <p className="max-w-3xl text-sm text-muted-foreground">{"Configure model credentials and market data source tokens for this local project."}</p>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {"Settings"}
+          </h1>
+          <p className="max-w-3xl text-sm text-muted-foreground">
+            {
+              "Configure model credentials and market data source tokens for this local project."
+            }
+          </p>
         </div>
         {localApiAccessSection}
         <div className="rounded-lg border bg-card p-5 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-base font-semibold">{i18n.t("settings.usageData.title")}</h2>
+            <h2 className="text-base font-semibold">
+              {i18n.t("settings.usageData.title")}
+            </h2>
             <button
               type="button"
               role="switch"
@@ -370,15 +466,21 @@ export function Settings() {
               onClick={() => toggleUsageData(!usageDataOn)}
               className={`relative h-6 w-11 rounded-full transition ${usageDataOn ? "bg-primary" : "bg-muted"}`}
             >
-              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${usageDataOn ? "left-[22px]" : "left-0.5"}`} />
+              <span
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${usageDataOn ? "left-[22px]" : "left-0.5"}`}
+              />
             </button>
           </div>
-          <p className="text-sm text-muted-foreground">{i18n.t("settings.usageData.description")}</p>
+          <p className="text-sm text-muted-foreground">
+            {i18n.t("settings.usageData.description")}
+          </p>
         </div>
         <div className="flex min-h-32 items-center justify-center rounded-lg border bg-card p-5 text-sm text-muted-foreground">
           {settingsLoadError ? (
             <div className="text-center">
-              <div className="font-medium text-foreground">{"Settings are unavailable"}</div>
+              <div className="font-medium text-foreground">
+                {"Settings are unavailable"}
+              </div>
               <div className="mt-1">{settingsLoadError}</div>
             </div>
           ) : (
@@ -396,7 +498,8 @@ export function Settings() {
     ? "Configured"
     : settings.api_key_required
       ? "Leave blank to keep the current key"
-      : selectedProvider?.auth_type === "oauth" && selectedProvider.login_command
+      : selectedProvider?.auth_type === "oauth" &&
+          selectedProvider.login_command
         ? `This provider uses OAuth. Run: ${selectedProvider.login_command}`
         : "This provider does not require an API key.";
   const apiKeyDisabled = !selectedProvider?.api_key_required || clearApiKey;
@@ -407,16 +510,28 @@ export function Settings() {
   const channelRows = Object.entries(channelStatus.channels ?? {})
     .filter(([name]) => name === "weixin")
     .sort(([a], [b]) => a.localeCompare(b));
-  const channelEnabledCount = channelRows.filter(([, item]) => item.enabled).length;
-  const channelLoadedCount = channelRows.filter(([, item]) => item.loaded).length;
-  const channelUnavailableCount = channelRows.filter(([, item]) => item.available === false).length;
+  const channelEnabledCount = channelRows.filter(
+    ([, item]) => item.enabled,
+  ).length;
+  const channelLoadedCount = channelRows.filter(
+    ([, item]) => item.loaded,
+  ).length;
+  const channelUnavailableCount = channelRows.filter(
+    ([, item]) => item.available === false,
+  ).length;
   const channelBusy = channelRefreshing || channelAction !== null;
+  // 桌面端登录后,.env 由 console 自动注入 VIP 大模型配置,WebUI 不再需要手配。
+  const hideLlm = !!settings.desktop_login_provisioned;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">{"Settings"}</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">{"Configure model credentials and market data source tokens for this local project."}</p>
+        <p className="max-w-3xl text-sm text-muted-foreground">
+          {
+            "Configure model credentials and market data source tokens for this local project."
+          }
+        </p>
       </div>
 
       {localApiAccessSection}
@@ -424,7 +539,9 @@ export function Settings() {
       {/* Usage data consent */}
       <div className="rounded-lg border bg-card p-5 shadow-sm">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-base font-semibold">{i18n.t("settings.usageData.title")}</h2>
+          <h2 className="text-base font-semibold">
+            {i18n.t("settings.usageData.title")}
+          </h2>
           <button
             type="button"
             role="switch"
@@ -432,19 +549,27 @@ export function Settings() {
             onClick={() => toggleUsageData(!usageDataOn)}
             className={`relative h-6 w-11 rounded-full transition ${usageDataOn ? "bg-primary" : "bg-muted"}`}
           >
-            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${usageDataOn ? "left-[22px]" : "left-0.5"}`} />
+            <span
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${usageDataOn ? "left-[22px]" : "left-0.5"}`}
+            />
           </button>
         </div>
-        <p className="text-sm text-muted-foreground">{i18n.t("settings.usageData.description")}</p>
-        <button
+        <p className="text-sm text-muted-foreground">
+          {i18n.t("settings.usageData.description")}
+        </p>
+        {/* <button
           type="button"
           onClick={handleTestUpload}
           disabled={flushing}
           className="mt-3 inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {flushing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+          {flushing ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Upload className="h-3.5 w-3.5" />
+          )}
           测试上传埋点数据
-        </button>
+        </button> */}
       </div>
 
       {/* IM channels */}
@@ -453,9 +578,13 @@ export function Settings() {
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <MessageSquareMore className="h-4 w-4 text-primary" />
-              <h2 className="text-base font-semibold">{t("settings.channels.title")}</h2>
+              <h2 className="text-base font-semibold">
+                {t("settings.channels.title")}
+              </h2>
             </div>
-            <p className="max-w-3xl text-sm text-muted-foreground">{t("settings.channels.description")}</p>
+            <p className="max-w-3xl text-sm text-muted-foreground">
+              {t("settings.channels.description")}
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -464,7 +593,11 @@ export function Settings() {
               disabled={channelBusy}
               className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {channelRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {channelRefreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
               {t("settings.channels.refresh")}
             </button>
             <button
@@ -473,7 +606,11 @@ export function Settings() {
               disabled={channelBusy}
               className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {channelAction === "start" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+              {channelAction === "start" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4" />
+              )}
               {t("settings.channels.start")}
             </button>
             <button
@@ -482,7 +619,11 @@ export function Settings() {
               disabled={channelBusy}
               className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {channelAction === "stop" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="h-4 w-4" />}
+              {channelAction === "stop" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Square className="h-4 w-4" />
+              )}
               {t("settings.channels.stop")}
             </button>
           </div>
@@ -490,19 +631,31 @@ export function Settings() {
 
         <div className="mb-4 grid gap-3 md:grid-cols-4">
           <div className="rounded-md border bg-muted/20 px-3 py-2">
-            <div className="text-xs text-muted-foreground">{t("settings.channels.runtime")}</div>
-            <div className="text-sm font-medium">{channelStatus.running ? t("settings.channels.running") : t("settings.channels.stopped")}</div>
+            <div className="text-xs text-muted-foreground">
+              {t("settings.channels.runtime")}
+            </div>
+            <div className="text-sm font-medium">
+              {channelStatus.running
+                ? t("settings.channels.running")
+                : t("settings.channels.stopped")}
+            </div>
           </div>
           <div className="rounded-md border bg-muted/20 px-3 py-2">
-            <div className="text-xs text-muted-foreground">{t("settings.channels.enabled")}</div>
+            <div className="text-xs text-muted-foreground">
+              {t("settings.channels.enabled")}
+            </div>
             <div className="text-sm font-medium">{channelEnabledCount}</div>
           </div>
           <div className="rounded-md border bg-muted/20 px-3 py-2">
-            <div className="text-xs text-muted-foreground">{t("settings.channels.loaded")}</div>
+            <div className="text-xs text-muted-foreground">
+              {t("settings.channels.loaded")}
+            </div>
             <div className="text-sm font-medium">{channelLoadedCount}</div>
           </div>
           <div className="rounded-md border bg-muted/20 px-3 py-2">
-            <div className="text-xs text-muted-foreground">{t("settings.channels.unavailable")}</div>
+            <div className="text-xs text-muted-foreground">
+              {t("settings.channels.unavailable")}
+            </div>
             <div className="text-sm font-medium">{channelUnavailableCount}</div>
           </div>
         </div>
@@ -511,51 +664,83 @@ export function Settings() {
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-xs text-muted-foreground">
               <tr>
-                <th className="px-3 py-2 text-left font-medium">{t("settings.channels.channel")}</th>
-                <th className="px-3 py-2 text-left font-medium">{t("settings.channels.state")}</th>
-                <th className="px-3 py-2 text-left font-medium">{t("settings.channels.recovery")}</th>
+                <th className="px-3 py-2 text-left font-medium">
+                  {t("settings.channels.channel")}
+                </th>
+                <th className="px-3 py-2 text-left font-medium">
+                  {t("settings.channels.state")}
+                </th>
+                <th className="px-3 py-2 text-left font-medium">
+                  {t("settings.channels.recovery")}
+                </th>
               </tr>
             </thead>
             <tbody>
               {channelRows.map(([name, item]) => (
                 <tr key={name} className="border-t">
                   <td className="px-3 py-2 align-top">
-                    <div className="font-medium">{item.display_name || name}</div>
+                    <div className="font-medium">
+                      {item.display_name || name}
+                    </div>
                     <div className="text-xs text-muted-foreground">{name}</div>
                   </td>
                   <td className="px-3 py-2 align-top">
                     <div className="flex flex-wrap gap-1.5">
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${item.enabled ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
-                        {item.enabled ? t("settings.channels.enabled") : t("settings.channels.disabled")}
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs ${item.enabled ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}
+                      >
+                        {item.enabled
+                          ? t("settings.channels.enabled")
+                          : t("settings.channels.disabled")}
                       </span>
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${item.loaded ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
-                        {item.loaded ? t("settings.channels.loaded") : t("settings.channels.notLoaded")}
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs ${item.loaded ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}
+                      >
+                        {item.loaded
+                          ? t("settings.channels.loaded")
+                          : t("settings.channels.notLoaded")}
                       </span>
                       {item.health === "expired" ? (
                         <span className="rounded-full px-2 py-0.5 text-xs bg-destructive/10 text-destructive">
                           {t("settings.channels.loginExpired")}
                         </span>
                       ) : (
-                        <span className={`rounded-full px-2 py-0.5 text-xs ${item.running ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
-                          {item.running ? t("settings.channels.running") : t("settings.channels.stopped")}
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs ${item.running ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}
+                        >
+                          {item.running
+                            ? t("settings.channels.running")
+                            : t("settings.channels.stopped")}
                         </span>
                       )}
                     </div>
                   </td>
                   <td className="max-w-md px-3 py-2 align-top text-xs text-muted-foreground">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span>{item.install_hint || item.error || t("settings.channels.noRecovery")}</span>
-                      {item.available === false && matchedPkg(item.name, optionalDeps) && (
-                        <button
-                          type="button"
-                          disabled={installingPkg !== null}
-                          onClick={() => installChannelDep(matchedPkg(item.name, optionalDeps)!)}
-                          className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {installingPkg === matchedPkg(item.name, optionalDeps) ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                          {t("settings.channels.installDep")}
-                        </button>
-                      )}
+                      <span>
+                        {item.install_hint ||
+                          item.error ||
+                          t("settings.channels.noRecovery")}
+                      </span>
+                      {item.available === false &&
+                        matchedPkg(item.name, optionalDeps) && (
+                          <button
+                            type="button"
+                            disabled={installingPkg !== null}
+                            onClick={() =>
+                              installChannelDep(
+                                matchedPkg(item.name, optionalDeps)!,
+                              )
+                            }
+                            className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {installingPkg ===
+                            matchedPkg(item.name, optionalDeps) ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : null}
+                            {t("settings.channels.installDep")}
+                          </button>
+                        )}
                       {name === "weixin" && item.enabled && (
                         <button
                           type="button"
@@ -563,7 +748,11 @@ export function Settings() {
                           onClick={startWeixinQrLogin}
                           className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {weixinPolling ? <Loader2 className="h-3 w-3 animate-spin" /> : <QrCode className="h-3 w-3" />}
+                          {weixinPolling ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <QrCode className="h-3 w-3" />
+                          )}
                           扫码登录
                         </button>
                       )}
@@ -576,7 +765,10 @@ export function Settings() {
         </div>
 
         {/* ponytail: 仅微信开放,channel 固定 weixin,不再展示渠道选择器 */}
-        <form onSubmit={submitPairingCommand} className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+        <form
+          onSubmit={submitPairingCommand}
+          className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]"
+        >
           <label className="grid gap-2">
             <span className={labelClass}>{"Pairing command"}</span>
             <input
@@ -591,24 +783,38 @@ export function Settings() {
             disabled={pairingBusy || !pairingCommand.trim()}
             className="inline-flex items-center justify-center gap-2 self-end rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {pairingBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquareMore className="h-4 w-4" />}
+            {pairingBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <MessageSquareMore className="h-4 w-4" />
+            )}
             {"Run pairing"}
           </button>
         </form>
       </section>
 
-      {/* VIP 登录状态 / 登录引导 */}
-      <div className="rounded-lg border bg-card p-5 shadow-sm">
-        <div>账户管理已移至桌面控制台</div>
-      </div>
-
-      {/* LLM Settings */}
+      {hideLlm ? (
+        <div className="rounded-lg border bg-card p-5 shadow-sm flex items-center gap-3 text-sm text-muted-foreground">
+          <Server className="h-4 w-4 text-primary shrink-0" />
+          <span>大模型已由桌面端登录自动配置（VIP），无需手动设置。</span>
+        </div>
+      ) : (
+        <>
           <div className="space-y-2">
-            <h2 className="text-lg font-semibold tracking-tight">{"LLM Settings"}</h2>
-            <p className="max-w-3xl text-sm text-muted-foreground">{"Choose the model used by the agent and save it to the project-local agent/.env file."}</p>
+            <h2 className="text-lg font-semibold tracking-tight">
+              {"LLM Settings"}
+            </h2>
+            <p className="max-w-3xl text-sm text-muted-foreground">
+              {
+                "Choose the model used by the agent and save it to the project-local agent/.env file."
+              }
+            </p>
           </div>
 
-          <form onSubmit={submit} className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
+          <form
+            onSubmit={submit}
+            className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]"
+          >
             <section className="rounded-lg border bg-card p-5 shadow-sm">
               <div className="mb-5 flex items-center gap-2">
                 <Server className="h-4 w-4 text-primary" />
@@ -617,17 +823,25 @@ export function Settings() {
 
               <div className="grid gap-4">
                 <label className="grid gap-2">
-                  <span className={labelClass}>{i18n.t("settings.provider")}</span>
+                  <span className={labelClass}>
+                    {i18n.t("settings.provider")}
+                  </span>
                   <select
                     value={form.provider}
                     onChange={(event) => onProviderChange(event.target.value)}
                     className={fieldClass}
                   >
                     {providers.map((provider) => (
-                      <option key={provider.name} value={provider.name}>{provider.label}</option>
+                      <option key={provider.name} value={provider.name}>
+                        {provider.label}
+                      </option>
                     ))}
                   </select>
-                  <span className={hintClass}>{"Changing providers updates the recommended model and endpoint."}</span>
+                  <span className={hintClass}>
+                    {
+                      "Changing providers updates the recommended model and endpoint."
+                    }
+                  </span>
                 </label>
 
                 <label className="grid gap-2">
@@ -635,7 +849,9 @@ export function Settings() {
                   <div className="flex gap-2">
                     <input
                       value={form.model_name}
-                      onChange={(event) => setForm({ ...form, model_name: event.target.value })}
+                      onChange={(event) =>
+                        setForm({ ...form, model_name: event.target.value })
+                      }
                       className={fieldClass}
                       required
                     />
@@ -646,17 +862,25 @@ export function Settings() {
                       title={"Use provider defaults"}
                     >
                       <RotateCcw className="h-4 w-4" />
-                      <span className="hidden sm:inline">{"Use provider defaults"}</span>
+                      <span className="hidden sm:inline">
+                        {"Use provider defaults"}
+                      </span>
                     </button>
                   </div>
-                  <span className={hintClass}>{"Use the exact model id required by your provider."}</span>
+                  <span className={hintClass}>
+                    {"Use the exact model id required by your provider."}
+                  </span>
                 </label>
 
                 <label className="grid gap-2">
-                  <span className={labelClass}>{i18n.t("settings.baseUrl")}</span>
+                  <span className={labelClass}>
+                    {i18n.t("settings.baseUrl")}
+                  </span>
                   <input
                     value={form.base_url}
-                    onChange={(event) => setForm({ ...form, base_url: event.target.value })}
+                    onChange={(event) =>
+                      setForm({ ...form, base_url: event.target.value })
+                    }
                     className={fieldClass}
                     placeholder={selectedProvider?.default_base_url}
                     disabled={selectedProvider?.auth_type === "oauth"}
@@ -665,7 +889,9 @@ export function Settings() {
 
                 <label className="grid gap-2">
                   <span className={labelClass}>
-                    {selectedProvider?.auth_type === "oauth" ? "OAuth" : "API key"}
+                    {selectedProvider?.auth_type === "oauth"
+                      ? "OAuth"
+                      : "API key"}
                   </span>
                   <div className="relative">
                     <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -708,27 +934,41 @@ export function Settings() {
 
               <div className="grid gap-4">
                 <label className="grid gap-2">
-                  <span className={labelClass}>{i18n.t("settings.temperature")}</span>
+                  <span className={labelClass}>
+                    {i18n.t("settings.temperature")}
+                  </span>
                   <input
                     type="number"
                     min={0}
                     max={2}
                     step={0.1}
                     value={form.temperature}
-                    onChange={(event) => setForm({ ...form, temperature: Number(event.target.value) })}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        temperature: Number(event.target.value),
+                      })
+                    }
                     className={fieldClass}
                   />
                 </label>
 
                 <label className="grid gap-2">
-                  <span className={labelClass}>{i18n.t("settings.timeoutSeconds")}</span>
+                  <span className={labelClass}>
+                    {i18n.t("settings.timeoutSeconds")}
+                  </span>
                   <input
                     type="number"
                     min={1}
                     max={3600}
                     step={1}
                     value={form.timeout_seconds}
-                    onChange={(event) => setForm({ ...form, timeout_seconds: Number(event.target.value) })}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        timeout_seconds: Number(event.target.value),
+                      })
+                    }
                     className={fieldClass}
                   />
                 </label>
@@ -741,16 +981,25 @@ export function Settings() {
                     max={20}
                     step={1}
                     value={form.max_retries}
-                    onChange={(event) => setForm({ ...form, max_retries: Number(event.target.value) })}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        max_retries: Number(event.target.value),
+                      })
+                    }
                     className={fieldClass}
                   />
                 </label>
 
                 <label className="grid gap-2">
-                  <span className={labelClass}>{i18n.t("settings.reasoningEffort")}</span>
+                  <span className={labelClass}>
+                    {i18n.t("settings.reasoningEffort")}
+                  </span>
                   <select
                     value={form.reasoning_effort}
-                    onChange={(event) => setForm({ ...form, reasoning_effort: event.target.value })}
+                    onChange={(event) =>
+                      setForm({ ...form, reasoning_effort: event.target.value })
+                    }
                     className={fieldClass}
                   >
                     <option value="">{"Off"}</option>
@@ -759,12 +1008,20 @@ export function Settings() {
                     <option value="high">high</option>
                     <option value="max">max</option>
                   </select>
-                  <span className={hintClass}>{"How hard the model thinks before answering. Higher is more thorough but slower; leave Off for fastest replies."}</span>
+                  <span className={hintClass}>
+                    {
+                      "How hard the model thinks before answering. Higher is more thorough but slower; leave Off for fastest replies."
+                    }
+                  </span>
                 </label>
 
                 <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">{i18n.t("settings.saved")}: </span>
-                  <span className="break-all font-mono">{settings.env_path}</span>
+                  <span className="font-medium text-foreground">
+                    {i18n.t("settings.saved")}:{" "}
+                  </span>
+                  <span className="break-all font-mono">
+                    {settings.env_path}
+                  </span>
                 </div>
 
                 <button
@@ -772,20 +1029,35 @@ export function Settings() {
                   disabled={saving}
                   className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
                   {saving ? i18n.t("settings.saving") : i18n.t("settings.save")}
                 </button>
               </div>
             </section>
           </form>
+        </>
+      )}
 
-      <form onSubmit={submitDataSources} className="rounded-lg border bg-card p-5 shadow-sm">
+      <form
+        onSubmit={submitDataSources}
+        className="rounded-lg border bg-card p-5 shadow-sm"
+      >
         <div className="mb-5 space-y-1">
           <div className="flex items-center gap-2">
             <Database className="h-4 w-4 text-primary" />
-            <h2 className="text-base font-semibold">{"Data Source Settings"}</h2>
+            <h2 className="text-base font-semibold">
+              {"Data Source Settings"}
+            </h2>
           </div>
-          <p className="text-sm text-muted-foreground">{"Configure optional market data credentials used by backtests and research agents."}</p>
+          <p className="text-sm text-muted-foreground">
+            {
+              "Configure optional market data credentials used by backtests and research agents."
+            }
+          </p>
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
@@ -805,7 +1077,11 @@ export function Settings() {
                 />
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className={hintClass}>{"Used for China A-share, futures, fund, and macro data. If unset, the project falls back to AKShare where available."}</span>
+                <span className={hintClass}>
+                  {
+                    "Used for China A-share, futures, fund, and macro data. If unset, the project falls back to AKShare where available."
+                  }
+                </span>
                 <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                   <input
                     type="checkbox"
@@ -822,8 +1098,12 @@ export function Settings() {
             </label>
 
             <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">{i18n.t("settings.saved")}: </span>
-              <span className="break-all font-mono">{dataSettings.env_path}</span>
+              <span className="font-medium text-foreground">
+                {i18n.t("settings.saved")}:{" "}
+              </span>
+              <span className="break-all font-mono">
+                {dataSettings.env_path}
+              </span>
             </div>
 
             <button
@@ -831,16 +1111,26 @@ export function Settings() {
               disabled={dataSaving}
               className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {dataSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {dataSaving ? i18n.t("settings.saving") : "Save data source settings"}
+              {dataSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              {dataSaving
+                ? i18n.t("settings.saving")
+                : "Save data source settings"}
             </button>
           </div>
 
           <div className="rounded-md border bg-muted/20 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <span className="text-sm font-medium">{"BaoStock"}</span>
-              <span className={`rounded-full px-2 py-0.5 text-xs ${dataSettings.baostock_supported ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}>
-                {dataSettings.baostock_supported ? "Loader available" : "No project loader"}
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs ${dataSettings.baostock_supported ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}
+              >
+                {dataSettings.baostock_supported
+                  ? "Loader available"
+                  : "No project loader"}
               </span>
             </div>
             <div className="space-y-2 text-sm text-muted-foreground">
@@ -869,24 +1159,39 @@ export function Settings() {
 
       {/* WeChat QR login modal */}
       {weixinQr && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setWeixinQr(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm" onClick={e => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          onClick={() => setWeixinQr(null)}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg font-semibold mb-4">微信扫码登录</h3>
             <div className="flex flex-col items-center gap-3 py-4">
               <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
               <p className="text-sm text-gray-500 text-center">
-                请在已打开的页面完成微信扫码登录<br />本窗口会自动检测登录状态…
+                请在已打开的页面完成微信扫码登录
+                <br />
+                本窗口会自动检测登录状态…
               </p>
               {weixinQr.image?.startsWith("http") && (
                 <button
-                  onClick={() => window.open(weixinQr.image, "_blank", "noopener,noreferrer")}
+                  onClick={() =>
+                    window.open(weixinQr.image, "_blank", "noopener,noreferrer")
+                  }
                   className="text-xs text-blue-600 hover:underline"
                 >
                   未弹出页面?点此重新打开登录链接
                 </button>
               )}
             </div>
-            <button onClick={() => setWeixinQr(null)} className="mt-4 w-full rounded-md border px-3 py-2 text-sm">取消</button>
+            <button
+              onClick={() => setWeixinQr(null)}
+              className="mt-4 w-full rounded-md border px-3 py-2 text-sm"
+            >
+              取消
+            </button>
           </div>
         </div>
       )}

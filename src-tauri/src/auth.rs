@@ -222,6 +222,28 @@ pub fn write_env_token_section(layout: &Layout, sess: &UserSession) -> Result<()
     write_env_atomic(path, &new_content)
 }
 
+/// 清掉登录写入 .env 的 7 个 key（置空，复用 rewrite_env_keys）；其余 key 不动。
+/// token 为空后 read_env_token_section 返回 None，等价于未登录。
+pub fn clear_env_token_section(layout: &Layout) -> Result<(), AuthError> {
+    let path = &layout.user_env;
+    let content = fs::read_to_string(path).unwrap_or_default();
+    let keys = [
+        ENV_KEY_PROVIDER,
+        ENV_KEY_MODEL,
+        ENV_KEY_BASE_URL,
+        ENV_KEY_API_KEY,
+        ENV_KEY_REFRESH,
+        ENV_KEY_EXPIRE,
+        ENV_KEY_REFRESH_EXPIRE,
+    ];
+    let updates: Vec<(String, String)> = keys
+        .iter()
+        .map(|k| (k.to_string(), String::new()))
+        .collect();
+    let new_content = rewrite_env_keys(&content, &updates);
+    write_env_atomic(path, &new_content)
+}
+
 /// 从 layout.user_env 读回 session（重启恢复用）。userInfo 读不到，留 None。
 pub fn read_env_token_section(layout: &Layout) -> Option<UserSession> {
     let content = fs::read_to_string(&layout.user_env).ok()?;
@@ -568,6 +590,31 @@ mod tests {
         assert!(after.contains("LANGCHAIN_MODEL_NAME=deepseek-v4-flash"));
         assert!(after.contains("USER_REFRESH_TOKEN=rt"));
         assert!(after.contains("USER_TOKEN_EXPIRE=1700000000"));
+    }
+
+    #[test]
+    fn clear_token_section_wipes_login_keys_but_keeps_others() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join(".vibe-trading");
+        fs::create_dir_all(&home).unwrap();
+        let layout = Layout::new(&home);
+        fs::write(&layout.user_env, "OPENROUTER_API_KEY=xxx\nTUSHARE_TOKEN=t\n").unwrap();
+        let sess = UserSession {
+            token: "tok".into(),
+            refresh_token: "rt".into(),
+            expire_at: 1700000000,
+            refresh_expire_at: 1700000100,
+            user_info: None,
+        };
+        write_env_token_section(&layout, &sess).unwrap();
+        clear_env_token_section(&layout).unwrap();
+
+        let after = fs::read_to_string(&layout.user_env).unwrap();
+        assert!(!after.contains("tok"), "token 不得残留");
+        assert!(!after.contains("USER_REFRESH_TOKEN=rt"));
+        assert!(after.contains("OPENROUTER_API_KEY=xxx"), "其他 provider 须保留");
+        assert!(after.contains("TUSHARE_TOKEN=t"));
+        assert!(read_env_token_section(&layout).is_none(), "清理后读不到 session");
     }
 
     #[test]

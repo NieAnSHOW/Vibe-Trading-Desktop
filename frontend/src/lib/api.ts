@@ -287,6 +287,7 @@ export interface LLMSettings {
   sse_timeout_seconds: number;
   env_path: string;
   providers: LLMProviderOption[];
+  desktop_login_provisioned?: boolean;
 }
 
 export interface UpdateLLMSettingsRequest {

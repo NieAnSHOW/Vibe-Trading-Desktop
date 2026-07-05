@@ -180,6 +180,10 @@ class LLMSettingsResponse(BaseModel):
     sse_timeout_seconds: int
     env_path: str
     providers: List[LLMProviderOption]
+    # ponytail: True 当 .env 有未过期的 console-login token 段。
+    # USER_REFRESH_TOKEN/USER_REFRESH_EXPIRE 只由桌面端 Rust write_env_token_section 写入,
+    # 手动配 LLM 不会写这两个 key —— 它们是"桌面登录自动配置"的唯一指纹。
+    desktop_login_provisioned: bool = False
 
 
 class UpdateLLMSettingsRequest(BaseModel):
@@ -1185,6 +1189,9 @@ def _build_llm_settings_response(values: Optional[Dict[str, str]] = None) -> LLM
             token = None
         api_key_configured = bool(token)
         api_key_hint = None
+    # 桌面端登录指纹:refresh_token 非空且 refresh_expire 未过 → 视为由 console 自动配置。
+    desktop_login_provisioned = bool(env_values.get("USER_REFRESH_TOKEN", "").strip()) and \
+        _coerce_int(env_values.get("USER_REFRESH_EXPIRE", "0"), 0) > int(time.time())
     return LLMSettingsResponse(
         provider=provider.name,
         model_name=env_values.get("LANGCHAIN_MODEL_NAME", provider.default_model),
@@ -1200,6 +1207,7 @@ def _build_llm_settings_response(values: Optional[Dict[str, str]] = None) -> LLM
         sse_timeout_seconds=_coerce_int(env_values.get("VIBE_TRADING_SSE_TIMEOUT", "90"), 90),
         env_path=_project_relative_path(env_path),
         providers=LLM_PROVIDERS,
+        desktop_login_provisioned=desktop_login_provisioned,
     )
 
 

@@ -134,20 +134,12 @@ onUnmounted(() => {
       </header>
 
       <nav class="tabs" role="tablist" aria-label="登录方式">
-        <button
-          :class="['tab', tab === 'sms' && 'active']"
-          role="tab"
-          :aria-selected="tab === 'sms'"
-          @click="tab = 'sms'"
-        >
+        <button :class="['tab', tab === 'sms' && 'active']" role="tab" :aria-selected="tab === 'sms'"
+          @click="tab = 'sms'">
           短信登录
         </button>
-        <button
-          :class="['tab', tab === 'password' && 'active']"
-          role="tab"
-          :aria-selected="tab === 'password'"
-          @click="tab = 'password'"
-        >
+        <button :class="['tab', tab === 'password' && 'active']" role="tab" :aria-selected="tab === 'password'"
+          @click="tab = 'password'">
           密码登录
         </button>
       </nav>
@@ -155,42 +147,20 @@ onUnmounted(() => {
       <form v-if="tab === 'sms'" class="form" @submit.prevent="submitSms">
         <label class="row">
           <span class="lbl">手机号</span>
-          <input
-            class="field"
-            v-model="phone"
-            inputmode="numeric"
-            placeholder="13800000000"
-            autocomplete="tel"
-            @input="phone = phone.replace(/\D/g, '').slice(0, 11)"
-          />
+          <input class="field" v-model="phone" inputmode="numeric" placeholder="13800000000" autocomplete="tel"
+            @input="phone = phone.replace(/\D/g, '').slice(0, 11)" />
         </label>
 
         <label class="row">
           <span class="lbl">图形验证码</span>
           <div class="inline">
-            <input
-              class="field"
-              v-model="captchaCode"
-              placeholder="abcd"
-              autocomplete="off"
-              @input="captchaCode = captchaCode.trim().slice(0, 4)"
-            />
-            <button
-              type="button"
-              class="captcha-btn"
-              title="刷新验证码"
-              aria-label="刷新验证码"
-              @click="loadCaptcha"
-            >
-              <img
-                v-if="captcha"
-                :src="
-                  captcha.data.startsWith('data:')
-                    ? captcha.data
-                    : `data:image/svg+xml;base64,${captcha.data}`
-                "
-                alt="图形验证码"
-              />
+            <input class="field" v-model="captchaCode" placeholder="abcd" autocomplete="off"
+              @input="captchaCode = captchaCode.trim().slice(0, 4)" />
+            <button type="button" class="captcha-btn" title="刷新验证码" aria-label="刷新验证码" @click="loadCaptcha">
+              <img v-if="captcha" :src="captcha.data.startsWith('data:')
+                ? captcha.data
+                : `data:image/svg+xml;base64,${captcha.data}`
+                " alt="图形验证码" />
               <span v-else class="captcha-loading">…</span>
             </button>
           </div>
@@ -199,70 +169,40 @@ onUnmounted(() => {
         <label class="row">
           <span class="lbl">短信验证码</span>
           <div class="inline">
-            <input
-              class="field"
-              v-model="smsCode"
-              inputmode="numeric"
-              placeholder="1234"
-              autocomplete="one-time-code"
-              @input="smsCode = smsCode.trim().slice(0, 4)"
-            />
-            <button
-              type="button"
-              class="code-btn"
-              :disabled="!phoneValid || !captchaValid || countdown > 0"
-              @click="sendCode"
-            >
+            <input class="field" v-model="smsCode" inputmode="numeric" placeholder="1234" autocomplete="one-time-code"
+              @input="smsCode = smsCode.trim().slice(0, 4)" />
+            <button type="button" class="code-btn" :disabled="!phoneValid || !captchaValid || countdown > 0"
+              @click="sendCode">
               {{ countdown > 0 ? `${countdown}s` : "获取" }}
             </button>
           </div>
         </label>
 
-        <button
-          type="button"
-          class="submit"
-          :disabled="!phoneValid || !smsValid || submitBusy.busy.value"
-          @click="submitSms"
-        >
+        <button type="button" class="submit" :disabled="!phoneValid || !smsValid || submitBusy.busy.value"
+          @click="submitSms">
           {{ submitBusy.busy.value ? "登录中…" : "登录" }}
         </button>
         <button type="button" class="skip-btn" @click="router.replace('/')">
-          跳过登录
+          回到首页
         </button>
       </form>
 
       <form v-else class="form" @submit.prevent="submitPassword">
         <label class="row">
           <span class="lbl">手机号</span>
-          <input
-            class="field"
-            v-model="phone"
-            inputmode="numeric"
-            placeholder="13800000000"
-            autocomplete="tel"
-            @input="phone = phone.replace(/\D/g, '').slice(0, 11)"
-          />
+          <input class="field" v-model="phone" inputmode="numeric" placeholder="13800000000" autocomplete="tel"
+            @input="phone = phone.replace(/\D/g, '').slice(0, 11)" />
         </label>
         <label class="row">
           <span class="lbl">密码</span>
-          <input
-            class="field"
-            type="password"
-            v-model="password"
-            placeholder="请输入密码"
-            autocomplete="current-password"
-          />
+          <input class="field" type="password" v-model="password" placeholder="请输入密码" autocomplete="current-password" />
         </label>
-        <button
-          type="button"
-          class="submit"
-          :disabled="!phoneValid || !passwordValid || submitBusy.busy.value"
-          @click="submitPassword"
-        >
+        <button type="button" class="submit" :disabled="!phoneValid || !passwordValid || submitBusy.busy.value"
+          @click="submitPassword">
           {{ submitBusy.busy.value ? "登录中…" : "登录" }}
         </button>
         <button type="button" class="skip-btn" @click="router.replace('/')">
-          跳过登录
+          回到首页
         </button>
       </form>
 
@@ -276,7 +216,6 @@ onUnmounted(() => {
 <style scoped>
 /* 卡片不继承 body 的 580px .console 宽度:登录页是独立全屏门面。*/
 .login-wrap {
-  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -286,8 +225,7 @@ onUnmounted(() => {
 }
 
 .card {
-  width: 100%;
-  max-width: 380px;
+  width: 480px;
   background: hsl(var(--surface-1));
   border: 1px solid hsl(var(--line));
   border-radius: 16px;
@@ -298,6 +236,7 @@ onUnmounted(() => {
     0 6px 18px hsl(220 70% 4% / 0.6);
   position: relative;
 }
+
 /* 卡片顶部一条极细的 brand 光晕——门面仪式感,静态,不抢戏。
    降级友好:不支持 mask-composite 时仅丢失这条描边,卡片边框仍在。*/
 .card::before {
@@ -306,11 +245,9 @@ onUnmounted(() => {
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(
-    180deg,
-    hsl(var(--brand) / 0.55),
-    hsl(var(--brand) / 0) 32%
-  );
+  background: linear-gradient(180deg,
+      hsl(var(--brand) / 0.55),
+      hsl(var(--brand) / 0) 32%);
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -325,6 +262,7 @@ onUnmounted(() => {
   gap: 13px;
   margin-bottom: 22px;
 }
+
 .mark {
   flex: none;
   width: 48px;
@@ -332,15 +270,18 @@ onUnmounted(() => {
   border-radius: 12px;
   filter: drop-shadow(0 4px 12px hsl(var(--brand) / 0.25));
 }
+
 .brand-text {
   min-width: 0;
 }
+
 h1 {
   font-size: 20px;
   font-weight: 650;
   letter-spacing: -0.01em;
   line-height: 1.2;
 }
+
 .sub {
   margin-top: 3px;
   font-size: 12.5px;
@@ -354,6 +295,7 @@ h1 {
   margin-bottom: 18px;
   border-bottom: 1px solid hsl(var(--line));
 }
+
 .tab {
   flex: 1;
   display: flex;
@@ -373,13 +315,16 @@ h1 {
     color 0.18s var(--ease),
     border-color 0.18s var(--ease);
 }
+
 .tab:hover:not(.active) {
   color: hsl(var(--ink));
 }
+
 .tab.active {
   color: hsl(var(--brand));
   border-bottom-color: hsl(var(--brand));
 }
+
 .tab:focus-visible {
   outline: 2px solid hsl(var(--brand));
   outline-offset: 4px;
@@ -391,16 +336,19 @@ h1 {
   flex-direction: column;
   gap: 14px;
 }
+
 .row {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
+
 .lbl {
   font-size: 12.5px;
   font-weight: 550;
   color: hsl(var(--ink-dim));
 }
+
 .field {
   width: 100%;
   padding: 10px 12px;
@@ -415,12 +363,15 @@ h1 {
     box-shadow 0.16s var(--ease),
     background 0.16s var(--ease);
 }
+
 .field::placeholder {
   color: hsl(var(--ink-dim) / 0.7);
 }
+
 .field:hover {
   border-color: hsl(var(--ink-dim) / 0.4);
 }
+
 .field:focus {
   outline: none;
   border-color: hsl(var(--brand) / 0.7);
@@ -433,6 +384,7 @@ h1 {
   gap: 8px;
   align-items: stretch;
 }
+
 .inline .field {
   flex: 1;
   min-width: 0;
@@ -454,22 +406,27 @@ h1 {
     border-color 0.16s var(--ease),
     transform 0.12s var(--ease);
 }
+
 .captcha-btn:hover {
   border-color: hsl(var(--brand) / 0.5);
 }
+
 .captcha-btn:active {
   transform: translateY(1px);
 }
+
 .captcha-btn:focus-visible {
   outline: 2px solid hsl(var(--brand));
   outline-offset: 2px;
 }
+
 .captcha-btn img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
+
 .captcha-loading {
   font-size: 13px;
   color: hsl(var(--ink-dim));
@@ -494,17 +451,21 @@ h1 {
     border-color 0.16s var(--ease),
     transform 0.12s var(--ease);
 }
+
 .code-btn:hover:not(:disabled) {
   border-color: hsl(var(--brand) / 0.5);
   background: hsl(var(--brand) / 0.08);
 }
+
 .code-btn:active:not(:disabled) {
   transform: translateY(1px);
 }
+
 .code-btn:focus-visible {
   outline: 2px solid hsl(var(--brand));
   outline-offset: 2px;
 }
+
 .code-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -532,18 +493,22 @@ h1 {
     transform 0.12s var(--ease),
     opacity 0.18s var(--ease);
 }
+
 .submit:hover:not(:disabled) {
   background: hsl(var(--brand-strong));
   box-shadow: 0 8px 22px hsl(var(--brand) / 0.36);
 }
+
 .submit:active:not(:disabled) {
   transform: translateY(1px);
   box-shadow: 0 4px 12px hsl(var(--brand) / 0.24);
 }
+
 .submit:focus-visible {
   outline: 2px solid hsl(var(--brand));
   outline-offset: 3px;
 }
+
 .submit:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -568,11 +533,13 @@ h1 {
     border-color 0.16s var(--ease),
     background 0.16s var(--ease);
 }
+
 .skip-btn:hover {
   color: hsl(var(--ink));
   border-color: hsl(var(--ink-dim) / 0.5);
   background: hsl(var(--surface-2) / 0.5);
 }
+
 .skip-btn:focus-visible {
   outline: 2px solid hsl(var(--brand));
   outline-offset: 2px;

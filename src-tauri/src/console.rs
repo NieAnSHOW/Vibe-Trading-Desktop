@@ -406,6 +406,17 @@ pub fn console_login_set_password(
 }
 
 #[tauri::command]
+pub fn console_logout(
+    auth_state: State<'_, AuthState>,
+) -> Result<(), AuthError> {
+    let layout = Layout::from_home()
+        .map_err(|e| AuthError::EnvWrite { message: e })?;
+    auth::clear_env_token_section(&layout)?;
+    *auth_state.0.lock().unwrap() = None;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn console_auth_status(
     auth_state: State<'_, AuthState>,
 ) -> Result<AuthStatusView, AuthError> {

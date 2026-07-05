@@ -16,6 +16,7 @@ import {
   consoleOpenWebui,
   consoleOpenLogs,
   consoleConfirmClose,
+  consoleLogout,
 } from "../ipc/commands";
 import {
   onBootstrapEvent,
@@ -140,6 +141,38 @@ async function onStopDialogClose(v: "ok" | "cancel") {
   });
 }
 
+// ── 退出登录(二次确认 → 清登录信息 → 重启服务) ──────────────────
+const logoutBusy = useBusy();
+const logoutDialogOpen = ref(false);
+const logoutText = computed(() =>
+  serviceRunning.value
+    ? "若您退出登录，当前服务将会重启，正在任务中的智能体也会被强制关闭，确认操作吗？"
+    : "若您退出登录，则需要您手动配置大模型，确认操作吗？",
+);
+function onLogout() {
+  logoutDialogOpen.value = true;
+}
+async function onLogoutDialogClose(v: "ok" | "cancel") {
+  logoutDialogOpen.value = false;
+  if (v !== "ok") return;
+  await logoutBusy.run("退出中", async () => {
+    setErr("");
+    try {
+      await consoleLogout(); // 清 .env 登录段 + Rust 内存 session
+      authStore.clear();
+      // 重启服务：清掉旧 token 的进程，新进程以未登录态启动
+      if (serviceRunning.value) {
+        await service.stop();
+        env.setPort(null);
+        const p = await service.start();
+        env.setPort(p);
+      }
+    } catch (e) {
+      setErr(e);
+    }
+  });
+}
+
 // ── 打开 WebUI / 日志 ───────────────────────────────────────────
 async function onOpenWebui() {
   if (port.value == null) return;
@@ -248,7 +281,7 @@ onUnmounted(() => {
       <div style="display:flex;align-items:center;gap:8px">
         <template v-if="authStore.authenticated && authStore.userInfo">
           <span style="font-size:12px;color:#666">{{ authStore.userInfo.nickName || authStore.userInfo.phone || '已登录' }}</span>
-          <AppButton variant="ghost" @click="authStore.clear()">退出登录</AppButton>
+          <AppButton variant="ghost" :busy="logoutBusy.busy.value" @click="onLogout">退出登录</AppButton>
         </template>
         <AppButton v-else variant="ghost" @click="router.push('/login')">登录</AppButton>
         <AppButton variant="ghost" :disabled="!running" @click="onOpenWebui">
@@ -302,6 +335,11 @@ onUnmounted(() => {
     <ConfirmDialog :open="closeDialogOpen" title="确认关闭客户端？" @close="onCloseDialogClose">
       <span v-html="closeText"></span>
       <template #confirm-text>确认关闭</template>
+    </ConfirmDialog>
+
+    <ConfirmDialog :open="logoutDialogOpen" title="确认退出登录？" @close="onLogoutDialogClose">
+      {{ logoutText }}
+      <template #confirm-text>确认退出</template>
     </ConfirmDialog>
 
     <div id="err">{{ errorMsg }}</div>

@@ -40,7 +40,8 @@ fn main() {
             console::console_login_by_phone,
             console::console_login_by_password,
             console::console_login_set_password,
-            console::console_auth_status
+            console::console_auth_status,
+            console::console_logout
         ])
         .manage(console::InstallingFlag(installing))
         .manage(console::CloseConfirmed(close_confirmed))
