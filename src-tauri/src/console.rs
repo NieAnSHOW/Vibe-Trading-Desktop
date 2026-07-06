@@ -638,21 +638,29 @@ pub struct AdImage {
 /// 调用 cool-admin 公开接口拉取广告列表。
 /// POST /app/marketing/ad/list → { type?, position? } → { code, data: AdItem[], message }
 /// 无鉴权（IGNORE_TOKEN），静默失败：接口挂了或没广告时返回空数组。
+///
+/// 注意：reqwest::blocking 会阻塞调用线程。若在 #[tauri::command] 同步函数中调用，
+/// 会占住 Tauri 异步运行时线程，导致 webview 整体假死（与 start/stop 服务同类问题）。
+/// 解法与 console_start_service 一致：改为 async fn + spawn_blocking 甩到线程池。
 #[tauri::command]
-pub fn console_fetch_ads(position: String) -> Result<Vec<AdItem>, String> {
-    let url = format!("{}/app/marketing/ad/list", auth::user_api_url());
-    let body = serde_json::json!({ "position": position });
-    let text = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-        .map_err(|e| format!("build client: {e}"))?
-        .post(&url)
-        .json(&body)
-        .send()
-        .map_err(|e| format!("ad list request: {e}"))?
-        .text()
-        .map_err(|e| format!("ad list body: {e}"))?;
-    auth::parse_cool_response::<Vec<AdItem>>(&text).map_err(|e| e.to_string())
+pub async fn console_fetch_ads(position: String) -> Result<Vec<AdItem>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let url = format!("{}/app/marketing/ad/list", auth::user_api_url());
+        let body = serde_json::json!({ "position": position });
+        let text = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .map_err(|e| format!("build client: {e}"))?
+            .post(&url)
+            .json(&body)
+            .send()
+            .map_err(|e| format!("ad list request: {e}"))?
+            .text()
+            .map_err(|e| format!("ad list body: {e}"))?;
+        auth::parse_cool_response::<Vec<AdItem>>(&text).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking join: {e}"))?
 }
 
 // ── 测试 ────────────────────────────────────────────────────────────
