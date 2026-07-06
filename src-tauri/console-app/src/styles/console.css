@@ -490,3 +490,47 @@ dialog.confirm .confirm-actions {
   letter-spacing: 0.02em;
   color: hsl(0 0% 60% / 0.6);
 }
+
+/* ── Ad slots ── */
+.ad-banner {
+  margin-top: 16px;
+  padding: 10px 14px;
+  background: hsl(var(--surface-1));
+  border: 1px solid hsl(var(--line));
+  border-radius: var(--radius);
+  font-size: 13px;
+  text-align: center;
+}
+.ad-banner p {
+  margin: 0 0 4px;
+  color: hsl(var(--ink-dim));
+}
+.ad-banner img {
+  border-radius: 8px;
+}
+.ad-bottom {
+  margin-top: 12px;
+  padding: 8px 14px;
+  background: hsl(var(--surface-1));
+  border: 1px solid hsl(var(--line));
+  border-radius: var(--radius);
+  font-size: 12px;
+  text-align: center;
+  color: hsl(var(--ink-dim));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.ad-bottom img {
+  border-radius: 6px;
+}
+.ad-link {
+  color: hsl(var(--brand));
+  text-decoration: none;
+  font-weight: 550;
+}
+.ad-link:hover {
+  color: hsl(var(--brand-strong));
+  text-decoration: underline;
+}

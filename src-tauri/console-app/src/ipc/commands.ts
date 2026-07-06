@@ -4,6 +4,7 @@ import type {
   Captcha,
   LoginResultView,
   StatusReport,
+  AdItem,
 } from "./types";
 
 // 与 src-tauri/src/console.rs 的 #[tauri::command] 一一对应。
@@ -70,3 +71,6 @@ export const consoleAuthStatus = (): Promise<AuthStatusView> =>
 
 export const consoleLogout = (): Promise<void> =>
   invoke<void>("console_logout");
+
+export const consoleFetchAds = (position: string): Promise<AdItem[]> =>
+  invoke<AdItem[]>("console_fetch_ads", { position });

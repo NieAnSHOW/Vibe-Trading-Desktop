@@ -87,3 +87,21 @@ export interface ServiceStartError {
   message?: string;
   code?: number | null;
 }
+
+// === 广告 ===
+
+export interface AdImage {
+  url: string;
+  link?: string | null;
+}
+
+export interface AdItem {
+  id: number;
+  title: string;
+  type: number; // 1=纯图片 2=纯文本
+  position: string;
+  images?: AdImage[] | null;
+  content?: string | null;
+  link?: string | null;
+  sort: number;
+}

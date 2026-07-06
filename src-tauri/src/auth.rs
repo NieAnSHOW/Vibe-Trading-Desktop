@@ -49,6 +49,18 @@ pub enum AuthError {
     NotAuthenticated,
 }
 
+impl std::fmt::Display for AuthError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Network { message } => write!(f, "网络错误: {message}"),
+            Self::Api { code, message } => write!(f, "API 错误({code}): {message}"),
+            Self::LoginExpired => write!(f, "登录已过期"),
+            Self::EnvWrite { message } => write!(f, "写入 .env 失败: {message}"),
+            Self::NotAuthenticated => write!(f, "未登录"),
+        }
+    }
+}
+
 // ── 类型：与 cool-admin JSON 对齐（camelCase）──
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -17,6 +17,7 @@ import {
   consoleOpenLogs,
   consoleConfirmClose,
   consoleLogout,
+  consoleFetchAds,
 } from "../ipc/commands";
 import {
   onBootstrapEvent,
@@ -27,6 +28,7 @@ import {
   onChanneldepExit,
 } from "../ipc/events";
 import type { BootstrapEvent } from "../ipc/types";
+import type { AdItem } from "../ipc/types";
 
 import StatusBadge from "../components/StatusBadge.vue";
 import AppButton from "../components/AppButton.vue";
@@ -37,6 +39,7 @@ import HintBanner from "../components/HintBanner.vue";
 import VersionFooter from "../components/VersionFooter.vue";
 import { useBusy } from "../composables/useBusy";
 import logoPng from "../assets/128x128@2x.png";
+import ProdConfig from '../config/prod.ts'
 
 const env = useEnvStore();
 const service = useServiceStore();
@@ -56,6 +59,10 @@ function log(line: string) {
 }
 function setErr(m: unknown) {
   errorMsg.value = m ? String(m) : "";
+}
+
+function openUrl(url: string) {
+  window.open(url, "_blank", "noopener");
 }
 
 // ── ENV/SVC 渲染(搬自 renderEnv/renderSvc) ──────────────────────
@@ -210,6 +217,27 @@ async function onCloseDialogClose(v: "ok" | "cancel") {
 // ── hint 显隐 ───────────────────────────────────────────────────
 const hintHidden = ref(false);
 
+// ── 广告 ─────────────────────────────────────────────────────────
+const adBanner = ref<AdItem | null>(null);
+const adBottom = ref<AdItem | null>(null);
+
+function pickAd(items: AdItem[]): AdItem | null {
+  return items.length > 0 ? items[0] : null;
+}
+
+async function fetchAds() {
+  try {
+    const [banner, bottom] = await Promise.all([
+      consoleFetchAds("banner").then((r) => pickAd(r), () => null),
+      consoleFetchAds("bottom").then((r) => pickAd(r), () => null),
+    ]);
+    adBanner.value = banner;
+    adBottom.value = bottom;
+  } catch {
+    // 静默：广告接口不可用不影响控制台
+  }
+}
+
 // ── 刷新(轮询) ──────────────────────────────────────────────────
 async function refresh() {
   await env.refresh();
@@ -222,6 +250,7 @@ async function refresh() {
 // ── 事件监听(生命周期内) ────────────────────────────────────────
 let unlistens: UnlistenFn[] = [];
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+let adTimer: ReturnType<typeof setInterval> | null = null;
 
 onMounted(async () => {
   // 恢复登录态（静默，不阻塞）
@@ -256,11 +285,14 @@ onMounted(async () => {
   ]);
   refresh();
   pollTimer = setInterval(refresh, 3000);
+  fetchAds();
+  adTimer = setInterval(fetchAds, 120_000);
 });
 
 onUnmounted(() => {
   unlistens.forEach((u) => u());
   if (pollTimer) clearInterval(pollTimer);
+  if (adTimer) clearInterval(adTimer);
 });
 </script>
 
@@ -277,7 +309,8 @@ onUnmounted(() => {
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <template v-if="authStore.authenticated && authStore.userInfo">
-          <span style="font-size:12px;color:#666">{{ authStore.userInfo.nickName || authStore.userInfo.phone || '已登录' }}</span>
+          <span style="font-size:12px;color:#666">{{ authStore.userInfo.nickName || authStore.userInfo.phone || '已登录'
+            }}</span>
           <AppButton variant="ghost" :busy="logoutBusy.busy.value" @click="onLogout">退出登录</AppButton>
         </template>
         <AppButton v-else variant="ghost" @click="router.push('/login')">登录</AppButton>
@@ -285,6 +318,18 @@ onUnmounted(() => {
           在浏览器打开 WebUI
         </AppButton>
       </div>
+    </div>
+    <!-- AD banner -->
+    <div v-if="adBanner" class="ad-banner">
+      <template v-if="adBanner.type === 2">
+        <p>{{ adBanner.content }}</p>
+        <a v-if="adBanner.link" :href="adBanner.link" target="_blank" class="ad-link">查看详情 →</a>
+      </template>
+      <template v-else-if="adBanner.images?.length">
+        <img :src="`${ProdConfig.imgBase}${adBanner.images[0].url}`" :alt="adBanner.title"
+          :style="{ maxWidth: '100%', height: 'auto', cursor: adBanner.link ? 'pointer' : 'default' }"
+          @click="adBanner.link && openUrl(adBanner.link)" />
+      </template>
     </div>
 
     <!-- status -->
@@ -342,7 +387,20 @@ onUnmounted(() => {
     <div id="err">{{ errorMsg }}</div>
 
     <LogViewer ref="logViewer" @open-logs="onOpenLogs" />
+    <!-- AD bottom -->
+    <div v-if="adBottom" class="ad-bottom">
+      <template v-if="adBottom.type === 2">
+        <span>{{ adBottom.content }}</span>
+        <a v-if="adBottom.link" :href="adBottom.link" target="_blank" class="ad-link">查看详情 →</a>
+      </template>
+      <template v-else-if="adBottom.images?.length">
+        <img :src="`${ProdConfig.imgBase}${adBottom.images[0].url}`" :alt="adBottom.title"
+          :style="{ maxWidth: '100%', cursor: adBottom.link ? 'pointer' : 'default' }"
+          @click="adBottom.link && openUrl(adBottom.link)" />
+      </template>
+    </div>
 
+    <!-- 版本号展示 -->
     <VersionFooter />
   </main>
 </template>

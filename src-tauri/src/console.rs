@@ -606,6 +606,55 @@ fn open_path_in_file_manager(p: &Path) -> Result<(), String> {
         .map_err(|e| format!("open logs: {e}"))
 }
 
+// ── 广告 ──
+
+/// 广告项（镜像 cool-admin MarketingAdEntity select 字段）。
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdItem {
+    pub id: i64,
+    pub title: String,
+    /// 1=纯图片 2=纯文本
+    #[serde(rename = "type")]
+    pub ad_type: i64,
+    pub position: String,
+    #[serde(default)]
+    pub images: Option<Vec<AdImage>>,
+    #[serde(default)]
+    pub content: Option<String>,
+    #[serde(default)]
+    pub link: Option<String>,
+    pub sort: i64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdImage {
+    pub url: String,
+    #[serde(default)]
+    pub link: Option<String>,
+}
+
+/// 调用 cool-admin 公开接口拉取广告列表。
+/// POST /app/marketing/ad/list → { type?, position? } → { code, data: AdItem[], message }
+/// 无鉴权（IGNORE_TOKEN），静默失败：接口挂了或没广告时返回空数组。
+#[tauri::command]
+pub fn console_fetch_ads(position: String) -> Result<Vec<AdItem>, String> {
+    let url = format!("{}/app/marketing/ad/list", auth::user_api_url());
+    let body = serde_json::json!({ "position": position });
+    let text = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("build client: {e}"))?
+        .post(&url)
+        .json(&body)
+        .send()
+        .map_err(|e| format!("ad list request: {e}"))?
+        .text()
+        .map_err(|e| format!("ad list body: {e}"))?;
+    auth::parse_cool_response::<Vec<AdItem>>(&text).map_err(|e| e.to_string())
+}
+
 // ── 测试 ────────────────────────────────────────────────────────────
 
 #[cfg(test)]
