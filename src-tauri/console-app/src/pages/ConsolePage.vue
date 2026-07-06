@@ -36,6 +36,7 @@ import ProgressBar from "../components/ProgressBar.vue";
 import LogViewer from "../components/LogViewer.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import HintBanner from "../components/HintBanner.vue";
+import AdSlot from "../components/AdSlot.vue";
 import VersionFooter from "../components/VersionFooter.vue";
 import { useBusy } from "../composables/useBusy";
 import logoPng from "../assets/128x128@2x.png";
@@ -59,10 +60,6 @@ function log(line: string) {
 }
 function setErr(m: unknown) {
   errorMsg.value = m ? String(m) : "";
-}
-
-function openUrl(url: string) {
-  window.open(url, "_blank", "noopener");
 }
 
 // ── ENV/SVC 渲染(搬自 renderEnv/renderSvc) ──────────────────────
@@ -285,8 +282,12 @@ onMounted(async () => {
   ]);
   refresh();
   pollTimer = setInterval(refresh, 3000);
-  fetchAds();
-  adTimer = setInterval(fetchAds, 120_000);
+  // 当启用AD时才需要请求此接口
+  if (ProdConfig.enableAd) {
+    fetchAds();
+    adTimer = setInterval(fetchAds, 120_000);
+  }
+
 });
 
 onUnmounted(() => {
@@ -308,29 +309,21 @@ onUnmounted(() => {
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <template v-if="authStore.authenticated && authStore.userInfo">
-          <span style="font-size:12px;color:#666">{{ authStore.userInfo.nickName || authStore.userInfo.phone || '已登录'
+        <div v-if="ProdConfig.enableLogin">
+          <template v-if="authStore.authenticated && authStore.userInfo">
+            <span style="font-size:12px;color:#666">{{ authStore.userInfo.nickName || authStore.userInfo.phone || '已登录'
             }}</span>
-          <AppButton variant="ghost" :busy="logoutBusy.busy.value" @click="onLogout">退出登录</AppButton>
-        </template>
-        <AppButton v-else variant="ghost" @click="router.push('/login')">登录</AppButton>
+            <AppButton variant="ghost" :busy="logoutBusy.busy.value" @click="onLogout">退出登录</AppButton>
+          </template>
+          <AppButton v-else variant="ghost" @click="router.push('/login')">登录</AppButton>
+        </div>
         <AppButton variant="ghost" :disabled="!running" @click="onOpenWebui">
           在浏览器打开 WebUI
         </AppButton>
       </div>
     </div>
-    <!-- AD banner -->
-    <div v-if="adBanner" class="ad-banner">
-      <template v-if="adBanner.type === 2">
-        <p>{{ adBanner.content }}</p>
-        <a v-if="adBanner.link" :href="adBanner.link" target="_blank" class="ad-link">查看详情 →</a>
-      </template>
-      <template v-else-if="adBanner.images?.length">
-        <img :src="`${ProdConfig.imgBase}${adBanner.images[0].url}`" :alt="adBanner.title"
-          :style="{ maxWidth: '100%', height: 'auto', cursor: adBanner.link ? 'pointer' : 'default' }"
-          @click="adBanner.link && openUrl(adBanner.link)" />
-      </template>
-    </div>
+    <!-- 广告位 banner:标题 + 多图轮播 / 文字 -->
+    <AdSlot :ad="adBanner" variant="banner" />
 
     <!-- status -->
     <div class="status">
@@ -383,22 +376,12 @@ onUnmounted(() => {
       {{ logoutText }}
       <template #confirm-text>确认退出</template>
     </ConfirmDialog>
-
+    <!-- 广告位 bottom:横条 -->
+    <AdSlot :ad="adBottom" variant="bottom" />
     <div id="err">{{ errorMsg }}</div>
 
     <LogViewer ref="logViewer" @open-logs="onOpenLogs" />
-    <!-- AD bottom -->
-    <div v-if="adBottom" class="ad-bottom">
-      <template v-if="adBottom.type === 2">
-        <span>{{ adBottom.content }}</span>
-        <a v-if="adBottom.link" :href="adBottom.link" target="_blank" class="ad-link">查看详情 →</a>
-      </template>
-      <template v-else-if="adBottom.images?.length">
-        <img :src="`${ProdConfig.imgBase}${adBottom.images[0].url}`" :alt="adBottom.title"
-          :style="{ maxWidth: '100%', cursor: adBottom.link ? 'pointer' : 'default' }"
-          @click="adBottom.link && openUrl(adBottom.link)" />
-      </template>
-    </div>
+
 
     <!-- 版本号展示 -->
     <VersionFooter />
