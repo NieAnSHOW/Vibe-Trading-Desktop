@@ -1,5 +1,14 @@
 [
   {
+    "name": "vip_server",
+    "label": "VIP Server",
+    "api_key_env": "VIP_API_KEY",
+    "base_url_env": "VIP_BASE_URL",
+    "default_model": "deepseek-v4-flash",
+    "default_base_url": "https://aiyfy.cn/v1",
+    "api_key_required": true
+  },
+  {
     "name": "openrouter",
     "label": "OpenRouter",
     "api_key_env": "OPENROUTER_API_KEY",

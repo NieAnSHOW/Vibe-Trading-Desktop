@@ -76,6 +76,8 @@ _OPENAI_CODEX_CAPABILITIES = ProviderCapabilities("openai-codex", None, "OPENAI_
 
 
 _PROVIDERS: dict[str, ProviderCapabilities] = {
+    "vip_server": ProviderCapabilities("vip_server", "VIP_API_KEY", "VIP_BASE_URL"),
+    "vip-server": ProviderCapabilities("vip_server", "VIP_API_KEY", "VIP_BASE_URL"),
     "openai": ProviderCapabilities("openai", "OPENAI_API_KEY", "OPENAI_BASE_URL"),
     "openrouter": ProviderCapabilities(
         "openrouter",

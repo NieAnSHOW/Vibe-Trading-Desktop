@@ -61,6 +61,18 @@ function toForm(settings: LLMSettings): LLMFormState {
   };
 }
 
+// VIP Server 现为后端一等公民 provider(agent/src/providers/llm_providers.json +
+// capabilities.py::_PROVIDERS)。前端只保留默认值/判定常量,与后端 json 对齐。
+const VIP_PROVIDER_NAME = "vip_server";
+const VIP_DEFAULTS = {
+  model: "deepseek-v4-flash",
+  base_url: "https://aiyfy.cn/v1",
+} as const;
+
+// ponytail: "用户是否主动切换过 provider"的本地标记。
+// 未标记 = 全新安装/未选过其他供应商 → 默认 VIP;一旦在下拉里切换过就置 "1",之后尊重 .env 当前值。
+const PROVIDER_PICKED_KEY = "vt_provider_picked";
+
 export function Settings() {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<LLMSettings | null>(null);
@@ -141,7 +153,20 @@ export function Settings() {
       .then(([llmData, dataSourceData, channelData, depsData]) => {
         if (!alive) return;
         setSettings(llmData);
-        setForm(toForm(llmData));
+        // ponytail: 仅"用户未主动选过其他供应商"时默认 VIP(全新安装语义);
+        // 切换过就尊重 .env 当前值。
+        const picked = localStorage.getItem(PROVIDER_PICKED_KEY) === "1";
+        const formInit = toForm(llmData);
+        setForm(
+          picked
+            ? formInit
+            : {
+                ...formInit,
+                provider: VIP_PROVIDER_NAME,
+                model_name: VIP_DEFAULTS.model,
+                base_url: VIP_DEFAULTS.base_url,
+              },
+        );
         setDataSettings(dataSourceData);
         setChannelStatus(channelData);
         setOptionalDeps(depsData);
@@ -338,6 +363,7 @@ export function Settings() {
   const onProviderChange = (name: string) => {
     const provider = providers.find((item) => item.name === name);
     if (!provider || !form) return;
+    localStorage.setItem(PROVIDER_PICKED_KEY, "1");
     setForm({
       ...form,
       provider: provider.name,
@@ -848,6 +874,7 @@ export function Settings() {
                   </span>
                 </label>
 
+                {form.provider !== VIP_PROVIDER_NAME && (
                 <label className="grid gap-2">
                   <span className={labelClass}>{"Model"}</span>
                   <div className="flex gap-2">
@@ -875,7 +902,9 @@ export function Settings() {
                     {"Use the exact model id required by your provider."}
                   </span>
                 </label>
+                )}
 
+                {form.provider !== VIP_PROVIDER_NAME && (
                 <label className="grid gap-2">
                   <span className={labelClass}>
                     {i18n.t("settings.baseUrl")}
@@ -890,6 +919,7 @@ export function Settings() {
                     disabled={selectedProvider?.auth_type === "oauth"}
                   />
                 </label>
+                )}
 
                 <label className="grid gap-2">
                   <span className={labelClass}>
