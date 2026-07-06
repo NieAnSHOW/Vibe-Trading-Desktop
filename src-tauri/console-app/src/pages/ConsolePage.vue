@@ -74,8 +74,10 @@ const envBadge = computed(() => {
   return ENV_MAP[envState.value] ?? { txt: "未知", cls: "warn" };
 });
 
-// busy 期间不覆盖按钮态(交由 useBusy 的 busy ref 接管 disabled)。
-const installBusy = useBusy();
+// console_bootstrap 是 fire-and-forget:spawn 后立即返回,真正的结束信号是
+// bootstrap://exit 事件。installing 由该事件翻转,而非 IPC resolve——否则按钮
+// 在 IPC 返回瞬间就恢复可点,但实际安装仍在后台跑几十秒到几分钟。
+const installing = ref(false);
 const startBusy = useBusy();
 const stopBusy = useBusy();
 
@@ -91,17 +93,18 @@ const btnStartDisabled = computed(
 
 // ── 安装 ────────────────────────────────────────────────────────
 async function onInstall() {
-  await installBusy.run("安装中", async () => {
-    setErr("");
-    log("开始安装依赖…");
-    bootstrap.start();
-    try {
-      await consoleBootstrap();
-    } catch (e) {
-      setErr(e);
-      bootstrap.advance("failed", "");
-    }
-  });
+  if (installing.value) return; // 防重入:安装期间按钮已被 AppButton 的 busy 禁用
+  setErr("");
+  log("开始安装依赖…");
+  bootstrap.start();
+  installing.value = true;
+  try {
+    await consoleBootstrap(); // fire-and-forget:spawn 成功即返回,结束走 bootstrap://exit
+  } catch (e) {
+    setErr(e);
+    bootstrap.advance("failed", "");
+    installing.value = false; // spawn 失败:后台线程不会 emit exit,这里释放
+  }
 }
 
 // ── 启动服务 ────────────────────────────────────────────────────
@@ -262,6 +265,7 @@ onMounted(async () => {
     onBootstrapExit((code: number) => {
       log("bootstrap 退出码: " + code);
       if (code !== 0 && bootstrap.state !== "done") bootstrap.advance("failed", "");
+      installing.value = false; // 权威结束信号:无论成功失败,后台线程退出即释放按钮
       refresh();
     }),
     onServiceStarted((p: number) => {
@@ -332,7 +336,7 @@ onUnmounted(() => {
         <div style="display: flex; gap: 8px">
           <StatusBadge :cls="envBadge.cls" :text="envBadge.txt" />
           <AppButton v-if="showInstallBtn" :variant="envState === 'ready' ? 'ghost' : 'primary'"
-            :busy="installBusy.busy.value" busy-label="安装中" @click="onInstall">
+            :busy="installing" busy-label="安装中" @click="onInstall">
             安装/修复依赖
           </AppButton>
         </div>
