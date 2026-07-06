@@ -521,8 +521,13 @@ dialog.confirm .confirm-actions {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  flex-flow: column;
 }
 .ad-bottom img {
+  max-height: 200px;
+  width: auto;
+  flex: none;
+  object-fit: contain;
   border-radius: 6px;
 }
 .ad-link {
@@ -533,4 +538,93 @@ dialog.confirm .confirm-actions {
 .ad-link:hover {
   color: hsl(var(--brand-strong));
   text-decoration: underline;
+}
+
+/* 广告标题(banner):退为次要信息,不抢功能区 */
+.ad-title {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: hsl(var(--ink-dim));
+}
+
+/* ── 轮播窗:固定高度 + contain,完整展示成品 banner(不裁切文案/Logo) ── */
+.ad-carousel {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  margin-inline: auto;
+  height: 150px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: hsl(var(--bg));
+}
+.ad-slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  will-change: opacity;
+}
+.ad-slide.active {
+  opacity: 1;
+}
+.ad-slide.clickable {
+  cursor: pointer;
+}
+.ad-slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.ad-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: hsl(0 0% 0% / 0.5);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.16s var(--ease);
+}
+.ad-nav:hover {
+  background: hsl(0 0% 0% / 0.7);
+}
+.ad-nav.prev {
+  left: 6px;
+}
+.ad-nav.next {
+  right: 6px;
+}
+.ad-dots {
+  position: absolute;
+  bottom: 6px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+.ad-dot {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: hsl(0 0% 100% / 0.4);
+  cursor: pointer;
+  transition: background 0.16s var(--ease);
+}
+.ad-dot.active {
+  background: hsl(0 0% 100% / 0.9);
 }
