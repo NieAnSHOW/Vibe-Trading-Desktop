@@ -59,17 +59,19 @@ The desktop app bundles three artifacts into the Tauri resource bundle (see `src
 
 ```bash
 # Full pipeline (stages into .desktop-build/):
-bash scripts/desktop/fetch-runtime.sh     # download embedded Python 3.12 runtime (macOS/Linux)
-bash scripts/desktop/install-deps.sh <runtime_dir>   # `uv pip install` Tier 0 deps only (requirements-tier0.txt) into site-packages
+bash scripts/desktop/fetch-runtime.sh     # download python-build-standalone runtime; PBS_TAG/PBS_ASSET optional (defaults to cpython-3.12.13+20260610, asset auto-picked by uname -m)
+bash scripts/desktop/install-deps.sh [<runtime_dir>]  # `uv pip install` Tier 0 deps only (requirements-tier0.txt) into site-packages; runtime_dir defaults to .desktop-build/python-runtime
 bash scripts/desktop/assemble.sh          # stage agent code + .env + VERSION into .desktop-build/, then run smoke_tier0.py
 
-# End-to-end packaging (auto-runs assemble.sh if .desktop-build/ is not ready):
+# End-to-end packaging (auto-runs fetch-runtime + install-deps + assemble if .desktop-build/ is not ready):
 bash scripts/desktop/build-dmg.sh         # macOS .dmg (validates toolchain, rebuilds frontend, cargo tauri build, smoke-checks .app/.dmg)
 ./scripts/desktop/build-windows.ps1       # Windows MSI (fetch-runtime → install-deps → assemble → cargo tauri build)
 
 # Version sync for tag-driven releases (keep pyproject.toml, tauri.conf.json, etc. aligned):
 node scripts/desktop/sync-version.mjs <vX.Y.Z>
 ```
+
+`fetch-runtime.sh` no longer hard-fails without `PBS_TAG`: it defaults to `PBS_TAG=20260610` / `PBS_PY=3.12.13` and auto-picks the `install_only` asset by `uname -sm` (macOS arm64/x86_64, Linux gnu x86_64/aarch64). Override only to pin a different release — `PBS_TAG=… PBS_ASSET=… bash scripts/desktop/fetch-runtime.sh` (or set `PBS_PY` to retarget the CPython patch version while keeping the auto-picked asset template). The CI equivalent lives in `.github/workflows/desktop-build.yml` (`PBS_TAG: '20260610'`, asset resolved via the release API).
 
 `uv` is a prerequisite for `install-deps.sh`. **Note:** `install-deps.sh` now installs **only Tier 0** (`requirements-tier0.txt`, ~15 lightweight packages) instead of the full `requirements.txt`. Heavy dependencies (pandas, scipy, scikit-learn, duckdb, etc.) are installed at first-run bootstrap into `~/.vibe-trading/venv/` via `vibe-trading bootstrap`. See `docs/desktop/README.md` for the three-tier dependency model.
 

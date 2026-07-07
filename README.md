@@ -112,15 +112,20 @@ docker compose --profile frontend up            # API + Vite 前端，:5899
 桌面应用把三件制品 —— 嵌入式 Python 3.12 运行时、`agent` 代码、`frontend/dist` —— 打包进 Tauri resource bundle。流水线脚本位于 [`scripts/desktop/`](scripts/desktop/)：
 
 ```bash
-# macOS 端到端（校验工具链 → 重建前端 → cargo tauri build → 冒烟检查 .app/.dmg）
+# macOS 端到端（校验工具链 → 自动下载 Python 运行时 → 重建前端 → cargo tauri build → 冒烟检查）
 bash scripts/desktop/build-dmg.sh
 
 # Windows 端到端（fetch-runtime → install-deps → assemble → cargo tauri build）
 ./scripts/desktop/build-windows.ps1
 
+# 单独准备运行时（build-dmg.sh 已自动调用；手动时默认按架构选 asset，无需任何环境变量）
+bash scripts/desktop/fetch-runtime.sh
+
 # 版本同步（pyproject.toml / tauri.conf.json / 前端对齐）
 node scripts/desktop/sync-version.mjs <vX.Y.Z>
 ```
+
+> 运行时来自 [python-build-standalone](https://github.com/astral-sh/python-build-standalone)，默认 `PBS_TAG=20260610`（对应 CPython 3.12.13），`fetch-runtime.sh` 会按 `uname -m` 自动挑 asset。换版本时用 `PBS_TAG` / `PBS_ASSET` 环境变量覆盖，详见 `CLAUDE.md`。
 
 发布走 **tag-driven** CI（`.github/workflows/desktop-build.yml`）；代码签名与公证（需 Apple Developer 账号）见 `scripts/desktop/sign-and-notarize.sh`。
 
