@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Vibe Trading Desktop",
+  "productName": "Vibe Trading",
   "version": "0.1.2",
   "identifier": "ai.vibetrading.desktop",
   "build": {
@@ -12,7 +12,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Vibe Trading Desktop",
+        "title": "Vibe Trading",
         "width": 650,
         "height": 880,
         "resizable": false
@@ -38,8 +38,7 @@
       "../.desktop-build/python-runtime": "python-runtime",
       "../.desktop-build/agent": "agent",
       "../frontend/dist": "frontend/dist",
-      "../.desktop-build/agent/.env": "agent/.env",
-      "../.desktop-build/VERSION": "VERSION"
+      "../.desktop-build/agent/.env": "agent/.env"
     }
   }
 }
