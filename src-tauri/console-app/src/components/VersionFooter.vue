@@ -1,14 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { ref } from "vue";
+import tauriConf from "../../../tauri.conf.json";
 
-// 读 index.html footer 的 data-console-version 锚点(由 console-version.mjs 维护)。
-const version = ref("");
-onMounted(() => {
-  const el = document.querySelector<HTMLDivElement>(".console-version");
-  version.value = el?.dataset.consoleVersion ?? "";
-});
+const version = ref(tauriConf.version);
 </script>
 
 <template>
-  <footer v-if="version" class="console-version-text">控制台 {{ version }}</footer>
+  <footer v-if="version" class="console-version-text">控制台 v{{ version }}</footer>
 </template>

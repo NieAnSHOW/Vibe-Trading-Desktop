@@ -1,22 +1,18 @@
 #!/usr/bin/env node
-// 桌面控制台独立版本号管理。
-// 与 sync-version.mjs(release 语义版本,联动 tauri.conf.json/Cargo.toml/pyproject/frontend)
-// 刻意解耦:console-dist/index.html 是独立迭代的 UI 产物,版本空间单独演进。
-// 锚点:index.html 里 footer 的 data-console-version="vX.Y.Z"。
+// 桌面控制台版本号管理，读写 tauri.conf.json 的 version 字段。
+// Console UI 内 VersionFooter.vue 直接 import tauri.conf.json 取值。
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// 源文件改为 console-app/index.html(Vite 源);构建后锚点带到 console-dist 产物。
-const INDEX_PATH = "src-tauri/console-app/index.html";
-const ANCHOR_RE = /data-console-version="(v?(\d+\.\d+\.\d+))"/;
-const SEMVER_RE = /^v?(\d+)\.(\d+)\.(\d+)$/;
+const TAURI_CONF_PATH = "src-tauri/tauri.conf.json";
+const SEMVER_RE = /^\d+\.\d+\.\d+$/;
 
 function usage() {
   console.error(
     [
-      "usage: node scripts/desktop/console-version.mjs [vX.Y.Z|--bump patch|minor|major] [--check] [--root <repo>]",
-      "       no args → print current console version",
+      "usage: node scripts/desktop/console-version.mjs [X.Y.Z|--bump patch|minor|major] [--check] [--root <repo>]",
+      "       no args → print current version",
     ].join("\n"),
   );
 }
@@ -48,70 +44,55 @@ function parseArgs(argv) {
     throw new Error("cannot combine a literal version with --bump");
   }
   if (versionArg && !SEMVER_RE.test(versionArg)) {
-    throw new Error(`version must look like v1.2.3 or 1.2.3: ${versionArg}`);
+    throw new Error(`version must look like 1.2.3: ${versionArg}`);
   }
   return { root, versionArg, bump, check };
 }
 
-function readVersion(root) {
-  const html = readFileSync(join(root, INDEX_PATH), "utf8");
-  const m = ANCHOR_RE.exec(html);
-  if (!m) {
-    throw new Error(`could not find data-console-version anchor in ${INDEX_PATH}`);
+function readConf(root) {
+  const raw = readFileSync(join(root, TAURI_CONF_PATH), "utf8");
+  const conf = JSON.parse(raw);
+  if (!SEMVER_RE.test(conf.version)) {
+    throw new Error(`invalid version field in ${TAURI_CONF_PATH}: ${conf.version}`);
   }
-  return { display: m[1], raw: m[2], html };
+  return { version: conf.version, conf };
+}
+
+function writeConf(root, conf) {
+  writeFileSync(join(root, TAURI_CONF_PATH), JSON.stringify(conf, null, 2) + "\n", "utf8");
 }
 
 function bumpVersion(raw, kind) {
-  const [, maj, min, pat] = SEMVER_RE.exec(`v${raw}`);
-  const next = { major: +maj, minor: +min, patch: +pat };
-  if (kind === "major") {
-    next.major += 1;
-    next.minor = 0;
-    next.patch = 0;
-  } else if (kind === "minor") {
-    next.minor += 1;
-    next.patch = 0;
-  } else {
-    next.patch += 1;
-  }
-  return `${next.major}.${next.minor}.${next.patch}`;
-}
-
-function writeVersion(root, html, nextDisplay) {
-  const next = html.replace(ANCHOR_RE, `data-console-version="${nextDisplay}"`);
-  writeFileSync(join(root, INDEX_PATH), next, "utf8");
+  const [maj, min, pat] = raw.split(".").map(Number);
+  if (kind === "major") return `${maj + 1}.0.0`;
+  if (kind === "minor") return `${maj}.${min + 1}.0`;
+  return `${maj}.${min}.${pat + 1}`;
 }
 
 function main() {
   const { root, versionArg, bump, check } = parseArgs(process.argv.slice(2));
-  const { display, raw, html } = readVersion(root);
+  const { version, conf } = readConf(root);
 
   if (check) {
-    if (versionArg) {
-      const want = versionArg.replace(/^v/, "");
-      if (raw !== want) {
-        throw new Error(`console version drift: anchor=v${raw}, expected=v${want}`);
-      }
-      console.log(`console version ok: v${want}`);
-      return;
+    if (versionArg && version !== versionArg) {
+      throw new Error(`version drift: actual=${version}, expected=${versionArg}`);
     }
-    // ponytail: 无期望值时的 --check 退化为"锚点可解析"自检。
-    console.log(`console version ok: ${display}`);
+    console.log(`version ok: ${version}`);
     return;
   }
 
-  const nextDisplay = bump ? `v${bumpVersion(raw, bump)}` : versionArg;
-  if (!nextDisplay) {
-    console.log(display);
+  const next = bump ? bumpVersion(version, bump) : versionArg;
+  if (!next) {
+    console.log(version);
     return;
   }
-  if (nextDisplay === display) {
-    console.log(`console version already ${display}`);
+  if (next === version) {
+    console.log(`version already ${version}`);
     return;
   }
-  writeVersion(root, html, nextDisplay);
-  console.log(`console version ${display} → ${nextDisplay}`);
+
+  writeConf(root, { ...conf, version: next });
+  console.log(`${version} → ${next}`);
 }
 
 try {

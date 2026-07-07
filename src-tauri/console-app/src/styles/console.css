@@ -461,28 +461,6 @@ dialog.confirm .confirm-actions {
   background: hsl(var(--line));
   border-radius: 4px;
 }
-/* 控制台独立版本号;data-console-version 由 console-version.mjs 维护。 */
-.console-version {
-  margin-top: 18px;
-  text-align: center;
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  color: hsl(var(--ink-dim) / 0.6);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  ::before,
-  ::after {
-    animation-duration: 0.001ms !important;
-    transition-duration: 0.001ms !important;
-  }
-}
-
-/* Vue 重构新增 */
-.hint[hidden] {
-  display: none !important;
-}
 .console-version-text {
   position: fixed;
   bottom: 8px;
