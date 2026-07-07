@@ -5,21 +5,21 @@
 #
 # 作用范围：
 #   1. 校验前置工具链（cargo, npm, iconutil, sips）
-#   2. 校验 .desktop-build/ 资源就绪（python-runtime / agent / .env / VERSION）
-#   3. 重新构建前端 dist（npm run build）
+#   2. 自动准备嵌入式 Python 运行时（缺失则 fetch-runtime + install-deps）+ 校验 assemble 产物（agent/.env/VERSION）
+#   3. 构建 console-dist（webview）+ assemble 资源模板（含 frontend/dist）
 #   4. 调用 `cargo tauri build` 编译 Rust release + 生成 .app / .dmg
 #   5. 冒烟检查：.app 可执行位、icon.icns 大小、.dmg 产物存在
 #   6. 输出产物路径与体积摘要
 #
 # 用法：
-#   bash scripts/desktop/build-dmg.sh              # 标准构建
-#   bash scripts/desktop/build-dmg.sh --skip-frontend   # 跳过前端构建（dist 已就绪时）
+#   bash scripts/desktop/build-dmg.sh              # 标准构建（runtime 缺失时自动下载）
 #   bash scripts/desktop/build-dmg.sh --no-smoke        # 跳过冒烟检查
+#   bash scripts/desktop/build-dmg.sh --skip-runtime    # 跳过 runtime 自动准备（调试已有 runtime）
 #
 # 前置条件：
-#   - 已运行 scripts/desktop/fetch-runtime.sh + install-deps.sh（生成 .desktop-build/python-runtime）
-#   - 已运行 scripts/desktop/assemble.sh（生成 .desktop-build/agent, .env, VERSION）
-#   - 或直接运行本脚本会自动调用 assemble.sh 兜底
+#   - runtime/依赖缺失时本脚本自动调用 fetch-runtime.sh + install-deps.sh（--skip-runtime 可禁用）
+#   - assemble 产物缺失时本脚本自动调用 assemble.sh 兜底
+#   - 固定 PBS 版本：调用前 export PBS_TAG / PBS_ASSET（默认 20260610，asset 按架构自动选）
 #
 # 退出码：
 #   0 成功 / 1 工具缺失 / 2 资源缺失 / 3 构建失败 / 4 冒烟失败 / 5 签名/公证失败
@@ -46,12 +46,12 @@ err()  { printf "${C_RED}✗${C_RESET} %s\n" "$*" >&2; }
 section() { printf "\n${C_BOLD}${C_BLUE}━━━ %s ━━━${C_RESET}\n" "$*"; }
 
 # ── 参数解析 ─────────────────────────────────────────────────
-SKIP_FRONTEND=0
 SKIP_SMOKE=0
+SKIP_RUNTIME=0
 for arg in "$@"; do
     case "$arg" in
-        --skip-frontend) SKIP_FRONTEND=1 ;;
         --no-smoke)      SKIP_SMOKE=1 ;;
+        --skip-runtime)  SKIP_RUNTIME=1 ;;
         --help|-h)
             sed -n '2,28p' "$0"
             exit 0 ;;
@@ -94,34 +94,58 @@ fi
 
 [ "$missing" -ne 0 ] && { err "工具链不完整，请先安装缺失项"; exit 1; }
 
+# ── 嵌入式 Python 运行时 ─────────────────────────────────────
+PY_RUNTIME="$BUILD/python-runtime/bin/python3"
+section "嵌入式 Python 运行时"
+# runtime 就绪 = python3 可执行 + Tier 0 依赖可 import。只看可执行位会漏掉
+# "fetch 过 runtime 但从未跑 install-deps"的状态，导致 site-packages 只有 pip，
+# 一路静默到冒烟检查才爆炸。
+if [ -x "$PY_RUNTIME" ] && PYTHONPATH=agent "$PY_RUNTIME" -c "import fastapi" >/dev/null 2>&1; then
+    ok "runtime 就绪（含 Tier 0 依赖）→ $("$PY_RUNTIME" --version 2>&1)"
+elif [ "$SKIP_RUNTIME" -eq 1 ]; then
+    err "runtime 未就绪但指定了 --skip-runtime；移除该参数，或先手动运行 fetch-runtime.sh + install-deps.sh"
+    exit 2
+else
+    if [ ! -x "$PY_RUNTIME" ]; then
+        warn "runtime 未就绪，自动调用 fetch-runtime.sh"
+        log "bash scripts/desktop/fetch-runtime.sh $BUILD/python-runtime  (PBS_TAG/PBS_ASSET 可选)"
+        if ! bash "$ROOT/scripts/desktop/fetch-runtime.sh" "$BUILD/python-runtime"; then
+            err "fetch-runtime.sh 失败。如需固定版本，export PBS_TAG / PBS_ASSET 后重试。"
+            exit 2
+        fi
+    else
+        warn "runtime 存在但 Tier 0 依赖缺失，自动调用 install-deps.sh"
+    fi
+    log "bash scripts/desktop/install-deps.sh $BUILD/python-runtime"
+    if ! bash "$ROOT/scripts/desktop/install-deps.sh" "$BUILD/python-runtime"; then
+        err "install-deps.sh 失败。"
+        exit 2
+    fi
+    [ -x "$PY_RUNTIME" ] || { err "fetch-runtime + install-deps 完成后 runtime 仍不可用"; exit 2; }
+    ok "runtime 已就绪 → $("$PY_RUNTIME" --version 2>&1)"
+fi
+
 # ── 资源校验 ─────────────────────────────────────────────────
 section ".desktop-build 资源检查"
-PY_RUNTIME="$BUILD/python-runtime/bin/python3"
-
 verify_resource() {
     if [ -e "$1" ]; then ok "$2"; else err "缺失: $2 ($1)"; return 1; fi
 }
 
 resources_ok=1
-verify_resource "$PY_RUNTIME"        "python-runtime"    || resources_ok=0
+# runtime 已由上一个 section 保证，这里只校验 assemble 产物（agent/.env/VERSION）
 verify_resource "$BUILD/agent"       "agent 代码模板"    || resources_ok=0
 verify_resource "$BUILD/agent/.env"  "agent .env 种子"   || resources_ok=0
 verify_resource "$BUILD/VERSION"     "VERSION 标记"      || resources_ok=0
 
 if [ "$resources_ok" -ne 1 ]; then
-    warn ".desktop-build 资源不全，尝试调用 assemble.sh 兜底组装…"
+    warn "assemble 产物不全，调用 assemble.sh 兜底组装…"
     if [ -x "$ROOT/scripts/desktop/assemble.sh" ]; then
-        # assemble.sh 内部会校验 runtime，runtime 缺失时它自己会报错退出
         if ! bash "$ROOT/scripts/desktop/assemble.sh"; then
-            err "assemble.sh 失败。请先运行："
-            err "  bash scripts/desktop/fetch-runtime.sh"
-            err "  bash scripts/desktop/install-deps.sh .desktop-build/python-runtime"
-            err "  bash scripts/desktop/assemble.sh"
+            err "assemble.sh 失败。"
             exit 2
         fi
         ok "assemble.sh 完成，重新校验资源"
         resources_ok=1
-        verify_resource "$PY_RUNTIME"        "python-runtime"    || resources_ok=0
         verify_resource "$BUILD/agent"       "agent 代码模板"    || resources_ok=0
         verify_resource "$BUILD/agent/.env"  "agent .env 种子"   || resources_ok=0
         verify_resource "$BUILD/VERSION"     "VERSION 标记"      || resources_ok=0
@@ -138,6 +162,18 @@ if ! bash "$ROOT/scripts/desktop/build-console.sh"; then
     err "build-console.sh 失败。"
     exit 2
 fi
+
+# console-dist 是 Tauri frontendDist（webview 加载的桌面控制台）。build-console.sh
+# 已构建；此处校验产出非空，防止空目录被 embed 进 .app 导致 release 启动白屏
+# （build-console.sh 退出码只能证明构建命令跑通，不能证明产物有效）。
+CONSOLE_DIST_INDEX="$SRC_TAURI/console-dist/index.html"
+if [ ! -s "$CONSOLE_DIST_INDEX" ]; then
+    err "console-dist 产出缺失或为空: $CONSOLE_DIST_INDEX"
+    err "webview 将白屏。请检查 build-console.sh / console-app 源码。"
+    exit 2
+fi
+ok "console-dist/index.html 就绪"
+
 log "bash scripts/desktop/assemble.sh"
 if ! bash "$ROOT/scripts/desktop/assemble.sh"; then
     err "assemble.sh 失败。请先确认 python-runtime 已准备好。"
@@ -167,18 +203,6 @@ else
 fi
 echo "$VERSION_NEW" > "$BUILD/VERSION"
 ok "VERSION → $VERSION_NEW"
-
-# ── 前端构建 ─────────────────────────────────────────────────
-if [ "$SKIP_FRONTEND" -eq 1 ]; then
-    section "前端构建（已跳过）"
-    warn "--skip-frontend：使用现有 frontend/dist"
-    [ -f "$ROOT/frontend/dist/index.html" ] || { err "frontend/dist 不存在，无法跳过"; exit 2; }
-else
-    section "前端构建 (npm run build)"
-    log "cd frontend && npm run build"
-    ( cd "$ROOT/frontend" && npm run build ) || { err "前端构建失败"; exit 3; }
-    ok "frontend/dist 构建完成"
-fi
 
 # ── Tauri 编译 + 打包 ────────────────────────────────────────
 section "Tauri build (cargo tauri build)"
