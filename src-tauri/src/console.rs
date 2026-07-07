@@ -151,6 +151,17 @@ pub fn build_channel_dep_cmd(venv_python: &Path, channel: &str) -> std::process:
     cmd
 }
 
+fn prepare_runtime_from_bundle(app: &AppHandle, layout: &Layout) -> Result<(), String> {
+    let res = crate::resources::Resources::resolve(app).map_err(|e| format!("resources: {e}"))?;
+    crate::runtime_dir::prepare(
+        &res.agent_template,
+        &res.env_seed,
+        &res.version_file,
+        Some(&res.frontend_dist),
+        layout,
+    )
+}
+
 // ── Tauri IPC 命令 ──────────────────────────────────────────────────
 
 #[derive(serde::Serialize)]
@@ -229,8 +240,8 @@ pub async fn console_bootstrap(
     installing: State<'_, InstallingFlag>,
 ) -> Result<(), String> {
     let layout = Layout::from_home()?;
-    let res = crate::resources::Resources::resolve(&app)
-        .map_err(|e| format!("resources: {e}"))?;
+    prepare_runtime_from_bundle(&app, &layout)?;
+    let res = crate::resources::Resources::resolve(&app).map_err(|e| format!("resources: {e}"))?;
     let mut child = build_bootstrap_cmd(&res.runtime_python, &layout.runtime_agent)
         .spawn()
         .map_err(|e| format!("spawn bootstrap: {e}"))?;

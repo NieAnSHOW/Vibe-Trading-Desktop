@@ -38,7 +38,8 @@
       "../.desktop-build/python-runtime": "python-runtime",
       "../.desktop-build/agent": "agent",
       "../frontend/dist": "frontend/dist",
-      "../.desktop-build/agent/.env": "agent/.env"
+      "../.desktop-build/agent/.env": "agent/.env",
+      "../.desktop-build/VERSION": "VERSION"
     }
   }
 }

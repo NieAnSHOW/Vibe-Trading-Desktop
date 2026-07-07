@@ -1,6 +1,9 @@
 // src-tauri/src/runtime_dir.rs
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+
+static PREPARE_LOCK: Mutex<()> = Mutex::new(());
 
 #[allow(dead_code)]
 pub struct Layout {
@@ -72,13 +75,19 @@ pub fn prepare(
     bundle_frontend_dist: Option<&Path>,
     layout: &Layout,
 ) -> Result<(), String> {
+    let _guard = PREPARE_LOCK
+        .lock()
+        .map_err(|e| format!("prepare lock poisoned: {e}"))?;
     if !bundle_agent.exists() {
         return Err(format!("bundle agent template missing: {bundle_agent:?}"));
     }
     let bundle_ver = fs::read_to_string(bundle_version)
         .map_err(|e| format!("read bundle VERSION {bundle_version:?}: {e}"))?;
     let installed = fs::read_to_string(&layout.marker).ok();
-    let action = crate::version::decide(installed.as_deref(), &bundle_ver);
+    let mut action = crate::version::decide(installed.as_deref(), &bundle_ver);
+    if matches!(action, crate::version::Action::Reuse) && !layout.runtime_agent.is_dir() {
+        action = crate::version::Action::FirstRun;
+    }
 
     fs::create_dir_all(&layout.root).map_err(|e| format!("create root {:?}: {e}", layout.root))?;
     // 可写可选依赖目录：始终确保存在；升级时不被清空（与 runtime_agent 的
@@ -286,6 +295,28 @@ mod tests {
             "runtime_libs should be created"
         );
         assert!(layout.runtime_libs.is_dir());
+    }
+
+    #[test]
+    fn reuse_marker_without_runtime_agent_recopies_bundle_agent() {
+        let tmp = tempdir().unwrap();
+        let bundle = tmp.path().join("bundle");
+        let home = tmp.path().join("home");
+        make_bundle(&bundle, "1.0.0");
+        let layout = Layout::new(&home);
+        fs::create_dir_all(layout.marker.parent().unwrap()).unwrap();
+        fs::write(&layout.marker, "1.0.0").unwrap();
+
+        prepare(
+            &bundle.join("agent"),
+            &bundle.join("agent/.env"),
+            &bundle.join("VERSION"),
+            None,
+            &layout,
+        )
+        .unwrap();
+
+        assert!(layout.runtime_agent.join("api_server.py").exists());
     }
 
     #[test]

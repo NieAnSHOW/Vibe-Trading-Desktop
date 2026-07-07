@@ -190,4 +190,15 @@ mod tests {
             "app.withGlobalTauri 须为 true,否则控制台 HTML 拿不到 window.__TAURI__"
         );
     }
+
+    #[test]
+    fn tauri_conf_bundles_runtime_version_marker() {
+        let cfg: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("parse tauri.conf.json");
+        assert_eq!(
+            cfg["bundle"]["resources"]["../.desktop-build/VERSION"],
+            serde_json::Value::String("VERSION".into()),
+            "bundle.resources 必须打包 VERSION,否则 release 下 runtime prepare 读不到版本标记"
+        );
+    }
 }
