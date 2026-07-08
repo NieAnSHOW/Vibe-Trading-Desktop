@@ -226,4 +226,21 @@ describe("Settings IM channels panel", () => {
 
     vi.useRealTimers();
   });
+
+  // upstream 容错测试: channel status 接口失败时, LLM / data source 设置仍可渲染。
+  // 依赖 Settings.tsx 用 Promise.allSettled 而非 Promise.all (单接口失败不整体崩)。
+  // ponytail: 包 MemoryRouter (fork 的 Settings 用 useNavigate 做 auth 重定向)。
+  it("still renders LLM and data source settings when channel status fails", async () => {
+    apiMock.getChannelStatus.mockRejectedValue(
+      new Error('Expected JSON from /channels/status, got text/html: <!doctype html>'),
+    );
+
+    render(<MemoryRouter><Settings /></MemoryRouter>);
+
+    expect(await screen.findByText("LLM Settings")).toBeInTheDocument();
+    expect(screen.getByText("Data Source Settings")).toBeInTheDocument();
+    expect(screen.getByText("IM Channels")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start channels" })).toBeDisabled();
+  });
 });

@@ -33,6 +33,7 @@ import {
 } from "@/lib/api";
 import { getApiAuthKey, setApiAuthKey } from "@/lib/apiAuth";
 import { OptionalDepsManager } from "@/components/settings/OptionalDepsManager";
+import { QVerisSettings } from "@/components/settings/QVerisSettings"; // QVERIS-INTEGRATION
 
 interface LLMFormState {
   provider: string;
@@ -144,44 +145,70 @@ export function Settings() {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([
+    Promise.allSettled([
       api.getLLMSettings(),
       api.getDataSourceSettings(),
       api.getChannelStatus(),
       api.listOptionalDeps(),
     ])
-      .then(([llmData, dataSourceData, channelData, depsData]) => {
+      .then(([llmResult, dataSourceResult, channelResult, depsResult]) => {
         if (!alive) return;
-        setSettings(llmData);
-        // ponytail: 仅"用户未主动选过其他供应商"时默认 VIP(全新安装语义);
-        // 切换过就尊重 .env 当前值。
-        const picked = localStorage.getItem(PROVIDER_PICKED_KEY) === "1";
-        const formInit = toForm(llmData);
-        setForm(
-          picked
-            ? formInit
-            : {
-                ...formInit,
-                provider: VIP_PROVIDER_NAME,
-                model_name: VIP_DEFAULTS.model,
-                base_url: VIP_DEFAULTS.base_url,
-              },
-        );
-        setDataSettings(dataSourceData);
-        setChannelStatus(channelData);
-        setOptionalDeps(depsData);
-        setSettingsLoadError(null);
-      })
-      .catch((error) => {
-        const message =
-          error instanceof Error ? error.message : "Unknown error";
-        setSettingsLoadError(message);
-        if (isAuthRequiredError(error)) {
-          toast.error(message);
+
+        // ponytail: allSettled — 单接口失败不拖垮整页 (upstream 容错语义)。
+        // LLM 分支保留 fork 的 VIP 默认值逻辑 (未主动选过 provider 时默认 VIP)。
+        if (llmResult.status === "fulfilled") {
+          const llmData = llmResult.value;
+          setSettings(llmData);
+          const picked = localStorage.getItem(PROVIDER_PICKED_KEY) === "1";
+          const formInit = toForm(llmData);
+          setForm(
+            picked
+              ? formInit
+              : {
+                  ...formInit,
+                  provider: VIP_PROVIDER_NAME,
+                  model_name: VIP_DEFAULTS.model,
+                  base_url: VIP_DEFAULTS.base_url,
+                },
+          );
         } else {
-          toast.error(`Failed to load LLM settings: ${message}`);
-          toast.error(`Failed to load data source settings: ${message}`);
+          const message =
+            llmResult.reason instanceof Error ? llmResult.reason.message : "Unknown error";
+          setSettingsLoadError(message);
+          if (isAuthRequiredError(llmResult.reason)) {
+            toast.error(message);
+          } else {
+            toast.error(`Failed to load LLM settings: ${message}`);
+          }
         }
+
+        if (dataSourceResult.status === "fulfilled") {
+          setDataSettings(dataSourceResult.value);
+        } else {
+          const message =
+            dataSourceResult.reason instanceof Error ? dataSourceResult.reason.message : "Unknown error";
+          setSettingsLoadError(message);
+          if (isAuthRequiredError(dataSourceResult.reason)) {
+            toast.error(message);
+          } else {
+            toast.error(`Failed to load data source settings: ${message}`);
+          }
+        }
+
+        if (channelResult.status === "fulfilled") {
+          setChannelStatus(channelResult.value);
+        } else {
+          // channel status 失败不拖垮整页: 保留 LLM/data source 可用, channel 区降级为空。
+          const message =
+            channelResult.reason instanceof Error ? channelResult.reason.message : "Unknown error";
+          toast.error(`Failed to load channel status: ${message}`);
+          setChannelStatus(null);
+        }
+
+        if (depsResult.status === "fulfilled") {
+          setOptionalDeps(depsResult.value);
+        }
+        // optional-deps 失败不报错: 桌面可选依赖面板静默降级即可, 不阻塞设置页。
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -470,7 +497,7 @@ export function Settings() {
     </form>
   );
 
-  if (loading || !form || !settings || !dataSettings || !channelStatus) {
+  if (loading || !form || !settings || !dataSettings) {
     return (
       <div className="mx-auto max-w-5xl space-y-6 p-6">
         <div className="space-y-2">
@@ -484,6 +511,8 @@ export function Settings() {
           </p>
         </div>
         {localApiAccessSection}
+        {/* QVERIS-INTEGRATION */}
+        <QVerisSettings />
         <div className="rounded-lg border bg-card p-5 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-base font-semibold">
@@ -537,7 +566,7 @@ export function Settings() {
     ? "Configured"
     : "Leave blank to keep the current token";
   // ponytail: 仅展示微信渠道。其他 IM 渠道暂不开放,不在 WebUI 中露出。
-  const channelRows = Object.entries(channelStatus.channels ?? {})
+  const channelRows = Object.entries(channelStatus?.channels ?? {})
     .filter(([name]) => name === "weixin")
     .sort(([a], [b]) => a.localeCompare(b));
   const channelEnabledCount = channelRows.filter(
@@ -550,6 +579,9 @@ export function Settings() {
     ([, item]) => item.available === false,
   ).length;
   const channelBusy = channelRefreshing || channelAction !== null;
+  // channel 状态未知时(getChannelStatus 失败, channelStatus=null)禁用启停,
+  // 但 Refresh 仍可用 —— 与 upstream 降级语义一致(状态未知不盲目 start/stop)。
+  const channelControlsDisabled = channelBusy || !channelStatus;
   // 桌面端登录后,.env 由 console 自动注入 VIP 大模型配置,WebUI 不再需要手配。
   const hideLlm = !!settings.desktop_login_provisioned;
 
@@ -565,6 +597,9 @@ export function Settings() {
       </div>
 
       {localApiAccessSection}
+
+      {/* QVERIS-INTEGRATION */}
+      <QVerisSettings />
 
       {/* Usage data consent */}
       <div className="rounded-lg border bg-card p-5 shadow-sm">
@@ -633,7 +668,7 @@ export function Settings() {
             <button
               type="button"
               onClick={() => setChannelsRunning("start")}
-              disabled={channelBusy}
+              disabled={channelControlsDisabled}
               className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {channelAction === "start" ? (
@@ -646,7 +681,7 @@ export function Settings() {
             <button
               type="button"
               onClick={() => setChannelsRunning("stop")}
-              disabled={channelBusy}
+              disabled={channelControlsDisabled}
               className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
             >
               {channelAction === "stop" ? (
@@ -665,7 +700,7 @@ export function Settings() {
               {t("settings.channels.runtime")}
             </div>
             <div className="text-sm font-medium">
-              {channelStatus.running
+              {channelStatus?.running
                 ? t("settings.channels.running")
                 : t("settings.channels.stopped")}
             </div>
