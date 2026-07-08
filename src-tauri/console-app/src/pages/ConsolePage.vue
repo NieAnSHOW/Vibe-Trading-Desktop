@@ -16,6 +16,7 @@ import {
   consoleOpenWebui,
   consoleOpenLogs,
   consoleConfirmClose,
+  consoleClearVenv,
   consoleLogout,
   consoleFetchAds,
 } from "../ipc/commands";
@@ -177,7 +178,31 @@ async function onLogoutDialogClose(v: "ok" | "cancel") {
   });
 }
 
-// ── 打开 WebUI / 日志 ───────────────────────────────────────────
+// ── 强制清理 venv(二次确认 → 停服 → 删目录 → 刷新) ────────────────
+const clearVenvBusy = useBusy();
+const clearVenvDialogOpen = ref(false);
+function onClearVenv() {
+  clearVenvDialogOpen.value = true;
+}
+async function onClearVenvDialogClose(v: "ok" | "cancel") {
+  clearVenvDialogOpen.value = false;
+  if (v !== "ok") return;
+  await clearVenvBusy.run("清理中", async () => {
+    setErr("");
+    try {
+      // venv 被占用时(Win)删除会失败,先停服务释放进程。
+      if (serviceRunning.value) {
+        await service.stop();
+        env.setPort(null);
+      }
+      await consoleClearVenv();
+      log("已清理虚拟环境,请重新安装依赖");
+      await refresh();
+    } catch (e) {
+      setErr(e);
+    }
+  });
+}
 async function onOpenWebui() {
   if (port.value == null) return;
   try {
@@ -339,6 +364,9 @@ onUnmounted(() => {
             :busy="installing" busy-label="安装中" @click="onInstall">
             安装/修复依赖
           </AppButton>
+          <AppButton variant="ghost" :busy="clearVenvBusy.busy.value" @click="onClearVenv">
+            强制清理环境
+          </AppButton>
         </div>
       </div>
       <div class="status-row">
@@ -369,6 +397,11 @@ onUnmounted(() => {
     <ConfirmDialog :open="stopDialogOpen" title="确认停止服务？" @close="onStopDialogClose">
       停止将中断后端进程，<b>请确保当前没有正在执行的任务</b>（回测、研究、实盘等）。
       <template #confirm-text>确认停止</template>
+    </ConfirmDialog>
+
+    <ConfirmDialog :open="clearVenvDialogOpen" title="确认强制清理环境？" @close="onClearVenvDialogClose">
+      将删除 <b>~/.vibe-trading/venv</b> 虚拟环境(含已安装依赖)，<b>不会删除您的配置、会话等数据</b>。清理后需重新完整安装依赖，确认操作吗？
+      <template #confirm-text>确认清理</template>
     </ConfirmDialog>
 
     <ConfirmDialog :open="closeDialogOpen" title="确认关闭客户端？" @close="onCloseDialogClose">

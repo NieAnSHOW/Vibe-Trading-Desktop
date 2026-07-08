@@ -10,6 +10,7 @@ of import order.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Type
 
 from backtest.loaders.base import NoAvailableSourceError
@@ -64,6 +65,46 @@ def register(cls: Type[Any]) -> Type[Any]:
     return cls
 
 
+# Chinese financial-data hosts that must connect directly, never through the
+# OS/http(s)_proxy. macOS system proxy (e.g. Clash/Surge) inherits into the
+# agent process via requests' trust_env; akshare and the direct requests-based
+# Chinese loaders (eastmoney/tencent/sina/cninfo) then route through it and
+# East Money rejects the proxy hop with a hard ProxyError — the recurring
+# "akshare 代理问题". Foreign sources (OKX/yfinance/Yahoo/Stooq) are intentionally
+# left on the proxy. ``requests`` matches NO_PROXY by domain suffix, so listing
+# the registrable domains exempts every subdomain (push2his.eastmoney.com,
+# web.ifzq.gtimg.cn, hq.sinajs.cn, ...).
+_CHINA_DIRECT_NO_PROXY = (
+    "eastmoney.com,gtimg.cn,qq.com,sina.com.cn,sina.cn,sinajs.cn,"
+    "cninfo.com.cn,szse.cn,sseinfo.com,legulegu.com,jin10.com,jisilu.cn,"
+    "xueqiu.com,baidu.com,dfcfw.com,futunn.com,akshare.org"
+)
+
+
+def _apply_china_direct_no_proxy() -> None:
+    """Exempt Chinese data hosts from the inherited OS proxy.
+
+    Runs once at loader registration (the shared chokepoint hit by every
+    market-data fetch path: agent loop, api_server, mcp_server, and the
+    backtest subprocess via its inherited NO_PROXY). Idempotent and harmless
+    when no proxy is configured — NO_PROXY is only consulted when a proxy
+    exists. Foreign hosts (okx.com, query1.finance.yahoo.com, stooq.com)
+    are not listed, so they keep using the proxy.
+    """
+    existing = os.environ.get("NO_PROXY", "").strip()
+    existing_lower = {p.strip().lower() for p in existing.split(",") if p.strip()}
+    additions = [
+        host for host in _CHINA_DIRECT_NO_PROXY.split(",")
+        if host and host.strip().lower() not in existing_lower
+    ]
+    if not additions:
+        return
+    merged = (existing + "," if existing else "") + ",".join(additions)
+    # Set both cases; requests reads NO_PROXY, urllib reads no_proxy.
+    os.environ["NO_PROXY"] = merged
+    os.environ["no_proxy"] = merged
+
+
 def _ensure_registered() -> None:
     """Import every known loader module so ``@register`` decorators fire.
 
@@ -75,6 +116,11 @@ def _ensure_registered() -> None:
     if _registered:
         return
     _registered = True
+
+    # Exempt Chinese data hosts from the inherited OS proxy before any loader
+    # (akshare especially) opens a requests.Session that would otherwise route
+    # through it. Must run before the loader imports below.
+    _apply_china_direct_no_proxy()
 
     _loader_modules = [
         "backtest.loaders.tushare",

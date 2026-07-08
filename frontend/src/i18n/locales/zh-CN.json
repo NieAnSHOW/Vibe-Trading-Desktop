@@ -55,6 +55,30 @@
         "sinaFinance": {
           "label": "新浪财经",
           "description": "财经新闻、市场数据与 24 小时市场资讯。"
+        },
+        "cninfo": {
+          "label": "巨潮资讯",
+          "description": "深交所官方信息披露平台，公告、财报与招股书。"
+        },
+        "jisilu": {
+          "label": "集思录",
+          "description": "可转债、分级基金与低风险投资数据社区。"
+        },
+        "wallstreetcn": {
+          "label": "华尔街见闻",
+          "description": "全球宏观、市场快讯与实时金融资讯。"
+        },
+        "cls": {
+          "label": "财联社",
+          "description": "7×24 小时电报式财经快讯与政策解读。"
+        },
+        "investing": {
+          "label": "英为财情",
+          "description": "全球行情、外汇、期货与财经数据终端。"
+        },
+        "gelonghui": {
+          "label": "格隆汇",
+          "description": "港股、A 股与全球市场的财经研究与资讯。"
         }
       }
     }

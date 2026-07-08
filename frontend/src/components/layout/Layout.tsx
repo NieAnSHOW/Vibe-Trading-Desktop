@@ -71,6 +71,48 @@ const EXTERNAL_SHORTCUTS: ExternalShortcut[] = [
     descriptionKey: "layout.externalShortcuts.sites.sinaFinance.description",
     icon: Globe2,
   },
+  {
+    id: "cninfo",
+    labelKey: "layout.externalShortcuts.sites.cninfo.label",
+    url: "https://www.cninfo.com.cn/",
+    descriptionKey: "layout.externalShortcuts.sites.cninfo.description",
+    icon: FileText,
+  },
+  {
+    id: "jisilu",
+    labelKey: "layout.externalShortcuts.sites.jisilu.label",
+    url: "https://www.jisilu.cn/",
+    descriptionKey: "layout.externalShortcuts.sites.jisilu.description",
+    icon: BarChart3,
+  },
+  {
+    id: "wallstreetcn",
+    labelKey: "layout.externalShortcuts.sites.wallstreetcn.label",
+    url: "https://wallstreetcn.com/",
+    descriptionKey: "layout.externalShortcuts.sites.wallstreetcn.description",
+    icon: Newspaper,
+  },
+  {
+    id: "cls",
+    labelKey: "layout.externalShortcuts.sites.cls.label",
+    url: "https://www.cls.cn/",
+    descriptionKey: "layout.externalShortcuts.sites.cls.description",
+    icon: Activity,
+  },
+  {
+    id: "investing",
+    labelKey: "layout.externalShortcuts.sites.investing.label",
+    url: "https://cn.investing.com/",
+    descriptionKey: "layout.externalShortcuts.sites.investing.description",
+    icon: LineChart,
+  },
+  {
+    id: "gelonghui",
+    labelKey: "layout.externalShortcuts.sites.gelonghui.label",
+    url: "https://www.gelonghui.com/",
+    descriptionKey: "layout.externalShortcuts.sites.gelonghui.description",
+    icon: Globe2,
+  },
 ];
 
 // ── nav link helper ──

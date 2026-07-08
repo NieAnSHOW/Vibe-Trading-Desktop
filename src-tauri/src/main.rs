@@ -35,6 +35,7 @@ fn main() {
             console::console_install_channel_dep,
             console::console_confirm_close,
             console::console_open_logs,
+            console::console_clear_venv,
             console::console_login_captcha,
             console::console_login_send_sms,
             console::console_login_by_phone,

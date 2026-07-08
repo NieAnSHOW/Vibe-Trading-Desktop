@@ -2,6 +2,7 @@
 //! 逻辑尽量做成纯函数(可 cargo 测);Tauri command 是薄壳(设计 D3)。
 
 use std::io::{BufRead, BufReader};
+use std::fs;
 use std::path::Path;
 use std::process::Child;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -581,6 +582,26 @@ pub fn console_confirm_close(confirmed: State<'_, CloseConfirmed>) {
     confirmed.0.store(true, Ordering::SeqCst);
 }
 
+/// 强制清理虚拟环境:删除 ~/.vibe-trading/venv,便于用户从零重新安装依赖。
+///
+/// 仅删除 venv 目录本身(包含解释器与已装依赖);不动 runtime/、.env、
+/// sessions/ 等用户数据。删除前应停止服务,否则正在运行的 sidecar 进程
+/// 会持有该目录(Windows 下会删除失败)。纯函数便于单测覆盖「存在/不存在」。
+pub fn clear_venv_dir(layout: &Layout) -> Result<(), String> {
+    if !layout.venv_dir.exists() {
+        return Ok(()); // 幂等:目录本就不存在,视为已清理。
+    }
+    fs::remove_dir_all(&layout.venv_dir)
+        .map_err(|e| format!("清理 venv 失败 {}: {e}", layout.venv_dir.display()))
+}
+
+/// 强制清理虚拟环境:删除 ~/.vibe-trading/venv,便于用户从零重新安装依赖。
+#[tauri::command]
+pub fn console_clear_venv() -> Result<(), String> {
+    let layout = Layout::from_home()?;
+    clear_venv_dir(&layout)
+}
+
 /// 在文件管理器打开 ~/.vibe-trading/logs/。
 #[tauri::command]
 pub fn console_open_logs() -> Result<(), String> {
@@ -795,6 +816,28 @@ mod tests {
     #[test]
     fn parse_sse_rejects_non_json_data() {
         assert!(parse_sse_data("progress", "not json").is_none());
+    }
+
+    #[test]
+    fn clear_venv_dir_removes_existing_venv() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join(".vibe-trading");
+        let layout = crate::runtime_dir::Layout::new(&home);
+        fs::create_dir_all(layout.venv_dir.join("lib")).unwrap();
+        fs::write(layout.venv_dir.join("marker"), "x").unwrap();
+        assert!(layout.venv_dir.exists());
+        clear_venv_dir(&layout).expect("清理应成功");
+        assert!(!layout.venv_dir.exists(), "venv 应被删除");
+    }
+
+    #[test]
+    fn clear_venv_dir_idempotent_when_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join(".vibe-trading");
+        let layout = crate::runtime_dir::Layout::new(&home);
+        assert!(!layout.venv_dir.exists());
+        clear_venv_dir(&layout).expect("缺失时应幂等成功");
+        assert!(!layout.venv_dir.exists());
     }
 
     #[test]

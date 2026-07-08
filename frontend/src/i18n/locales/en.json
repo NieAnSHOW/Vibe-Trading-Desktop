@@ -60,6 +60,30 @@
         "sinaFinance": {
           "label": "Sina Finance",
           "description": "Financial news, market data, and 24-hour market coverage."
+        },
+        "cninfo": {
+          "label": "CNINFO",
+          "description": "SZSE official disclosure platform for announcements, financial reports, and prospectuses."
+        },
+        "jisilu": {
+          "label": "Jisilu",
+          "description": "Convertible bonds, structured funds, and low-risk investing data community."
+        },
+        "wallstreetcn": {
+          "label": "Wallstreetcn",
+          "description": "Global macro, market flashes, and real-time financial news."
+        },
+        "cls": {
+          "label": "CLS",
+          "description": "24/7 telegraph-style financial flashes and policy analysis."
+        },
+        "investing": {
+          "label": "Investing.com",
+          "description": "Global quotes, forex, futures, and financial data terminal."
+        },
+        "gelonghui": {
+          "label": "Gelonghui",
+          "description": "Hong Kong, A-share, and global market research and news."
         }
       }
     }
