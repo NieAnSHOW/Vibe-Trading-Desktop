@@ -64,6 +64,8 @@ EXIT_SUCCESS = 0
 EXIT_RUN_FAILED = 1
 EXIT_USAGE_ERROR = 2
 RICH_TAG_PATTERN = re.compile(r"\[/?[^\]]+\]")
+SWARM_RUN_USAGE = """--swarm-run PRESET '{"k":"v"}'"""
+SWARM_RUN_VARS_PREVIEW_CHARS = 80
 
 from cli._version import __version__ as _VERSION  # noqa: E402 — single source of truth
 
@@ -73,6 +75,47 @@ if TYPE_CHECKING:
 # Agent color assignments for swarm display
 _AGENT_STYLES = ["cyan", "magenta", "green", "yellow", "blue", "bright_red", "bright_cyan", "bright_magenta"]
 _agent_color_map: dict[str, str] = {}
+
+
+def _truncate_swarm_vars_preview(value: str) -> str:
+    """Return a compact preview for a CLI JSON token."""
+    if len(value) <= SWARM_RUN_VARS_PREVIEW_CHARS:
+        return value
+    return value[: SWARM_RUN_VARS_PREVIEW_CHARS - 3] + "..."
+
+
+def _print_swarm_vars_json_error(vars_json: str, exc: json.JSONDecodeError) -> None:
+    """Print actionable JSON diagnostics for ``--swarm-run`` vars."""
+    preview = rich_escape(_truncate_swarm_vars_preview(vars_json))
+    console.print(
+        "[red]Invalid JSON for --swarm-run VARS.[/red]\n"
+        f"Offending string: {preview}\n"
+        f"JSON parse error: {rich_escape(str(exc))}\n"
+        f"Correct usage: {SWARM_RUN_USAGE}\n"
+        "shell quoting is the usual culprit; wrap the JSON in single quotes."
+    )
+
+
+def _parse_swarm_run_args(values: list[str]) -> tuple[str, Optional[str]] | None:
+    """Validate ``--swarm-run`` values before starting the swarm."""
+    if len(values) > 2:
+        extras = ", ".join(rich_escape(repr(token)) for token in values[2:])
+        console.print(
+            "[red]Invalid --swarm-run arguments:[/red] "
+            f"unexpected extra token(s): {extras}\n"
+            f"Correct usage: {SWARM_RUN_USAGE}"
+        )
+        return None
+
+    preset = values[0]
+    vars_json = values[1] if len(values) > 1 else None
+    if vars_json:
+        try:
+            json.loads(vars_json)
+        except json.JSONDecodeError as exc:
+            _print_swarm_vars_json_error(vars_json, exc)
+            return None
+    return preset, vars_json
 
 _HAS_PROMPT_TOOLKIT = False
 try:
@@ -2083,7 +2126,7 @@ class _SwarmDashboard:
         return table
 
 
-def cmd_swarm_run_live(preset: str, vars_json: Optional[str] = None) -> None:
+def cmd_swarm_run_live(preset: str, vars_json: Optional[str] = None) -> Optional[int]:
     """Run a swarm preset with Rich Live dashboard."""
     from rich.live import Live
     from src.config import load_swarm_agent_config
@@ -2096,8 +2139,8 @@ def cmd_swarm_run_live(preset: str, vars_json: Optional[str] = None) -> None:
         try:
             user_vars = json.loads(vars_json)
         except json.JSONDecodeError as exc:
-            console.print(f"[red]Invalid JSON: {exc}[/red]")
-            return
+            _print_swarm_vars_json_error(vars_json, exc)
+            return EXIT_USAGE_ERROR
 
     store = SwarmStore(base_dir=SWARM_DIR)
     agent_config = load_swarm_agent_config()
@@ -2414,9 +2457,9 @@ def cmd_swarm_presets() -> None:
     console.print(table)
 
 
-def cmd_swarm_run(preset: str, vars_json: Optional[str] = None) -> None:
+def cmd_swarm_run(preset: str, vars_json: Optional[str] = None) -> Optional[int]:
     """Run swarm preset (legacy polling mode, use cmd_swarm_run_live for streaming)."""
-    cmd_swarm_run_live(preset, vars_json)
+    return cmd_swarm_run_live(preset, vars_json)
 
 
 def cmd_swarm_inspect(preset: str) -> int:
@@ -2999,8 +3042,113 @@ def _dispatch_channels(args: argparse.Namespace) -> int:
         return cmd_channels_login(args.channel_name, force=args.force)
     console.print("[red]channels requires a subcommand.[/red] Try: vibe-trading channels status")
     return EXIT_USAGE_ERROR
-
-
+# QVERIS-INTEGRATION
+def _print_qveris_config(config) -> None:  # QVERIS-INTEGRATION
+    """Render local QVeris config."""  # QVERIS-INTEGRATION
+    from src.tools.qveris_tool import SIGNUP_URL, INVITE_CODE, has_qveris_credentials, is_qveris_configured, mask_api_key, normalize_qveris_mode  # QVERIS-INTEGRATION
+    table = Table(title="Data Routing", box=box.SIMPLE)  # QVERIS-INTEGRATION
+    table.add_column("Field")  # QVERIS-INTEGRATION
+    table.add_column("Value")  # QVERIS-INTEGRATION
+    table.add_row("mode", normalize_qveris_mode(config.mode))  # QVERIS-INTEGRATION
+    table.add_row("free_route", "built-in public data")  # QVERIS-INTEGRATION
+    table.add_row("premium_provider", "QVeris")  # QVERIS-INTEGRATION
+    table.add_row("paid_active", "yes" if is_qveris_configured(config) else "no")  # QVERIS-INTEGRATION
+    table.add_row("premium_key", "yes" if has_qveris_credentials(config) else "no")  # QVERIS-INTEGRATION
+    table.add_row("base_url", config.base_url)  # QVERIS-INTEGRATION
+    table.add_row("api_key", mask_api_key(config.api_key) or "(not set)")  # QVERIS-INTEGRATION
+    table.add_row("budget/session", str(config.budget_credits_per_session))  # QVERIS-INTEGRATION
+    table.add_row("signup", SIGNUP_URL)  # QVERIS-INTEGRATION
+    table.add_row("invite_code", INVITE_CODE)  # QVERIS-INTEGRATION
+    console.print(table)  # QVERIS-INTEGRATION
+# QVERIS-INTEGRATION
+def cmd_qveris_status() -> int:  # QVERIS-INTEGRATION
+    """Show QVeris local config and live status when configured."""  # QVERIS-INTEGRATION
+    from src.tools.qveris_tool import QVerisClient, is_qveris_configured, load_qveris_config  # QVERIS-INTEGRATION
+    config = load_qveris_config()  # QVERIS-INTEGRATION
+    _print_qveris_config(config)  # QVERIS-INTEGRATION
+    if not is_qveris_configured(config):  # QVERIS-INTEGRATION
+        return EXIT_SUCCESS  # QVERIS-INTEGRATION
+    try:  # QVERIS-INTEGRATION
+        payload = QVerisClient(config).search("status", limit=1)  # QVERIS-INTEGRATION
+        console.print(f"[green]QVeris reachable.[/green] remaining_credits={payload.get('remaining_credits')}")  # QVERIS-INTEGRATION
+        return EXIT_SUCCESS  # QVERIS-INTEGRATION
+    except Exception as exc:  # noqa: BLE001  # QVERIS-INTEGRATION
+        console.print(f"[red]QVeris status failed:[/red] {exc}")  # QVERIS-INTEGRATION
+        return EXIT_RUN_FAILED  # QVERIS-INTEGRATION
+# QVERIS-INTEGRATION
+def cmd_qveris_enable(*, key: str | None = None, url: str | None = None) -> int:  # QVERIS-INTEGRATION
+    """Enable QVeris if an API key is present or supplied."""  # QVERIS-INTEGRATION
+    from src.tools.qveris_tool import SIGNUP_URL, INVITE_CODE, QVerisConfig, _read_config_file, save_qveris_config  # QVERIS-INTEGRATION
+    existing = _read_config_file()  # QVERIS-INTEGRATION
+    api_key = (key or existing.api_key or "").strip()  # QVERIS-INTEGRATION
+    if not api_key:  # QVERIS-INTEGRATION
+        console.print("[yellow]QVeris API key is required to enable the integration.[/yellow]")  # QVERIS-INTEGRATION
+        console.print(f"[dim]Sign up: {SIGNUP_URL}  invite_code={INVITE_CODE}[/dim]")  # QVERIS-INTEGRATION
+        return EXIT_USAGE_ERROR  # QVERIS-INTEGRATION
+    base_url = (url or existing.base_url).strip().rstrip("/")  # QVERIS-INTEGRATION
+    if not base_url.startswith(("http://", "https://")):  # QVERIS-INTEGRATION
+        console.print("[red]--url must start with http:// or https://[/red]")  # QVERIS-INTEGRATION
+        return EXIT_USAGE_ERROR  # QVERIS-INTEGRATION
+    saved = save_qveris_config(QVerisConfig(True, base_url, api_key, "paid", existing.budget_credits_per_session))  # QVERIS-INTEGRATION
+    console.print("[green]QVeris paid route enabled.[/green]")  # QVERIS-INTEGRATION
+    _print_qveris_config(saved)  # QVERIS-INTEGRATION
+    return EXIT_SUCCESS  # QVERIS-INTEGRATION
+# QVERIS-INTEGRATION
+def cmd_qveris_mode(
+    *,
+    mode: str,
+    budget: float | None = None,
+    key: str | None = None,
+    url: str | None = None,
+) -> int:  # QVERIS-INTEGRATION
+    """Switch QVeris between free and paid modes."""  # QVERIS-INTEGRATION
+    from src.tools.qveris_tool import QVerisConfig, _read_config_file, normalize_qveris_mode, save_qveris_config  # QVERIS-INTEGRATION
+    existing = _read_config_file()  # QVERIS-INTEGRATION
+    next_mode = normalize_qveris_mode(mode)  # QVERIS-INTEGRATION
+    next_budget = existing.budget_credits_per_session if budget is None else max(float(budget), 0.0)  # QVERIS-INTEGRATION
+    base_url = (url or existing.base_url).strip().rstrip("/")  # QVERIS-INTEGRATION
+    if not base_url.startswith(("http://", "https://")):  # QVERIS-INTEGRATION
+        console.print("[red]--url must start with http:// or https://[/red]")  # QVERIS-INTEGRATION
+        return EXIT_USAGE_ERROR  # QVERIS-INTEGRATION
+    api_key = (key or existing.api_key or "").strip()  # QVERIS-INTEGRATION
+    saved = save_qveris_config(QVerisConfig(next_mode == "paid", base_url, api_key, next_mode, next_budget))  # QVERIS-INTEGRATION
+    console.print(f"[green]QVeris mode set to {next_mode}.[/green]")  # QVERIS-INTEGRATION
+    _print_qveris_config(saved)  # QVERIS-INTEGRATION
+    return EXIT_SUCCESS  # QVERIS-INTEGRATION
+# QVERIS-INTEGRATION
+def cmd_qveris_disable() -> int:  # QVERIS-INTEGRATION
+    """Disable QVeris without deleting the stored key."""  # QVERIS-INTEGRATION
+    from src.tools.qveris_tool import QVerisConfig, _read_config_file, save_qveris_config  # QVERIS-INTEGRATION
+    existing = _read_config_file()  # QVERIS-INTEGRATION
+    save_qveris_config(QVerisConfig(False, existing.base_url, existing.api_key, "free", existing.budget_credits_per_session))  # QVERIS-INTEGRATION
+    console.print("[green]QVeris disabled.[/green]")  # QVERIS-INTEGRATION
+    return EXIT_SUCCESS  # QVERIS-INTEGRATION
+# QVERIS-INTEGRATION
+def cmd_qveris_usage() -> int:  # QVERIS-INTEGRATION
+    """Show recent QVeris usage events."""  # QVERIS-INTEGRATION
+    from src.tools.qveris_tool import QVerisClient, is_qveris_configured, load_qveris_config  # QVERIS-INTEGRATION
+    config = load_qveris_config()  # QVERIS-INTEGRATION
+    if not is_qveris_configured(config):  # QVERIS-INTEGRATION
+        console.print("[yellow]QVeris is not configured.[/yellow]")  # QVERIS-INTEGRATION
+        return EXIT_USAGE_ERROR  # QVERIS-INTEGRATION
+    try:  # QVERIS-INTEGRATION
+        payload = QVerisClient(config).usage_history(limit=10, page_size=10)  # QVERIS-INTEGRATION
+    except Exception as exc:  # noqa: BLE001  # QVERIS-INTEGRATION
+        console.print(f"[red]QVeris usage failed:[/red] {exc}")  # QVERIS-INTEGRATION
+        return EXIT_RUN_FAILED  # QVERIS-INTEGRATION
+    print(json.dumps(payload, indent=2, ensure_ascii=False))  # QVERIS-INTEGRATION
+    return EXIT_SUCCESS  # QVERIS-INTEGRATION
+def _dispatch_data(args: argparse.Namespace) -> int:  # QVERIS-INTEGRATION
+    """Dispatch user-facing data-routing commands."""  # QVERIS-INTEGRATION
+    if args.data_command == "status":  # QVERIS-INTEGRATION
+        return cmd_qveris_status()  # QVERIS-INTEGRATION
+    if args.data_command == "mode":  # QVERIS-INTEGRATION
+        return cmd_qveris_mode(mode=args.mode, budget=args.budget, key=args.key, url=args.url)  # QVERIS-INTEGRATION
+    if args.data_command == "usage":  # QVERIS-INTEGRATION
+        return cmd_qveris_usage()  # QVERIS-INTEGRATION
+    console.print("[red]data requires a subcommand.[/red] Try: vibe-trading data status")  # QVERIS-INTEGRATION
+    return EXIT_USAGE_ERROR  # QVERIS-INTEGRATION
+# QVERIS-INTEGRATION
 def _live_server_config(broker: str):
     """Resolve the protected MCP server config for ``broker``.
 
@@ -4273,6 +4421,17 @@ def _build_parser() -> argparse.ArgumentParser:
     login_parser.add_argument("provider", help="OAuth provider name, e.g. openai-codex")
     provider_subparsers.add_parser("doctor", help="Print redacted provider diagnostics")
 
+    # QVERIS-INTEGRATION
+    data_parser = subparsers.add_parser("data", help="Manage data routing mode")  # QVERIS-INTEGRATION
+    data_subparsers = data_parser.add_subparsers(dest="data_command")  # QVERIS-INTEGRATION
+    data_subparsers.add_parser("status", help="Show active data routing mode")  # QVERIS-INTEGRATION
+    data_mode = data_subparsers.add_parser("mode", help="Switch between free public data and paid data routing")  # QVERIS-INTEGRATION
+    data_mode.add_argument("mode", choices=["free", "paid"], help="free uses built-in public data; paid enables premium data execution")  # QVERIS-INTEGRATION
+    data_mode.add_argument("--budget", type=float, help="Paid-mode credit budget per session")  # QVERIS-INTEGRATION
+    data_mode.add_argument("--key", help="Premium data API key")  # QVERIS-INTEGRATION
+    data_mode.add_argument("--url", help="Premium data API base URL")  # QVERIS-INTEGRATION
+    data_subparsers.add_parser("usage", help="Show recent paid data usage")  # QVERIS-INTEGRATION
+    # QVERIS-INTEGRATION
     channels_parser = subparsers.add_parser("channels", help="Manage IM channel adapters")
     channels_subparsers = channels_parser.add_subparsers(dest="channels_command")
     channels_status = channels_subparsers.add_parser("status", help="Show IM channel status")
@@ -5096,6 +5255,29 @@ def cmd_dev(
         )
         return EXIT_USAGE_ERROR
 
+    # `npm run dev` invokes the local Vite binary at
+    # ``frontend/node_modules/.bin/vite``. If ``node_modules`` does not
+    # exist (or is missing the Vite package), npm's bare-script
+    # resolution will print a confusing "vite is not a command" error
+    # and exit. Detect this case up front and point the user at
+    # ``vibe-trading setup`` instead.
+    vite_bin = frontend_dir / "node_modules" / ".bin" / ("vite.cmd" if _is_windows() else "vite")
+    if not vite_bin.exists():
+        console.print(
+            Panel(
+                f"[red]Frontend dependencies not installed.[/red]\n"
+                f"  Missing: [dim]{frontend_dir / 'node_modules'}[/dim]\n\n"
+                "Run this first:\n"
+                "  [cyan]vibe-trading setup[/cyan]\n\n"
+                "[dim]Or, to start the dev mode anyway and install on the fly,\n"
+                "run [bold]vibe-trading setup[/bold] in another terminal.[/dim]",
+                title="vibe-trading dev",
+                border_style="red",
+                padding=(0, 1),
+            )
+        )
+        return EXIT_USAGE_ERROR
+
     node, npm = _resolve_node_and_npm()
     if not node or not npm:
         missing = [name for name, path_ in (("node", node), ("npm", npm)) if not path_]
@@ -5232,6 +5414,8 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_USAGE_ERROR
     if args.command == "channels":
         return _coerce_exit_code(_dispatch_channels(args))
+    if args.command == "data":  # QVERIS-INTEGRATION
+        return _coerce_exit_code(_dispatch_data(args))  # QVERIS-INTEGRATION
     if args.command == "run":
         return _handle_prompt_command(
             args.run_prompt,
@@ -5284,8 +5468,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.swarm_inspect:
         return _coerce_exit_code(cmd_swarm_inspect(args.swarm_inspect))
     if args.swarm_run:
-        preset_name = args.swarm_run[0]
-        vars_json = args.swarm_run[1] if len(args.swarm_run) > 1 else None
+        parsed_swarm_run = _parse_swarm_run_args(args.swarm_run)
+        if parsed_swarm_run is None:
+            return EXIT_USAGE_ERROR
+        preset_name, vars_json = parsed_swarm_run
         return _coerce_exit_code(cmd_swarm_run_live(preset_name, vars_json))
     if args.swarm_list:
         return _coerce_exit_code(cmd_swarm_list())
