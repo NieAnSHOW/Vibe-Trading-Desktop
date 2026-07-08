@@ -16,8 +16,13 @@ from typing import Optional
 MIRROR_URLS = {
     "tsinghua": "https://pypi.tuna.tsinghua.edu.cn/simple",
     "aliyun": "https://mirrors.aliyun.com/pypi/simple",
-    "official": "https://pypi.org/simple",
 }
+
+# Bootstrap fallback order: try the user-selected mirror first, then each
+# domestic mirror in turn. Official PyPI is intentionally excluded — it is
+# slow / blocked in the domestic networks this fallback targets (only
+# reached when every mirror is hijacked, where it won't help either).
+FALLBACK_MIRRORS = ("tsinghua", "aliyun")
 
 DEFAULT_MIRROR = "tsinghua"
 

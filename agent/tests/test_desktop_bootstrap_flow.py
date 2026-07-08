@@ -87,3 +87,65 @@ def test_cli_sse_flag_emits_frames(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "installing" in out.lower() or "done" in out.lower()
+
+
+def test_falls_back_to_aliyun_when_tsinghua_broken(tmp_path, monkeypatch):
+    from src.desktop_bootstrap.bootstrap import run_bootstrap, _mirror_sequence
+    from src.optional_deps.mirror import MIRROR_URLS, MirrorConfig, save_mirror_config
+    # No persisted config -> default chain is tsinghua then aliyun.
+    home = tmp_path / ".vibe-trading"
+    req = tmp_path / "requirements.txt"; req.write_text("numpy\n", encoding="utf-8")
+    assert [u for u in _mirror_sequence(MirrorConfig())] == [
+        MIRROR_URLS["tsinghua"], MIRROR_URLS["aliyun"]
+    ]
+
+    tried: list[str] = []
+    def pip_stream(python, requirements, index_url, trusted_host):
+        tried.append(index_url)
+        if index_url == MIRROR_URLS["tsinghua"]:
+            import subprocess
+            raise subprocess.CalledProcessError(1, ["pip"])
+        yield "Successfully installed numpy"
+    cfg_path = home / "runtime" / "optional_deps_mirror.json"
+    monkeypatch.setattr(
+        "src.optional_deps.mirror.default_config_path",
+        lambda: cfg_path,
+    )
+    events = list(run_bootstrap(
+        home_vibe=home, requirements=req,
+        ensure_venv=lambda h: (h / "venv" / "bin" / "python"),
+        pip_stream=pip_stream,
+        smoke=lambda py: SmokeResult(ok=True),
+    ))
+    assert tried == [MIRROR_URLS["tsinghua"], MIRROR_URLS["aliyun"]], tried
+    assert events[-1].stage == "done" and events[-1].ok
+    # The working mirror is persisted as the new default.
+    saved = MirrorConfig(**json.loads(cfg_path.read_text(encoding="utf-8")))
+    assert saved.name == "aliyun"
+
+
+def test_all_mirrors_failed_yields_failed(tmp_path):
+    from src.desktop_bootstrap.bootstrap import run_bootstrap
+    import subprocess
+    home = tmp_path / ".vibe-trading"
+    req = tmp_path / "requirements.txt"; req.write_text("numpy\n", encoding="utf-8")
+    def boom(python, requirements, index_url, trusted_host):
+        yield "Collecting numpy"
+        raise subprocess.CalledProcessError(1, ["pip"])
+    events = list(run_bootstrap(
+        home_vibe=home, requirements=req,
+        ensure_venv=lambda h: (h / "venv" / "bin" / "python"),
+        pip_stream=boom,
+        smoke=lambda py: SmokeResult(ok=True),
+    ))
+    assert events[-1].stage == "failed"
+
+
+def test_custom_mirror_no_fallback(tmp_path):
+    from src.desktop_bootstrap.bootstrap import _mirror_sequence
+    from src.optional_deps.mirror import MirrorConfig
+    assert _mirror_sequence(MirrorConfig(name="custom", custom_index_url="https://x/simple")) == ["https://x/simple"]
+    assert _mirror_sequence(MirrorConfig(name="off")) == [""]
+
+
+import json  # noqa: E402  (used by the fallback persistence test above)

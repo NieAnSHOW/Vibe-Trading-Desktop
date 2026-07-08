@@ -16,6 +16,49 @@ def _normalized_requirement_name(requirement: str) -> str:
     return name.strip().lower()
 
 
+# Packages intentionally kept out of the desktop-bundled requirements.txt.
+# The desktop venv excludes weasyprint because its native cairo/pango deps do
+# not bundle reliably across platforms (see agent/src/desktop_bootstrap/cli.py
+# and scripts/desktop/install-deps.sh, which both strip it).
+_REQUIREMENTS_TXT_EXEMPT = {"weasyprint"}
+
+
+def _core_dependencies() -> set[str]:
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    return {
+        _normalized_requirement_name(requirement)
+        for requirement in pyproject["project"]["dependencies"]
+    }
+
+
+def _requirements_txt_names() -> set[str]:
+    return {
+        _normalized_requirement_name(line)
+        for line in (ROOT / "agent" / "requirements.txt").read_text().splitlines()
+        if line and not line.startswith("#")
+    }
+
+
+def test_requirements_txt_covers_every_core_dependency() -> None:
+    """Guard against pyproject.toml ↔ requirements.txt drift.
+
+    The desktop bootstrap (`vibe-trading bootstrap`) installs from
+    ``agent/requirements.txt``, not from ``pyproject.toml``. Any runtime
+    dependency declared in ``pyproject.toml`` but missing from
+    ``requirements.txt`` is absent from the desktop venv and surfaces as an
+    ``ImportError`` only when the agent hits that code path at runtime
+    (e.g. ``defusedxml`` in the RSSHub events loader). Keep the two in sync.
+    """
+    missing = _core_dependencies() - _requirements_txt_names() - _REQUIREMENTS_TXT_EXEMPT
+
+    assert not missing, (
+        "pyproject.toml declares runtime dependencies missing from "
+        f"agent/requirements.txt: {sorted(missing)}. Add them to "
+        "requirements.txt (the desktop bootstrap installs from it), or add "
+        "them to _REQUIREMENTS_TXT_EXEMPT if intentionally bundle-excluded."
+    )
+
+
 def test_harmonic_backend_is_not_a_core_install_dependency() -> None:
     """Keep optional harmonic plotting deps from breaking baseline installs."""
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text())
