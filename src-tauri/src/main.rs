@@ -18,6 +18,12 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
+        // 单实例保护：第二个进程实例启动时，唤回第一个实例的主窗口并退出自身。
+        // Windows 用命名 Mutex 实现锁；macOS/Linux 用 Unix domain socket。
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // 第二实例的启动参数传入此回调，当前无需处理；仅唤回主窗口即可。
+            tray::show_main_window(app);
+        }))
         .invoke_handler(tauri::generate_handler![
             open_external_url,
             console::console_status,

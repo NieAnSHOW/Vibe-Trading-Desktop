@@ -36,7 +36,8 @@ pub fn decide_quit(service_running: bool, installing: bool) -> QuitDecision {
 }
 
 /// 唤回并聚焦主窗口(从后台收纳态恢复)。窗口不存在时静默跳过。
-fn show_main_window(app: &AppHandle) {
+/// pub：单实例回调（main.rs）与托盘事件均需调用。
+pub fn show_main_window(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.show();
         let _ = win.unminimize();

@@ -94,8 +94,35 @@ const btnStartDisabled = computed(
 );
 
 // ── 安装 ────────────────────────────────────────────────────────
+// 安装前「服务运行中」确认对话框:安装新版本依赖会影响正在运行的服务,
+// 需先停服务再安装；用户取消则放弃本次安装。
+const installStopDialogOpen = ref(false);
+
 async function onInstall() {
   if (installing.value) return; // 防重入:安装期间按钮已被 AppButton 的 busy 禁用
+  // 服务运行中:弹确认框,由 onInstallStopDialogClose 续接后续逻辑
+  if (serviceRunning.value) {
+    installStopDialogOpen.value = true;
+    return;
+  }
+  await doInstall();
+}
+
+async function onInstallStopDialogClose(v: "ok" | "cancel") {
+  installStopDialogOpen.value = false;
+  if (v !== "ok") return;
+  // 先停止服务再安装
+  try {
+    await service.stop();
+    env.setPort(null);
+  } catch (e) {
+    setErr(e);
+    return;
+  }
+  await doInstall();
+}
+
+async function doInstall() {
   setErr("");
   log("开始安装依赖…");
   bootstrap.start();
@@ -413,6 +440,11 @@ onUnmounted(() => {
     <HintBanner :hidden="hintHidden" />
 
     <ProgressBar />
+
+    <ConfirmDialog :open="installStopDialogOpen" title="服务运行中，确认停止并安装？" @close="onInstallStopDialogClose">
+      检测到后端服务正在运行，安装新版本依赖需要先停止服务。<b>停止将中断正在执行的任务</b>（回测、研究、实盘等），确认停止并继续安装吗？
+      <template #confirm-text>停止并安装</template>
+    </ConfirmDialog>
 
     <ConfirmDialog :open="stopDialogOpen" title="确认停止服务？" @close="onStopDialogClose">
       停止将中断后端进程，<b>请确保当前没有正在执行的任务</b>（回测、研究、实盘等）。
