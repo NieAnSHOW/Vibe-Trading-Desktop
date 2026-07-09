@@ -115,15 +115,22 @@ fn wait_or_kill(child: &mut Child, pid: i32, timeout: Duration) {
     let _ = child.wait();
 }
 
-/// Windows 进程清理：使用 kill + wait 确保进程终止。
+/// Windows 进程清理：用 `taskkill /F /T` 递归终止整个进程树，再回收直接子进程。
 ///
-/// `child.kill()` 即 `TerminateProcess`，同步立即结束句柄、`wait` 随即返回，
-/// 不存在 unix 那种 graceful-shutdown 卡住的可能，因此无需超时兜底。
-/// 后续可改进为 WinAPI Job Object（CreateJobObject / AssignProcessToJobObject），
-/// 以便内核级关联所有子孙进程，确保在异常退出时也无残留。
+/// `child.kill()`（即 `TerminateProcess`）只结束直接子进程；uvicorn worker、
+/// Python subprocess 等孙进程仍在运行，会持有 python-runtime 目录下的
+/// `.pyd`/`.dll` 文件句柄——安装程序覆写这些文件时出现
+/// "Error opening file for writing: ..._asyncio.pyd" 报错。
+/// `taskkill /F /T /PID <pid>` 等价于 Unix 的 `killpg`，内核级递归终止
+/// 整棵子进程树（包括孙进程），确保所有文件句柄在安装前全部释放。
 #[cfg(windows)]
 pub fn terminate(child: &mut Child) {
-    let _ = child.kill();
+    let pid = child.id();
+    // /F 强制; /T 递归终止子进程树; 忽略返回值（进程已退出时会报错 128，属正常）
+    let _ = std::process::Command::new("taskkill")
+        .args(["/F", "/T", "/PID", &pid.to_string()])
+        .output();
+    // 回收直接子进程的句柄，避免僵尸进程
     let _ = child.wait();
 }
 
