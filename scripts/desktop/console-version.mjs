@@ -32,7 +32,9 @@ function parseArgs(argv) {
     } else if (arg === "--bump") {
       bump = argv[++i];
       if (!["patch", "minor", "major"].includes(bump)) {
-        throw new Error(`--bump must be one of patch|minor|major, got: ${bump}`);
+        throw new Error(
+          `--bump must be one of patch|minor|major, got: ${bump}`,
+        );
       }
     } else if (!versionArg) {
       versionArg = arg;
@@ -53,13 +55,19 @@ function readConf(root) {
   const raw = readFileSync(join(root, TAURI_CONF_PATH), "utf8");
   const conf = JSON.parse(raw);
   if (!SEMVER_RE.test(conf.version)) {
-    throw new Error(`invalid version field in ${TAURI_CONF_PATH}: ${conf.version}`);
+    throw new Error(
+      `invalid version field in ${TAURI_CONF_PATH}: ${conf.version}`,
+    );
   }
   return { version: conf.version, conf };
 }
 
 function writeConf(root, conf) {
-  writeFileSync(join(root, TAURI_CONF_PATH), JSON.stringify(conf, null, 2) + "\n", "utf8");
+  writeFileSync(
+    join(root, TAURI_CONF_PATH),
+    JSON.stringify(conf, null, 2) + "\n",
+    "utf8",
+  );
 }
 
 function bumpVersion(raw, kind) {
@@ -75,7 +83,9 @@ function main() {
 
   if (check) {
     if (versionArg && version !== versionArg) {
-      throw new Error(`version drift: actual=${version}, expected=${versionArg}`);
+      throw new Error(
+        `version drift: actual=${version}, expected=${versionArg}`,
+      );
     }
     console.log(`version ok: ${version}`);
     return;

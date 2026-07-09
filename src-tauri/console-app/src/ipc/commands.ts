@@ -28,6 +28,9 @@ export const consoleOpenWebui = (port: number): Promise<void> =>
 export const consoleOpenLogs = (): Promise<void> =>
   invoke<void>("console_open_logs");
 
+export const consoleClearLogs = (): Promise<number> =>
+  invoke<number>("console_clear_logs");
+
 export const consoleClearVenv = (): Promise<void> =>
   invoke<void>("console_clear_venv");
 

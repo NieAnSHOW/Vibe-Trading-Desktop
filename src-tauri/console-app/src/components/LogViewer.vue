@@ -4,7 +4,7 @@ import { ref, nextTick } from "vue";
 const lines = ref<string[]>([]);
 const el = ref<HTMLDivElement | null>(null);
 
-defineEmits<{ (e: "open-logs"): void }>();
+defineEmits<{ (e: "open-logs"): void; (e: "clear-logs"): void }>();
 
 function append(line: string) {
   const atBottom =
@@ -25,6 +25,7 @@ defineExpose({ append, clear });
       <span class="log-title">运行日志</span>
       <div>
         <button class="log-clear" @click="$emit('open-logs')">打开日志目录</button>
+        <button class="log-clear" type="button" @click="$emit('clear-logs')">清理日志文件</button>
         <button class="log-clear" type="button" @click="clear">清空</button>
       </div>
     </div>

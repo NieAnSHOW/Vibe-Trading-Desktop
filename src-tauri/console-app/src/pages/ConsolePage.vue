@@ -15,6 +15,7 @@ import {
   consoleBootstrap,
   consoleOpenWebui,
   consoleOpenLogs,
+  consoleClearLogs,
   consoleQuit,
   consoleClearVenv,
   consoleLogout,
@@ -219,6 +220,26 @@ async function onOpenLogs() {
   }
 }
 
+// ── 清理日志文件(二次确认 → 删 logs/*.log → 反馈数量) ─────────────
+const clearLogsBusy = useBusy();
+const clearLogsDialogOpen = ref(false);
+function onClearLogs() {
+  clearLogsDialogOpen.value = true;
+}
+async function onClearLogsDialogClose(v: "ok" | "cancel") {
+  clearLogsDialogOpen.value = false;
+  if (v !== "ok") return;
+  await clearLogsBusy.run("清理中", async () => {
+    setErr("");
+    try {
+      const n = await consoleClearLogs();
+      log(`已清理 ${n} 个日志文件`);
+    } catch (e) {
+      setErr(e);
+    }
+  });
+}
+
 // ── 退出二次确认(由托盘「退出」在服务运行中 / 安装中时触发) ──────────
 // 窗口关闭按钮 X 一律静默收纳后台,不经此确认;只有托盘「退出」有活跃工作时才弹。
 const quitDialogOpen = ref(false);
@@ -403,6 +424,11 @@ onUnmounted(() => {
       <template #confirm-text>确认清理</template>
     </ConfirmDialog>
 
+    <ConfirmDialog :open="clearLogsDialogOpen" title="确认清理日志文件？" @close="onClearLogsDialogClose">
+      将删除 <b>~/.vibe-trading/logs</b> 下的所有日志文件（sidecar-*.log），<b>不影响配置、会话等数据</b>。服务运行中当天日志可能被占用而跳过，确认操作吗？
+      <template #confirm-text>确认清理</template>
+    </ConfirmDialog>
+
     <ConfirmDialog :open="quitDialogOpen" title="确认退出客户端？" @close="onQuitDialogClose">
       <span v-html="quitText"></span>
       <template #confirm-text>确认退出</template>
@@ -416,7 +442,7 @@ onUnmounted(() => {
     <AdSlot :ad="adBottom" variant="bottom" />
     <div id="err">{{ errorMsg }}</div>
 
-    <LogViewer ref="logViewer" @open-logs="onOpenLogs" />
+    <LogViewer ref="logViewer" @open-logs="onOpenLogs" @clear-logs="onClearLogs" />
 
 
     <!-- 版本号展示 -->

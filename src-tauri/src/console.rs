@@ -636,6 +636,34 @@ pub fn console_open_logs() -> Result<(), String> {
     open_path_in_file_manager(&layout.logs_dir)
 }
 
+/// 清理 ~/.vibe-trading/logs/ 下所有日志文件（sidecar-YYYY-MM-DD.log 及遗留 sidecar.log）。
+/// 保留目录本身;服务运行中当天文件被进程占用时(macOS/Linux 仍可 unlink,Windows 可能
+/// 拒绝)删除会失败,自动跳过。返回实际删除的文件数。
+#[tauri::command]
+pub fn console_clear_logs() -> Result<usize, String> {
+    let layout = Layout::from_home()?;
+    std::fs::create_dir_all(&layout.logs_dir)
+        .map_err(|e| format!("mkdir logs: {e}"))?;
+    clear_logs_in(&layout.logs_dir)
+}
+
+/// 删除目录下所有 `.log` 文件,返回删除数。非 `.log` 文件(会话、配置等)不动。
+fn clear_logs_in(dir: &Path) -> Result<usize, String> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Ok(0);
+    };
+    let mut removed = 0usize;
+    for ent in entries.flatten() {
+        let path = ent.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("log")
+            && std::fs::remove_file(&path).is_ok()
+        {
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
 #[cfg(target_os = "macos")]
 fn open_path_in_file_manager(p: &Path) -> Result<(), String> {
     std::process::Command::new("open")
@@ -726,6 +754,20 @@ pub async fn console_fetch_ads(position: String) -> Result<Vec<AdItem>, String> 
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn clear_logs_removes_log_files_keeps_others() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        fs::write(dir.join("sidecar-2026-07-09.log"), "a").unwrap();
+        fs::write(dir.join("sidecar.log"), "b").unwrap();
+        fs::write(dir.join("notes.txt"), "c").unwrap();
+        let removed = clear_logs_in(dir).unwrap();
+        assert_eq!(removed, 2);
+        assert!(!dir.join("sidecar-2026-07-09.log").exists());
+        assert!(!dir.join("sidecar.log").exists());
+        assert!(dir.join("notes.txt").exists(), "非日志文件应保留");
+    }
 
     #[test]
     fn env_status_not_installed_when_no_venv() {
