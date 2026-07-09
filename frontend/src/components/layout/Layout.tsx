@@ -216,7 +216,7 @@ export function Layout() {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("qa-sidebar") === "collapsed"
   );
-  const [showExternal, setShowExternal] = useState(true);
+  const [showExternal, setShowExternal] = useState(false);
 
   const activeSessionId = searchParams.get("session");
   const streamingSessionId = useAgentStore((s) => s.streamingSessionId);
