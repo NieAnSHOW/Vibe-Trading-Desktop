@@ -156,6 +156,52 @@ pub fn await_health(child: &mut Child, port: u16) -> Ready {
     Ready::Timeout
 }
 
+/// 为已启动的 sidecar 各开一个后台线程消费 stdout/stderr 管道，
+/// 防止管道缓冲区（macOS/Linux ~64 KB）写满后 Python 端 write() 阻塞，
+/// 导致 uvicorn event loop 卡死（长时间运行假死根因）。
+///
+/// 日志追加写入 `log_path`（BufWriter + 行级 flush）。磁盘满时停止写入但
+/// 继续消费管道——管道永不满，sidecar 运行不受影响。
+pub fn drain_child_pipes(child: &mut Child, log_path: &Path) {
+    if let Some(stdout) = child.stdout.take() {
+        let path = log_path.to_path_buf();
+        std::thread::spawn(move || {
+            use std::io::BufRead;
+            let mut w = open_log_append(&path);
+            for line in std::io::BufReader::new(stdout).lines().map_while(Result::ok) {
+                drain_line(&mut w, "[out]", &line);
+            }
+        });
+    }
+    if let Some(stderr) = child.stderr.take() {
+        let path = log_path.to_path_buf();
+        std::thread::spawn(move || {
+            use std::io::BufRead;
+            let mut w = open_log_append(&path);
+            for line in std::io::BufReader::new(stderr).lines().map_while(Result::ok) {
+                drain_line(&mut w, "[err]", &line);
+            }
+        });
+    }
+}
+
+fn open_log_append(path: &Path) -> Option<std::io::BufWriter<std::fs::File>> {
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map(std::io::BufWriter::new)
+        .ok()
+}
+
+fn drain_line(w: &mut Option<std::io::BufWriter<std::fs::File>>, tag: &str, line: &str) {
+    use std::io::Write;
+    let Some(writer) = w else { return };
+    if writeln!(writer, "{tag} {line}").is_err() || writer.flush().is_err() {
+        *w = None; // 磁盘满：停写，但外层循环继续消费管道
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -15,7 +15,7 @@ import {
   consoleBootstrap,
   consoleOpenWebui,
   consoleOpenLogs,
-  consoleConfirmClose,
+  consoleQuit,
   consoleClearVenv,
   consoleLogout,
   consoleFetchAds,
@@ -24,7 +24,7 @@ import {
   onBootstrapEvent,
   onBootstrapExit,
   onServiceStarted,
-  onCloseRequested,
+  onQuitRequested,
   onChanneldepProgress,
   onChanneldepExit,
 } from "../ipc/events";
@@ -219,21 +219,20 @@ async function onOpenLogs() {
   }
 }
 
-// ── 关闭二次确认 ────────────────────────────────────────────────
-const closeDialogOpen = ref(false);
-const closeInstalling = ref(false);
-const closeText = computed(() =>
-  closeInstalling.value
-    ? '依赖仍在安装中，<b>关闭客户端将中断安装</b>，下次需要重新安装。确认要关闭吗？'
-    : '后端服务仍在运行，<b>关闭客户端将终止服务并中断正在执行的任务</b>（回测、研究、实盘等）。确认要关闭吗？',
+// ── 退出二次确认(由托盘「退出」在服务运行中 / 安装中时触发) ──────────
+// 窗口关闭按钮 X 一律静默收纳后台,不经此确认;只有托盘「退出」有活跃工作时才弹。
+const quitDialogOpen = ref(false);
+const quitInstalling = ref(false);
+const quitText = computed(() =>
+  quitInstalling.value
+    ? '依赖仍在安装中,<b>退出将中断安装</b>,下次需要重新安装。确认要退出吗?'
+    : '后端服务仍在运行,<b>退出将终止服务并中断正在执行的任务</b>(回测、研究、实盘等)。确认要退出吗?',
 );
-async function onCloseDialogClose(v: "ok" | "cancel") {
-  closeDialogOpen.value = false;
+async function onQuitDialogClose(v: "ok" | "cancel") {
+  quitDialogOpen.value = false;
   if (v !== "ok") return;
   try {
-    await consoleConfirmClose();
-    const win = (window as any).__TAURI__?.window?.getCurrentWindow?.();
-    if (win) await win.close();
+    await consoleQuit(); // Rust 侧 app.exit(0) → ExitRequested 回收 sidecar
   } catch (e) {
     setErr(e);
   }
@@ -299,9 +298,9 @@ onMounted(async () => {
       hintHidden.value = true;
       refresh();
     }),
-    onCloseRequested((payload: any) => {
-      closeInstalling.value = !!payload?.installing;
-      closeDialogOpen.value = true;
+    onQuitRequested((payload: any) => {
+      quitInstalling.value = !!payload?.installing;
+      quitDialogOpen.value = true;
     }),
     onChanneldepProgress((line: string) => log(line)),
     onChanneldepExit((code: number) => {
@@ -404,9 +403,9 @@ onUnmounted(() => {
       <template #confirm-text>确认清理</template>
     </ConfirmDialog>
 
-    <ConfirmDialog :open="closeDialogOpen" title="确认关闭客户端？" @close="onCloseDialogClose">
-      <span v-html="closeText"></span>
-      <template #confirm-text>确认关闭</template>
+    <ConfirmDialog :open="quitDialogOpen" title="确认退出客户端？" @close="onQuitDialogClose">
+      <span v-html="quitText"></span>
+      <template #confirm-text>确认退出</template>
     </ConfirmDialog>
 
     <ConfirmDialog :open="logoutDialogOpen" title="确认退出登录？" @close="onLogoutDialogClose">

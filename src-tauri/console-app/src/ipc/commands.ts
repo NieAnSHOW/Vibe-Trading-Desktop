@@ -40,8 +40,8 @@ export const consoleChannelsStatus = (port: number): Promise<string> =>
 export const consoleInstallChannelDep = (channel: string): Promise<void> =>
   invoke<void>("console_install_channel_dep", { channel });
 
-export const consoleConfirmClose = (): Promise<void> =>
-  invoke<void>("console_confirm_close");
+export const consoleQuit = (): Promise<void> =>
+  invoke<void>("console_quit");
 
 // 与 src-tauri/src/console.rs 的 #[tauri::command] 一一对应。
 export const consoleLoginCaptcha = (): Promise<Captcha> =>

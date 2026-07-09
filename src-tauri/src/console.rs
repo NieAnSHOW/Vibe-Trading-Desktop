@@ -18,13 +18,12 @@ use crate::runtime_dir::Layout;
 
 pub type SharedChild = Arc<Mutex<Option<Child>>>;
 
-/// 依赖安装(bootstrap)进行中标志。关闭拦截据此判断是否需要二次确认。
+/// 依赖安装(bootstrap)进行中标志。托盘「退出」据此判断是否需要二次确认。
 pub struct InstallingFlag(pub Arc<AtomicBool>);
-/// 关闭已确认标志:用户在二次确认框点「确认关闭」后置真,放行下一次 CloseRequested。
-pub struct CloseConfirmed(pub Arc<AtomicBool>);
 
-/// 窗口关闭需要拦截时,发给前端(触发二次确认框)的事件名。
-pub const CLOSE_REQUESTED_EVENT: &str = "app://close-requested";
+/// 托盘「退出」在有活跃工作时,发给前端(触发二次确认框)的事件名。
+/// 窗口关闭按钮 X 不再触发确认——它一律静默收纳到后台(见 main.rs 的 CloseRequested 处理)。
+pub const QUIT_REQUESTED_EVENT: &str = "app://quit-requested";
 
 // ── 纯函数(状态判定、命令构造) ──────────────────────────────────────
 
@@ -318,7 +317,7 @@ pub async fn console_start_service(
     // 甩到阻塞线程池执行——否则会卡死 Tauri main thread,整个窗口假死、
     // 前端 spinner 也转不动(对照 console_bootstrap 用 async + 后台线程,从不卡)。
     let shared = state.inner().clone();
-    let (ready, child) = tauri::async_runtime::spawn_blocking(move || {
+    let (ready, mut child) = tauri::async_runtime::spawn_blocking(move || {
         let ready = crate::sidecar::await_health(&mut child, port);
         (ready, child)
     })
@@ -326,6 +325,14 @@ pub async fn console_start_service(
     .map_err(|e| ServiceStartError::Other { message: e.to_string() })?;
     match ready {
         crate::sidecar::Ready::Ok => {
+            // 启动后台线程消费 stdout/stderr 管道，防止缓冲区（~64 KB）写满后
+            // Python uvicorn write() 阻塞，导致长时间运行假死（根因 A）。
+            // 日志写入 ~/.vibe-trading/logs/sidecar.log，磁盘满时停写但继续 drain。
+            let log_path = layout.logs_dir.join("sidecar.log");
+            if let Err(e) = std::fs::create_dir_all(&layout.logs_dir) {
+                eprintln!("warn: cannot mkdir logs_dir: {e}");
+            }
+            crate::sidecar::drain_child_pipes(&mut child, &log_path);
             shared.lock().unwrap().replace(child);
             let _ = app.emit("service://started", port);
             Ok(port)
@@ -492,21 +499,29 @@ pub fn channels_start_url(port: u16) -> String {
 
 /// 启动消息渠道:转发 POST /channels/start 到正在运行的 backend。
 /// 等价于 `vibe-trading channels start`。backend 对 loopback 免 auth,无需鉴权头。
+///
+/// 用 async fn + spawn_blocking：reqwest::blocking 若在同步 Tauri command 中调用，
+/// 会占住 Tauri 异步运行时线程（最长 30 s），导致 webview 整体假死（根因 B）。
 #[tauri::command]
-pub fn console_start_channels(port: u16) -> Result<String, String> {
-    let resp = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("构建 HTTP 客户端: {e}"))?
-        .post(channels_start_url(port))
-        .send()
-        .map_err(|e| format!("调用 /channels/start 失败: {e}"))?;
-    let status = resp.status();
-    let body = resp.text().map_err(|e| format!("读取响应: {e}"))?;
-    if !status.is_success() {
-        return Err(format!("后端返回 {status}: {body}"));
-    }
-    Ok(body)
+pub async fn console_start_channels(port: u16) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let resp = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .map_err(|e| format!("构建 HTTP 客户端: {e}"))?
+            .post(channels_start_url(port))
+            .send()
+            .map_err(|e| format!("调用 /channels/start 失败: {e}"))?;
+        let status = resp.status();
+        let body = resp.text().map_err(|e| format!("读取响应: {e}"))?;
+        if !status.is_success() {
+            return Err(format!("后端返回 {status}: {body}"));
+        }
+        Ok(body)
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking join: {e}"))
+    .and_then(|r| r)
 }
 
 /// 构造本地 backend 的消息渠道状态 URL。
@@ -516,21 +531,29 @@ pub fn channels_status_url(port: u16) -> String {
 
 /// 消息渠道状态:转发 GET /channels/status,供控制台展示运行/未登录/失效。
 /// backend 对 loopback 免 auth,无需鉴权头。服务未运行时由调用方决定不触发。
+///
+/// 用 async fn + spawn_blocking：前端通常定期轮询此接口，若在同步 Tauri command
+/// 中用 reqwest::blocking，每次轮询都会占住 Tauri 工作线程最长 10 s（根因 B）。
 #[tauri::command]
-pub fn console_channels_status(port: u16) -> Result<String, String> {
-    let resp = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .map_err(|e| format!("构建 HTTP 客户端: {e}"))?
-        .get(channels_status_url(port))
-        .send()
-        .map_err(|e| format!("调用 /channels/status 失败: {e}"))?;
-    let status = resp.status();
-    let body = resp.text().map_err(|e| format!("读取响应: {e}"))?;
-    if !status.is_success() {
-        return Err(format!("后端返回 {status}: {body}"));
-    }
-    Ok(body)
+pub async fn console_channels_status(port: u16) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let resp = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .build()
+            .map_err(|e| format!("构建 HTTP 客户端: {e}"))?
+            .get(channels_status_url(port))
+            .send()
+            .map_err(|e| format!("调用 /channels/status 失败: {e}"))?;
+        let status = resp.status();
+        let body = resp.text().map_err(|e| format!("读取响应: {e}"))?;
+        if !status.is_success() {
+            return Err(format!("后端返回 {status}: {body}"));
+        }
+        Ok(body)
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking join: {e}"))
+    .and_then(|r| r)
 }
 
 /// 安装单个消息渠道的可选依赖:用 venv 解释器 spawn
@@ -570,16 +593,18 @@ pub async fn console_install_channel_dep(
     Ok(())
 }
 
-/// 关闭窗口时是否需要二次确认:服务运行中或依赖安装中都需要提醒用户。
-/// 纯函数,便于单测覆盖「运行中/安装中/空闲」三态。
-pub fn needs_close_confirmation(service_running: bool, installing: bool) -> bool {
+/// 退出应用时是否需要二次确认:服务运行中或依赖安装中都需要提醒用户
+/// (退出会终止 sidecar / 中断安装)。纯函数,便于单测覆盖「运行中/安装中/空闲」三态。
+/// 注意:窗口关闭按钮 X 不经此判断——它一律静默收纳后台,只有托盘「退出」才走这里。
+pub fn needs_quit_confirmation(service_running: bool, installing: bool) -> bool {
     service_running || installing
 }
 
-/// 用户在二次确认框点「确认关闭」后调用:置位放行标志,随后前端再触发关闭。
+/// 用户在退出二次确认框点「确认退出」后调用:真正退出应用。
+/// `app.exit(0)` 会触发 RunEvent::ExitRequested,由 main.rs 在那里回收 sidecar 进程组。
 #[tauri::command]
-pub fn console_confirm_close(confirmed: State<'_, CloseConfirmed>) {
-    confirmed.0.store(true, Ordering::SeqCst);
+pub fn console_quit(app: AppHandle) {
+    app.exit(0);
 }
 
 /// 强制清理虚拟环境:删除 ~/.vibe-trading/venv,便于用户从零重新安装依赖。
@@ -841,10 +866,10 @@ mod tests {
     }
 
     #[test]
-    fn close_confirmation_required_when_running_or_installing() {
-        assert!(needs_close_confirmation(true, false), "运行中应确认");
-        assert!(needs_close_confirmation(false, true), "安装中应确认");
-        assert!(needs_close_confirmation(true, true), "同时进行更应确认");
-        assert!(!needs_close_confirmation(false, false), "空闲直接关闭");
+    fn quit_confirmation_required_when_running_or_installing() {
+        assert!(needs_quit_confirmation(true, false), "运行中应确认");
+        assert!(needs_quit_confirmation(false, true), "安装中应确认");
+        assert!(needs_quit_confirmation(true, true), "同时进行更应确认");
+        assert!(!needs_quit_confirmation(false, false), "空闲直接退出");
     }
 }

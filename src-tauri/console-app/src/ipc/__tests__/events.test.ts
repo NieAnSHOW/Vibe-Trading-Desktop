@@ -5,7 +5,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: (...args: unknown[]) => listenMock(...args),
 }));
 
-import { onBootstrapEvent, onServiceStarted, onCloseRequested } from "../events";
+import { onBootstrapEvent, onServiceStarted, onQuitRequested } from "../events";
 
 describe("ipc/events", () => {
   it("onBootstrapEvent 注册 bootstrap://event 并返回 unlisten", async () => {
@@ -23,9 +23,9 @@ describe("ipc/events", () => {
     expect(listenMock).toHaveBeenCalledWith("service://started", expect.any(Function));
   });
 
-  it("onCloseRequested 注册 app://close-requested", async () => {
+  it("onQuitRequested 注册 app://quit-requested", async () => {
     listenMock.mockResolvedValue(vi.fn());
-    await onCloseRequested(vi.fn());
-    expect(listenMock).toHaveBeenCalledWith("app://close-requested", expect.any(Function));
+    await onQuitRequested(vi.fn());
+    expect(listenMock).toHaveBeenCalledWith("app://quit-requested", expect.any(Function));
   });
 });

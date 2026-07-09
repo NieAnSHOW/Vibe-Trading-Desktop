@@ -12,10 +12,10 @@ export const onBootstrapExit = (cb: (code: number) => void): Promise<UnlistenFn>
 export const onServiceStarted = (cb: (port: number) => void): Promise<UnlistenFn> =>
   listen<number>("service://started", (ev) => cb(ev.payload));
 
-export const onCloseRequested = (
+export const onQuitRequested = (
   cb: (payload: { installing?: boolean } | unknown) => void,
 ): Promise<UnlistenFn> =>
-  listen("app://close-requested", (ev) => cb(ev.payload));
+  listen("app://quit-requested", (ev) => cb(ev.payload));
 
 export const onChanneldepProgress = (cb: (line: string) => void): Promise<UnlistenFn> =>
   listen<string>("channeldep://progress", (ev) => cb(ev.payload));

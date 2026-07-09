@@ -1,9 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-mod resources; mod version; mod runtime_dir; mod port; mod sidecar; mod console; mod auth;
+mod resources; mod version; mod runtime_dir; mod port; mod sidecar; mod console; mod auth; mod tray;
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
-use tauri::{Emitter, Manager, RunEvent, WindowEvent};
+use tauri::{Manager, RunEvent, WindowEvent};
 
 type SharedChild = console::SharedChild;
 
@@ -12,14 +12,9 @@ fn main() {
     let shared_setup = shared.clone();
     let auth_state = auth::AuthState(std::sync::Mutex::new(None));
 
-    // 关闭门控用的两个共享标志:
-    // - installing:bootstrap 进行中(console::console_bootstrap 维护)
-    // - close_confirmed:用户已在二次确认框点「确认关闭」,放行下一次 CloseRequested
+    // bootstrap 进行中标志(console::console_bootstrap 维护)。托盘「退出」据此判断
+    // 是否需要二次确认;窗口关闭按钮 X 不再触发确认——它一律静默收纳到后台。
     let installing = Arc::new(AtomicBool::new(false));
-    let close_confirmed = Arc::new(AtomicBool::new(false));
-    let shared_close = shared.clone();
-    let installing_close = installing.clone();
-    let close_confirmed_close = close_confirmed.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
@@ -33,7 +28,7 @@ fn main() {
             console::console_start_channels,
             console::console_channels_status,
             console::console_install_channel_dep,
-            console::console_confirm_close,
+            console::console_quit,
             console::console_open_logs,
             console::console_clear_venv,
             console::console_login_captcha,
@@ -46,33 +41,21 @@ fn main() {
             console::console_fetch_ads,
         ])
         .manage(console::InstallingFlag(installing))
-        .manage(console::CloseConfirmed(close_confirmed))
         .manage(auth_state)
         .on_window_event(move |window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                // 用户已确认关闭 → 放行(复位标志以免影响后续)。
-                if close_confirmed_close.swap(false, Ordering::SeqCst) {
-                    return;
-                }
-                let service_running = shared_close.lock().unwrap().is_some();
-                let installing = installing_close.load(Ordering::SeqCst);
-                if console::needs_close_confirmation(service_running, installing) {
-                    // 拦截本次关闭,让前端弹二次确认框;确认后前端会置位再关。
-                    api.prevent_close();
-                    let _ = window.emit(
-                        console::CLOSE_REQUESTED_EVENT,
-                        serde_json::json!({
-                            "service_running": service_running,
-                            "installing": installing,
-                        }),
-                    );
-                }
+                // 后台挂载:点关闭按钮 X 一律静默隐藏窗口(收纳后台),不退出应用。
+                // sidecar / 安装任务继续在后台运行;唤回与真正退出都走系统托盘(见 tray.rs)。
+                api.prevent_close();
+                let _ = window.hide();
             }
         })
         .setup(move |app| {
             let handle = app.handle().clone();
             let res = resources::Resources::resolve(&handle)
                 .map_err(|e| format!("resources: {e}"))?;
+            // 安装系统托盘:后台挂载态下唤回窗口 / 退出应用的唯一入口。
+            tray::build(&handle).map_err(|e| format!("tray: {e}"))?;
             let win = app.get_webview_window("main")
                 .expect("main window (defined in tauri.conf.json)");
 
