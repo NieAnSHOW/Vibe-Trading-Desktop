@@ -494,6 +494,38 @@ def _has_root_route(routes: Any) -> bool:
     return any(getattr(route, "path", None) == "/" for route in routes)
 
 
+class _NonSuccessAccessFilter(logging.Filter):
+    """只让非成功 (>=400) 的访问请求写进 access log。
+
+    uvicorn access 的 LogRecord.args 为
+    (client_addr, method, path, http_version, status_code),其中 status_code
+    是唯一的 int,取它判断即可 (3.11/3.12 结构已核实一致)。这样前端常驻轮询的
+    200 健康检查 (/live/status、/channels/status) 不再刷日志,4xx/5xx 照常记录。
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        for arg in record.args or ():
+            if isinstance(arg, int):  # status_code
+                return arg >= 400
+        return True  # 解析不到状态码则照常记 (偏保守)
+
+
+def _build_access_log_config() -> dict:
+    """拷贝 uvicorn 默认 LOGGING_CONFIG,给 uvicorn.access 挂上非成功过滤。
+
+    必须走 log_config:uvicorn.run 内部会 dictConfig 重置 logger,
+    在 run 之前手动 addFilter 会被覆盖。
+    """
+    import copy
+
+    from uvicorn.config import LOGGING_CONFIG
+
+    cfg = copy.deepcopy(LOGGING_CONFIG)
+    cfg.setdefault("filters", {})["nonsuccess"] = {"()": _NonSuccessAccessFilter}
+    cfg["loggers"]["uvicorn.access"]["filters"] = ["nonsuccess"]
+    return cfg
+
+
 def serve_main(argv: list[str] | None = None) -> int:
     """Start the API server from CLI-style arguments."""
     import argparse
@@ -558,7 +590,13 @@ def serve_main(argv: list[str] | None = None) -> int:
     print("=" * 50)
 
     try:
-        uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+        uvicorn.run(
+            app,
+            host=args.host,
+            port=args.port,
+            log_level="info",
+            log_config=_build_access_log_config(),
+        )
     finally:
         if vite_proc:
             vite_proc.terminate()

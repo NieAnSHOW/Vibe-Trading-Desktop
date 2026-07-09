@@ -327,12 +327,12 @@ pub async fn console_start_service(
         crate::sidecar::Ready::Ok => {
             // 启动后台线程消费 stdout/stderr 管道，防止缓冲区（~64 KB）写满后
             // Python uvicorn write() 阻塞，导致长时间运行假死（根因 A）。
-            // 日志写入 ~/.vibe-trading/logs/sidecar.log，磁盘满时停写但继续 drain。
-            let log_path = layout.logs_dir.join("sidecar.log");
+            // 日志按天写入 ~/.vibe-trading/logs/sidecar-YYYY-MM-DD.log，
+            // 跨天自动切分并清理保留窗口外的旧文件（见 sidecar::drain_child_pipes）。
             if let Err(e) = std::fs::create_dir_all(&layout.logs_dir) {
                 eprintln!("warn: cannot mkdir logs_dir: {e}");
             }
-            crate::sidecar::drain_child_pipes(&mut child, &log_path);
+            crate::sidecar::drain_child_pipes(&mut child, &layout.logs_dir);
             shared.lock().unwrap().replace(child);
             let _ = app.emit("service://started", port);
             Ok(port)

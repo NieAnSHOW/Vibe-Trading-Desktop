@@ -157,31 +157,97 @@ pub fn await_health(child: &mut Child, port: u16) -> Ready {
 }
 
 /// 为已启动的 sidecar 各开一个后台线程消费 stdout/stderr 管道，
+/// 按天日志的保留窗口；早于「今天 - N 天」的 `sidecar-*.log` 在跨天时被清理。
+const LOG_RETAIN_DAYS: i64 = 14;
+
+/// epoch 天 → (year, month, day)。Howard Hinnant civil_from_days，无日期库依赖。
+/// <https://howardhinnant.github.io/date_algorithms.html>
+fn civil_from_days(z: i64) -> (i64, u32, u32) {
+    let z = z + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = (z - era * 146097) as u64; // [0, 146096]
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; // [0, 399]
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
+    let mp = (5 * doy + 2) / 153; // [0, 11]
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32; // [1, 31]
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32; // [1, 12]
+    (if m <= 2 { y + 1 } else { y }, m, d)
+}
+
+fn today_epoch_day() -> i64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64 / 86400)
+        .unwrap_or(0)
+}
+
+/// 当天日志文件名 `sidecar-YYYY-MM-DD.log`（UTC 天）。
+fn today_stamp() -> String {
+    let (y, m, d) = civil_from_days(today_epoch_day());
+    format!("sidecar-{y:04}-{m:02}-{d:02}.log")
+}
+
+/// 清理日志目录：删保留窗口外的旧 `sidecar-YYYY-MM-DD.log`，以及无日期格式的
+/// 遗留 `sidecar.log`（旧版本产物，新代码只写带日期格式）。
+/// `YYYY-MM-DD` 固定宽度，字典序即时间序，直接与 cutoff 字符串比较。
+fn cleanup_old_logs(log_dir: &Path, today_day: i64) {
+    let (y, m, d) = civil_from_days(today_day - LOG_RETAIN_DAYS);
+    let cutoff = format!("{y:04}-{m:02}-{d:02}");
+    let Ok(entries) = std::fs::read_dir(log_dir) else {
+        return;
+    };
+    for ent in entries.flatten() {
+        let fname = ent.file_name();
+        let Some(name) = fname.to_str() else {
+            continue;
+        };
+        // 遗留的无日期 sidecar.log（旧版本格式）直接删——新代码不再写它
+        if name == "sidecar.log" {
+            let _ = std::fs::remove_file(ent.path());
+            continue;
+        }
+        let Some(date) = name.strip_prefix("sidecar-").and_then(|s| s.strip_suffix(".log")) else {
+            continue;
+        };
+        if date.len() == 10 && date < cutoff.as_str() {
+            let _ = std::fs::remove_file(ent.path());
+        }
+    }
+}
+
 /// 防止管道缓冲区（macOS/Linux ~64 KB）写满后 Python 端 write() 阻塞，
 /// 导致 uvicorn event loop 卡死（长时间运行假死根因）。
 ///
-/// 日志追加写入 `log_path`（BufWriter + 行级 flush）。磁盘满时停止写入但
-/// 继续消费管道——管道永不满，sidecar 运行不受影响。
-pub fn drain_child_pipes(child: &mut Child, log_path: &Path) {
+/// 日志按天追加写入 `log_dir/sidecar-YYYY-MM-DD.log`（BufWriter + 行级 flush），
+/// 跨天自动切换并清理保留窗口外的旧文件。磁盘满时停止写入但继续消费管道——
+/// 管道永不满，sidecar 运行不受影响。
+pub fn drain_child_pipes(child: &mut Child, log_dir: &Path) {
     if let Some(stdout) = child.stdout.take() {
-        let path = log_path.to_path_buf();
-        std::thread::spawn(move || {
-            use std::io::BufRead;
-            let mut w = open_log_append(&path);
-            for line in std::io::BufReader::new(stdout).lines().map_while(Result::ok) {
-                drain_line(&mut w, "[out]", &line);
-            }
-        });
+        let dir = log_dir.to_path_buf();
+        std::thread::spawn(move || drain_stream(stdout, &dir, "[out]"));
     }
     if let Some(stderr) = child.stderr.take() {
-        let path = log_path.to_path_buf();
-        std::thread::spawn(move || {
-            use std::io::BufRead;
-            let mut w = open_log_append(&path);
-            for line in std::io::BufReader::new(stderr).lines().map_while(Result::ok) {
-                drain_line(&mut w, "[err]", &line);
-            }
-        });
+        let dir = log_dir.to_path_buf();
+        std::thread::spawn(move || drain_stream(stderr, &dir, "[err]"));
+    }
+}
+
+fn drain_stream<R: std::io::Read>(stream: R, dir: &Path, tag: &str) {
+    use std::io::BufRead;
+    let mut cur_day = today_epoch_day();
+    let mut w = open_log_append(&dir.join(today_stamp()));
+    cleanup_old_logs(dir, cur_day);
+    for line in std::io::BufReader::new(stream).lines().map_while(Result::ok) {
+        let day = today_epoch_day();
+        if day != cur_day {
+            // 跨天：重开当天文件并清理过期日志。
+            cur_day = day;
+            w = open_log_append(&dir.join(today_stamp()));
+            cleanup_old_logs(dir, day);
+        }
+        drain_line(&mut w, tag, &line);
     }
 }
 
@@ -238,6 +304,50 @@ mod tests {
         // BOOT is the -c argument for Python, which imports cli and calls cli.main
         assert!(BOOT.contains("cli.main"));
         assert!(BOOT.contains("import"));
+    }
+
+    #[test]
+    fn civil_from_days_known_dates() {
+        assert_eq!(civil_from_days(0), (1970, 1, 1));
+        assert_eq!(civil_from_days(31), (1970, 2, 1)); // 1970 非闰，1 月 31 天
+        assert_eq!(civil_from_days(365), (1971, 1, 1)); // 1970 整年 365 天
+        assert_eq!(civil_from_days(730), (1972, 1, 1)); // 1970+1971 各 365
+        assert_eq!(civil_from_days(789), (1972, 2, 29)); // 闰日
+        assert_eq!(civil_from_days(790), (1972, 3, 1));
+    }
+
+    #[test]
+    fn today_stamp_is_dated_filename() {
+        let s = today_stamp();
+        assert!(s.starts_with("sidecar-"));
+        assert!(s.ends_with(".log"));
+        assert_eq!(s.len(), "sidecar-0000-00-00.log".len()); // 21 字符
+    }
+
+    #[test]
+    fn cleanup_old_logs_keeps_recent_removes_expired() {
+        use std::fs;
+        let base = std::env::temp_dir().join("vibe_sidecar_cleanup_test");
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+
+        let today = today_epoch_day();
+        // 远古（今天-40，应删）和昨天（应留）各放一个
+        let (oy, om, od) = civil_from_days(today - 40);
+        let old_name = format!("sidecar-{oy:04}-{om:02}-{od:02}.log");
+        let (ry, rm, rd) = civil_from_days(today - 1);
+        let recent_name = format!("sidecar-{ry:04}-{rm:02}-{rd:02}.log");
+        fs::File::create(base.join(&old_name)).unwrap();
+        fs::File::create(base.join(&recent_name)).unwrap();
+        fs::File::create(base.join("sidecar.log")).unwrap(); // 旧版本遗留
+
+        cleanup_old_logs(&base, today);
+
+        assert!(!base.join(&old_name).exists(), "过期日志应被清理");
+        assert!(base.join(&recent_name).exists(), "近期日志应保留");
+        assert!(!base.join("sidecar.log").exists(), "无日期遗留 sidecar.log 应被清理");
+
+        fs::remove_dir_all(&base).ok();
     }
 
     #[test]
