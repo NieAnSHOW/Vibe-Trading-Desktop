@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-mod resources; mod version; mod runtime_dir; mod port; mod sidecar; mod console; mod auth; mod tray;
+mod resources; mod version; mod runtime_dir; mod port; mod sidecar; mod console; mod auth; mod tray; mod updater;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
@@ -46,6 +46,9 @@ fn main() {
             console::console_auth_status,
             console::console_logout,
             console::console_fetch_ads,
+            console::console_check_update,
+            console::console_download_update,
+            console::console_install_update,
         ])
         .manage(console::InstallingFlag(installing))
         .manage(auth_state)

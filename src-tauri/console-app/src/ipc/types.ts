@@ -88,6 +88,24 @@ export interface ServiceStartError {
   code?: number | null;
 }
 
+// === 版本更新 ===
+
+export interface UpdateInfo {
+  current: string;
+  latest: string;
+  hasUpdate: boolean;
+  downloadUrl: string;
+  assetName: string;
+  releaseNotes: string;
+}
+
+export interface DownloadProgress {
+  downloaded: number;
+  total: number;
+  done: boolean;
+  path?: string | null;
+}
+
 // === 广告 ===
 
 export interface AdImage {

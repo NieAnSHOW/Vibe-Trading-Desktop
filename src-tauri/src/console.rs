@@ -748,6 +748,48 @@ pub async fn console_fetch_ads(position: String) -> Result<Vec<AdItem>, String> 
     .map_err(|e| format!("spawn_blocking join: {e}"))?
 }
 
+// ── 版本检查与自动更新命令 ──────────────────────────────────────────
+
+/// 检查 GitHub 最新版本，与当前版本比较。
+/// 如果有新版本，返回 UpdateInfo（含下载链接、release notes）；
+/// 无新版本时 has_update = false。
+#[tauri::command]
+pub async fn console_check_update(app: AppHandle) -> Result<crate::updater::UpdateInfo, String> {
+    let current = app.package_info().version.to_string();
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::updater::check_update(&current)
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking join: {e}"))?
+}
+
+/// 下载最新安装包到 ~/.vibe-trading/updates/，流式推送 update://progress 事件。
+/// 前端应先调 console_check_update 拿到 UpdateInfo 再调此命令。
+#[tauri::command]
+pub async fn console_download_update(
+    app: AppHandle,
+    info: crate::updater::UpdateInfo,
+) -> Result<String, String> {
+    let app2 = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::updater::download_update(&info, &app2)
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking join: {e}"))?
+    .map(|p| p.to_string_lossy().to_string())
+}
+
+/// 用系统命令打开已下载的安装包（macOS 打开 DMG，Windows 启动安装程序）。
+/// 打开后 app 继续运行，用户手动完成安装。
+#[tauri::command]
+pub fn console_install_update(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() {
+        return Err(format!("安装包不存在: {path}"));
+    }
+    crate::updater::install_update(p)
+}
+
 // ── 测试 ────────────────────────────────────────────────────────────
 
 #[cfg(test)]

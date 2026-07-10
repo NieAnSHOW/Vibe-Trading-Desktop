@@ -5,6 +5,7 @@ import type {
   LoginResultView,
   StatusReport,
   AdItem,
+  UpdateInfo,
 } from "./types";
 
 // 与 src-tauri/src/console.rs 的 #[tauri::command] 一一对应。
@@ -80,3 +81,13 @@ export const consoleLogout = (): Promise<void> =>
 
 export const consoleFetchAds = (position: string): Promise<AdItem[]> =>
   invoke<AdItem[]>("console_fetch_ads", { position });
+
+// ── 版本检查与更新 ──────────────────────────────────────────────────
+export const consoleCheckUpdate = (): Promise<UpdateInfo> =>
+  invoke<UpdateInfo>("console_check_update");
+
+export const consoleDownloadUpdate = (info: UpdateInfo): Promise<string> =>
+  invoke<string>("console_download_update", { info });
+
+export const consoleInstallUpdate = (path: string): Promise<void> =>
+  invoke<void>("console_install_update", { path });

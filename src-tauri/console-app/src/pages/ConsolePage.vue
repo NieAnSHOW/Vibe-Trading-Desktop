@@ -40,6 +40,7 @@ import ConfirmDialog from "../components/ConfirmDialog.vue";
 import HintBanner from "../components/HintBanner.vue";
 import AdSlot from "../components/AdSlot.vue";
 import VersionFooter from "../components/VersionFooter.vue";
+import UpdateBanner from "../components/UpdateBanner.vue";
 import { useBusy } from "../composables/useBusy";
 import logoPng from "../assets/128x128@2x.png";
 import ProdConfig from '../config/prod.ts'
@@ -55,6 +56,7 @@ const { env: envState, port, serviceRunning } = storeToRefs(env);
 const { running } = storeToRefs(service);
 
 const logViewer = ref<InstanceType<typeof LogViewer> | null>(null);
+const updateBanner = ref<InstanceType<typeof UpdateBanner> | null>(null);
 const errorMsg = ref("");
 
 function log(line: string) {
@@ -327,6 +329,8 @@ let adTimer: ReturnType<typeof setInterval> | null = null;
 onMounted(async () => {
   // 恢复登录态（静默，不阻塞）
   await authStore.refresh();
+  // 启动时静默检查更新（失败不影响主流程）
+  updateBanner.value?.checkUpdate().catch(() => {});
 
   unlistens = await Promise.all([
     onBootstrapEvent((e: BootstrapEvent) => {
@@ -398,6 +402,9 @@ onUnmounted(() => {
         </AppButton>
       </div>
     </div>
+    <!-- 版本更新通知横幅 -->
+    <UpdateBanner ref="updateBanner" />
+
     <!-- 广告位 banner:标题 + 多图轮播 / 文字 -->
     <AdSlot :ad="adBanner" variant="banner" />
 

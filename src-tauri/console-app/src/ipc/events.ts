@@ -1,5 +1,5 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { BootstrapEvent } from "./types";
+import type { BootstrapEvent, DownloadProgress } from "./types";
 
 // 6 个事件的 typed wrapper,每个返回 unlisten,由调用方在 onUnmounted 时清理。
 
@@ -22,3 +22,6 @@ export const onChanneldepProgress = (cb: (line: string) => void): Promise<Unlist
 
 export const onChanneldepExit = (cb: (code: number) => void): Promise<UnlistenFn> =>
   listen<number>("channeldep://exit", (ev) => cb(ev.payload));
+
+export const onUpdateProgress = (cb: (p: DownloadProgress) => void): Promise<UnlistenFn> =>
+  listen<DownloadProgress>("update://progress", (ev) => cb(ev.payload));
