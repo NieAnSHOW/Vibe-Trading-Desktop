@@ -54,20 +54,45 @@ function Invoke-Step0Checks {
   Write-Host "All prerequisites present." -ForegroundColor Green
 }
 
+function Test-RuntimeReady([string]$Runtime) {
+  # runtime 就绪 = python.exe 存在 + Tier 0 依赖可 import（与 build-dmg.sh 逻辑一致）
+  $Py = "$Runtime\python.exe"
+  if (-not (Test-Path $Py)) { return $false }
+  $env:PYTHONPATH = "agent"
+  & $Py -c "import fastapi" 2>$null
+  return $LASTEXITCODE -eq 0
+}
+
 function Invoke-Step1Runtime {
   Write-Step 1 "Prepare runtime"
   $Runtime = "$Root\.desktop-build\python-runtime"
+  $Py     = "$Runtime\python.exe"
+
   if ($SkipRuntime) {
-    Write-Host "Skipping runtime download (-SkipRuntime); dependencies will still be installed and smoked" -ForegroundColor Yellow
-    if (-not (Test-Path "$Runtime\python.exe")) {
+    # 显式跳过：要求 runtime 已存在，否则报错
+    if (-not (Test-Path $Py)) {
       throw "runtime missing at $Runtime but -SkipRuntime set; remove the flag or run fetch-runtime first"
     }
+    Write-Host "Skipping runtime download (-SkipRuntime); runtime exists, proceeding to install-deps" -ForegroundColor Yellow
+  } elseif (Test-RuntimeReady $Runtime) {
+    # runtime 就绪（含 Tier 0 依赖）：跳过下载和安装，直接复用
+    $pyVer = (& $Py --version 2>&1)
+    Write-Host "Runtime already ready ($pyVer), skipping fetch + install-deps" -ForegroundColor Green
+    Write-Host "Runtime ready at: $Runtime" -ForegroundColor Green
+    return
   } else {
-    $env:PBS_TAG = $PbsTag
+    # runtime 不存在或 Tier 0 依赖缺失：重新下载
+    if (-not (Test-Path $Py)) {
+      Write-Host "Runtime not found, downloading..." -ForegroundColor Yellow
+    } else {
+      Write-Host "Runtime exists but Tier 0 deps missing, re-running install-deps..." -ForegroundColor Yellow
+    }
+    $env:PBS_TAG   = $PbsTag
     $env:PBS_ASSET = $PbsAsset
     & "$DesktopScripts\fetch-runtime.ps1"
     if ($LASTEXITCODE -ne 0) { throw "[FAILED] step 1: fetch-runtime exited $LASTEXITCODE" }
   }
+
   & "$DesktopScripts\install-deps.ps1" "$Runtime"
   if ($LASTEXITCODE -ne 0) { throw "[FAILED] step 1: install-deps exited $LASTEXITCODE" }
   Write-Host "Runtime ready at: $Runtime" -ForegroundColor Green
