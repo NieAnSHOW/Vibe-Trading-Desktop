@@ -329,8 +329,10 @@ let adTimer: ReturnType<typeof setInterval> | null = null;
 onMounted(async () => {
   // 恢复登录态（静默，不阻塞）
   await authStore.refresh();
-  // 启动时静默检查更新（失败不影响主流程）
-  updateBanner.value?.checkUpdate().catch(() => {});
+  // TODO: 暂时禁用自动更新，启动时静默检查更新（失败不影响主流程）
+  if (ProdConfig.checkUpdate) {
+    updateBanner.value?.checkUpdate().catch(() => { });
+  }
 
   unlistens = await Promise.all([
     onBootstrapEvent((e: BootstrapEvent) => {
@@ -392,7 +394,7 @@ onUnmounted(() => {
         <div v-if="ProdConfig.enableLogin">
           <template v-if="authStore.authenticated && authStore.userInfo">
             <span style="font-size:12px;color:#666">{{ authStore.userInfo.nickName || authStore.userInfo.phone || '已登录'
-            }}</span>
+              }}</span>
             <AppButton variant="ghost" :busy="logoutBusy.busy.value" @click="onLogout">退出登录</AppButton>
           </template>
           <AppButton v-else variant="ghost" @click="router.push('/login')">登录</AppButton>
@@ -414,8 +416,8 @@ onUnmounted(() => {
         <span class="status-label">运行环境</span>
         <div style="display: flex; gap: 8px">
           <StatusBadge :cls="envBadge.cls" :text="envBadge.txt" />
-          <AppButton v-if="showInstallBtn" :variant="envState === 'ready' ? 'ghost' : 'primary'"
-            :busy="installing" busy-label="安装中" @click="onInstall">
+          <AppButton v-if="showInstallBtn" :variant="envState === 'ready' ? 'ghost' : 'primary'" :busy="installing"
+            busy-label="安装中" @click="onInstall">
             安装/修复依赖
           </AppButton>
           <AppButton variant="ghost" :busy="clearVenvBusy.busy.value" @click="onClearVenv">
