@@ -15,7 +15,7 @@
 
 ## 3. 前端 API、类型与状态管理
 
-- [ ] 3.1 在 `frontend/src/lib/api.ts` 新增 watchlist 类型定义和 CRUD/quotes API 函数
+- [x] 3.1 在 `frontend/src/lib/api.ts` 新增 watchlist 类型定义和 CRUD/quotes API 函数
 - [ ] 3.2 新增 watchlist Zustand store，管理股票列表、行情数据、选中状态、loading/error，并提供 refresh/add/remove/toggleSelection actions
 - [ ] 3.3 为 API 函数与 store 添加 Vitest 测试，覆盖成功、错误和状态更新场景
 
