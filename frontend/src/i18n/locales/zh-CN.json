@@ -81,7 +81,8 @@
           "description": "港股、A 股与全球市场的财经研究与资讯。"
         }
       }
-    }
+    },
+    "watchlist": "自选股"
   },
   "runtime": {
     "monitorBadge": "运行时监控",
@@ -865,7 +866,11 @@
     "phone": "手机号",
     "nickName": "昵称",
     "gender": "性别",
-    "genderOptions": { "0": "未知", "1": "男", "2": "女" },
+    "genderOptions": {
+      "0": "未知",
+      "1": "男",
+      "2": "女"
+    },
     "description": "介绍",
     "save": "保存",
     "saved": "已保存",
@@ -881,11 +886,40 @@
     "profile": "个人信息",
     "logout": "退出登录",
     "guest": "未命名",
-    "loginMsg":"⚡️获取VIP服务⚡️"
+    "loginMsg": "⚡️获取VIP服务⚡️"
   },
   "charts": {
     "noPriceData": "暂无价格数据",
     "noCorrelationData": "暂无相关性数据",
     "noEquityData": "暂无收益曲线数据"
+  },
+  "watchlist": {
+    "title": "自选股",
+    "placeholder": "输入 6 位股票代码",
+    "add": "添加",
+    "adding": "添加中…",
+    "added": "已添加 {{code}}",
+    "alreadyAdded": "{{code}} 已在自选股中",
+    "addError": "添加失败，请稍后重试",
+    "remove": "删除",
+    "removed": "已删除 {{code}}",
+    "removeError": "删除失败，请稍后重试",
+    "refresh": "刷新",
+    "empty": "暂无自选股，请添加股票代码",
+    "invalidCode": "请输入 6 位数字股票代码",
+    "confirmDelete": "确认删除",
+    "cancelDelete": "取消",
+    "delete": "删除",
+    "select": "选择",
+    "selectAll": "全选",
+    "sendToAgent": "发给 Agent 分析",
+    "col": {
+      "code": "代码",
+      "name": "名称",
+      "price": "最新价",
+      "changeAmt": "涨跌额",
+      "changePct": "涨跌幅",
+      "actions": "操作"
+    }
   }
 }

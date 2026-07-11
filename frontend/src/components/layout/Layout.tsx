@@ -6,6 +6,7 @@ import {
   Activity,
   BarChart3,
   Bot,
+  Eye,
   FileText,
   Languages,
   Moon,
@@ -291,6 +292,7 @@ export function Layout() {
 
           <NavLink to="/" icon={BarChart3} label={t("layout.home")} collapsed={collapsed} isActive={isActive("/")} />
           <NavLink to="/agent" icon={Bot} label={t("layout.agent")} collapsed={collapsed} isActive={isActive("/agent")} />
+          <NavLink to="/watchlist" icon={Eye} label={t("layout.watchlist")} collapsed={collapsed} isActive={isActive("/watchlist")} />
           <NavLink to="/reports" icon={FileText} label={t("layout.reports")} collapsed={collapsed} isActive={isActive("/reports")} />
           <NavLink to="/alpha-zoo" icon={Layers} label={t("layout.alphaZoo")} collapsed={collapsed} isActive={isActive("/alpha-zoo")} />
 
