@@ -62,3 +62,15 @@ def test_delete_nonexistent(client):
     """DELETE 不存在的股票返回 404。"""
     resp = client.delete("/watchlist/stocks/999999")
     assert resp.status_code == 404
+
+
+def test_add_empty_code(client):
+    """POST 空 code 应返回 400 Bad Request。"""
+    resp = client.post("/watchlist/stocks", json={"code": ""})
+    assert resp.status_code == 400
+
+
+def test_add_whitespace_code(client):
+    """POST 纯空格 code 应返回 400。"""
+    resp = client.post("/watchlist/stocks", json={"code": "   "})
+    assert resp.status_code == 400

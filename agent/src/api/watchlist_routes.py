@@ -130,6 +130,9 @@ async def list_stocks() -> StockListResponse:
 @router.post("/stocks")
 async def add_stock(req: AddStockRequest) -> dict:
     """添加自选股；重复时返回 exists=true。"""
+    if not req.code or not req.code.strip():
+        raise HTTPException(status_code=400, detail="股票代码不能为空")
+
     def _insert():
         try:
             with _get_connection() as conn:
