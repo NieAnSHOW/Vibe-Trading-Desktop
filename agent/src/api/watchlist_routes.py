@@ -24,6 +24,55 @@ try:
 except ImportError:
     require_local_or_auth = None  # 测试环境无需鉴权
 
+try:
+    from backtest.loaders.a_stock_data import tencent_quote
+except ImportError:
+    tencent_quote = None  # type: ignore[assignment]
+
+# ---------------------------------------------------------------------------
+# QuoteProvider Protocol + TencentQuoteProvider
+# ---------------------------------------------------------------------------
+
+from typing import Protocol
+
+
+class QuoteProvider(Protocol):
+    """行情数据提供者协议。"""
+
+    market: str
+
+    def fetch(self, codes: list[str]) -> dict[str, dict]:
+        """批量查询行情，返回 {code: quote_dict}；失败的 code 以 error 字段标注。"""
+        ...
+
+
+class TencentQuoteProvider:
+    """A 股实时行情，复用 tencent_quote()，统一返回结构。"""
+
+    market: str = "a_stock"
+
+    def fetch(self, codes: list[str]) -> dict[str, dict]:
+        """返回 {code: {name, price, change_pct, change_amt, high, low, volume}}。"""
+        raw = tencent_quote(codes)  # type: ignore[misc]
+        result: dict[str, dict] = {}
+        for code in codes:
+            if code in raw:
+                r = raw[code]
+                result[code] = {
+                    "code": code,
+                    "name": r.get("name"),
+                    "price": r.get("price"),
+                    "change_pct": r.get("change_pct"),
+                    "change_amt": r.get("change_amt"),
+                    "high": r.get("high"),
+                    "low": r.get("low"),
+                    "volume": r.get("amount_wan"),
+                }
+            else:
+                result[code] = {"code": code, "error": "数据不可用"}
+        return result
+
+
 # ---------------------------------------------------------------------------
 # DB 路径与连接管理
 # ---------------------------------------------------------------------------
