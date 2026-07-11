@@ -7,7 +7,7 @@
 
 ## 2. 行情 Provider 与查询接口
 
-- [ ] 2.1 定义 `QuoteProvider` Protocol 和 `TencentQuoteProvider` 实现，复用 `tencent_quote` 并统一行情响应结构
+- [x] 2.1 定义 `QuoteProvider` Protocol 和 `TencentQuoteProvider` 实现，复用 `tencent_quote` 并统一行情响应结构
 - [ ] 2.2 实现 `GET /watchlist/quotes?codes=...` 端点：批量查询、空参数校验、部分失败降级、未知市场错误
 - [ ] 2.3 实现行情内存缓存与 stale 降级：数据源超时/失败时返回最后缓存值，无缓存时返回错误条目且不抛 HTTP 500
 - [ ] 2.4 在 `agent/api_server.py` 注册 watchlist router，并更新前端 Vite proxy 配置加入 `/watchlist`
