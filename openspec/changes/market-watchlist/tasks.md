@@ -36,7 +36,7 @@
 
 ## 6. 集成验证与文档
 
-- [ ] 6.1 运行后端 watchlist 窄测试、相关现有测试和 Python 语法检查，修复所有失败
-- [ ] 6.2 运行前端 Vitest 全量测试和 `npm run build`，修复所有失败和 TypeScript 错误
+- [x] 6.1 运行后端 watchlist 窄测试、相关现有测试和 Python 语法检查，修复所有失败
+- [x] 6.2 运行前端 Vitest 全量测试和 `npm run build`，修复所有失败和 TypeScript 错误
 - [ ] 6.3 手工验证核心流程：添加股票→3s 行情刷新→SQLite 持久化→删除→选中发给 Agent→输入框预填
 - [ ] 6.4 更新 `docs/desktop/README.md` 或相关用户文档，说明自选股功能、数据存储位置和当前仅支持 A 股的限制
