@@ -2,7 +2,7 @@
 
 - [x] 1.1 新建 `agent/src/api/watchlist_routes.py`，定义 Pydantic 请求/响应模型和 `APIRouter(prefix="/watchlist")`
 - [x] 1.2 实现 SQLite 初始化与连接管理：创建 `~/.vibe-trading/watchlist.db` 和 `watchlist` 表，确保幂等和跨平台路径兼容
-- [ ] 1.3 实现 `GET /watchlist/stocks`、`POST /watchlist/stocks`、`DELETE /watchlist/stocks/{code}` CRUD 端点，覆盖校验、重复添加和 404 场景
+- [x] 1.3 实现 `GET /watchlist/stocks`、`POST /watchlist/stocks`、`DELETE /watchlist/stocks/{code}` CRUD 端点，覆盖校验、重复添加和 404 场景
 - [ ] 1.4 添加后端存储层单元测试：首次建库、幂等初始化、CRUD、重复添加、无效代码、删除不存在记录
 
 ## 2. 行情 Provider 与查询接口
