@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import sqlite3
 import threading
+import time as _time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -219,10 +220,48 @@ async def delete_stock(code: str, market: str = "a_stock") -> dict:
 _SUPPORTED_MARKETS = {"a_stock"}
 _DEFAULT_PROVIDER = TencentQuoteProvider()
 
+# TTL 缓存：{code: (timestamp, quote_dict)}，5 秒过期（plan 约束）
+_QUOTE_CACHE: dict[str, tuple[float, dict]] = {}
+_QUOTE_TTL_S = 5.0
+
+
+def _fetch_with_cache(code_list: list[str]) -> dict[str, dict]:
+    """同步执行：带 TTL 缓存 + stale 降级的批量行情查询。"""
+    now = _time.monotonic()
+    fresh: list[str] = []
+    result: dict[str, dict] = {}
+
+    # 先从缓存取仍在 TTL 内的条目
+    for code in code_list:
+        if code in _QUOTE_CACHE:
+            ts, cached = _QUOTE_CACHE[code]
+            if now - ts < _QUOTE_TTL_S:
+                result[code] = cached
+
+    # 只请求缓存未命中或已过期的 code
+    fresh = [c for c in code_list if c not in result]
+    if fresh:
+        try:
+            fetched = _DEFAULT_PROVIDER.fetch(fresh)
+            for code, quote in fetched.items():
+                if "error" not in quote:
+                    _QUOTE_CACHE[code] = (_time.monotonic(), quote)
+                result[code] = quote
+        except Exception:
+            # 数据源失败：用 stale 缓存降级；无缓存则返回 error 条目
+            for code in fresh:
+                if code in _QUOTE_CACHE:
+                    _ts, stale_data = _QUOTE_CACHE[code]
+                    result[code] = {**stale_data, "stale": True}
+                else:
+                    result[code] = {"code": code, "error": "行情数据暂时不可用"}
+
+    return result
+
 
 @router.get("/quotes")
 async def get_quotes(codes: str = "", market: str = "a_stock") -> dict:
-    """批量查询行情。
+    """批量查询行情（含 TTL 缓存 + stale 降级）。
 
     Query params:
     - codes: 逗号分隔的股票代码，必填非空
@@ -238,7 +277,7 @@ async def get_quotes(codes: str = "", market: str = "a_stock") -> dict:
         raise HTTPException(status_code=400, detail="codes 参数不能为空")
 
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, _DEFAULT_PROVIDER.fetch, code_list)
+    result = await loop.run_in_executor(None, _fetch_with_cache, code_list)
     return result
 
 

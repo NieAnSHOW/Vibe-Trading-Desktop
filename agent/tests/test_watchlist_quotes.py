@@ -112,3 +112,63 @@ def test_quotes_unknown_market(quotes_client):
     """未知 market 参数返回 400。"""
     resp = quotes_client.get("/watchlist/quotes?codes=000001&market=unknown")
     assert resp.status_code == 400
+
+
+# ─── Task 7: TTL cache + stale fallback ──────────────────────────────────────
+
+def test_cache_returns_stale_on_error(monkeypatch):
+    """数据源超时/失败时，返回最后缓存值，不抛 HTTP 500。"""
+    import src.api.watchlist_routes as wm
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    call_count = 0
+
+    def mock_tencent_first(codes):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return {"000001": {"name": "平安银行", "price": 10.5, "change_pct": 1.0, "change_amt": 0.1, "high": 11.0, "low": 10.0, "amount_wan": 100.0}}
+        raise Exception("network timeout")
+
+    monkeypatch.setattr(wm, "tencent_quote", mock_tencent_first)
+    # Clear cache before test
+    wm._QUOTE_CACHE.clear()
+
+    app = FastAPI()
+    app.include_router(wm.router)
+    client = TestClient(app)
+
+    # First call — populates cache
+    resp1 = client.get("/watchlist/quotes?codes=000001")
+    assert resp1.status_code == 200
+    assert resp1.json()["000001"]["price"] == 10.5
+
+    # Manually expire cache so next call triggers the network (which will fail)
+    wm._QUOTE_CACHE["000001"] = (0.0, wm._QUOTE_CACHE["000001"][1])  # ts=0 → expired
+
+    # Second call — network fails, but returns stale cache
+    resp2 = client.get("/watchlist/quotes?codes=000001")
+    assert resp2.status_code == 200
+    data = resp2.json()
+    assert data["000001"]["price"] == 10.5  # stale value returned
+    assert data["000001"].get("stale") is True  # stale flag
+
+
+def test_cache_no_stale_returns_error_entry(monkeypatch):
+    """无缓存时数据源失败，返回 error 字段条目，不抛 HTTP 500。"""
+    import src.api.watchlist_routes as wm
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(wm, "tencent_quote", lambda codes: (_ for _ in ()).throw(Exception("timeout")))
+    wm._QUOTE_CACHE.clear()
+
+    app = FastAPI()
+    app.include_router(wm.router)
+    client = TestClient(app)
+
+    resp = client.get("/watchlist/quotes?codes=999888")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "error" in data["999888"]
