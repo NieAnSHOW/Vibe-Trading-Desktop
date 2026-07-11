@@ -66,8 +66,8 @@ function toForm(settings: LLMSettings): LLMFormState {
 // capabilities.py::_PROVIDERS)。前端只保留默认值/判定常量,与后端 json 对齐。
 const VIP_PROVIDER_NAME = "vip_server";
 const VIP_DEFAULTS = {
-  model: "deepseek-v4-flash",
-  base_url: "https://aiyfy.cn/v1",
+  model: "hy3",
+  base_url: "https://new.ailjf.cc/v1",
 } as const;
 
 // ponytail: "用户是否主动切换过 provider"的本地标记。
@@ -173,7 +173,9 @@ export function Settings() {
           );
         } else {
           const message =
-            llmResult.reason instanceof Error ? llmResult.reason.message : "Unknown error";
+            llmResult.reason instanceof Error
+              ? llmResult.reason.message
+              : "Unknown error";
           setSettingsLoadError(message);
           if (isAuthRequiredError(llmResult.reason)) {
             toast.error(message);
@@ -186,7 +188,9 @@ export function Settings() {
           setDataSettings(dataSourceResult.value);
         } else {
           const message =
-            dataSourceResult.reason instanceof Error ? dataSourceResult.reason.message : "Unknown error";
+            dataSourceResult.reason instanceof Error
+              ? dataSourceResult.reason.message
+              : "Unknown error";
           setSettingsLoadError(message);
           if (isAuthRequiredError(dataSourceResult.reason)) {
             toast.error(message);
@@ -200,7 +204,9 @@ export function Settings() {
         } else {
           // channel status 失败不拖垮整页: 保留 LLM/data source 可用, channel 区降级为空。
           const message =
-            channelResult.reason instanceof Error ? channelResult.reason.message : "Unknown error";
+            channelResult.reason instanceof Error
+              ? channelResult.reason.message
+              : "Unknown error";
           toast.error(`Failed to load channel status: ${message}`);
           setChannelStatus(null);
         }
@@ -596,8 +602,260 @@ export function Settings() {
         </p>
       </div>
 
-      {localApiAccessSection}
+      {/* {localApiAccessSection} */}
+      {/* LLM Settings */}
+      {hideLlm ? (
+        <div className="rounded-lg border bg-card p-5 shadow-sm flex items-center gap-3 text-sm text-muted-foreground">
+          <Server className="h-4 w-4 text-primary shrink-0" />
+          <span>大模型已由桌面端登录自动配置（VIP），无需手动设置。</span>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-2">
+            <h2 className="text-lg font-semibold tracking-tight">
+              {"LLM Settings"}
+            </h2>
+            <p className="max-w-3xl text-sm text-muted-foreground">
+              {
+                "Choose the model used by the agent and save it to the project-local agent/.env file."
+              }
+            </p>
+          </div>
 
+          <form
+            onSubmit={submit}
+            className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]"
+          >
+            <section className="rounded-lg border bg-card p-5 shadow-sm">
+              <div className="mb-5 flex items-center gap-2">
+                <Server className="h-4 w-4 text-primary" />
+                <h2 className="text-base font-semibold">{"Connection"}</h2>
+              </div>
+
+              <div className="grid gap-4">
+                <label className="grid gap-2">
+                  <span className={labelClass}>
+                    {i18n.t("settings.provider")}
+                  </span>
+                  <select
+                    value={form.provider}
+                    onChange={(event) => onProviderChange(event.target.value)}
+                    className={fieldClass}
+                  >
+                    {providers.map((provider) => (
+                      <option key={provider.name} value={provider.name}>
+                        {provider.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className={hintClass}>
+                    {
+                      "Changing providers updates the recommended model and endpoint."
+                    }
+                  </span>
+                </label>
+
+                {form.provider !== VIP_PROVIDER_NAME && (
+                  <label className="grid gap-2">
+                    <span className={labelClass}>{"Model"}</span>
+                    <div className="flex gap-2">
+                      <input
+                        value={form.model_name}
+                        onChange={(event) =>
+                          setForm({ ...form, model_name: event.target.value })
+                        }
+                        className={fieldClass}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => applyProviderDefaults()}
+                        className="inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                        title={"Use provider defaults"}
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                        <span className="hidden sm:inline">
+                          {"Use provider defaults"}
+                        </span>
+                      </button>
+                    </div>
+                    <span className={hintClass}>
+                      {"Use the exact model id required by your provider."}
+                    </span>
+                  </label>
+                )}
+
+                {form.provider !== VIP_PROVIDER_NAME && (
+                  <label className="grid gap-2">
+                    <span className={labelClass}>
+                      {i18n.t("settings.baseUrl")}
+                    </span>
+                    <input
+                      value={form.base_url}
+                      onChange={(event) =>
+                        setForm({ ...form, base_url: event.target.value })
+                      }
+                      className={fieldClass}
+                      placeholder={selectedProvider?.default_base_url}
+                      disabled={selectedProvider?.auth_type === "oauth"}
+                    />
+                  </label>
+                )}
+
+                <label className="grid gap-2">
+                  <span className={labelClass}>
+                    {selectedProvider?.auth_type === "oauth"
+                      ? "OAuth"
+                      : "API key"}
+                  </span>
+                  <div className="relative">
+                    <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <input
+                      type="password"
+                      value={apiKey}
+                      onChange={(event) => setApiKey(event.target.value)}
+                      className={`${fieldClass} pl-9`}
+                      placeholder={keyStatus}
+                      autoComplete="current-password"
+                      disabled={apiKeyDisabled}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className={hintClass}>{keyStatus}</span>
+                    {selectedProvider?.api_key_required ? (
+                      <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={clearApiKey}
+                          onChange={(event) => {
+                            setClearApiKey(event.target.checked);
+                            if (event.target.checked) setApiKey("");
+                          }}
+                          className="h-3.5 w-3.5 accent-primary"
+                        />
+                        {"Clear saved API key"}
+                      </label>
+                    ) : null}
+                  </div>
+                </label>
+              </div>
+            </section>
+
+            <section className="rounded-lg border bg-card p-5 shadow-sm">
+              <div className="mb-5 flex items-center gap-2">
+                <SlidersHorizontal className="h-4 w-4 text-primary" />
+                <h2 className="text-base font-semibold">{"Generation"}</h2>
+              </div>
+
+              <div className="grid gap-4">
+                <label className="grid gap-2">
+                  <span className={labelClass}>
+                    {i18n.t("settings.temperature")}
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={2}
+                    step={0.1}
+                    value={form.temperature}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        temperature: Number(event.target.value),
+                      })
+                    }
+                    className={fieldClass}
+                  />
+                </label>
+
+                <label className="grid gap-2">
+                  <span className={labelClass}>
+                    {i18n.t("settings.timeoutSeconds")}
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={3600}
+                    step={1}
+                    value={form.timeout_seconds}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        timeout_seconds: Number(event.target.value),
+                      })
+                    }
+                    className={fieldClass}
+                  />
+                </label>
+
+                <label className="grid gap-2">
+                  <span className={labelClass}>{"Max retries"}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={20}
+                    step={1}
+                    value={form.max_retries}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        max_retries: Number(event.target.value),
+                      })
+                    }
+                    className={fieldClass}
+                  />
+                </label>
+
+                <label className="grid gap-2">
+                  <span className={labelClass}>
+                    {i18n.t("settings.reasoningEffort")}
+                  </span>
+                  <select
+                    value={form.reasoning_effort}
+                    onChange={(event) =>
+                      setForm({ ...form, reasoning_effort: event.target.value })
+                    }
+                    className={fieldClass}
+                  >
+                    <option value="">{"Off"}</option>
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                    <option value="max">max</option>
+                  </select>
+                  <span className={hintClass}>
+                    {
+                      "How hard the model thinks before answering. Higher is more thorough but slower; leave Off for fastest replies."
+                    }
+                  </span>
+                </label>
+
+                <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {i18n.t("settings.saved")}:{" "}
+                  </span>
+                  <span className="break-all font-mono">
+                    {settings.env_path}
+                  </span>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  {saving ? i18n.t("settings.saving") : i18n.t("settings.save")}
+                </button>
+              </div>
+            </section>
+          </form>
+        </>
+      )}
       {/* QVERIS-INTEGRATION */}
       <QVerisSettings />
 
@@ -857,259 +1115,6 @@ export function Settings() {
           </button>
         </form>
       </section>
-
-      {hideLlm ? (
-        <div className="rounded-lg border bg-card p-5 shadow-sm flex items-center gap-3 text-sm text-muted-foreground">
-          <Server className="h-4 w-4 text-primary shrink-0" />
-          <span>大模型已由桌面端登录自动配置（VIP），无需手动设置。</span>
-        </div>
-      ) : (
-        <>
-          <div className="space-y-2">
-            <h2 className="text-lg font-semibold tracking-tight">
-              {"LLM Settings"}
-            </h2>
-            <p className="max-w-3xl text-sm text-muted-foreground">
-              {
-                "Choose the model used by the agent and save it to the project-local agent/.env file."
-              }
-            </p>
-          </div>
-
-          <form
-            onSubmit={submit}
-            className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]"
-          >
-            <section className="rounded-lg border bg-card p-5 shadow-sm">
-              <div className="mb-5 flex items-center gap-2">
-                <Server className="h-4 w-4 text-primary" />
-                <h2 className="text-base font-semibold">{"Connection"}</h2>
-              </div>
-
-              <div className="grid gap-4">
-                <label className="grid gap-2">
-                  <span className={labelClass}>
-                    {i18n.t("settings.provider")}
-                  </span>
-                  <select
-                    value={form.provider}
-                    onChange={(event) => onProviderChange(event.target.value)}
-                    className={fieldClass}
-                  >
-                    {providers.map((provider) => (
-                      <option key={provider.name} value={provider.name}>
-                        {provider.label}
-                      </option>
-                    ))}
-                  </select>
-                  <span className={hintClass}>
-                    {
-                      "Changing providers updates the recommended model and endpoint."
-                    }
-                  </span>
-                </label>
-
-                {form.provider !== VIP_PROVIDER_NAME && (
-                <label className="grid gap-2">
-                  <span className={labelClass}>{"Model"}</span>
-                  <div className="flex gap-2">
-                    <input
-                      value={form.model_name}
-                      onChange={(event) =>
-                        setForm({ ...form, model_name: event.target.value })
-                      }
-                      className={fieldClass}
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => applyProviderDefaults()}
-                      className="inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                      title={"Use provider defaults"}
-                    >
-                      <RotateCcw className="h-4 w-4" />
-                      <span className="hidden sm:inline">
-                        {"Use provider defaults"}
-                      </span>
-                    </button>
-                  </div>
-                  <span className={hintClass}>
-                    {"Use the exact model id required by your provider."}
-                  </span>
-                </label>
-                )}
-
-                {form.provider !== VIP_PROVIDER_NAME && (
-                <label className="grid gap-2">
-                  <span className={labelClass}>
-                    {i18n.t("settings.baseUrl")}
-                  </span>
-                  <input
-                    value={form.base_url}
-                    onChange={(event) =>
-                      setForm({ ...form, base_url: event.target.value })
-                    }
-                    className={fieldClass}
-                    placeholder={selectedProvider?.default_base_url}
-                    disabled={selectedProvider?.auth_type === "oauth"}
-                  />
-                </label>
-                )}
-
-                <label className="grid gap-2">
-                  <span className={labelClass}>
-                    {selectedProvider?.auth_type === "oauth"
-                      ? "OAuth"
-                      : "API key"}
-                  </span>
-                  <div className="relative">
-                    <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <input
-                      type="password"
-                      value={apiKey}
-                      onChange={(event) => setApiKey(event.target.value)}
-                      className={`${fieldClass} pl-9`}
-                      placeholder={keyStatus}
-                      autoComplete="current-password"
-                      disabled={apiKeyDisabled}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className={hintClass}>{keyStatus}</span>
-                    {selectedProvider?.api_key_required ? (
-                      <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-                        <input
-                          type="checkbox"
-                          checked={clearApiKey}
-                          onChange={(event) => {
-                            setClearApiKey(event.target.checked);
-                            if (event.target.checked) setApiKey("");
-                          }}
-                          className="h-3.5 w-3.5 accent-primary"
-                        />
-                        {"Clear saved API key"}
-                      </label>
-                    ) : null}
-                  </div>
-                </label>
-              </div>
-            </section>
-
-            <section className="rounded-lg border bg-card p-5 shadow-sm">
-              <div className="mb-5 flex items-center gap-2">
-                <SlidersHorizontal className="h-4 w-4 text-primary" />
-                <h2 className="text-base font-semibold">{"Generation"}</h2>
-              </div>
-
-              <div className="grid gap-4">
-                <label className="grid gap-2">
-                  <span className={labelClass}>
-                    {i18n.t("settings.temperature")}
-                  </span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={2}
-                    step={0.1}
-                    value={form.temperature}
-                    onChange={(event) =>
-                      setForm({
-                        ...form,
-                        temperature: Number(event.target.value),
-                      })
-                    }
-                    className={fieldClass}
-                  />
-                </label>
-
-                <label className="grid gap-2">
-                  <span className={labelClass}>
-                    {i18n.t("settings.timeoutSeconds")}
-                  </span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={3600}
-                    step={1}
-                    value={form.timeout_seconds}
-                    onChange={(event) =>
-                      setForm({
-                        ...form,
-                        timeout_seconds: Number(event.target.value),
-                      })
-                    }
-                    className={fieldClass}
-                  />
-                </label>
-
-                <label className="grid gap-2">
-                  <span className={labelClass}>{"Max retries"}</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={20}
-                    step={1}
-                    value={form.max_retries}
-                    onChange={(event) =>
-                      setForm({
-                        ...form,
-                        max_retries: Number(event.target.value),
-                      })
-                    }
-                    className={fieldClass}
-                  />
-                </label>
-
-                <label className="grid gap-2">
-                  <span className={labelClass}>
-                    {i18n.t("settings.reasoningEffort")}
-                  </span>
-                  <select
-                    value={form.reasoning_effort}
-                    onChange={(event) =>
-                      setForm({ ...form, reasoning_effort: event.target.value })
-                    }
-                    className={fieldClass}
-                  >
-                    <option value="">{"Off"}</option>
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                    <option value="max">max</option>
-                  </select>
-                  <span className={hintClass}>
-                    {
-                      "How hard the model thinks before answering. Higher is more thorough but slower; leave Off for fastest replies."
-                    }
-                  </span>
-                </label>
-
-                <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    {i18n.t("settings.saved")}:{" "}
-                  </span>
-                  <span className="break-all font-mono">
-                    {settings.env_path}
-                  </span>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
-                  {saving ? i18n.t("settings.saving") : i18n.t("settings.save")}
-                </button>
-              </div>
-            </section>
-          </form>
-        </>
-      )}
 
       <form
         onSubmit={submitDataSources}
