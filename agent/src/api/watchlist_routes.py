@@ -216,6 +216,32 @@ async def delete_stock(code: str, market: str = "a_stock") -> dict:
     return {"deleted": True}
 
 
+_SUPPORTED_MARKETS = {"a_stock"}
+_DEFAULT_PROVIDER = TencentQuoteProvider()
+
+
+@router.get("/quotes")
+async def get_quotes(codes: str = "", market: str = "a_stock") -> dict:
+    """批量查询行情。
+
+    Query params:
+    - codes: 逗号分隔的股票代码，必填非空
+    - market: 市场类型，当前仅支持 a_stock
+    """
+    if not codes or not codes.strip():
+        raise HTTPException(status_code=400, detail="codes 参数不能为空")
+    if market not in _SUPPORTED_MARKETS:
+        raise HTTPException(status_code=400, detail=f"不支持的市场: {market}，当前支持: {list(_SUPPORTED_MARKETS)}")
+
+    code_list = [c.strip() for c in codes.split(",") if c.strip()]
+    if not code_list:
+        raise HTTPException(status_code=400, detail="codes 参数不能为空")
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, _DEFAULT_PROVIDER.fetch, code_list)
+    return result
+
+
 def register_watchlist_routes(app, require_local_or_auth_dep=None) -> None:
     """挂载 watchlist 路由到 FastAPI app。"""
     app.include_router(router)

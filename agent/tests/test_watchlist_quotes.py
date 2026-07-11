@@ -64,3 +64,51 @@ def test_tencent_provider_network_error():
         provider = TencentQuoteProvider()
         with pytest.raises(Exception):
             provider.fetch(["000001"])
+
+
+# ─── Task 6: GET /watchlist/quotes endpoint ───────────────────────────────
+
+@pytest.fixture()
+def quotes_client(tmp_path, monkeypatch):
+    """创建隔离 TestClient，mock tencent_quote。"""
+    import src.api.watchlist_routes as wm
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    app = FastAPI()
+    app.include_router(wm.router)
+    return TestClient(app)
+
+
+def test_quotes_endpoint_basic(quotes_client, monkeypatch):
+    """GET /watchlist/quotes?codes=000001 返回行情数据。"""
+    import src.api.watchlist_routes as wm
+    mock_data = {"000001": {"name": "平安银行", "price": 10.5, "change_pct": 1.2, "change_amt": 0.12, "high": 10.8, "low": 10.3, "amount_wan": 5000.0}}
+    monkeypatch.setattr(wm, "tencent_quote", lambda codes: mock_data)
+    resp = quotes_client.get("/watchlist/quotes?codes=000001")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "000001" in data
+    assert data["000001"]["price"] == 10.5
+
+
+def test_quotes_endpoint_empty_codes(quotes_client):
+    """GET /watchlist/quotes 无 codes 参数返回 400。"""
+    resp = quotes_client.get("/watchlist/quotes")
+    assert resp.status_code == 400
+
+
+def test_quotes_partial_failure(quotes_client, monkeypatch):
+    """部分失败时，失败的 code 带 error 字段，不抛 500。"""
+    import src.api.watchlist_routes as wm
+    mock_data = {"000001": {"name": "平安银行", "price": 10.5, "change_pct": 0.0, "change_amt": 0.0, "high": None, "low": None, "amount_wan": None}}
+    monkeypatch.setattr(wm, "tencent_quote", lambda codes: mock_data)
+    resp = quotes_client.get("/watchlist/quotes?codes=000001,999999")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "error" in data["999999"]
+
+
+def test_quotes_unknown_market(quotes_client):
+    """未知 market 参数返回 400。"""
+    resp = quotes_client.get("/watchlist/quotes?codes=000001&market=unknown")
+    assert resp.status_code == 400
