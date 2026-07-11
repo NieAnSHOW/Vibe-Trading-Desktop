@@ -1029,3 +1029,62 @@ export interface MessageItem {
   linked_attempt_id?: string;
   metadata?: Record<string, unknown>;
 }
+
+// ─── Watchlist ────────────────────────────────────────────────────────────────
+
+export interface WatchlistStock {
+  code: string;
+  name: string;
+  market: string;
+  added_at: string;
+}
+
+export interface WatchlistStocksResponse {
+  stocks: WatchlistStock[];
+}
+
+export interface AddStockResult {
+  added: boolean;
+  exists: boolean;
+}
+
+export interface DeleteStockResult {
+  deleted: boolean;
+}
+
+export interface QuoteData {
+  code: string;
+  name?: string | null;
+  price?: number | null;
+  change_pct?: number | null;
+  change_amt?: number | null;
+  high?: number | null;
+  low?: number | null;
+  volume?: number | null;
+  stale?: boolean;
+  error?: string;
+}
+
+export type QuotesResponse = Record<string, QuoteData>;
+
+export async function fetchWatchlistStocks(): Promise<WatchlistStocksResponse> {
+  return request<WatchlistStocksResponse>("/watchlist/stocks");
+}
+
+export async function addWatchlistStock(code: string, market = "a_stock"): Promise<AddStockResult> {
+  return request<AddStockResult>("/watchlist/stocks", {
+    method: "POST",
+    body: JSON.stringify({ code, market }),
+  });
+}
+
+export async function deleteWatchlistStock(code: string, market = "a_stock"): Promise<DeleteStockResult> {
+  return request<DeleteStockResult>(`/watchlist/stocks/${encodeURIComponent(code)}?market=${encodeURIComponent(market)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchWatchlistQuotes(codes: string[], market = "a_stock"): Promise<QuotesResponse> {
+  const codesParam = codes.map(encodeURIComponent).join(",");
+  return request<QuotesResponse>(`/watchlist/quotes?codes=${codesParam}&market=${encodeURIComponent(market)}`);
+}
