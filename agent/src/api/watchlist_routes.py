@@ -16,8 +16,13 @@ import sqlite3
 import threading
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+try:
+    from src.api.security import require_local_or_auth
+except ImportError:
+    require_local_or_auth = None  # 测试环境无需鉴权
 
 # ---------------------------------------------------------------------------
 # DB 路径与连接管理
@@ -98,19 +103,67 @@ class StockListResponse(BaseModel):
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
 
+def _build_auth_dep():
+    if require_local_or_auth is not None:
+        return [Depends(require_local_or_auth)]
+    return []
+
+
 @router.get("/stocks", response_model=StockListResponse)
 async def list_stocks() -> StockListResponse:
-    # ponytail: 占位符，任务 1.2 替换为真实 SQLite 查询
-    return StockListResponse(stocks=[])
+    """返回自选股列表，按 added_at 倒序。"""
+    def _query():
+        with _get_connection() as conn:
+            rows = conn.execute(
+                "SELECT code, name, market, added_at FROM watchlist ORDER BY added_at DESC"
+            ).fetchall()
+            return [
+                StockItem(code=r["code"], name=r["name"], market=r["market"], added_at=r["added_at"])
+                for r in rows
+            ]
+
+    loop = asyncio.get_event_loop()
+    stocks = await loop.run_in_executor(None, _query)
+    return StockListResponse(stocks=stocks)
 
 
 @router.post("/stocks")
 async def add_stock(req: AddStockRequest) -> dict:
-    # ponytail: 占位符，任务 1.3 替换为真实插入逻辑
-    return {"added": False}
+    """添加自选股；重复时返回 exists=true。"""
+    def _insert():
+        try:
+            with _get_connection() as conn:
+                conn.execute(
+                    "INSERT INTO watchlist(code, name, market) VALUES (?, '', ?)",
+                    (req.code, req.market),
+                )
+                conn.commit()
+            return {"added": True, "exists": False}
+        except sqlite3.IntegrityError:
+            return {"added": False, "exists": True}
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _insert)
 
 
 @router.delete("/stocks/{code}")
-async def delete_stock(code: str) -> dict:
-    # ponytail: 占位符，任务 1.3 替换为真实删除逻辑
-    return {"deleted": False}
+async def delete_stock(code: str, market: str = "a_stock") -> dict:
+    """删除自选股；不存在时返回 404。"""
+    def _delete():
+        with _get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM watchlist WHERE code=? AND market=?", (code, market)
+            )
+            conn.commit()
+            return cursor.rowcount
+
+    loop = asyncio.get_event_loop()
+    rowcount = await loop.run_in_executor(None, _delete)
+    if rowcount == 0:
+        raise HTTPException(status_code=404, detail=f"股票 {code} 不在自选股中")
+    return {"deleted": True}
+
+
+def register_watchlist_routes(app, require_local_or_auth_dep=None) -> None:
+    """挂载 watchlist 路由到 FastAPI app。"""
+    app.include_router(router)
