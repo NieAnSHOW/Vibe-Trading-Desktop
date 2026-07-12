@@ -2,6 +2,8 @@
 comet_change: market-watchlist
 role: technical-design
 canonical_spec: openspec
+archived-with: 2026-07-12-market-watchlist
+status: final
 ---
 
 # 自选股盯盘 设计文档

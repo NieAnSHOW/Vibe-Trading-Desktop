@@ -2,6 +2,7 @@
 change: market-watchlist
 design-doc: docs/superpowers/specs/2026-07-11-market-watchlist-design.md
 base-ref: 8e19a4ba66d4c4a37d4eefb5e105a1979d17a1f0
+archived-with: 2026-07-12-market-watchlist
 ---
 
 # 自选股盯盘 实施计划
