@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Eye, Trash2, Send, RefreshCw } from "lucide-react";
+import { Eye, Trash2, Send, RefreshCw, CandlestickChart } from "lucide-react";
 import { useWatchlistStore } from "@/stores/watchlist";
 import type { QuoteData } from "@/lib/api";
 import { toast } from "sonner";
@@ -38,8 +38,19 @@ export default function WatchlistPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
-  const { stocks, quotes, selected, loading, error, refresh, add, remove, refreshQuotes, toggleSelection, clearSelection } =
-    useWatchlistStore();
+  const {
+    stocks,
+    quotes,
+    selected,
+    loading,
+    error,
+    refresh,
+    add,
+    remove,
+    refreshQuotes,
+    toggleSelection,
+    clearSelection,
+  } = useWatchlistStore();
 
   const [inputCode, setInputCode] = useState("");
   const [inputError, setInputError] = useState("");
@@ -91,7 +102,9 @@ export default function WatchlistPage() {
     try {
       const result = await add(code);
       if (result.exists) {
-        toast.info(t("watchlist.alreadyAdded", "{{code}} 已在自选股中", { code }));
+        toast.info(
+          t("watchlist.alreadyAdded", "{{code}} 已在自选股中", { code }),
+        );
       } else {
         setInputCode("");
         toast.success(t("watchlist.added", "已添加 {{code}}", { code }));
@@ -136,9 +149,14 @@ export default function WatchlistPage() {
     <div className="flex flex-col h-full p-4 gap-4 max-w-4xl mx-auto w-full">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{t("watchlist.title", "自选股")}</h1>
+        <h1 className="text-xl font-semibold">
+          {t("watchlist.title", "A股自选")}
+        </h1>
         <button
-          onClick={() => { refresh(); refreshQuotes(); }}
+          onClick={() => {
+            refresh();
+            refreshQuotes();
+          }}
           className="p-1.5 rounded hover:bg-accent"
           title={t("watchlist.refresh", "刷新")}
         >
@@ -152,21 +170,28 @@ export default function WatchlistPage() {
           <input
             type="text"
             value={inputCode}
-            onChange={(e) => { setInputCode(e.target.value); setInputError(""); }}
+            onChange={(e) => {
+              setInputCode(e.target.value);
+              setInputError("");
+            }}
             placeholder={t("watchlist.placeholder", "输入 6 位股票代码")}
             maxLength={6}
             className="border rounded px-3 py-1.5 text-sm w-40 bg-background"
             aria-label={t("watchlist.placeholder", "输入 6 位股票代码")}
             aria-invalid={!!inputError}
           />
-          {inputError && <span className="text-xs text-red-500">{inputError}</span>}
+          {inputError && (
+            <span className="text-xs text-red-500">{inputError}</span>
+          )}
         </div>
         <button
           type="submit"
           disabled={adding}
           className="px-3 py-1.5 text-sm rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
-          {adding ? t("watchlist.adding", "添加中…") : t("watchlist.add", "添加")}
+          {adding
+            ? t("watchlist.adding", "添加中…")
+            : t("watchlist.add", "添加")}
         </button>
       </form>
 
@@ -191,20 +216,37 @@ export default function WatchlistPage() {
                   <th className="px-3 py-2 text-left w-8">
                     <input
                       type="checkbox"
-                      checked={selected.size === stocks.length && stocks.length > 0}
+                      checked={
+                        selected.size === stocks.length && stocks.length > 0
+                      }
                       onChange={() => {
                         if (selected.size === stocks.length) clearSelection();
-                        else stocks.forEach((s) => { if (!selected.has(s.code)) toggleSelection(s.code); });
+                        else
+                          stocks.forEach((s) => {
+                            if (!selected.has(s.code)) toggleSelection(s.code);
+                          });
                       }}
                       aria-label={t("watchlist.selectAll", "全选")}
                     />
                   </th>
-                  <th className="px-3 py-2 text-left">{t("watchlist.col.code", "代码")}</th>
-                  <th className="px-3 py-2 text-left">{t("watchlist.col.name", "名称")}</th>
-                  <th className="px-3 py-2 text-right">{t("watchlist.col.price", "最新价")}</th>
-                  <th className="px-3 py-2 text-right">{t("watchlist.col.changeAmt", "涨跌额")}</th>
-                  <th className="px-3 py-2 text-right">{t("watchlist.col.changePct", "涨跌幅")}</th>
-                  <th className="px-3 py-2 text-center">{t("watchlist.col.actions", "操作")}</th>
+                  <th className="px-3 py-2 text-left">
+                    {t("watchlist.col.code", "代码")}
+                  </th>
+                  <th className="px-3 py-2 text-left">
+                    {t("watchlist.col.name", "名称")}
+                  </th>
+                  <th className="px-3 py-2 text-right">
+                    {t("watchlist.col.price", "最新价")}
+                  </th>
+                  <th className="px-3 py-2 text-right">
+                    {t("watchlist.col.changeAmt", "涨跌额")}
+                  </th>
+                  <th className="px-3 py-2 text-right">
+                    {t("watchlist.col.changePct", "涨跌幅")}
+                  </th>
+                  <th className="px-3 py-2 text-center">
+                    {t("watchlist.col.actions", "操作")}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -217,7 +259,10 @@ export default function WatchlistPage() {
                       className={`border-t hover:bg-muted/30 cursor-pointer ${selected.has(stock.code) ? "bg-muted/40" : ""}`}
                       onClick={() => toggleSelection(stock.code)}
                     >
-                      <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                      <td
+                        className="px-3 py-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <input
                           type="checkbox"
                           checked={selected.has(stock.code)}
@@ -226,11 +271,28 @@ export default function WatchlistPage() {
                         />
                       </td>
                       <td className="px-3 py-2 font-mono">{stock.code}</td>
-                      <td className="px-3 py-2">{q?.name ?? stock.name ?? "—"}</td>
-                      <td className={`px-3 py-2 text-right font-mono ${changeColor(pct)}`}>{fmtPrice(q?.price)}</td>
-                      <td className={`px-3 py-2 text-right font-mono ${changeColor(pct)}`}>{fmtAmt(q?.change_amt)}</td>
-                      <td className={`px-3 py-2 text-right font-mono ${changeColor(pct)}`}>{fmtPct(pct)}</td>
-                      <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 py-2">
+                        {q?.name ?? stock.name ?? "—"}
+                      </td>
+                      <td
+                        className={`px-3 py-2 text-right font-mono ${changeColor(pct)}`}
+                      >
+                        {fmtPrice(q?.price)}
+                      </td>
+                      <td
+                        className={`px-3 py-2 text-right font-mono ${changeColor(pct)}`}
+                      >
+                        {fmtAmt(q?.change_amt)}
+                      </td>
+                      <td
+                        className={`px-3 py-2 text-right font-mono ${changeColor(pct)}`}
+                      >
+                        {fmtPct(pct)}
+                      </td>
+                      <td
+                        className="px-3 py-2 text-center"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {confirmDelete === stock.code ? (
                           <span className="flex items-center gap-1 justify-center">
                             <button
@@ -248,14 +310,26 @@ export default function WatchlistPage() {
                             </button>
                           </span>
                         ) : (
-                          <button
-                            onClick={() => handleDelete(stock.code)}
-                            className="text-muted-foreground hover:text-red-500"
-                            title={t("watchlist.delete", "删除")}
-                            data-testid={`delete-${stock.code}`}
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          <span className="flex items-center gap-2 justify-center">
+                            <a
+                              href={`https://stockpage.10jqka.com.cn/${stock.code}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-muted-foreground hover:text-foreground"
+                              title={t("watchlist.kline", "同花顺 K 线")}
+                              data-testid={`kline-${stock.code}`}
+                            >
+                              <CandlestickChart size={14} />
+                            </a>
+                            <button
+                              onClick={() => handleDelete(stock.code)}
+                              className="text-muted-foreground hover:text-red-500"
+                              title={t("watchlist.delete", "删除")}
+                              data-testid={`delete-${stock.code}`}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </span>
                         )}
                       </td>
                     </tr>
@@ -274,7 +348,8 @@ export default function WatchlistPage() {
                 data-testid="send-to-agent"
               >
                 <Send size={14} />
-                {t("watchlist.sendToAgent", "发给 Agent 分析")}（{selected.size}）
+                {t("watchlist.sendToAgent", "发给 Agent 分析")}（{selected.size}
+                ）
               </button>
             </div>
           )}

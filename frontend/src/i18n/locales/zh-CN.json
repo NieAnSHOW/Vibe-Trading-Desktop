@@ -894,7 +894,7 @@
     "noEquityData": "暂无收益曲线数据"
   },
   "watchlist": {
-    "title": "自选股",
+    "title": "A股自选",
     "placeholder": "输入 6 位股票代码",
     "add": "添加",
     "adding": "添加中…",
@@ -910,6 +910,7 @@
     "confirmDelete": "确认删除",
     "cancelDelete": "取消",
     "delete": "删除",
+    "kline": "同花顺 K 线",
     "select": "选择",
     "selectAll": "全选",
     "sendToAgent": "发给 Agent 分析",

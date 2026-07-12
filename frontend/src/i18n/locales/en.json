@@ -910,6 +910,7 @@
     "confirmDelete": "Confirm delete",
     "cancelDelete": "Cancel",
     "delete": "Delete",
+    "kline": "10jqka K-Line",
     "select": "Select",
     "selectAll": "Select all",
     "sendToAgent": "Analyze with Agent",
