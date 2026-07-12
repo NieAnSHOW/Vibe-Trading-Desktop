@@ -86,7 +86,8 @@
           "description": "Hong Kong, A-share, and global market research and news."
         }
       }
-    }
+    },
+    "watchlist": "Watchlist"
   },
   "runtime": {
     "monitorBadge": "Runtime Monitor",
@@ -870,7 +871,11 @@
     "phone": "Phone",
     "nickName": "Nickname",
     "gender": "Gender",
-    "genderOptions": { "0": "Unknown", "1": "Male", "2": "Female" },
+    "genderOptions": {
+      "0": "Unknown",
+      "1": "Male",
+      "2": "Female"
+    },
     "description": "Bio",
     "save": "Save",
     "saved": "Saved",
@@ -886,6 +891,36 @@
     "profile": "Profile",
     "logout": "Log out",
     "guest": "Unnamed",
-    "loginMsg":"VIP Services"
+    "loginMsg": "VIP Services"
+  },
+  "watchlist": {
+    "title": "Watchlist",
+    "placeholder": "Enter 6-digit stock code",
+    "add": "Add",
+    "adding": "Adding…",
+    "added": "Added {{code}}",
+    "alreadyAdded": "{{code}} already in watchlist",
+    "addError": "Failed to add, please retry",
+    "remove": "Remove",
+    "removed": "Removed {{code}}",
+    "removeError": "Failed to remove, please retry",
+    "refresh": "Refresh",
+    "empty": "No stocks yet, add a code to start",
+    "invalidCode": "Please enter a 6-digit stock code",
+    "confirmDelete": "Confirm delete",
+    "cancelDelete": "Cancel",
+    "delete": "Delete",
+    "kline": "10jqka K-Line",
+    "select": "Select",
+    "selectAll": "Select all",
+    "sendToAgent": "Analyze with Agent",
+    "col": {
+      "code": "Code",
+      "name": "Name",
+      "price": "Price",
+      "changeAmt": "Change",
+      "changePct": "Change %",
+      "actions": "Actions"
+    }
   }
 }

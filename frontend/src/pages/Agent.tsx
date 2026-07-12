@@ -272,6 +272,17 @@ export function Agent() {
 
   const urlSessionId = searchParams.get("session");
 
+  // 从 URL prefill 参数预填输入框（来自自选股「发给 Agent 分析」）
+  useEffect(() => {
+    const prefillText = searchParams.get("prefill");
+    if (prefillText) {
+      setInput(prefillText);
+      // 清除 prefill 参数，避免刷新时重复预填
+      setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete("prefill"); return next; }, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /* Smart scroll — only auto-scroll when near bottom */
   const isNearBottom = useCallback(() => {
     const el = listRef.current;

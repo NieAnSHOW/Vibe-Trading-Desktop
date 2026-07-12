@@ -1,6 +1,0 @@
-openspec: "1.0"
-change: hide-windows-console
-artifacts:
-  - proposal.md
-  - design.md
-  - tasks.md

@@ -15,6 +15,7 @@ const PROXY_PATHS = [
   "/upload",
   "/shadow-reports",
   "/optional-deps",
+  "/watchlist",
 ];
 
 export default defineConfig(({ mode }) => {
