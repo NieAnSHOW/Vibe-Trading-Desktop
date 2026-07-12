@@ -209,6 +209,7 @@ async def _run_startup_preflight() -> None:
 
     run_preflight(console)
     _start_scheduled_research_executor()
+    await _watchlist_init_db()  # 幂等建表；plan 约束：DB 初始化须在 startup，不在首次请求中建
     if os.getenv("VIBE_TRADING_CHANNELS_AUTO_START", "").strip().lower() in {"1", "true", "yes"}:
         await _start_channel_runtime()
 
