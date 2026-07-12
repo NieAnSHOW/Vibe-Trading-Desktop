@@ -12,7 +12,7 @@
 - [x] 2.3 实现行情内存缓存与 stale 降级：数据源超时/失败时返回最后缓存值，无缓存时返回错误条目且不抛 HTTP 500
 - [x] 2.4 在 `agent/api_server.py` 注册 watchlist router，并更新前端 Vite proxy 配置加入 `/watchlist`
 - [x] 2.5 添加 QuoteProvider 与行情 API 单元测试：正常批量查询、部分失败、超时 stale、未知市场、空 codes
-- [ ] 2.6 修复 verify 回归：在 `agent/api_server.py` 的 startup 事件中调用 watchlist `init_db` 幂等建表（满足 plan「DB 初始化须在 startup 建表，不在首次请求中建」约束），确保 `GET/POST/DELETE /watchlist/stocks` 在空库下不再 500；补充 startup 建表的集成测试（断言启动后 watchlist 表存在 / 接口可用）
+- [x] 2.6 修复 verify 回归：在 `agent/api_server.py` 的 startup 事件中调用 watchlist `init_db` 幂等建表（满足 plan「DB 初始化须在 startup 建表，不在首次请求中建」约束），确保 `GET/POST/DELETE /watchlist/stocks` 在空库下不再 500；补充 startup 建表的集成测试（断言启动后 watchlist 表存在 / 接口可用）
 
 ## 3. 前端 API、类型与状态管理
 
