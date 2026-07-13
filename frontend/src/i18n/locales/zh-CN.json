@@ -82,7 +82,8 @@
         }
       }
     },
-    "watchlist": "自选股"
+    "watchlist": "自选股",
+    "dashboard": "市场看板"
   },
   "runtime": {
     "monitorBadge": "运行时监控",
@@ -892,6 +893,30 @@
     "noPriceData": "暂无价格数据",
     "noCorrelationData": "暂无相关性数据",
     "noEquityData": "暂无收益曲线数据"
+  },
+  "dashboard": {
+    "title": "市场概览",
+    "marketPulse": "市场异动",
+    "aiSummary": "AI 摘要",
+    "refreshSummary": "刷新 AI 摘要",
+    "watchlistQuotes": "自选股",
+    "stockDetail": "个股详情",
+    "selectStockHint": "选择一只股票查看 K 线图",
+    "sendToAgent": "发送到 Agent 分析",
+    "loading": "加载中…",
+    "noPulse": "暂无异动数据",
+    "noWatchlist": "暂无自选股",
+    "summaryUnavailable": "摘要暂不可用",
+    "staleData": "数据可能不是最新，请手动刷新",
+    "drivers": "驱动因素",
+    "risks": "风险提示",
+    "focus": "关注方向",
+    "col": {
+      "code": "代码",
+      "name": "名称",
+      "price": "最新价",
+      "changePct": "涨跌幅"
+    }
   },
   "watchlist": {
     "title": "A股自选",

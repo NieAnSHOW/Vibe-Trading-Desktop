@@ -328,6 +328,10 @@ register_alpha_routes(app)
 from src.api.watchlist_routes import register_watchlist_routes, init_db as _watchlist_init_db  # noqa: E402
 register_watchlist_routes(app)
 
+# --- Dashboard ---
+from src.api.dashboard_routes import register_dashboard_routes  # noqa: E402
+register_dashboard_routes(app, require_auth=require_auth)
+
 
 # ============================================================================
 # Scheduled Research Routes - defined in src/api/scheduled_routes.py

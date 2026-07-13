@@ -250,6 +250,13 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(body),
     }),
+
+  // Dashboard AI market summary
+  createMarketSummary: (body: MarketSnapshotRequest) =>
+    request<MarketSummaryResponse>("/dashboard/market-summary", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };
 
 // --- Swarm types ---
@@ -1087,4 +1094,30 @@ export async function deleteWatchlistStock(code: string, market = "a_stock"): Pr
 export async function fetchWatchlistQuotes(codes: string[], market = "a_stock"): Promise<QuotesResponse> {
   const codesParam = codes.map(encodeURIComponent).join(",");
   return request<QuotesResponse>(`/watchlist/quotes?codes=${codesParam}&market=${encodeURIComponent(market)}`);
+}
+
+// ─── Dashboard AI market summary ──────────────────────────────────────────
+
+export interface MarketSummaryResponse {
+  available: boolean;
+  summary: {
+    headline: string;
+    drivers: string[];
+    risks: string[];
+    focus: string[];
+  } | null;
+  market_as_of: string | null;
+  generated_at: string | null;
+  cached: boolean;
+  stale: boolean;
+  error_code?: string;
+}
+
+export interface MarketSnapshotRequest {
+  market: "a_share";
+  market_as_of: string;
+  force_refresh?: boolean;
+  indices: Array<{ code: string; name: string; price: number; change_pct: number }>;
+  sectors: Array<{ name: string; change_pct: number }>;
+  watchlist: Array<{ code: string; name: string; change_pct: number | null }>;
 }

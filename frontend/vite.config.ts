@@ -16,6 +16,7 @@ const PROXY_PATHS = [
   "/shadow-reports",
   "/optional-deps",
   "/watchlist",
+  "/dashboard",
 ];
 
 export default defineConfig(({ mode }) => {

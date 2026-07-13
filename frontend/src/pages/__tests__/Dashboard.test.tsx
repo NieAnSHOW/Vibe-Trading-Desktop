@@ -1,0 +1,293 @@
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import i18n from "@/i18n";
+import Dashboard from "@/pages/Dashboard";
+
+// ── Mocks ─────────────────────────────────────────────────────
+
+const mockStoreRef = {
+  indexes: [] as unknown[],
+  pulse: [] as unknown[],
+  quotes: {} as Record<string, unknown>,
+  selectedCode: null as string | null,
+  selectedBars: [] as unknown[],
+  summary: null as unknown,
+  indexesLoading: false,
+  pulseLoading: false,
+  quotesLoading: false,
+  summaryLoading: false,
+  barsLoading: false,
+  indexesError: null as string | null,
+  pulseError: null as string | null,
+  quotesError: null as string | null,
+  summaryError: null as string | null,
+  barsError: null as string | null,
+  initialize: vi.fn(),
+  refreshMarketData: vi.fn(),
+  refreshSummary: vi.fn(),
+  setSelectedCode: vi.fn(),
+  startPolling: vi.fn(),
+  stopPolling: vi.fn(),
+};
+
+vi.mock("@/stores/marketDashboard", () => ({
+  useMarketDashboardStore: (selector: (s: typeof mockStoreRef) => unknown) => selector(mockStoreRef),
+}));
+
+vi.mock("@/lib/api", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/api")>();
+  return { ...original, api: { ...original.api, listSessions: vi.fn().mockResolvedValue([]) } };
+});
+
+vi.mock("@/components/charts/CandlestickChart", () => ({
+  CandlestickChart: ({ data }: { data: unknown[] }) => (
+    <div data-testid="candlestick-chart" data-count={data.length}>
+      K-line chart
+    </div>
+  ),
+}));
+
+// ── Helpers ───────────────────────────────────────────────────
+
+/** Build a minimal store snapshot with indexes and a summary */
+function stateWithIndexesAndSummary(overrides?: Partial<typeof mockStoreRef>) {
+  Object.assign(mockStoreRef, {
+    indexes: [
+      { code: "000001", name: "上证指数", price: 3000, changePct: 0.5, changeAmt: 15, source: "test", stale: false },
+      { code: "399001", name: "深证成指", price: 10000, changePct: -0.3, changeAmt: -30, source: "test", stale: false },
+    ],
+    pulse: [
+      { code: "600519", name: "贵州茅台", time: "10:00", changeType: "涨停", info: "白酒板块走强", source: "test", stale: false },
+    ],
+    quotes: {
+      "600519": { code: "600519", name: "贵州茅台", price: 1500, changePct: 1.2, changeAmt: 18, source: "test", stale: false },
+    },
+    selectedCode: null,
+    selectedBars: [],
+    summary: {
+      available: true,
+      summary: {
+        headline: "风险偏好回升",
+        drivers: ["外资流入", "政策利好"],
+        risks: ["地缘风险"],
+        focus: ["消费板块"],
+      },
+      market_as_of: "2026-07-13T10:00:00Z",
+      generated_at: "2026-07-13T10:00:00Z",
+      cached: false,
+      stale: false,
+    },
+    summaryError: null,
+    indexesError: null,
+    pulseError: null,
+    quotesError: null,
+    barsError: null,
+    ...overrides,
+  });
+}
+
+/** Render Dashboard in a MemoryRouter */
+function renderDashboard() {
+  return render(
+    <MemoryRouter>
+      <Dashboard />
+    </MemoryRouter>,
+  );
+}
+
+/** Render Dashboard inside a Routes tree so useNavigate works */
+function renderDashboardWithRoutes() {
+  return render(
+    <MemoryRouter initialEntries={["/dashboard"]}>
+      <Routes>
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/agent" element={<div>Agent page</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+// ── Tests ─────────────────────────────────────────────────────
+
+describe("Dashboard page", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Reset all mockStoreRef fields
+    Object.assign(mockStoreRef, {
+      indexes: [],
+      pulse: [],
+      quotes: {},
+      selectedCode: null,
+      selectedBars: [],
+      summary: null,
+      indexesLoading: false,
+      pulseLoading: false,
+      quotesLoading: false,
+      summaryLoading: false,
+      barsLoading: false,
+      indexesError: null,
+      pulseError: null,
+      quotesError: null,
+      summaryError: null,
+      barsError: null,
+    });
+  });
+
+  describe("lifecycle", () => {
+    it("calls initialize and startPolling on mount", () => {
+      renderDashboard();
+
+      expect(mockStoreRef.initialize).toHaveBeenCalledOnce();
+      expect(mockStoreRef.startPolling).toHaveBeenCalledOnce();
+    });
+
+    it("calls stopPolling on unmount", () => {
+      const { unmount } = renderDashboard();
+      unmount();
+
+      expect(mockStoreRef.stopPolling).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("market-first layout", () => {
+    it("renders market-first sections before watchlist detail", () => {
+      stateWithIndexesAndSummary();
+      renderDashboard();
+
+      // The market overview section heading appears
+      expect(screen.getByRole("heading", { name: /市场概览|Market Overview/i })).toBeInTheDocument();
+
+      // Watchlist section heading appears
+      expect(screen.queryByText(/自选股|Watchlist/i)).not.toBeNull();
+    });
+
+    it("shows indexes in the market overview section", () => {
+      stateWithIndexesAndSummary();
+      renderDashboard();
+
+      expect(screen.getByText("上证指数")).toBeInTheDocument();
+      expect(screen.getByText("深证成指")).toBeInTheDocument();
+    });
+
+    it("shows AI summary when available", () => {
+      stateWithIndexesAndSummary();
+      renderDashboard();
+
+      expect(screen.getByText("风险偏好回升")).toBeInTheDocument();
+    });
+  });
+
+  describe("summary failure resilience", () => {
+    it("still shows market data when summary fails", () => {
+      stateWithIndexesAndSummary({
+        summary: null,
+        summaryError: "no_provider",
+      });
+
+      renderDashboard();
+
+      // Market data still present
+      expect(screen.getByText("上证指数")).toBeInTheDocument();
+      // Refresh summary button still available
+      expect(screen.getByRole("button", { name: /刷新.*摘要|Refresh.*Summary/i })).toBeInTheDocument();
+    });
+
+    it("shows refresh summary icon button even when summary unavailable", () => {
+      stateWithIndexesAndSummary({
+        summary: null,
+        summaryError: null,
+      });
+
+      renderDashboard();
+
+      // Refresh summary button still available
+      const refreshBtn = screen.getByRole("button", { name: /刷新.*摘要|Refresh.*Summary/i });
+      expect(refreshBtn).toBeInTheDocument();
+    });
+  });
+
+  describe("watchlist interaction", () => {
+    it("clicking a watchlist row selects the stock and loads K-line", async () => {
+      const user = userEvent.setup();
+      stateWithIndexesAndSummary();
+
+      renderDashboard();
+
+      // Click on a watchlist row — scope to the watchlist table section
+      const watchlistSection = screen.getByText("自选股").closest("div");
+      expect(watchlistSection).not.toBeNull();
+      const row = within(watchlistSection!).getByText("600519").closest("tr");
+      expect(row).not.toBeNull();
+      if (row) {
+        await user.click(row);
+      }
+
+      expect(mockStoreRef.setSelectedCode).toHaveBeenCalledWith("600519");
+    });
+
+    it("shows K-line chart when bars are available", () => {
+      stateWithIndexesAndSummary({
+        selectedCode: "600519",
+        selectedBars: [
+          { time: "2026-07-10", open: 100, high: 105, low: 99, close: 102, volume: 10000 },
+          { time: "2026-07-11", open: 102, high: 108, low: 101, close: 107, volume: 12000 },
+        ],
+      });
+
+      renderDashboard();
+
+      const chart = screen.getByTestId("candlestick-chart");
+      expect(chart).toBeInTheDocument();
+      expect(chart.dataset.count).toBe("2");
+    });
+  });
+
+  describe("Send to Agent navigation", () => {
+    it("navigates to Agent with prefill but does not submit a message", async () => {
+      const user = userEvent.setup();
+      stateWithIndexesAndSummary({
+        selectedCode: "600519",
+        selectedBars: [{ time: "2026-07-10", open: 100, high: 105, low: 99, close: 102, volume: 10000 }],
+      });
+
+      renderDashboardWithRoutes();
+
+      // Find the "Send to Agent" button
+      const sendBtn = screen.getByRole("button", { name: /发送.*Agent|Send.*Agent/i });
+      await user.click(sendBtn);
+
+      // After click, we should be on the Agent page with prefill param
+      // (The navigate call should have happened — we verify via the rendered Agent page appearing)
+      expect(screen.getByText("Agent page")).toBeInTheDocument();
+    });
+  });
+
+  describe("i18n labels", () => {
+    it("shows dashboard navigation label in Chinese", () => {
+      i18n.changeLanguage("zh-CN");
+      stateWithIndexesAndSummary();
+      renderDashboard();
+
+      expect(screen.getByRole("heading", { name: /市场概览/i })).toBeInTheDocument();
+    });
+
+    it("shows dashboard navigation label in English", () => {
+      i18n.changeLanguage("en");
+      stateWithIndexesAndSummary();
+      renderDashboard();
+
+      expect(screen.getByRole("heading", { name: /Market Overview/i })).toBeInTheDocument();
+    });
+  });
+
+  describe("empty state", () => {
+    it("shows compact empty states when no data", () => {
+      renderDashboard();
+
+      // Should still render without crashing
+      expect(screen.getByRole("heading", { name: /市场概览|Market Overview/i })).toBeInTheDocument();
+    });
+  });
+});

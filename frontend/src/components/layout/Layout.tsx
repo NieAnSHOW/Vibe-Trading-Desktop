@@ -24,6 +24,7 @@ import {
   Newspaper,
   Search,
   BookOpen,
+  LayoutDashboard,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -291,6 +292,7 @@ export function Layout() {
           {!collapsed && <SectionLabel>{t("layout.section.workspace")}</SectionLabel>}
 
           <NavLink to="/" icon={BarChart3} label={t("layout.home")} collapsed={collapsed} isActive={isActive("/")} />
+          <NavLink to="/dashboard" icon={LayoutDashboard} label={t("layout.dashboard")} collapsed={collapsed} isActive={isActive("/dashboard")} />
           <NavLink to="/agent" icon={Bot} label={t("layout.agent")} collapsed={collapsed} isActive={isActive("/agent")} />
           <NavLink to="/watchlist" icon={Eye} label={t("layout.watchlist")} collapsed={collapsed} isActive={isActive("/watchlist")} />
           <NavLink to="/reports" icon={FileText} label={t("layout.reports")} collapsed={collapsed} isActive={isActive("/reports")} />

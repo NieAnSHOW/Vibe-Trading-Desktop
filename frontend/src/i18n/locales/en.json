@@ -87,7 +87,8 @@
         }
       }
     },
-    "watchlist": "Watchlist"
+    "watchlist": "Watchlist",
+    "dashboard": "Dashboard"
   },
   "runtime": {
     "monitorBadge": "Runtime Monitor",
@@ -892,6 +893,30 @@
     "logout": "Log out",
     "guest": "Unnamed",
     "loginMsg": "VIP Services"
+  },
+  "dashboard": {
+    "title": "Market Overview",
+    "marketPulse": "Market Pulse",
+    "aiSummary": "AI Summary",
+    "refreshSummary": "Refresh AI Summary",
+    "watchlistQuotes": "Watchlist",
+    "stockDetail": "Stock Detail",
+    "selectStockHint": "Select a stock to view K-line chart",
+    "sendToAgent": "Send to Agent",
+    "loading": "Loading…",
+    "noPulse": "No market pulse data",
+    "noWatchlist": "No watchlist stocks",
+    "summaryUnavailable": "Summary unavailable",
+    "staleData": "Data may be stale, please refresh manually",
+    "drivers": "Drivers",
+    "risks": "Risks",
+    "focus": "Focus",
+    "col": {
+      "code": "Code",
+      "name": "Name",
+      "price": "Price",
+      "changePct": "Change %"
+    }
   },
   "watchlist": {
     "title": "Watchlist",

@@ -643,3 +643,45 @@ def test_swarm_run_endpoints_reject_traversal_run_id() -> None:
         response = getattr(client, method)(path)
         assert response.status_code == 400, f"{method.upper()} {path} should be rejected"
         assert response.json()["detail"] == "invalid run_id"
+
+
+# ============================================================================
+# Dashboard market-summary auth
+# ============================================================================
+
+_DASHBOARD_SNAPSHOT = {
+    "market": "a_share",
+    "market_as_of": "2026-07-13T10:00:00Z",
+    "force_refresh": False,
+    "indices": [
+        {"code": "000001", "name": "上证指数", "price": 3428.0, "change_pct": 0.84},
+        {"code": "399001", "name": "深证成指", "price": 10761.0, "change_pct": 1.13},
+        {"code": "399006", "name": "创业板指", "price": 2214.0, "change_pct": -0.22},
+    ],
+}
+
+
+def test_dashboard_market_summary_requires_auth_when_key_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("API_AUTH_KEY", "secret")
+    monkeypatch.setattr(api_server, "_API_KEY", "secret")
+
+    response = _remote_client().post("/dashboard/market-summary", json=_DASHBOARD_SNAPSHOT)
+    assert response.status_code == 401
+
+
+def test_dashboard_market_summary_accepts_bearer_when_key_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("API_AUTH_KEY", "secret")
+    monkeypatch.setattr(api_server, "_API_KEY", "secret")
+
+    response = _remote_client().post(
+        "/dashboard/market-summary",
+        headers={"Authorization": "Bearer secret"},
+        json=_DASHBOARD_SNAPSHOT,
+    )
+    # 422 indicates auth passed but the request was processed (build_llm not
+    # configured in this test env, so method-not-allowed / unprocessable is ok)
+    assert response.status_code in {200, 422, 501, 503}, f"unexpected {response.status_code}: {response.text}"
