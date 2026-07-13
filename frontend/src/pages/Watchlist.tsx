@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Eye, Trash2, Send, RefreshCw, CandlestickChart } from "lucide-react";
+import {
+  AlertCircle,
+  Eye,
+  Trash2,
+  Send,
+  RefreshCw,
+  CandlestickChart,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useWatchlistStore } from "@/stores/watchlist";
 import type { QuoteData } from "@/lib/api";
 import { toast } from "sonner";
@@ -15,6 +23,14 @@ function changeColor(pct: number | null | undefined): string {
   if (pct > 0) return "text-red-500";
   if (pct < 0) return "text-green-500";
   return "text-muted-foreground";
+}
+
+/** 涨跌幅 chip：柔和背景色块，一眼可辨涨跌方向 */
+function pctChipClass(pct: number | null | undefined): string {
+  if (pct == null) return "text-muted-foreground";
+  if (pct > 0) return "bg-red-500/10 text-red-500";
+  if (pct < 0) return "bg-green-500/10 text-green-500";
+  return "bg-muted text-muted-foreground";
 }
 
 function fmtPrice(v: number | null | undefined): string {
@@ -32,6 +48,61 @@ function fmtAmt(v: number | null | undefined): string {
   if (v == null) return "—";
   const sign = v > 0 ? "+" : "";
   return `${sign}${v.toFixed(2)}`;
+}
+
+/** 表头行：真实表与骨架表共用，保证列宽一致 */
+function HeaderRow({
+  selectAllChecked,
+  onSelectAll,
+  labels,
+}: {
+  selectAllChecked: boolean;
+  onSelectAll: () => void;
+  labels: {
+    selectAll: string;
+    code: string;
+    name: string;
+    price: string;
+    changeAmt: string;
+    changePct: string;
+    actions: string;
+  };
+}) {
+  return (
+    <tr className="text-xs font-medium text-muted-foreground">
+      <th className="px-3 py-2.5 text-left w-8">
+        <input
+          type="checkbox"
+          checked={selectAllChecked}
+          onChange={onSelectAll}
+          className="accent-primary"
+          aria-label={labels.selectAll}
+        />
+      </th>
+      <th className="px-3 py-2.5 text-left">{labels.code}</th>
+      <th className="px-3 py-2.5 text-left">{labels.name}</th>
+      <th className="px-3 py-2.5 text-right">{labels.price}</th>
+      <th className="px-3 py-2.5 text-right">{labels.changeAmt}</th>
+      <th className="px-3 py-2.5 text-right">{labels.changePct}</th>
+      <th className="px-3 py-2.5 text-center">{labels.actions}</th>
+    </tr>
+  );
+}
+
+/** 骨架行：首次加载占位，避免空白闪烁 */
+function SkeletonRow() {
+  return (
+    <tr className="border-t">
+      <td className="px-3 py-3">
+        <div className="h-3.5 w-3 rounded bg-muted/60 animate-pulse" />
+      </td>
+      {["w-14", "w-20", "w-16", "w-14", "w-16", "w-16"].map((w, i) => (
+        <td key={i} className="px-3 py-3">
+          <div className={cn("h-3.5 rounded bg-muted/60 animate-pulse", w)} />
+        </td>
+      ))}
+    </tr>
+  );
 }
 
 export default function WatchlistPage() {
@@ -130,6 +201,14 @@ export default function WatchlistPage() {
     }
   }
 
+  function handleSelectAll() {
+    if (selected.size === stocks.length) clearSelection();
+    else
+      stocks.forEach((s) => {
+        if (!selected.has(s.code)) toggleSelection(s.code);
+      });
+  }
+
   function handleSendToAgent() {
     const selectedStocks = stocks.filter((s) => selected.has(s.code));
     if (selectedStocks.length === 0) return;
@@ -145,24 +224,44 @@ export default function WatchlistPage() {
     navigate(`/agent?prefill=${encodeURIComponent(prefill)}`);
   }
 
+  const colLabels = {
+    selectAll: t("watchlist.selectAll", "全选"),
+    code: t("watchlist.col.code", "代码"),
+    name: t("watchlist.col.name", "名称"),
+    price: t("watchlist.col.price", "最新价"),
+    changeAmt: t("watchlist.col.changeAmt", "涨跌额"),
+    changePct: t("watchlist.col.changePct", "涨跌幅"),
+    actions: t("watchlist.col.actions", "操作"),
+  };
+  const allSelected = selected.size === stocks.length && stocks.length > 0;
+  const showSkeleton = loading && stocks.length === 0;
+
   return (
-    <div className="flex flex-col h-full p-4 gap-4 max-w-4xl mx-auto w-full">
+    <div className="flex flex-col h-full gap-4 max-w-4xl mx-auto w-full p-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">
-          {t("watchlist.title", "A股自选")}
-        </h1>
+      <header className="flex items-center justify-between">
+        <div className="flex items-baseline gap-2.5">
+          <h1 className="text-xl font-semibold tracking-tight">
+            {t("watchlist.title", "A股自选")}
+          </h1>
+          {stocks.length > 0 && (
+            <span className="text-xs font-medium tabular-nums text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+              {stocks.length}
+            </span>
+          )}
+        </div>
         <button
           onClick={() => {
             refresh();
             refreshQuotes();
           }}
-          className="p-1.5 rounded hover:bg-accent"
+          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
           title={t("watchlist.refresh", "刷新")}
+          aria-label={t("watchlist.refresh", "刷新")}
         >
-          <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+          <RefreshCw size={16} className={cn(loading && "animate-spin")} />
         </button>
-      </div>
+      </header>
 
       {/* Add Form */}
       <form onSubmit={handleAdd} className="flex gap-2 items-start">
@@ -176,18 +275,22 @@ export default function WatchlistPage() {
             }}
             placeholder={t("watchlist.placeholder", "输入 6 位股票代码")}
             maxLength={6}
-            className="border rounded px-3 py-1.5 text-sm w-40 bg-background"
+            inputMode="numeric"
+            className="border rounded-lg px-3 py-2 text-sm w-44 bg-background placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-shadow"
             aria-label={t("watchlist.placeholder", "输入 6 位股票代码")}
             aria-invalid={!!inputError}
           />
           {inputError && (
-            <span className="text-xs text-red-500">{inputError}</span>
+            <span className="flex items-center gap-1 text-xs text-red-500">
+              <AlertCircle size={12} />
+              {inputError}
+            </span>
           )}
         </div>
         <button
           type="submit"
           disabled={adding}
-          className="px-3 py-1.5 text-sm rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          className="px-3.5 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background transition-colors"
         >
           {adding
             ? t("watchlist.adding", "添加中…")
@@ -196,135 +299,163 @@ export default function WatchlistPage() {
       </form>
 
       {/* Error */}
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && (
+        <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/5 border border-destructive/20 rounded-lg px-3 py-2">
+          <AlertCircle size={14} className="shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Skeleton：首次加载 */}
+      {showSkeleton && (
+        <div className="overflow-hidden rounded-lg border">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40">
+              <HeaderRow
+                selectAllChecked={false}
+                onSelectAll={() => {}}
+                labels={colLabels}
+              />
+            </thead>
+            <tbody>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <SkeletonRow key={i} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Empty State */}
       {!loading && stocks.length === 0 && (
-        <div className="flex flex-col items-center justify-center flex-1 gap-2 text-muted-foreground">
-          <Eye size={40} strokeWidth={1} />
-          <p>{t("watchlist.empty", "暂无自选股，请添加股票代码")}</p>
+        <div className="flex flex-col items-center justify-center flex-1 gap-3 py-16 text-center">
+          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-muted">
+            <Eye size={28} strokeWidth={1.5} className="text-muted-foreground" />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-base font-medium">
+              {t("watchlist.empty", "暂无自选股，请添加股票代码")}
+            </p>
+            <p className="text-sm text-muted-foreground max-w-xs">
+              {t(
+                "watchlist.emptyHint",
+                "盯盘你关注的股票，涨跌实时刷新",
+              )}
+            </p>
+          </div>
         </div>
       )}
 
       {/* Quotes Table */}
       {stocks.length > 0 && (
         <>
-          <div className="overflow-x-auto rounded border">
+          <div className="overflow-x-auto rounded-lg border">
             <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="px-3 py-2 text-left w-8">
-                    <input
-                      type="checkbox"
-                      checked={
-                        selected.size === stocks.length && stocks.length > 0
-                      }
-                      onChange={() => {
-                        if (selected.size === stocks.length) clearSelection();
-                        else
-                          stocks.forEach((s) => {
-                            if (!selected.has(s.code)) toggleSelection(s.code);
-                          });
-                      }}
-                      aria-label={t("watchlist.selectAll", "全选")}
-                    />
-                  </th>
-                  <th className="px-3 py-2 text-left">
-                    {t("watchlist.col.code", "代码")}
-                  </th>
-                  <th className="px-3 py-2 text-left">
-                    {t("watchlist.col.name", "名称")}
-                  </th>
-                  <th className="px-3 py-2 text-right">
-                    {t("watchlist.col.price", "最新价")}
-                  </th>
-                  <th className="px-3 py-2 text-right">
-                    {t("watchlist.col.changeAmt", "涨跌额")}
-                  </th>
-                  <th className="px-3 py-2 text-right">
-                    {t("watchlist.col.changePct", "涨跌幅")}
-                  </th>
-                  <th className="px-3 py-2 text-center">
-                    {t("watchlist.col.actions", "操作")}
-                  </th>
-                </tr>
+              <thead className="bg-muted/40">
+                <HeaderRow
+                  selectAllChecked={allSelected}
+                  onSelectAll={handleSelectAll}
+                  labels={colLabels}
+                />
               </thead>
               <tbody>
                 {stocks.map((stock) => {
                   const q: QuoteData | undefined = quotes[stock.code];
                   const pct = q?.change_pct;
+                  const isSelected = selected.has(stock.code);
                   return (
                     <tr
                       key={stock.code}
-                      className={`border-t hover:bg-muted/30 cursor-pointer ${selected.has(stock.code) ? "bg-muted/40" : ""}`}
+                      title={q?.stale ? t("watchlist.stale", "行情延迟") : undefined}
+                      className={cn(
+                        "border-t transition-colors cursor-pointer hover:bg-muted/40",
+                        isSelected && "bg-primary/[0.06]",
+                        q?.stale && "opacity-50",
+                      )}
                       onClick={() => toggleSelection(stock.code)}
                     >
                       <td
-                        className="px-3 py-2"
+                        className="px-3 py-2.5"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <input
                           type="checkbox"
-                          checked={selected.has(stock.code)}
+                          checked={isSelected}
                           onChange={() => toggleSelection(stock.code)}
+                          className="accent-primary"
                           aria-label={`${t("watchlist.select", "选择")} ${stock.code}`}
                         />
                       </td>
-                      <td className="px-3 py-2 font-mono">{stock.code}</td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2.5 font-mono tabular-nums">
+                        {stock.code}
+                      </td>
+                      <td className="px-3 py-2.5 max-w-[8rem] truncate">
                         {q?.name ?? stock.name ?? "—"}
                       </td>
                       <td
-                        className={`px-3 py-2 text-right font-mono ${changeColor(pct)}`}
+                        className={cn(
+                          "px-3 py-2.5 text-right font-mono tabular-nums",
+                          changeColor(pct),
+                        )}
                       >
                         {fmtPrice(q?.price)}
                       </td>
                       <td
-                        className={`px-3 py-2 text-right font-mono ${changeColor(pct)}`}
+                        className={cn(
+                          "px-3 py-2.5 text-right font-mono tabular-nums",
+                          changeColor(pct),
+                        )}
                       >
                         {fmtAmt(q?.change_amt)}
                       </td>
-                      <td
-                        className={`px-3 py-2 text-right font-mono ${changeColor(pct)}`}
-                      >
-                        {fmtPct(pct)}
+                      <td className="px-3 py-2.5 text-right">
+                        <span
+                          className={cn(
+                            "inline-block min-w-[3.75rem] px-1.5 py-0.5 rounded text-xs font-mono tabular-nums text-right",
+                            pctChipClass(pct),
+                          )}
+                        >
+                          {fmtPct(pct)}
+                        </span>
                       </td>
                       <td
-                        className="px-3 py-2 text-center"
+                        className="px-3 py-2.5 text-center"
                         onClick={(e) => e.stopPropagation()}
                       >
                         {confirmDelete === stock.code ? (
                           <span className="flex items-center gap-1 justify-center">
                             <button
                               onClick={() => handleDelete(stock.code)}
-                              className="text-xs text-red-500 hover:underline"
+                              className="text-xs font-medium text-red-600 hover:text-red-700 px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
                               data-testid={`confirm-delete-${stock.code}`}
                             >
                               {t("watchlist.confirmDelete", "确认删除")}
                             </button>
                             <button
                               onClick={() => setConfirmDelete(null)}
-                              className="text-xs text-muted-foreground hover:underline ml-1"
+                              className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted/60 transition-colors"
                             >
                               {t("watchlist.cancelDelete", "取消")}
                             </button>
                           </span>
                         ) : (
-                          <span className="flex items-center gap-2 justify-center">
+                          <span className="flex items-center gap-1 justify-center">
                             <a
                               href={`https://stockpage.10jqka.com.cn/${stock.code}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-muted-foreground hover:text-foreground"
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors inline-flex"
                               title={t("watchlist.kline", "同花顺 K 线")}
+                              aria-label={t("watchlist.kline", "同花顺 K 线")}
                               data-testid={`kline-${stock.code}`}
                             >
                               <CandlestickChart size={14} />
                             </a>
                             <button
                               onClick={() => handleDelete(stock.code)}
-                              className="text-muted-foreground hover:text-red-500"
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
                               title={t("watchlist.delete", "删除")}
+                              aria-label={t("watchlist.delete", "删除")}
                               data-testid={`delete-${stock.code}`}
                             >
                               <Trash2 size={14} />
@@ -344,12 +475,14 @@ export default function WatchlistPage() {
             <div className="flex justify-end">
               <button
                 onClick={handleSendToAgent}
-                className="flex items-center gap-2 px-4 py-2 text-sm rounded bg-primary text-primary-foreground hover:bg-primary/90"
+                className="flex items-center gap-2 px-4 py-2.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background transition-colors"
                 data-testid="send-to-agent"
               >
                 <Send size={14} />
-                {t("watchlist.sendToAgent", "发给 Agent 分析")}（{selected.size}
-                ）
+                <span>{t("watchlist.sendToAgent", "发给 Agent 分析")}</span>
+                <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-primary-foreground/25 text-xs font-medium tabular-nums">
+                  {selected.size}
+                </span>
               </button>
             </div>
           )}
