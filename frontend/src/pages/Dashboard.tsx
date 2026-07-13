@@ -1,7 +1,7 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { RefreshCw, Send, TrendingUp, TrendingDown, Minus, AlertCircle } from "lucide-react";
+import { RefreshCw, Send, TrendingUp, TrendingDown, Minus, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMarketDashboardStore } from "@/stores/marketDashboard";
 import { CandlestickChart } from "@/components/charts/CandlestickChart";
@@ -38,32 +38,42 @@ function fmtAmt(v: number | null | undefined): string {
 
 /** Horizontal strip of major A-share index cards */
 function IndexStrip({ indexes }: { indexes: DashboardIndex[] }) {
+  const { t } = useTranslation();
+
   if (indexes.length === 0) {
-    return <p className="text-xs text-muted-foreground py-2">暂无指数数据</p>;
+    return <p className="text-xs text-muted-foreground py-2">{t("dashboard.noIndexes")}</p>;
   }
 
   return (
-    <div className="flex flex-wrap gap-3">
-      {indexes.map((idx) => (
-        <div
-          key={idx.code}
-          className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 min-w-[160px]"
-        >
-          <span className="text-sm font-medium whitespace-nowrap">{idx.name}</span>
-          <span className="text-sm tabular-nums font-mono">{fmtPrice(idx.price)}</span>
-          <span className={cn("text-xs tabular-nums font-mono", changeColor(idx.changePct))}>
-            {fmtPct(idx.changePct)}
-          </span>
-          <span className={cn("text-xs tabular-nums font-mono", changeColor(idx.changePct))}>
-            {fmtAmt(idx.changeAmt)}
-          </span>
-        </div>
-      ))}
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 xl:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]">
+      {indexes.map((idx) => {
+        const color = changeColor(idx.changePct);
+        return (
+          <div key={idx.code} className="rounded-lg border bg-card px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground truncate">{idx.name}</span>
+              <span className={cn("text-[11px] tabular-nums font-mono", color)}>
+                {fmtPct(idx.changePct)}
+              </span>
+            </div>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className="text-lg font-semibold tabular-nums font-mono leading-none">
+                {fmtPrice(idx.price)}
+              </span>
+              <span className={cn("text-xs tabular-nums font-mono", color)}>
+                {fmtAmt(idx.changeAmt)}
+              </span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 /** Market pulse / 异动 section */
+const PULSE_PAGE_SIZES = [200, 500, 1000] as const;
+
 function MarketPulseSection({
   items,
   loading,
@@ -74,10 +84,24 @@ function MarketPulseSection({
   error: string | null;
 }) {
   const { t } = useTranslation();
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState<(typeof PULSE_PAGE_SIZES)[number]>(200);
+
+  // Reset to first page when data refreshes
+  useEffect(() => {
+    setPage(0);
+  }, [items.length]);
+
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageItems = useMemo(
+    () => items.slice(safePage * pageSize, (safePage + 1) * pageSize),
+    [items, safePage, pageSize],
+  );
 
   if (loading && items.length === 0) {
     return (
-      <div className="rounded-lg border p-4 space-y-2">
+      <div className="rounded-lg border p-4 space-y-3">
         <h2 className="text-sm font-semibold">{t("dashboard.marketPulse")}</h2>
         <p className="text-xs text-muted-foreground">{t("dashboard.loading")}</p>
       </div>
@@ -85,7 +109,7 @@ function MarketPulseSection({
   }
 
   return (
-    <div className="rounded-lg border p-4 space-y-2">
+    <div className="rounded-lg border p-4 space-y-3">
       <h2 className="text-sm font-semibold">{t("dashboard.marketPulse")}</h2>
       {error && items.length === 0 && (
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -97,28 +121,82 @@ function MarketPulseSection({
         <p className="text-xs text-muted-foreground">{t("dashboard.noPulse")}</p>
       )}
       {items.length > 0 && (
-        <ul className="space-y-1.5 max-h-[320px] overflow-auto">
-          {items.map((item, i) => (
-            <li key={`${item.code}-${i}`} className="text-xs border-b border-border/50 pb-1.5 last:border-0">
-              <div className="flex items-center gap-1.5">
-                <span className="font-medium">{item.name}</span>
-                <span className="text-muted-foreground">{item.code}</span>
-                <span
-                  className={cn(
-                    "px-1 py-0.5 rounded text-[10px] font-medium",
-                    item.changeType.includes("涨") ? "bg-red-500/10 text-red-500" : "bg-green-500/10 text-green-500",
-                  )}
-                >
-                  {item.changeType}
-                </span>
+        <>
+          <ul className="space-y-1.5 max-h-[340px] overflow-auto">
+            {pageItems.map((item, i) => (
+              <li key={`${item.code}-${safePage * pageSize + i}`} className="text-xs border-b border-border/50 pb-1.5 last:border-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-medium">{item.name}</span>
+                  <span className="text-muted-foreground">{item.code}</span>
+                  <span
+                    className={cn(
+                      "px-1 py-0.5 rounded text-[10px] font-medium",
+                      item.changeType.includes("涨") ? "bg-red-500/10 text-red-500" : "bg-green-500/10 text-green-500",
+                    )}
+                  >
+                    {item.changeType}
+                  </span>
+                </div>
+                {item.info && (
+                  <p className="text-muted-foreground mt-0.5">{item.info}</p>
+                )}
+                <span className="text-muted-foreground/60 text-[10px]">{item.time}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex items-center justify-between pt-1 border-t border-border/50">
+            <span className="text-[10px] text-muted-foreground">
+              {t("dashboard.pulseRange", {
+                from: safePage * pageSize + 1,
+                to: Math.min((safePage + 1) * pageSize, items.length),
+                total: items.length,
+              })}
+            </span>
+            <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5 mr-1">
+                {PULSE_PAGE_SIZES.map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => {
+                      setPageSize(size);
+                      setPage(0);
+                    }}
+                    className={cn(
+                      "px-1.5 py-0.5 rounded text-[10px] transition-colors",
+                      pageSize === size
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-muted",
+                    )}
+                  >
+                    {size}
+                  </button>
+                ))}
               </div>
-              {item.info && (
-                <p className="text-muted-foreground mt-0.5">{item.info}</p>
-              )}
-              <span className="text-muted-foreground/60 text-[10px]">{item.time}</span>
-            </li>
-          ))}
-        </ul>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={safePage === 0}
+                className="p-0.5 rounded hover:bg-muted transition-colors disabled:opacity-30"
+                aria-label={t("dashboard.prevPage")}
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <span className="text-[10px] text-muted-foreground min-w-[3rem] text-center">
+                {safePage + 1} / {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={safePage >= totalPages - 1}
+                className="p-0.5 rounded hover:bg-muted transition-colors disabled:opacity-30"
+                aria-label={t("dashboard.nextPage")}
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
@@ -139,7 +217,7 @@ function AiSummarySection({
   const { t } = useTranslation();
 
   return (
-    <div className="rounded-lg border p-4 space-y-2">
+    <div className="rounded-lg border p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">{t("dashboard.aiSummary")}</h2>
         <button
@@ -252,8 +330,13 @@ function WatchlistQuotesSection({
   const rows = Object.values(quotes).sort((a, b) => a.code.localeCompare(b.code));
 
   return (
-    <div className="rounded-lg border p-4 space-y-2">
-      <h2 className="text-sm font-semibold">{t("dashboard.watchlistQuotes")}</h2>
+    <div className="rounded-lg border p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold">{t("dashboard.watchlistQuotes")}</h2>
+        {rows.length > 0 && (
+          <span className="text-xs text-muted-foreground tabular-nums">{rows.length}</span>
+        )}
+      </div>
 
       {loading && rows.length === 0 && (
         <p className="text-xs text-muted-foreground">{t("dashboard.loading")}</p>
@@ -271,7 +354,7 @@ function WatchlistQuotesSection({
       )}
 
       {rows.length > 0 && (
-        <div className="max-h-[360px] overflow-auto">
+        <div className="max-h-[400px] overflow-auto">
           <table className="w-full text-xs">
             <thead className="sticky top-0 bg-card">
               <tr className="border-b text-muted-foreground">
@@ -335,9 +418,12 @@ function StockDetailSection({
 
   if (!code) {
     return (
-      <div className="rounded-lg border p-4 space-y-2">
+      <div className="rounded-lg border p-4 space-y-3">
         <h2 className="text-sm font-semibold">{t("dashboard.stockDetail")}</h2>
-        <p className="text-xs text-muted-foreground">{t("dashboard.selectStockHint")}</p>
+        <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+          <TrendingUp className="h-6 w-6 text-muted-foreground/40" />
+          <p className="text-xs text-muted-foreground">{t("dashboard.selectStockHint")}</p>
+        </div>
       </div>
     );
   }
@@ -375,7 +461,7 @@ function StockDetailSection({
       )}
 
       {bars.length > 0 && (
-        <CandlestickChart data={bars} height={380} />
+        <CandlestickChart data={bars} height={440} />
       )}
     </div>
   );
@@ -434,11 +520,11 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="p-4 lg:p-6 space-y-4 max-w-[1440px] mx-auto">
+    <div className="p-4 lg:p-6 space-y-6 lg:space-y-8 max-w-[1440px] mx-auto">
       {/* Market Overview */}
-      <section aria-labelledby="market-overview">
-        <div className="flex items-center gap-3 mb-3">
-          <h1 id="market-overview" className="text-lg font-bold">
+      <section aria-labelledby="market-overview" className="space-y-4">
+        <div className="flex items-baseline gap-3">
+          <h1 id="market-overview" className="text-xl font-bold tracking-tight">
             {t("dashboard.title")}
           </h1>
           {indexesLoading && (
@@ -447,12 +533,12 @@ export default function Dashboard() {
         </div>
         <IndexStrip indexes={indexes} />
         {indexesError && indexes.length > 0 && (
-          <p className="text-[10px] text-muted-foreground/60 mt-1">{t("dashboard.staleData")}</p>
+          <p className="text-[10px] text-muted-foreground/60">{t("dashboard.staleData")}</p>
         )}
       </section>
 
       {/* Market Pulse + AI Summary */}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.7fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(22rem,1.08fr)]">
         <MarketPulseSection items={pulse} loading={pulseLoading} error={pulseError} />
         <AiSummarySection
           summary={summary}
@@ -463,7 +549,7 @@ export default function Dashboard() {
       </div>
 
       {/* Watchlist Quotes + Stock Detail */}
-      <div className="grid gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.2fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(16rem,0.7fr)_minmax(0,1.3fr)]">
         <WatchlistQuotesSection
           quotes={quotes}
           selectedCode={selectedCode}
