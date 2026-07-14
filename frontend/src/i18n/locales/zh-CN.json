@@ -917,6 +917,8 @@
     "limitLadder": "涨停梯队",
     "conceptHeat": "概念热度",
     "stale": "数据陈旧",
+    "source": "来源",
+    "lastUpdated": "最后更新",
     "up": "涨",
     "flat": "平",
     "down": "跌",

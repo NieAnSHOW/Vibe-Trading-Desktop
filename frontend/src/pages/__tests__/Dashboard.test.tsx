@@ -69,6 +69,11 @@ const MARKET_SNAPSHOT = {
   source: "stock-sdk",
   asOf: "2026-07-13T10:00:00Z",
   stale: false,
+  areas: {
+    market: { source: "market-source", asOf: "2026-07-13T10:00:00Z", stale: false, available: true },
+    concepts: { source: "concept-source", asOf: "2026-07-13T10:01:00Z", stale: false, available: true },
+    limit: { source: "limit-source", asOf: "2026-07-13T10:02:00Z", stale: false, available: true },
+  },
 };
 
 vi.mock("@/stores/marketDashboard", () => ({
@@ -240,6 +245,25 @@ describe("Dashboard page", () => {
 
       expect(screen.getByTestId("market-concepts-card")).toHaveTextContent("concept source unavailable");
       expect(screen.getByTestId("market-breadth-card")).not.toHaveTextContent("concept source unavailable");
+    });
+
+    it("shows source and last successful time for every market snapshot card", () => {
+      stateWithIndexesAndSummary();
+      renderDashboard();
+
+      const expectations = [
+        ["market-breadth-card", "market-source", "2026-07-13T10:00:00Z"],
+        ["market-emotion-card", "market-source", "2026-07-13T10:00:00Z"],
+        ["market-trend-card", "market-source", "2026-07-13T10:00:00Z"],
+        ["market-limit-card", "limit-source", "2026-07-13T10:02:00Z"],
+        ["market-concepts-card", "concept-source", "2026-07-13T10:01:00Z"],
+      ] as const;
+
+      for (const [testId, source, asOf] of expectations) {
+        const card = screen.getByTestId(testId);
+        expect(card).toHaveTextContent(source);
+        expect(card.querySelector("time")).toHaveAttribute("dateTime", asOf);
+      }
     });
   });
 

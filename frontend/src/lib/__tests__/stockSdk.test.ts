@@ -306,6 +306,29 @@ describe("fetchDashboardMarketSnapshot", () => {
     });
   }
 
+  it("marks an initially failed source unavailable instead of returning placeholder market values", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2000-01-01T00:00:00Z"));
+    try {
+      mockBatchCn.mockRejectedValueOnce(new Error("market source unavailable"));
+      mockConceptList.mockResolvedValueOnce([]);
+      mockZtPool.mockResolvedValue([]);
+      const fetchSnapshot = snapshotFetcher();
+
+      expect(fetchSnapshot).toEqual(expect.any(Function));
+      if (!fetchSnapshot) return;
+
+      const result = await fetchSnapshot();
+
+      expect(result.data.breadth).toBeNull();
+      expect(result.data.trend).toBeNull();
+      expect(result.data.emotion).toBeNull();
+      expect(result.data.errors?.market).toBe("market source unavailable");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("aggregates breadth, ladder, and concepts and reuses the snapshot within 60 seconds", async () => {
     seedMarketSnapshotSources();
     const fetchSnapshot = snapshotFetcher();
@@ -359,4 +382,96 @@ describe("fetchDashboardMarketSnapshot", () => {
       vi.useRealTimers();
     }
   });
+
+  it("retains each area's latest successful data across later partial failures", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2100-01-01T00:00:00Z"));
+    try {
+      seedMarketSnapshotSources();
+      const fetchSnapshot = snapshotFetcher();
+
+      expect(fetchSnapshot).toEqual(expect.any(Function));
+      if (!fetchSnapshot) return;
+
+      await fetchSnapshot();
+      mockConceptList.mockRejectedValueOnce(new Error("concept source unavailable"));
+      mockBatchCn.mockResolvedValueOnce([
+        { code: "600001", name: "强势股", price: 10, changePercent: 4, high52w: 10.1, low52w: 5 },
+        { code: "600002", name: "转强股", price: 10, changePercent: 2, high52w: 12, low52w: 6 },
+      ]);
+      vi.advanceTimersByTime(61_000);
+      const conceptFallback = await fetchSnapshot();
+      expect(conceptFallback.data.breadth).toMatchObject({ up: 2, down: 0 });
+
+      mockBatchCn.mockRejectedValueOnce(new Error("market source unavailable"));
+      vi.advanceTimersByTime(61_000);
+      const marketFallback = await fetchSnapshot();
+
+      expect(marketFallback.data.breadth).toMatchObject({ up: 2, down: 0 });
+      expect(marketFallback.data.errors?.market).toBe("market source unavailable");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries a partial snapshot before the successful snapshot TTL expires", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2200-01-01T00:00:00Z"));
+    try {
+      seedMarketSnapshotSources();
+      const fetchSnapshot = snapshotFetcher();
+
+      expect(fetchSnapshot).toEqual(expect.any(Function));
+      if (!fetchSnapshot) return;
+
+      await fetchSnapshot();
+      vi.advanceTimersByTime(61_000);
+      mockConceptList.mockRejectedValueOnce(new Error("concept source unavailable"));
+      const partial = await fetchSnapshot();
+      expect(partial.stale).toBe(true);
+
+      mockBatchCn.mockResolvedValueOnce([
+        { code: "600001", name: "转强股", price: 10, changePercent: 2, high52w: 10.1, low52w: 5 },
+      ]);
+      mockConceptList.mockResolvedValueOnce([
+        { code: "BK001", name: "人工智能", changePercent: 4, riseCount: 12, fallCount: 2, leadingStock: "龙头A", leadingStockChangePercent: 8.8 },
+      ]);
+      vi.advanceTimersByTime(15_000);
+      const recovered = await fetchSnapshot();
+
+      expect(mockBatchCn).toHaveBeenCalledTimes(3);
+      expect(recovered.stale).toBe(false);
+      expect(recovered.data.breadth).toMatchObject({ total: 1, up: 1 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shares one in-flight full-market request across concurrent callers", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2300-01-01T00:00:00Z"));
+    try {
+      let resolveBatch: ((rows: Array<Record<string, unknown>>) => void) | undefined;
+      mockBatchCn.mockImplementationOnce(() => new Promise((resolve) => {
+        resolveBatch = resolve;
+      }));
+      mockConceptList.mockResolvedValueOnce([]);
+      mockZtPool.mockResolvedValue([]);
+      const fetchSnapshot = snapshotFetcher();
+
+      expect(fetchSnapshot).toEqual(expect.any(Function));
+      if (!fetchSnapshot) return;
+
+      const first = fetchSnapshot();
+      const second = fetchSnapshot();
+      expect(mockBatchCn).toHaveBeenCalledOnce();
+
+      resolveBatch?.([]);
+      const [firstResult, secondResult] = await Promise.all([first, second]);
+      expect(secondResult).toBe(firstResult);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
 });

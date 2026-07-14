@@ -12,3 +12,9 @@
 ## 3. Verification and Delivery
 
 - [x] 3.1 Run focused Vitest, the frontend production build, and strict OpenSpec validation; confirm existing AI summary, watchlist, and Agent handoff behavior does not regress.
+
+## 4. Verification Remediation
+
+- [x] 4.1 Pause dashboard polling while hidden and resume it when the page returns to the foreground.
+- [x] 4.2 Retain each snapshot area's latest successful data, source, and timestamp through partial upstream failures, and render unavailable states instead of placeholder market values.
+- [x] 4.3 Cache only fully successful snapshots and deduplicate concurrent full-market snapshot requests.

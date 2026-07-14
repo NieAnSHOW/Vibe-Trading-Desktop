@@ -5,7 +5,14 @@ import { RefreshCw, Send, TrendingUp, TrendingDown, Minus, AlertCircle, ChevronL
 import { cn } from "@/lib/utils";
 import { useMarketDashboardStore } from "@/stores/marketDashboard";
 import { CandlestickChart } from "@/components/charts/CandlestickChart";
-import type { DashboardIndex, DashboardMarketSnapshot, MarketPulseItem, DashboardQuote } from "@/lib/stockSdk";
+import type {
+  DashboardIndex,
+  DashboardMarketSnapshot,
+  DashboardMarketEmotion,
+  DashboardSnapshotArea,
+  MarketPulseItem,
+  DashboardQuote,
+} from "@/lib/stockSdk";
 import type { MarketSummaryResponse, PriceBar } from "@/lib/api";
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -32,6 +39,30 @@ function fmtAmt(v: number | null | undefined): string {
   if (v == null) return "—";
   const sign = v > 0 ? "+" : "";
   return `${sign}${v.toFixed(2)}`;
+}
+
+function fmtSnapshotTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) ? value : date.toLocaleString();
+}
+
+function combineSnapshotAreas(
+  ...areas: Array<DashboardSnapshotArea | undefined>
+): DashboardSnapshotArea | undefined {
+  const availableAreas = areas.filter((area): area is DashboardSnapshotArea => area != null);
+  if (availableAreas.length === 0) return undefined;
+
+  const asOf = availableAreas
+    .map((area) => area.asOf)
+    .filter((value): value is string => value != null)
+    .sort()[0] ?? null;
+  return {
+    source: [...new Set(availableAreas.map((area) => area.source))].join(" / "),
+    asOf,
+    stale: availableAreas.some((area) => area.stale),
+    available: availableAreas.every((area) => area.available),
+    error: availableAreas.map((area) => area.error).find((error) => error != null),
+  };
 }
 
 // ── Sub-components ────────────────────────────────────────────
@@ -311,6 +342,7 @@ function MarketCard({
   hasData,
   loading,
   error,
+  status,
 }: {
   testId: string;
   title: string;
@@ -318,6 +350,7 @@ function MarketCard({
   hasData: boolean;
   loading: boolean;
   error: string | null;
+  status?: DashboardSnapshotArea;
 }) {
   const { t } = useTranslation();
 
@@ -338,6 +371,14 @@ function MarketCard({
       )}
       {hasData && children}
       {hasData && error && <p className="text-[10px] text-muted-foreground/70">{error}</p>}
+      {hasData && status?.available && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-border/60 pt-2 text-[10px] text-muted-foreground/70">
+          <span>{t("dashboard.source")}: {status.source}</span>
+          {status.asOf && (
+            <time dateTime={status.asOf}>{t("dashboard.lastUpdated")}: {fmtSnapshotTime(status.asOf)}</time>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -370,10 +411,11 @@ function MarketBreadthCard({
 }) {
   const { t } = useTranslation();
   const breadth = snapshot?.breadth;
-  const marketError = snapshot?.errors?.market ?? (snapshot ? null : error);
+  const marketArea = snapshot?.areas.market;
+  const marketError = marketArea?.error ?? snapshot?.errors?.market ?? (snapshot ? null : error);
   if (!breadth) {
     return (
-      <MarketCard testId="market-breadth-card" title={t("dashboard.marketBreadth")} hasData={false} loading={loading} error={marketError}>
+      <MarketCard testId="market-breadth-card" title={t("dashboard.marketBreadth")} hasData={false} loading={loading} error={marketError} status={marketArea}>
         {null}
       </MarketCard>
     );
@@ -391,6 +433,7 @@ function MarketBreadthCard({
       hasData={breadth != null}
       loading={loading}
       error={marketError}
+      status={marketArea}
     >
       <div className="grid h-24 grid-cols-7 items-end gap-1" aria-label={t("dashboard.marketBreadth")}>
         {breadth!.distribution.map((bucket) => {
@@ -427,9 +470,9 @@ function MarketBreadthCard({
   );
 }
 
-function EmotionRadar({ snapshot }: { snapshot: DashboardMarketSnapshot }) {
+function EmotionRadar({ emotion }: { emotion: DashboardMarketEmotion }) {
   const { t } = useTranslation();
-  const dimensions = snapshot.emotion.dimensions;
+  const dimensions = emotion.dimensions;
   const size = 220;
   const center = size / 2;
   const radius = 63;
@@ -464,7 +507,7 @@ function EmotionRadar({ snapshot }: { snapshot: DashboardMarketSnapshot }) {
           <circle key={point.key} cx={point.x} cy={point.y} r="3" fill="hsl(var(--primary))" />
         ))}
         <circle cx={center} cy={center} r="27" fill="hsl(var(--card))" stroke="hsl(var(--border))" />
-        <text x={center} y={center + 6} textAnchor="middle" className="fill-foreground text-[22px] font-semibold">{snapshot.emotion.score}</text>
+        <text x={center} y={center + 6} textAnchor="middle" className="fill-foreground text-[22px] font-semibold">{emotion.score}</text>
         {points.map((point) => (
           <text key={`${point.key}-label`} x={point.labelX} y={point.labelY + 3} textAnchor="middle" className="fill-muted-foreground text-[9px]">
             {t(`dashboard.emotionDimensions.${point.key}`)}
@@ -485,22 +528,24 @@ function MarketEmotionCard({
   error: string | null;
 }) {
   const { t } = useTranslation();
-  const marketError = snapshot?.errors?.market ?? (snapshot ? null : error);
-  if (!snapshot) {
+  const emotion = snapshot?.emotion;
+  const emotionArea = combineSnapshotAreas(snapshot?.areas.market, snapshot?.areas.limit);
+  const emotionError = emotionArea?.error ?? (snapshot ? null : error);
+  if (!emotion) {
     return (
-      <MarketCard testId="market-emotion-card" title={t("dashboard.emotionRadar")} hasData={false} loading={loading} error={marketError}>
+      <MarketCard testId="market-emotion-card" title={t("dashboard.emotionRadar")} hasData={false} loading={loading} error={emotionError} status={emotionArea}>
         {null}
       </MarketCard>
     );
   }
-  const emotionTone = snapshot && snapshot.emotion.score >= 55 ? "text-red-500" : snapshot && snapshot.emotion.score < 45 ? "text-green-500" : "text-foreground";
+  const emotionTone = emotion.score >= 55 ? "text-red-500" : emotion.score < 45 ? "text-green-500" : "text-foreground";
 
   return (
-    <MarketCard testId="market-emotion-card" title={t("dashboard.emotionRadar")} hasData={snapshot != null} loading={loading} error={marketError}>
-      <EmotionRadar snapshot={snapshot!} />
+    <MarketCard testId="market-emotion-card" title={t("dashboard.emotionRadar")} hasData loading={loading} error={emotionError} status={emotionArea}>
+      <EmotionRadar emotion={emotion} />
       <div className="flex items-center justify-between text-xs">
-        <span className="text-muted-foreground">{t(`dashboard.emotionLabels.${snapshot!.emotion.label}`)}</span>
-        <span className={cn("font-mono font-semibold tabular-nums", emotionTone)}>{snapshot!.emotion.score} / 100</span>
+        <span className="text-muted-foreground">{t(`dashboard.emotionLabels.${emotion.label}`)}</span>
+        <span className={cn("font-mono font-semibold tabular-nums", emotionTone)}>{emotion.score} / 100</span>
       </div>
     </MarketCard>
   );
@@ -516,18 +561,19 @@ function MarketTrendCard({
   error: string | null;
 }) {
   const { t } = useTranslation();
-  const marketError = snapshot?.errors?.market ?? (snapshot ? null : error);
+  const marketArea = snapshot?.areas.market;
+  const marketError = marketArea?.error ?? snapshot?.errors?.market ?? (snapshot ? null : error);
   const trend = snapshot?.trend;
   if (!trend) {
     return (
-      <MarketCard testId="market-trend-card" title={t("dashboard.trendStrength")} hasData={false} loading={loading} error={marketError}>
+      <MarketCard testId="market-trend-card" title={t("dashboard.trendStrength")} hasData={false} loading={loading} error={marketError} status={marketArea}>
         {null}
       </MarketCard>
     );
   }
 
   return (
-    <MarketCard testId="market-trend-card" title={t("dashboard.trendStrength")} hasData={trend != null} loading={loading} error={marketError}>
+    <MarketCard testId="market-trend-card" title={t("dashboard.trendStrength")} hasData={trend != null} loading={loading} error={marketError} status={marketArea}>
       <div className="grid grid-cols-2 gap-2">
         <MarketMetric label={t("dashboard.strongUp")} value={trend!.strongUp} tone="text-red-500" />
         <MarketMetric label={t("dashboard.strongDown")} value={trend!.strongDown} tone="text-green-500" />
@@ -558,10 +604,11 @@ function MarketLimitCard({
 }) {
   const { t } = useTranslation();
   const limit = snapshot?.limit;
-  const limitError = snapshot?.errors?.limit ?? (snapshot ? null : error);
+  const limitArea = snapshot?.areas.limit;
+  const limitError = limitArea?.error ?? snapshot?.errors?.limit ?? (snapshot ? null : error);
   if (!limit) {
     return (
-      <MarketCard testId="market-limit-card" title={t("dashboard.limitLadder")} hasData={false} loading={loading} error={limitError}>
+      <MarketCard testId="market-limit-card" title={t("dashboard.limitLadder")} hasData={false} loading={loading} error={limitError} status={limitArea}>
         {null}
       </MarketCard>
     );
@@ -569,7 +616,7 @@ function MarketLimitCard({
   const maxTierCount = Math.max(...(limit?.tiers.map((tier) => tier.count) ?? []), 1);
 
   return (
-    <MarketCard testId="market-limit-card" title={t("dashboard.limitLadder")} hasData={limit != null} loading={loading} error={limitError}>
+    <MarketCard testId="market-limit-card" title={t("dashboard.limitLadder")} hasData={limit != null} loading={loading} error={limitError} status={limitArea}>
       <div className="grid grid-cols-3 gap-2">
         <MarketMetric label={t("dashboard.limitUp")} value={limit!.limitUp} tone="text-red-500" />
         <MarketMetric label={t("dashboard.limitDown")} value={limit!.limitDown} tone="text-green-500" />
@@ -605,20 +652,21 @@ function MarketConceptsCard({
 }) {
   const { t } = useTranslation();
   const concepts = snapshot?.concepts;
-  const conceptError = snapshot?.errors?.concepts ?? (snapshot ? null : error);
-  if (!concepts) {
+  const conceptsArea = snapshot?.areas.concepts;
+  const conceptError = conceptsArea?.error ?? snapshot?.errors?.concepts ?? (snapshot ? null : error);
+  if (concepts == null) {
     return (
-      <MarketCard testId="market-concepts-card" title={t("dashboard.conceptHeat")} hasData={false} loading={loading} error={conceptError}>
+      <MarketCard testId="market-concepts-card" title={t("dashboard.conceptHeat")} hasData={false} loading={loading} error={conceptError} status={conceptsArea}>
         {null}
       </MarketCard>
     );
   }
 
   return (
-    <MarketCard testId="market-concepts-card" title={t("dashboard.conceptHeat")} hasData={concepts != null} loading={loading} error={conceptError}>
-      {concepts!.length > 0 ? (
+    <MarketCard testId="market-concepts-card" title={t("dashboard.conceptHeat")} hasData loading={loading} error={conceptError} status={conceptsArea}>
+      {concepts.length > 0 ? (
         <ul className="max-h-52 space-y-1 overflow-auto">
-          {concepts!.slice(0, 8).map((concept) => (
+          {concepts.slice(0, 8).map((concept) => (
             <li key={concept.code} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border/50 py-1.5 last:border-0">
               <div className="min-w-0">
                 <p className="truncate text-xs font-medium">{concept.name}</p>

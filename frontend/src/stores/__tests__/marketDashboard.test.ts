@@ -322,6 +322,20 @@ describe("useMarketDashboardStore", () => {
       expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 15000);
     });
 
+    it("pauses scheduled refreshes when a visible tab becomes hidden", () => {
+      const visibilitySpy = vi.spyOn(document, "visibilityState", "get");
+      visibilitySpy.mockReturnValue("visible");
+      useMarketDashboardStore.getState().startPolling();
+
+      visibilitySpy.mockReturnValue("hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+      vi.advanceTimersByTime(15_000);
+
+      expect(clearIntervalSpy).toHaveBeenCalled();
+      expect(mockFetchMarketSnapshot).not.toHaveBeenCalled();
+      expect(useMarketDashboardStore.getState().pollingTimerId).toBeNull();
+    });
+
     it("refreshes market data once on visibility return after being hidden", () => {
       const visibilitySpy = vi.spyOn(document, "visibilityState", "get");
 

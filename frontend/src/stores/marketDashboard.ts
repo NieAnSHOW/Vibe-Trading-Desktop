@@ -190,28 +190,37 @@ export const useMarketDashboardStore = create<MarketDashboardState>((set, get) =
   },
 
   startPolling: () => {
-    const { pollingTimerId } = get();
+    if (get().visibilityHandler) return;
 
-    // Already polling
-    if (pollingTimerId) return;
+    const startInterval = () => {
+      if (get().pollingTimerId) return;
+      const timerId = setInterval(() => {
+        if (document.visibilityState === "visible") {
+          get().refreshMarketData();
+        }
+      }, POLL_INTERVAL);
+      set({ pollingTimerId: timerId });
+    };
 
     const handler = () => {
-      if (document.visibilityState === "visible") {
-        get().refreshMarketData();
+      if (document.visibilityState !== "visible") {
+        const { pollingTimerId } = get();
+        if (pollingTimerId) {
+          clearInterval(pollingTimerId);
+          set({ pollingTimerId: null });
+        }
+        return;
       }
+
+      get().refreshMarketData();
+      startInterval();
     };
 
     document.addEventListener("visibilitychange", handler);
-
-    // Start interval only when visible
-    let timerId: ReturnType<typeof setInterval> | null = null;
+    set({ visibilityHandler: handler });
     if (document.visibilityState === "visible") {
-      timerId = setInterval(() => {
-        get().refreshMarketData();
-      }, POLL_INTERVAL);
+      startInterval();
     }
-
-    set({ pollingTimerId: timerId, visibilityHandler: handler });
   },
 
   stopPolling: () => {

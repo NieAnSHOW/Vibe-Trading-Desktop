@@ -98,12 +98,23 @@ export interface DashboardConceptHeat {
   leadingStockChangePct: number | null;
 }
 
+export type DashboardSnapshotAreaKey = "market" | "concepts" | "limit";
+
+export interface DashboardSnapshotArea {
+  source: string;
+  asOf: string | null;
+  stale: boolean;
+  available: boolean;
+  error?: string;
+}
+
 export interface DashboardMarketSnapshot {
-  breadth: DashboardMarketBreadth;
-  emotion: DashboardMarketEmotion;
-  trend: DashboardMarketTrend;
-  limit: DashboardLimitLadder;
-  concepts: DashboardConceptHeat[];
+  breadth: DashboardMarketBreadth | null;
+  emotion: DashboardMarketEmotion | null;
+  trend: DashboardMarketTrend | null;
+  limit: DashboardLimitLadder | null;
+  concepts: DashboardConceptHeat[] | null;
+  areas: Record<DashboardSnapshotAreaKey, DashboardSnapshotArea>;
   source: string;
   asOf: string;
   stale: boolean;
@@ -153,6 +164,8 @@ let marketSnapshotCache: {
   expiresAt: number;
   result: DashboardDataResult<DashboardMarketSnapshot>;
 } | null = null;
+let latestMarketSnapshot: DashboardDataResult<DashboardMarketSnapshot> | null = null;
+let marketSnapshotRequest: Promise<DashboardDataResult<DashboardMarketSnapshot>> | null = null;
 
 const codeOf = (value: unknown) =>
   String(value ?? "").replace(/^(sh|sz)/i, "").replace(/\.(SH|SZ)$/i, "");
@@ -172,31 +185,22 @@ const staleResult = <T>(fallback: T, error: unknown): DashboardDataResult<T> => 
 
 const clampPercent = (value: number) => Math.max(0, Math.min(100, value));
 
-const emptyBreadth = (): DashboardMarketBreadth => ({
-  total: 0,
-  up: 0,
-  flat: 0,
-  down: 0,
-  upPct: 0,
-  strongUp: 0,
-  strongDown: 0,
-  avgChangePct: 0,
-  distribution: [],
+const successfulSnapshotArea = (asOf: string): DashboardSnapshotArea => ({
+  source: SOURCE,
+  asOf,
+  stale: false,
+  available: true,
 });
 
-const emptyTrend = (): DashboardMarketTrend => ({
-  strongUp: 0,
-  strongDown: 0,
-  nearHigh: 0,
-  nearLow: 0,
-  highLowRatio: 50,
-});
-
-const emptyLimit = (): DashboardLimitLadder => ({
-  limitUp: 0,
-  limitDown: 0,
-  broken: 0,
-  tiers: [],
+const failedSnapshotArea = (
+  previous: DashboardSnapshotArea | undefined,
+  error: string,
+): DashboardSnapshotArea => ({
+  source: previous?.source ?? SOURCE,
+  asOf: previous?.asOf ?? null,
+  stale: true,
+  available: previous?.available ?? false,
+  error,
 });
 
 function buildBreadth(rows: SnapshotQuote[]): DashboardMarketBreadth {
@@ -398,7 +402,20 @@ export async function fetchDashboardMarketSnapshot(): Promise<
   if (marketSnapshotCache && Date.now() < marketSnapshotCache.expiresAt) {
     return marketSnapshotCache.result;
   }
+  if (marketSnapshotRequest) return marketSnapshotRequest;
 
+  const request = fetchUncachedDashboardMarketSnapshot();
+  marketSnapshotRequest = request;
+  try {
+    return await request;
+  } finally {
+    if (marketSnapshotRequest === request) marketSnapshotRequest = null;
+  }
+}
+
+async function fetchUncachedDashboardMarketSnapshot(): Promise<
+  DashboardDataResult<DashboardMarketSnapshot>
+> {
   const [marketResult, conceptsResult, limitUpResult, limitDownResult, brokenResult] = await Promise.allSettled([
     sdk.batch.cn(),
     sdk.board.concept.list(),
@@ -406,59 +423,86 @@ export async function fetchDashboardMarketSnapshot(): Promise<
     sdk.marketEvent.ztPool("dt"),
     sdk.marketEvent.ztPool("broken"),
   ]);
-  const previous = marketSnapshotCache?.result.data;
+  const previous = latestMarketSnapshot?.data;
   const errors: Partial<Record<"market" | "concepts" | "limit", string>> = {};
+  const asOf = now();
 
-  let breadth = previous?.breadth ?? emptyBreadth();
-  let trend = previous?.trend ?? emptyTrend();
+  let breadth = previous?.breadth ?? null;
+  let trend = previous?.trend ?? null;
+  let marketArea: DashboardSnapshotArea;
   if (marketResult.status === "fulfilled") {
     breadth = buildBreadth(marketResult.value);
     trend = buildTrend(marketResult.value, breadth);
+    marketArea = successfulSnapshotArea(asOf);
   } else {
-    errors.market = rejectionMessage(marketResult) ?? "market snapshot unavailable";
+    const error = rejectionMessage(marketResult) ?? "market snapshot unavailable";
+    errors.market = error;
+    marketArea = failedSnapshotArea(previous?.areas.market, error);
   }
 
-  let concepts = previous?.concepts ?? [];
+  let concepts = previous?.concepts ?? null;
+  let conceptsArea: DashboardSnapshotArea;
   if (conceptsResult.status === "fulfilled") {
     concepts = buildConcepts(conceptsResult.value);
+    conceptsArea = successfulSnapshotArea(asOf);
   } else {
-    errors.concepts = rejectionMessage(conceptsResult) ?? "concept snapshot unavailable";
+    const error = rejectionMessage(conceptsResult) ?? "concept snapshot unavailable";
+    errors.concepts = error;
+    conceptsArea = failedSnapshotArea(previous?.areas.concepts, error);
   }
 
-  let limit = previous?.limit ?? emptyLimit();
+  let limit = previous?.limit ?? null;
+  let limitArea: DashboardSnapshotArea;
   const limitError = [limitUpResult, limitDownResult, brokenResult]
     .map(rejectionMessage)
     .find((message): message is string => message != null);
   if (limitError) {
     errors.limit = limitError;
+    limitArea = failedSnapshotArea(previous?.areas.limit, limitError);
   } else if (
     limitUpResult.status === "fulfilled"
     && limitDownResult.status === "fulfilled"
     && brokenResult.status === "fulfilled"
   ) {
     limit = buildLimit(limitUpResult.value, limitDownResult.value, brokenResult.value);
+    limitArea = successfulSnapshotArea(asOf);
+  } else {
+    const error = "limit snapshot unavailable";
+    errors.limit = error;
+    limitArea = failedSnapshotArea(previous?.areas.limit, error);
   }
 
-  const stale = Object.keys(errors).length > 0;
-  const asOf = now();
+  const areas = {
+    market: marketArea,
+    concepts: conceptsArea,
+    limit: limitArea,
+  };
+  const stale = Object.values(areas).some((area) => area.stale);
+  const successfulTimes = Object.values(areas)
+    .map((area) => area.asOf)
+    .filter((value): value is string => value != null)
+    .sort();
+  const latestSuccessfulAsOf = successfulTimes[successfulTimes.length - 1] ?? asOf;
   const data: DashboardMarketSnapshot = {
     breadth,
-    emotion: buildEmotion(breadth, trend, limit),
+    emotion: breadth && trend && limit ? buildEmotion(breadth, trend, limit) : null,
     trend,
     limit,
     concepts,
+    areas,
     source: SOURCE,
-    asOf,
+    asOf: latestSuccessfulAsOf,
     stale,
     ...(stale ? { errors } : {}),
   };
   const result: DashboardDataResult<DashboardMarketSnapshot> = {
     data,
-    asOf,
+    asOf: latestSuccessfulAsOf,
     stale,
     ...(stale ? { error: errors.market ?? errors.concepts ?? errors.limit } : {}),
   };
 
+  latestMarketSnapshot = result;
   if (!stale) {
     marketSnapshotCache = {
       expiresAt: Date.now() + MARKET_SNAPSHOT_TTL_MS,
