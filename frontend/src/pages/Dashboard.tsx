@@ -113,11 +113,11 @@ function IndexStrip({ indexes }: { indexes: DashboardIndex[] }) {
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 xl:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]">
       {indexes.map((idx) => {
         const color = changeColor(idx.changePct);
         return (
-          <div key={idx.code} className="rounded-lg border bg-card px-3 py-2.5">
+          <div key={idx.code} className="rounded-lg border bg-card px-2.5 py-2">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs text-muted-foreground truncate">
                 {idx.name}
@@ -420,7 +420,7 @@ function MarketCard({
   return (
     <section
       data-testid={testId}
-      className="rounded-lg border bg-card p-4 space-y-3"
+      className="h-full space-y-2.5 rounded-lg border bg-card p-3"
     >
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">{title}</h2>
@@ -532,7 +532,7 @@ function MarketBreadthCard({
       status={marketArea}
     >
       <div
-        className="grid h-24 grid-cols-7 items-end gap-1"
+        className="grid h-20 grid-cols-7 items-end gap-1"
         aria-label={t("dashboard.marketBreadth")}
       >
         {breadth!.distribution.map((bucket) => {
@@ -553,7 +553,7 @@ function MarketBreadthCard({
               <div
                 className={cn("w-full max-w-3 rounded-sm", barClass)}
                 style={{
-                  height: `${Math.max(4, (bucket.count / maxBucketCount) * 62)}px`,
+                  height: `${Math.max(4, (bucket.count / maxBucketCount) * 50)}px`,
                 }}
                 title={`${bucket.label}: ${bucket.count}`}
               />
@@ -639,7 +639,7 @@ function EmotionRadar({ emotion }: { emotion: DashboardMarketEmotion }) {
     <div className="flex justify-center">
       <svg
         viewBox={`0 0 ${size} ${size}`}
-        className="h-52 w-full max-w-[17rem]"
+        className="h-48 w-full max-w-[15rem]"
         role="img"
         aria-label={t("dashboard.emotionRadar")}
       >
@@ -699,7 +699,7 @@ function EmotionRadar({ emotion }: { emotion: DashboardMarketEmotion }) {
             x={point.labelX}
             y={point.labelY + 3}
             textAnchor="middle"
-            className="fill-muted-foreground text-[9px]"
+            className="fill-muted-foreground text-[10px]"
           >
             {t(`dashboard.emotionDimensions.${point.key}`)}
           </text>
@@ -991,7 +991,7 @@ function BoardHeatCard({
       status={area}
     >
       {boards.length > 0 ? (
-        <ul className="max-h-52 space-y-1 overflow-auto">
+        <ul className="max-h-48 space-y-1 overflow-auto">
           {boards.slice(0, 8).map((board) => (
             <li
               key={board.code}
@@ -1054,7 +1054,7 @@ function StockRankCard({
       status={status}
     >
       {rows && rows.length > 0 ? (
-        <ul className="max-h-72 space-y-1 overflow-auto">
+        <ul className="max-h-64 space-y-1 overflow-auto">
           {rows.map((row, i) => (
             <li
               key={`${row.code}-${i}`}
@@ -1138,22 +1138,23 @@ function MarketSnapshotSection({
   const { t } = useTranslation();
 
   return (
-    <section aria-label={t("dashboard.marketSnapshot")} className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-3">
-        <MarketBreadthCard
-          snapshot={snapshot}
-          loading={loading}
-          error={error}
-        />
-        <MarketEmotionCard
-          snapshot={snapshot}
-          loading={loading}
-          error={error}
-        />
-        <MarketTrendCard snapshot={snapshot} loading={loading} error={error} />
-      </div>
-      <div className="grid gap-4 lg:grid-cols-3">
-        <MarketLimitCard snapshot={snapshot} loading={loading} error={error} />
+    <section
+      aria-label={t("dashboard.marketSnapshot")}
+      className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 min-[1440px]:grid-cols-4"
+    >
+      <MarketBreadthCard
+        snapshot={snapshot}
+        loading={loading}
+        error={error}
+      />
+      <MarketEmotionCard
+        snapshot={snapshot}
+        loading={loading}
+        error={error}
+      />
+      <MarketTrendCard snapshot={snapshot} loading={loading} error={error} />
+      <MarketLimitCard snapshot={snapshot} loading={loading} error={error} />
+      <div className="min-w-0 min-[1440px]:col-span-2 [&>section]:h-full">
         <BoardHeatCard
           testId="market-concepts-card"
           title={t("dashboard.conceptHeat")}
@@ -1167,6 +1168,8 @@ function MarketSnapshotSection({
           }
           loading={loading}
         />
+      </div>
+      <div className="min-w-0 min-[1440px]:col-span-2 [&>section]:h-full">
         <BoardHeatCard
           testId="market-industries-card"
           title={t("dashboard.industryHeat")}
@@ -1202,8 +1205,8 @@ function MarketRankingsSection({
     (snapshot ? null : error);
 
   return (
-    <section aria-label={t("dashboard.rankings")} className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <section aria-label={t("dashboard.rankings")}>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StockRankCard
           testId="top-gainers-card"
           title={t("dashboard.topGainers")}
@@ -1495,9 +1498,9 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="p-4 lg:p-6 space-y-6 lg:space-y-8 max-w-[1440px] mx-auto">
+    <div className="mx-auto max-w-[1440px] space-y-5 p-3 sm:p-4 lg:space-y-6 lg:p-5">
       {/* Market Overview */}
-      <section aria-labelledby="market-overview" className="space-y-4">
+      <section aria-labelledby="market-overview" className="space-y-3">
         <div className="flex items-baseline gap-3">
           <h1 id="market-overview" className="text-xl font-bold tracking-tight">
             {t("dashboard.title")}
@@ -1527,7 +1530,7 @@ export default function Dashboard() {
       />
 
       {/* Market Pulse + AI Summary */}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(22rem,1.08fr)]">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,0.92fr)_minmax(22rem,1.08fr)]">
         <MarketPulseSection
           items={pulse}
           loading={pulseLoading}
@@ -1542,7 +1545,7 @@ export default function Dashboard() {
       </div>
 
       {/* Watchlist Quotes + Stock Detail */}
-      <div className="grid gap-4 xl:grid-cols-[minmax(16rem,0.7fr)_minmax(0,1.3fr)]">
+      <div className="grid gap-3 xl:grid-cols-[minmax(16rem,0.7fr)_minmax(0,1.3fr)]">
         <WatchlistQuotesSection
           quotes={quotes}
           selectedCode={selectedCode}
