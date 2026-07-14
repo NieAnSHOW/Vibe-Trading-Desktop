@@ -88,7 +88,8 @@
       }
     },
     "watchlist": "Watchlist",
-    "dashboard": "Dashboard"
+  "dashboard": "Dashboard",
+  "indices": "Indices"
   },
   "runtime": {
     "monitorBadge": "Runtime Monitor",
@@ -963,6 +964,24 @@
       "price": "Price",
       "changePct": "Change %"
     }
+  },
+  "indices": {
+    "title": "Indices",
+    "description": "View current quotes and daily trends for major A-share indices.",
+    "supported": "Supported indices",
+    "loading": "Loading index quotes",
+    "quotesError": "Index quotes are unavailable",
+    "unavailable": "No indices are available",
+    "stale": "Market data may be stale",
+    "price": "Last price",
+    "change": "Change",
+    "changePercent": "Change %",
+    "dailyHistory": "Daily trend",
+    "historyLoading": "Loading daily history",
+    "historyError": "Daily history is unavailable",
+    "historyUnavailable": "No daily history available",
+    "historyUnavailableHint": "Select another index and try again",
+    "selectPrompt": "Select an index"
   },
   "watchlist": {
     "title": "Watchlist",

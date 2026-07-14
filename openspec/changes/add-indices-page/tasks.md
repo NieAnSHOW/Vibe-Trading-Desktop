@@ -7,7 +7,7 @@
 
 - [x] 2.1 Implement the dedicated index page using the existing quote and daily-history adapter functions and the shared candlestick chart.
 - [x] 2.2 Register the lazy `/indices` route and sidebar navigation entry, preserving responsive and accessible selection behavior.
-- [ ] 2.3 Add localized navigation and index-page labels for all supported application languages.
+- [x] 2.3 Add localized navigation and index-page labels for all supported application languages.
 
 ## 3. Verification
 

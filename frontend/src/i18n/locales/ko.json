@@ -21,7 +21,8 @@
     "dark": "다크",
     "language": "언어",
     "collapse": "접기",
-    "expand": "펼치기"
+    "expand": "펼치기",
+    "indices": "지수"
   },
   "runtime": {
     "monitorBadge": "런타임 모니터",
@@ -755,5 +756,23 @@
     "noPriceData": "가격 데이터 없음",
     "noCorrelationData": "상관 데이터 없음",
     "noEquityData": "자산 데이터 없음"
+  },
+  "indices": {
+    "title": "지수",
+    "description": "주요 A주 지수의 현재 시세와 일간 추세를 확인합니다.",
+    "supported": "지원 지수",
+    "loading": "지수 시세를 불러오는 중",
+    "quotesError": "지수 시세를 불러올 수 없습니다",
+    "unavailable": "사용 가능한 지수가 없습니다",
+    "stale": "시장 데이터가 오래되었을 수 있습니다",
+    "price": "현재가",
+    "change": "변동액",
+    "changePercent": "등락률",
+    "dailyHistory": "일간 추세",
+    "historyLoading": "일간 데이터를 불러오는 중",
+    "historyError": "일간 데이터를 불러올 수 없습니다",
+    "historyUnavailable": "일간 데이터가 없습니다",
+    "historyUnavailableHint": "다른 지수를 선택해 다시 시도하세요",
+    "selectPrompt": "지수를 선택하세요"
   }
 }

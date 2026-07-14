@@ -83,7 +83,8 @@
       }
     },
     "watchlist": "自选股",
-    "dashboard": "市场看板"
+  "dashboard": "市场看板",
+  "indices": "指数"
   },
   "runtime": {
     "monitorBadge": "运行时监控",
@@ -963,6 +964,24 @@
       "price": "最新价",
       "changePct": "涨跌幅"
     }
+  },
+  "indices": {
+    "title": "指数",
+    "description": "查看主要 A 股指数的当日行情和日线走势",
+    "supported": "支持的指数",
+    "loading": "指数行情加载中",
+    "quotesError": "指数行情加载失败",
+    "unavailable": "暂无可用指数",
+    "stale": "行情数据可能已过期",
+    "price": "最新价",
+    "change": "涨跌额",
+    "changePercent": "涨跌幅",
+    "dailyHistory": "日线走势",
+    "historyLoading": "日线数据加载中",
+    "historyError": "日线数据加载失败",
+    "historyUnavailable": "暂无日线数据",
+    "historyUnavailableHint": "请选择其他指数后重试",
+    "selectPrompt": "请选择一个指数"
   },
   "watchlist": {
     "title": "A股自选",

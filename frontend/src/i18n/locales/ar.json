@@ -21,7 +21,8 @@
     "dark": "داكن",
     "language": "اللغة",
     "collapse": "طي",
-    "expand": "توسيع"
+    "expand": "توسيع",
+    "indices": "المؤشرات"
   },
   "runtime": {
     "monitorBadge": "مراقب وقت التشغيل",
@@ -755,5 +756,23 @@
     "noPriceData": "لا توجد بيانات أسعار",
     "noCorrelationData": "لا توجد بيانات ارتباط",
     "noEquityData": "لا توجد بيانات أصول"
+  },
+  "indices": {
+    "title": "المؤشرات",
+    "description": "اعرض الأسعار الحالية والاتجاهات اليومية لمؤشرات الأسهم الصينية الرئيسية.",
+    "supported": "المؤشرات المدعومة",
+    "loading": "جارٍ تحميل أسعار المؤشرات",
+    "quotesError": "أسعار المؤشرات غير متاحة",
+    "unavailable": "لا توجد مؤشرات متاحة",
+    "stale": "قد تكون بيانات السوق قديمة",
+    "price": "آخر سعر",
+    "change": "التغير",
+    "changePercent": "نسبة التغير",
+    "dailyHistory": "الاتجاه اليومي",
+    "historyLoading": "جارٍ تحميل البيانات اليومية",
+    "historyError": "البيانات اليومية غير متاحة",
+    "historyUnavailable": "لا توجد بيانات يومية",
+    "historyUnavailableHint": "اختر مؤشرًا آخر وحاول مرة أخرى",
+    "selectPrompt": "اختر مؤشرًا"
   }
 }
