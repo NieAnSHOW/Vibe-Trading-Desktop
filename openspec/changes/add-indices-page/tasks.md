@@ -11,4 +11,4 @@
 
 ## 3. Verification
 
-- [ ] 3.1 Run the focused frontend tests and frontend production build, then resolve any regressions.
+- [x] 3.1 Run the focused frontend tests and frontend production build, then resolve any regressions.
