@@ -1,23 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Hoist mock fns so vi.mock's factory can reference them
-const { mockCnSimple, mockCn, mockKlineCn, mockStockChanges } = vi.hoisted(() => ({
+const {
+  mockCnSimple,
+  mockCn,
+  mockKlineCn,
+  mockStockChanges,
+  mockBatchCn,
+  mockConceptList,
+  mockZtPool,
+} = vi.hoisted(() => ({
   mockCnSimple: vi.fn(),
   mockCn: vi.fn(),
   mockKlineCn: vi.fn(),
   mockStockChanges: vi.fn(),
+  mockBatchCn: vi.fn(),
+  mockConceptList: vi.fn(),
+  mockZtPool: vi.fn(),
 }));
 
 vi.mock("stock-sdk", () => ({
   StockSDK: vi.fn(function () {
     return {
       quotes: { cnSimple: mockCnSimple, cn: mockCn },
+      batch: { cn: mockBatchCn },
+      board: { concept: { list: mockConceptList } },
       kline: { cn: mockKlineCn },
-      marketEvent: { stockChanges: mockStockChanges },
+      marketEvent: { stockChanges: mockStockChanges, ztPool: mockZtPool },
     };
   }),
 }));
 
+import * as dashboardSdk from "../stockSdk";
 import {
   fetchDashboardIndexes,
   fetchMarketPulse,
@@ -256,5 +270,93 @@ describe("fetchMarketPulse", () => {
       info: "",
       source: "stock-sdk",
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchDashboardMarketSnapshot
+// ---------------------------------------------------------------------------
+describe("fetchDashboardMarketSnapshot", () => {
+  const snapshotFetcher = () => (
+    dashboardSdk as typeof dashboardSdk & {
+      fetchDashboardMarketSnapshot?: () => Promise<{ data: Record<string, unknown>; stale: boolean }>;
+    }
+  ).fetchDashboardMarketSnapshot;
+
+  function seedMarketSnapshotSources() {
+    mockBatchCn.mockResolvedValue([
+      { code: "600001", name: "强势股", price: 10, changePercent: 4, high52w: 10.1, low52w: 5 },
+      { code: "600002", name: "普通上涨", price: 10, changePercent: 1, high52w: 12, low52w: 6 },
+      { code: "600003", name: "平盘股", price: 10, changePercent: 0, high52w: 12, low52w: 8 },
+      { code: "600004", name: "弱势股", price: 5, changePercent: -4, high52w: 12, low52w: 5.05 },
+    ]);
+    mockConceptList.mockResolvedValue([
+      { code: "BK001", name: "人工智能", changePercent: 3.2, riseCount: 12, fallCount: 2, leadingStock: "龙头A", leadingStockChangePercent: 8.8 },
+      { code: "BK002", name: "半导体", changePercent: 1.4, riseCount: 8, fallCount: 5, leadingStock: "龙头B", leadingStockChangePercent: 5.2 },
+    ]);
+    mockZtPool.mockImplementation((type: string) => {
+      if (type === "zt") {
+        return Promise.resolve([
+          { code: "600001", name: "三连板", continuousBoardCount: 3 },
+          { code: "600005", name: "二连板", continuousBoardCount: 2 },
+        ]);
+      }
+      if (type === "dt") return Promise.resolve([{ code: "600004", name: "跌停股" }]);
+      return Promise.resolve([{ code: "600006", name: "炸板股" }]);
+    });
+  }
+
+  it("aggregates breadth, ladder, and concepts and reuses the snapshot within 60 seconds", async () => {
+    seedMarketSnapshotSources();
+    const fetchSnapshot = snapshotFetcher();
+
+    expect(fetchSnapshot).toEqual(expect.any(Function));
+    if (!fetchSnapshot) return;
+
+    const first = await fetchSnapshot();
+    const second = await fetchSnapshot();
+    const breadth = first.data.breadth as Record<string, unknown>;
+    const limit = first.data.limit as Record<string, unknown>;
+    const concepts = first.data.concepts as Array<Record<string, unknown>>;
+
+    expect(breadth).toMatchObject({ total: 4, up: 2, flat: 1, down: 1, strongUp: 1, strongDown: 1 });
+    expect(limit).toMatchObject({ limitUp: 2, limitDown: 1, broken: 1 });
+    expect(limit.tiers).toEqual([
+      { boards: 3, count: 1 },
+      { boards: 2, count: 1 },
+    ]);
+    expect(concepts[0]).toMatchObject({ code: "BK001", name: "人工智能", changePct: 3.2 });
+    expect(second).toBe(first);
+    expect(mockBatchCn).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps only concepts stale when their source fails after cache expiry", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2099-01-01T00:00:00Z"));
+    try {
+      seedMarketSnapshotSources();
+      const fetchSnapshot = snapshotFetcher();
+
+      expect(fetchSnapshot).toEqual(expect.any(Function));
+      if (!fetchSnapshot) return;
+
+      const first = await fetchSnapshot();
+      mockConceptList.mockRejectedValueOnce(new Error("concept source unavailable"));
+      mockBatchCn.mockResolvedValueOnce([
+        { code: "600001", name: "强势股", price: 10, changePercent: 4, high52w: 10.1, low52w: 5 },
+        { code: "600002", name: "普通上涨", price: 10, changePercent: 1, high52w: 12, low52w: 6 },
+        { code: "600003", name: "平盘股", price: 10, changePercent: 0, high52w: 12, low52w: 8 },
+        { code: "600004", name: "转强股", price: 5, changePercent: 2, high52w: 12, low52w: 5.05 },
+      ]);
+      vi.advanceTimersByTime(61000);
+      const fallback = await fetchSnapshot();
+
+      expect(fallback.stale).toBe(true);
+      expect(fallback.error).toBe("concept source unavailable");
+      expect(fallback.data.concepts).toEqual(first.data.concepts);
+      expect(fallback.data.breadth).toMatchObject({ up: 3, down: 0 });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
