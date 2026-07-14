@@ -19,6 +19,7 @@ export interface DashboardQuote {
 
 export interface DashboardIndex {
   code: string;
+  symbol: string;
   name: string;
   price: number | null;
   changePct: number | null;
@@ -363,6 +364,7 @@ export async function fetchDashboardIndexes(): Promise<
     const rows = await sdk.quotes.cn(INDEX_CODES);
     const data = rows.map((row) => ({
       code: codeOf(row.code),
+      symbol: String(row.code ?? codeOf(row.code)),
       name: String(row.name ?? row.code),
       price: fin(row.price),
       changePct: fin(row.changePercent),

@@ -12,3 +12,7 @@
 ## 3. Verification
 
 - [x] 3.1 Run the focused frontend tests and frontend production build, then resolve any regressions.
+
+## 4. Remediation
+
+- [x] 4.1 Preserve market-qualified index symbols for daily-history requests while retaining normalized URL selection.

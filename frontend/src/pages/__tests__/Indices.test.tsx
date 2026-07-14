@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "@/i18n";
 import Indices from "@/pages/Indices";
@@ -22,6 +23,7 @@ vi.mock("@/components/charts/CandlestickChart", () => ({
 const indexes = [
   {
     code: "000001",
+    symbol: "sh000001",
     name: "上证指数",
     price: 3200,
     changePct: 0.5,
@@ -31,6 +33,7 @@ const indexes = [
   },
   {
     code: "399001",
+    symbol: "sz399001",
     name: "深证成指",
     price: 10000,
     changePct: -0.25,
@@ -54,10 +57,16 @@ const bars = [
 const mockFetchIndexes = vi.mocked(fetchDashboardIndexes);
 const mockFetchDailyBars = vi.mocked(fetchDashboardDailyBars);
 
+function SearchParamsProbe() {
+  const { search } = useLocation();
+  return <output data-testid="search-params">{search}</output>;
+}
+
 function renderIndices(initialEntry = "/indices") {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <Indices />
+      <SearchParamsProbe />
     </MemoryRouter>,
   );
 }
@@ -83,7 +92,7 @@ describe("Indices page", () => {
 
     expect(await screen.findByRole("heading", { name: "上证指数" })).toBeInTheDocument();
     await waitFor(() => {
-      expect(mockFetchDailyBars).toHaveBeenCalledWith("000001");
+      expect(mockFetchDailyBars).toHaveBeenCalledWith("sh000001");
     });
     expect(screen.getByRole("button", { name: /上证指数 000001/i })).toHaveAttribute(
       "aria-pressed",
@@ -97,8 +106,24 @@ describe("Indices page", () => {
 
     expect(await screen.findByRole("heading", { name: "深证成指" })).toBeInTheDocument();
     await waitFor(() => {
-      expect(mockFetchDailyBars).toHaveBeenCalledWith("399001");
+      expect(mockFetchDailyBars).toHaveBeenCalledWith("sz399001");
     });
+    expect(screen.getByRole("button", { name: /深证成指 399001/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("keeps a normalized URL while requesting qualified daily history after selecting an index", async () => {
+    const user = userEvent.setup();
+    renderIndices();
+
+    await user.click(await screen.findByRole("button", { name: /深证成指 399001/i }));
+
+    await waitFor(() => {
+      expect(mockFetchDailyBars).toHaveBeenLastCalledWith("sz399001");
+    });
+    expect(screen.getByTestId("search-params")).toHaveTextContent("?symbol=399001");
     expect(screen.getByRole("button", { name: /深证成指 399001/i })).toHaveAttribute(
       "aria-pressed",
       "true",

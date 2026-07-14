@@ -195,6 +195,7 @@ describe("fetchDashboardIndexes", () => {
     expect(result.data).toHaveLength(2);
     expect(result.data[0]).toMatchObject({
       code: "000001",
+      symbol: "sh000001",
       name: "上证指数",
       price: 3250,
       source: "stock-sdk",

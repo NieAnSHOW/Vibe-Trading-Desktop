@@ -47,6 +47,7 @@ export default function Indices() {
     [indexes, requestedCode],
   );
   const selectedCode = selectedIndex?.code ?? "";
+  const selectedSymbol = selectedIndex?.symbol ?? "";
 
   useEffect(() => {
     let active = true;
@@ -89,7 +90,7 @@ export default function Indices() {
   }, [requestedCode, selectedCode, setSearchParams]);
 
   useEffect(() => {
-    if (!selectedCode) {
+    if (!selectedSymbol) {
       setBars([]);
       setBarsError(null);
       setBarsStale(false);
@@ -103,7 +104,7 @@ export default function Indices() {
     setBarsError(null);
     setBarsStale(false);
 
-    fetchDashboardDailyBars(selectedCode)
+    fetchDashboardDailyBars(selectedSymbol)
       .then((result) => {
         if (!active) return;
         setBars(result.data);
@@ -123,7 +124,7 @@ export default function Indices() {
     return () => {
       active = false;
     };
-  }, [selectedCode]);
+  }, [selectedSymbol]);
 
   const selectIndex = (code: string) => {
     setSearchParams((current) => {
