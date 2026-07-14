@@ -5,6 +5,7 @@ vi.mock("@/lib/stockSdk", () => ({
   fetchMarketPulse: vi.fn(),
   fetchDashboardQuotes: vi.fn(),
   fetchDashboardDailyBars: vi.fn(),
+  fetchDashboardMarketSnapshot: vi.fn(),
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -24,6 +25,7 @@ import {
   fetchMarketPulse,
   fetchDashboardQuotes,
   fetchDashboardDailyBars,
+  fetchDashboardMarketSnapshot,
 } from "@/lib/stockSdk";
 import { fetchWatchlistStocks, api } from "@/lib/api";
 import { useMarketDashboardStore } from "../marketDashboard";
@@ -32,8 +34,20 @@ const mockFetchIndexes = vi.mocked(fetchDashboardIndexes);
 const mockFetchPulse = vi.mocked(fetchMarketPulse);
 const mockFetchQuotes = vi.mocked(fetchDashboardQuotes);
 const mockFetchDailyBars = vi.mocked(fetchDashboardDailyBars);
+const mockFetchMarketSnapshot = vi.mocked(fetchDashboardMarketSnapshot);
 const mockFetchWatchlist = vi.mocked(fetchWatchlistStocks);
 const mockCreateSummary = vi.mocked(api.createMarketSummary);
+
+const MARKET_SNAPSHOT = {
+  breadth: { total: 4, up: 2, flat: 1, down: 1, upPct: 50, strongUp: 1, strongDown: 1, avgChangePct: 0, distribution: [] },
+  emotion: { score: 56, label: "warm", dimensions: [] },
+  trend: { strongUp: 1, strongDown: 1, nearHigh: 1, nearLow: 1, highLowRatio: 50 },
+  limit: { limitUp: 2, limitDown: 1, broken: 1, tiers: [] },
+  concepts: [{ code: "BK001", name: "人工智能", changePct: 3.2, riseCount: 12, fallCount: 2, leadingStock: "龙头A", leadingStockChangePct: 8.8 }],
+  source: "stock-sdk",
+  asOf: "2026-07-13T10:00:00Z",
+  stale: false,
+};
 
 const defaultState = {
   indexes: [],
@@ -42,16 +56,19 @@ const defaultState = {
   selectedCode: null as string | null,
   selectedBars: [],
   summary: null,
+  marketSnapshot: null,
   indexesLoading: false,
   pulseLoading: false,
   quotesLoading: false,
   summaryLoading: false,
   barsLoading: false,
+  marketSnapshotLoading: false,
   indexesError: null as string | null,
   pulseError: null as string | null,
   quotesError: null as string | null,
   summaryError: null as string | null,
   barsError: null as string | null,
+  marketSnapshotError: null as string | null,
   pollingTimerId: null as ReturnType<typeof setInterval> | null,
   visibilityHandler: null as (() => void) | null,
 };
@@ -59,6 +76,10 @@ const defaultState = {
 beforeEach(() => {
   vi.clearAllMocks();
   useMarketDashboardStore.setState({ ...defaultState });
+  mockFetchIndexes.mockResolvedValue({ data: [], asOf: "2026-07-13T10:00:00Z", stale: false });
+  mockFetchPulse.mockResolvedValue({ data: [], asOf: "2026-07-13T10:00:00Z", stale: false });
+  mockFetchWatchlist.mockResolvedValue({ stocks: [] });
+  mockFetchMarketSnapshot.mockResolvedValue({ data: MARKET_SNAPSHOT, asOf: MARKET_SNAPSHOT.asOf, stale: false });
 });
 
 describe("useMarketDashboardStore", () => {
@@ -71,16 +92,19 @@ describe("useMarketDashboardStore", () => {
       expect(s.selectedCode).toBeNull();
       expect(s.selectedBars).toEqual([]);
       expect(s.summary).toBeNull();
+      expect(s.marketSnapshot).toBeNull();
       expect(s.indexesLoading).toBe(false);
       expect(s.pulseLoading).toBe(false);
       expect(s.quotesLoading).toBe(false);
       expect(s.summaryLoading).toBe(false);
       expect(s.barsLoading).toBe(false);
+      expect(s.marketSnapshotLoading).toBe(false);
       expect(s.indexesError).toBeNull();
       expect(s.pulseError).toBeNull();
       expect(s.quotesError).toBeNull();
       expect(s.summaryError).toBeNull();
       expect(s.barsError).toBeNull();
+      expect(s.marketSnapshotError).toBeNull();
     });
   });
 
@@ -114,6 +138,28 @@ describe("useMarketDashboardStore", () => {
       expect(s.indexesError).toBeNull();
       expect(s.pulseError).toBeNull();
       expect(s.quotesError).toBeNull();
+    });
+
+    it("keeps the market snapshot available while reporting a stale concept area", async () => {
+      const staleSnapshot = {
+        ...MARKET_SNAPSHOT,
+        stale: true,
+        errors: { concepts: "concept source unavailable" },
+      };
+      mockFetchMarketSnapshot.mockResolvedValue({
+        data: staleSnapshot,
+        asOf: staleSnapshot.asOf,
+        stale: true,
+        error: "concept source unavailable",
+      });
+
+      await useMarketDashboardStore.getState().refreshMarketData();
+
+      const s = useMarketDashboardStore.getState();
+      expect(mockFetchMarketSnapshot).toHaveBeenCalledOnce();
+      expect(s.marketSnapshot).toEqual(staleSnapshot);
+      expect(s.marketSnapshotError).toBe("concept source unavailable");
+      expect(s.marketSnapshotLoading).toBe(false);
     });
 
     it("preserves old quotes on quotes failure and sets quotesError", async () => {

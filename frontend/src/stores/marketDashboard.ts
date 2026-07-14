@@ -6,8 +6,9 @@ import {
   fetchMarketPulse,
   fetchDashboardQuotes,
   fetchDashboardDailyBars,
+  fetchDashboardMarketSnapshot,
 } from "@/lib/stockSdk";
-import type { DashboardIndex, MarketPulseItem, DashboardQuote } from "@/lib/stockSdk";
+import type { DashboardIndex, MarketPulseItem, DashboardQuote, DashboardMarketSnapshot } from "@/lib/stockSdk";
 
 export interface MarketDashboardState {
   indexes: DashboardIndex[];
@@ -16,18 +17,21 @@ export interface MarketDashboardState {
   selectedCode: string | null;
   selectedBars: PriceBar[];
   summary: MarketSummaryResponse | null;
+  marketSnapshot: DashboardMarketSnapshot | null;
 
   indexesLoading: boolean;
   pulseLoading: boolean;
   quotesLoading: boolean;
   summaryLoading: boolean;
   barsLoading: boolean;
+  marketSnapshotLoading: boolean;
 
   indexesError: string | null;
   pulseError: string | null;
   quotesError: string | null;
   summaryError: string | null;
   barsError: string | null;
+  marketSnapshotError: string | null;
 
   pollingTimerId: ReturnType<typeof setInterval> | null;
   visibilityHandler: (() => void) | null;
@@ -49,18 +53,21 @@ export const useMarketDashboardStore = create<MarketDashboardState>((set, get) =
   selectedCode: null,
   selectedBars: [],
   summary: null,
+  marketSnapshot: null,
 
   indexesLoading: false,
   pulseLoading: false,
   quotesLoading: false,
   summaryLoading: false,
   barsLoading: false,
+  marketSnapshotLoading: false,
 
   indexesError: null,
   pulseError: null,
   quotesError: null,
   summaryError: null,
   barsError: null,
+  marketSnapshotError: null,
 
   pollingTimerId: null,
   visibilityHandler: null,
@@ -75,12 +82,14 @@ export const useMarketDashboardStore = create<MarketDashboardState>((set, get) =
       indexesLoading: true,
       pulseLoading: true,
       quotesLoading: true,
+      marketSnapshotLoading: true,
     });
 
-    const [indexesResult, pulseResult, stocksResult] = await Promise.allSettled([
+    const [indexesResult, pulseResult, stocksResult, marketSnapshotResult] = await Promise.allSettled([
       fetchDashboardIndexes(),
       fetchMarketPulse(),
       fetchWatchlistStocks(),
+      fetchDashboardMarketSnapshot(),
     ]);
 
     // Indexes
@@ -95,6 +104,16 @@ export const useMarketDashboardStore = create<MarketDashboardState>((set, get) =
       set({ pulse: pulseResult.value.data, pulseError: null });
     } else {
       set({ pulseError: (pulseResult.reason as Error)?.message ?? "pulse failed" });
+    }
+
+    // Full-market snapshot
+    if (marketSnapshotResult.status === "fulfilled") {
+      set({
+        marketSnapshot: marketSnapshotResult.value.data,
+        marketSnapshotError: marketSnapshotResult.value.error ?? null,
+      });
+    } else {
+      set({ marketSnapshotError: (marketSnapshotResult.reason as Error)?.message ?? "market snapshot failed" });
     }
 
     // Watchlist → Quotes
@@ -118,6 +137,7 @@ export const useMarketDashboardStore = create<MarketDashboardState>((set, get) =
       indexesLoading: false,
       pulseLoading: false,
       quotesLoading: false,
+      marketSnapshotLoading: false,
     });
   },
 
