@@ -30,4 +30,3 @@ The index research view SHALL distinguish loading, unavailable, error, and stale
 
 - **WHEN** the frontend index adapter marks the quote response as stale
 - **THEN** the application labels the displayed quote context as stale while preserving the last available values
-
