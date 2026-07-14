@@ -15,30 +15,34 @@ TBD - created by archiving change add-ai-market-dashboard. Update Purpose after 
 - **THEN** 系统懒加载看板页面并展示 A 股市场数据区域
 
 ### Requirement: 市场优先的信息层级
-看板 SHALL 以市场概览为首要内容，展示上证、深证和创业板指数的最新值与涨跌幅；随后展示市场脉冲、AI 盘面摘要、自选股和选中标的详情。每个区域 SHALL 显示最近一次成功数据的时间及数据可用性状态。
+The dashboard SHALL prioritize a market overview with current values and percentage changes for the Shanghai, Shenzhen, and ChiNext indexes. It SHALL then show market breadth and price-change distribution, an emotion radar, trend strength, a limit-up ladder, concept heat, market pulse, AI market summary, watchlist quotes, and selected-stock detail. The added market cards SHALL use traceable browser market data and expose the last successful data time, source, and availability state. Upward and downward market colors SHALL follow the A-share red-up/green-down convention.
 
 #### Scenario: 行情加载成功
-- **WHEN** 指数、板块或自选股行情成功加载
-- **THEN** 对应区域展示规范化数据、最后行情时间和来源状态，且上涨/下跌颜色遵循 A 股红涨绿跌惯例
+- **WHEN** index, market-snapshot, board, limit-pool, or watchlist data loads successfully
+- **THEN** its area shows normalized data with last-market time and source status, while upward and downward values follow the A-share red-up/green-down convention
+
+#### Scenario: Market snapshot loads successfully
+- **WHEN** full-market quotes, concept boards, and limit pools are available
+- **THEN** the dashboard shows breadth and distribution, an emotion radar with overall score and dimension values, trend strength based on price strength and 52-week high/low positions, a limit-up ladder grouped by consecutive-board count, and concept heat ordered by percentage change
 
 #### Scenario: 单一区域失败
-- **WHEN** 指数、市场脉冲、自选股或个股详情中的任一区域加载失败
-- **THEN** 系统仅在该区域展示错误或陈旧状态，并继续展示其他已成功加载的区域
+- **WHEN** any one of indexes, market snapshot, market pulse, watchlist, or stock detail fails to load
+- **THEN** the system shows an error or stale state only in that area and continues showing all other successful areas
 
 ### Requirement: 看板轮询与可见性控制
-看板 SHALL 在页面可见时每 15 秒刷新行情数据；页面隐藏时 SHALL 暂停轮询，重新可见时 SHALL 立即刷新一次。AI 摘要缓存命中时，行情轮询 SHALL 不触发新的模型调用。
+The dashboard SHALL refresh market data every 15 seconds while its page is visible, pause polling while hidden, and refresh immediately when it becomes visible again. The high-cost full-market snapshot SHALL be browser-cached for at most 60 seconds, and ordinary dashboard polling SHALL reuse that snapshot without a repeat public-upstream request while it is valid. A cached AI summary SHALL not trigger a new model call during market polling.
 
 #### Scenario: 页面可见时轮询
-- **WHEN** 用户停留在可见的 `/dashboard` 页面超过 15 秒
-- **THEN** 系统刷新看板行情数据
+- **WHEN** a user remains on a visible `/dashboard` page for more than 15 seconds
+- **THEN** the system refreshes dashboard market data and reuses the last successful full-market snapshot while its cache is valid
 
 #### Scenario: 页面隐藏后暂停
-- **WHEN** `document.visibilityState` 变为 `hidden`
-- **THEN** 系统停止后续行情轮询，直到页面再次可见
+- **WHEN** `document.visibilityState` becomes `hidden`
+- **THEN** the system stops subsequent market polling until the page becomes visible again
 
 #### Scenario: 返回看板标签页
-- **WHEN** 页面从隐藏状态恢复为可见
-- **THEN** 系统立即刷新行情数据而不等待下一个轮询间隔
+- **WHEN** the page returns from hidden to visible
+- **THEN** the system refreshes market data immediately without waiting for the next polling interval
 
 ### Requirement: 自选股详情与 Agent 联动
 看板 SHALL 读取现有自选股清单，并允许用户选择一个 A 股标的查看日 K 与技术指标。用户 SHALL 能从选中标的发起既有 Agent 分析预填工作流。
