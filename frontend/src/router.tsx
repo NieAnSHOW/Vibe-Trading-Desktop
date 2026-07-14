@@ -28,6 +28,7 @@ const AlphaZoo = lazy(() =>
 );
 
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Indices = lazy(() => import("@/pages/Indices"));
 const Watchlist = lazy(() => import("@/pages/Watchlist"));
 
 
@@ -65,6 +66,7 @@ export const router = createBrowserRouter([
       { path: "/alpha-zoo/compare", element: wrap(AlphaZoo) },
       { path: "/alpha-zoo/:alphaId", element: wrap(AlphaZoo) },
       { path: "/dashboard", element: wrap(Dashboard) },
+      { path: "/indices", element: wrap(Indices) },
       { path: "/watchlist", element: wrap(Watchlist) },
     ],
   },
