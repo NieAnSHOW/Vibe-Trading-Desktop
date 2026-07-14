@@ -66,12 +66,18 @@ const MARKET_SNAPSHOT = {
   trend: { strongUp: 1, strongDown: 1, nearHigh: 2, nearLow: 1, highLowRatio: 67 },
   limit: { limitUp: 2, limitDown: 1, broken: 1, tiers: [{ boards: 3, count: 1 }, { boards: 2, count: 1 }] },
   concepts: [{ code: "BK001", name: "人工智能", changePct: 3.2, riseCount: 12, fallCount: 2, leadingStock: "龙头A", leadingStockChangePct: 8.8 }],
+  industries: [{ code: "BK901", name: "半导体", changePct: 2.1, riseCount: 8, fallCount: 3, leadingStock: "龙头B", leadingStockChangePct: 6.5 }],
+  topGainers: [{ code: "600519", name: "贵州茅台", price: 1500, changePct: 9.98, amount: 123456, turnoverRate: 0.5 }],
+  topLosers: [{ code: "000002", name: "万科A", price: 10, changePct: -9.97, amount: 54321, turnoverRate: 1.2 }],
+  turnoverLeaders: [{ code: "601318", name: "中国平安", price: 50, changePct: 1.5, amount: 999999, turnoverRate: 0.8 }],
+  activeLeaders: [{ code: "300750", name: "宁德时代", price: 200, changePct: 2.3, amount: 234567, turnoverRate: 5.6 }],
   source: "stock-sdk",
   asOf: "2026-07-13T10:00:00Z",
   stale: false,
   areas: {
     market: { source: "market-source", asOf: "2026-07-13T10:00:00Z", stale: false, available: true },
     concepts: { source: "concept-source", asOf: "2026-07-13T10:01:00Z", stale: false, available: true },
+    industries: { source: "industry-source", asOf: "2026-07-13T10:03:00Z", stale: false, available: true },
     limit: { source: "limit-source", asOf: "2026-07-13T10:02:00Z", stale: false, available: true },
   },
 };
@@ -236,6 +242,17 @@ describe("Dashboard page", () => {
       expect(screen.getByTestId("market-concepts-card")).toHaveTextContent("人工智能");
     });
 
+    it("renders industry heat and ranking cards from the snapshot", () => {
+      stateWithIndexesAndSummary();
+      renderDashboard();
+
+      expect(screen.getByTestId("market-industries-card")).toHaveTextContent("半导体");
+      expect(screen.getByTestId("top-gainers-card")).toHaveTextContent("贵州茅台");
+      expect(screen.getByTestId("top-losers-card")).toHaveTextContent("万科A");
+      expect(screen.getByTestId("turnover-leaders-card")).toHaveTextContent("中国平安");
+      expect(screen.getByTestId("active-leaders-card")).toHaveTextContent("宁德时代");
+    });
+
     it("marks only the concept card stale when concept data is unavailable", () => {
       stateWithIndexesAndSummary({
         marketSnapshot: { ...MARKET_SNAPSHOT, stale: true, errors: { concepts: "concept source unavailable" } },
@@ -257,6 +274,7 @@ describe("Dashboard page", () => {
         ["market-trend-card", "market-source", "2026-07-13T10:00:00Z"],
         ["market-limit-card", "limit-source", "2026-07-13T10:02:00Z"],
         ["market-concepts-card", "concept-source", "2026-07-13T10:01:00Z"],
+        ["market-industries-card", "industry-source", "2026-07-13T10:03:00Z"],
       ] as const;
 
       for (const [testId, source, asOf] of expectations) {

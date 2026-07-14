@@ -27,6 +27,8 @@ import type {
   DashboardSnapshotArea,
   MarketPulseItem,
   DashboardQuote,
+  DashboardConceptHeat,
+  DashboardStockRankRow,
 } from "@/lib/stockSdk";
 import type { MarketSummaryResponse, PriceBar } from "@/lib/api";
 
@@ -54,6 +56,17 @@ function fmtAmt(v: number | null | undefined): string {
   if (v == null) return "—";
   const sign = v > 0 ? "+" : "";
   return `${sign}${v.toFixed(2)}`;
+}
+
+function fmtBigAmount(v: number | null | undefined): string {
+  if (v == null) return "—";
+  if (v >= 10000) return `${(v / 10000).toFixed(2)}亿`;
+  return `${v.toFixed(0)}万`;
+}
+
+function fmtTurnover(v: number | null | undefined): string {
+  if (v == null) return "—";
+  return `${v.toFixed(2)}%`;
 }
 
 function fmtSnapshotTime(value: string): string {
@@ -935,31 +948,33 @@ function MarketLimitCard({
   );
 }
 
-function MarketConceptsCard({
-  snapshot,
+function BoardHeatCard({
+  testId,
+  title,
+  emptyKey,
+  boards,
+  area,
+  areaError,
   loading,
-  error,
 }: {
-  snapshot: DashboardMarketSnapshot | null;
+  testId: string;
+  title: string;
+  emptyKey: string;
+  boards: DashboardConceptHeat[] | null;
+  area?: DashboardSnapshotArea;
+  areaError: string | null;
   loading: boolean;
-  error: string | null;
 }) {
   const { t } = useTranslation();
-  const concepts = snapshot?.concepts;
-  const conceptsArea = snapshot?.areas.concepts;
-  const conceptError =
-    conceptsArea?.error ??
-    snapshot?.errors?.concepts ??
-    (snapshot ? null : error);
-  if (concepts == null) {
+  if (boards == null) {
     return (
       <MarketCard
-        testId="market-concepts-card"
-        title={t("dashboard.conceptHeat")}
+        testId={testId}
+        title={title}
         hasData={false}
         loading={loading}
-        error={conceptError}
-        status={conceptsArea}
+        error={areaError}
+        status={area}
       >
         {null}
       </MarketCard>
@@ -968,44 +983,143 @@ function MarketConceptsCard({
 
   return (
     <MarketCard
-      testId="market-concepts-card"
-      title={t("dashboard.conceptHeat")}
+      testId={testId}
+      title={title}
       hasData
       loading={loading}
-      error={conceptError}
-      status={conceptsArea}
+      error={areaError}
+      status={area}
     >
-      {concepts.length > 0 ? (
+      {boards.length > 0 ? (
         <ul className="max-h-52 space-y-1 overflow-auto">
-          {concepts.slice(0, 8).map((concept) => (
+          {boards.slice(0, 8).map((board) => (
             <li
-              key={concept.code}
+              key={board.code}
               className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border/50 py-1.5 last:border-0"
             >
               <div className="min-w-0">
-                <p className="truncate text-xs font-medium">{concept.name}</p>
+                <p className="truncate text-xs font-medium">{board.name}</p>
                 <p className="truncate text-[10px] text-muted-foreground">
                   {t("dashboard.riseFall", {
-                    up: concept.riseCount ?? "-",
-                    down: concept.fallCount ?? "-",
+                    up: board.riseCount ?? "-",
+                    down: board.fallCount ?? "-",
                   })}
-                  {concept.leadingStock ? ` · ${concept.leadingStock}` : ""}
+                  {board.leadingStock ? ` · ${board.leadingStock}` : ""}
                 </p>
               </div>
               <span
                 className={cn(
                   "font-mono text-xs font-semibold tabular-nums",
-                  changeColor(concept.changePct),
+                  changeColor(board.changePct),
                 )}
               >
-                {fmtPct(concept.changePct)}
+                {fmtPct(board.changePct)}
               </span>
             </li>
           ))}
         </ul>
       ) : (
+        <p className="text-xs text-muted-foreground">{t(emptyKey)}</p>
+      )}
+    </MarketCard>
+  );
+}
+
+function StockRankCard({
+  testId,
+  title,
+  rows,
+  mode,
+  loading,
+  error,
+  status,
+}: {
+  testId: string;
+  title: string;
+  rows: DashboardStockRankRow[] | null;
+  mode: "gain" | "loss" | "amount" | "active";
+  loading: boolean;
+  error: string | null;
+  status?: DashboardSnapshotArea;
+}) {
+  const { t } = useTranslation();
+  const hasData = rows != null && rows.length > 0;
+  return (
+    <MarketCard
+      testId={testId}
+      title={title}
+      hasData={hasData}
+      loading={loading}
+      error={error}
+      status={status}
+    >
+      {rows && rows.length > 0 ? (
+        <ul className="max-h-72 space-y-1 overflow-auto">
+          {rows.map((row, i) => (
+            <li
+              key={`${row.code}-${i}`}
+              className="grid grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-2 border-b border-border/50 py-1 last:border-0"
+            >
+              <span className="text-center text-[11px] tabular-nums text-muted-foreground">
+                {i + 1}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-medium">{row.name}</p>
+                <p className="font-mono text-[10px] text-muted-foreground">
+                  {row.code}
+                </p>
+              </div>
+              <div className="text-right">
+                {mode === "amount" ? (
+                  <>
+                    <p className="font-mono text-xs tabular-nums">
+                      {fmtBigAmount(row.amount)}
+                    </p>
+                    <p
+                      className={cn(
+                        "font-mono text-[10px] tabular-nums",
+                        changeColor(row.changePct),
+                      )}
+                    >
+                      {fmtPct(row.changePct)}
+                    </p>
+                  </>
+                ) : mode === "active" ? (
+                  <>
+                    <p className="font-mono text-xs tabular-nums">
+                      {fmtTurnover(row.turnoverRate)}
+                    </p>
+                    <p
+                      className={cn(
+                        "font-mono text-[10px] tabular-nums",
+                        changeColor(row.changePct),
+                      )}
+                    >
+                      {fmtPct(row.changePct)}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p
+                      className={cn(
+                        "font-mono text-xs font-semibold tabular-nums",
+                        changeColor(row.changePct),
+                      )}
+                    >
+                      {fmtPct(row.changePct)}
+                    </p>
+                    <p className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                      {fmtPrice(row.price)}
+                    </p>
+                  </>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
         <p className="text-xs text-muted-foreground">
-          {t("dashboard.noConceptData")}
+          {t("dashboard.noRankData")}
         </p>
       )}
     </MarketCard>
@@ -1038,12 +1152,93 @@ function MarketSnapshotSection({
         />
         <MarketTrendCard snapshot={snapshot} loading={loading} error={error} />
       </div>
-      <div className="grid gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.2fr)]">
+      <div className="grid gap-4 lg:grid-cols-3">
         <MarketLimitCard snapshot={snapshot} loading={loading} error={error} />
-        <MarketConceptsCard
-          snapshot={snapshot}
+        <BoardHeatCard
+          testId="market-concepts-card"
+          title={t("dashboard.conceptHeat")}
+          emptyKey="dashboard.noConceptData"
+          boards={snapshot?.concepts ?? null}
+          area={snapshot?.areas.concepts}
+          areaError={
+            snapshot?.areas.concepts?.error ??
+            snapshot?.errors?.concepts ??
+            (snapshot ? null : error)
+          }
           loading={loading}
-          error={error}
+        />
+        <BoardHeatCard
+          testId="market-industries-card"
+          title={t("dashboard.industryHeat")}
+          emptyKey="dashboard.noIndustryData"
+          boards={snapshot?.industries ?? null}
+          area={snapshot?.areas.industries}
+          areaError={
+            snapshot?.areas.industries?.error ??
+            snapshot?.errors?.industries ??
+            (snapshot ? null : error)
+          }
+          loading={loading}
+        />
+      </div>
+    </section>
+  );
+}
+
+function MarketRankingsSection({
+  snapshot,
+  loading,
+  error,
+}: {
+  snapshot: DashboardMarketSnapshot | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  const { t } = useTranslation();
+  const marketArea = snapshot?.areas.market;
+  const marketError =
+    marketArea?.error ??
+    snapshot?.errors?.market ??
+    (snapshot ? null : error);
+
+  return (
+    <section aria-label={t("dashboard.rankings")} className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StockRankCard
+          testId="top-gainers-card"
+          title={t("dashboard.topGainers")}
+          rows={snapshot?.topGainers ?? null}
+          mode="gain"
+          loading={loading}
+          error={marketError}
+          status={marketArea}
+        />
+        <StockRankCard
+          testId="top-losers-card"
+          title={t("dashboard.topLosers")}
+          rows={snapshot?.topLosers ?? null}
+          mode="loss"
+          loading={loading}
+          error={marketError}
+          status={marketArea}
+        />
+        <StockRankCard
+          testId="turnover-leaders-card"
+          title={t("dashboard.turnoverLeaders")}
+          rows={snapshot?.turnoverLeaders ?? null}
+          mode="amount"
+          loading={loading}
+          error={marketError}
+          status={marketArea}
+        />
+        <StockRankCard
+          testId="active-leaders-card"
+          title={t("dashboard.activeLeaders")}
+          rows={snapshot?.activeLeaders ?? null}
+          mode="active"
+          loading={loading}
+          error={marketError}
+          status={marketArea}
         />
       </div>
     </section>
@@ -1320,6 +1515,12 @@ export default function Dashboard() {
       </section>
 
       <MarketSnapshotSection
+        snapshot={marketSnapshot}
+        loading={marketSnapshotLoading}
+        error={marketSnapshotError}
+      />
+
+      <MarketRankingsSection
         snapshot={marketSnapshot}
         loading={marketSnapshotLoading}
         error={marketSnapshotError}

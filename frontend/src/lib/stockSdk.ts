@@ -99,7 +99,16 @@ export interface DashboardConceptHeat {
   leadingStockChangePct: number | null;
 }
 
-export type DashboardSnapshotAreaKey = "market" | "concepts" | "limit";
+export interface DashboardStockRankRow {
+  code: string;
+  name: string;
+  price: number | null;
+  changePct: number | null;
+  amount: number | null;
+  turnoverRate: number | null;
+}
+
+export type DashboardSnapshotAreaKey = "market" | "concepts" | "limit" | "industries";
 
 export interface DashboardSnapshotArea {
   source: string;
@@ -115,11 +124,16 @@ export interface DashboardMarketSnapshot {
   trend: DashboardMarketTrend | null;
   limit: DashboardLimitLadder | null;
   concepts: DashboardConceptHeat[] | null;
+  industries: DashboardConceptHeat[] | null;
+  topGainers: DashboardStockRankRow[] | null;
+  topLosers: DashboardStockRankRow[] | null;
+  turnoverLeaders: DashboardStockRankRow[] | null;
+  activeLeaders: DashboardStockRankRow[] | null;
   areas: Record<DashboardSnapshotAreaKey, DashboardSnapshotArea>;
   source: string;
   asOf: string;
   stale: boolean;
-  errors?: Partial<Record<"market" | "concepts" | "limit", string>>;
+  errors?: Partial<Record<"market" | "concepts" | "limit" | "industries", string>>;
 }
 
 /** ponytail: alias existing PriceBar — duplicate shape would drift */
@@ -139,6 +153,8 @@ type SnapshotQuote = {
   changePercent: unknown;
   high52w: unknown;
   low52w: unknown;
+  amount: unknown;
+  turnoverRate: unknown;
 };
 
 type SnapshotConcept = {
@@ -294,6 +310,42 @@ function buildConcepts(rows: SnapshotConcept[]): DashboardConceptHeat[] {
     .slice(0, 10);
 }
 
+const RANK_SIZE = 10;
+
+function buildStockRanks(rows: SnapshotQuote[]): {
+  topGainers: DashboardStockRankRow[];
+  topLosers: DashboardStockRankRow[];
+  turnoverLeaders: DashboardStockRankRow[];
+  activeLeaders: DashboardStockRankRow[];
+} {
+  const mapped: DashboardStockRankRow[] = rows.map((row) => ({
+    code: codeOf(row.code),
+    name: String(row.name ?? row.code ?? ""),
+    price: fin(row.price),
+    changePct: fin(row.changePercent),
+    amount: fin(row.amount),
+    turnoverRate: fin(row.turnoverRate),
+  }));
+  const byChangeDesc = [...mapped].sort(
+    (a, b) => (b.changePct ?? -Infinity) - (a.changePct ?? -Infinity),
+  );
+  const byChangeAsc = [...mapped].sort(
+    (a, b) => (a.changePct ?? Infinity) - (b.changePct ?? Infinity),
+  );
+  const byAmountDesc = [...mapped].sort(
+    (a, b) => (b.amount ?? -Infinity) - (a.amount ?? -Infinity),
+  );
+  const byTurnoverDesc = [...mapped].sort(
+    (a, b) => (b.turnoverRate ?? -Infinity) - (a.turnoverRate ?? -Infinity),
+  );
+  return {
+    topGainers: byChangeDesc.slice(0, RANK_SIZE),
+    topLosers: byChangeAsc.slice(0, RANK_SIZE),
+    turnoverLeaders: byAmountDesc.slice(0, RANK_SIZE),
+    activeLeaders: byTurnoverDesc.slice(0, RANK_SIZE),
+  };
+}
+
 function buildEmotion(
   breadth: DashboardMarketBreadth,
   trend: DashboardMarketTrend,
@@ -418,23 +470,33 @@ export async function fetchDashboardMarketSnapshot(): Promise<
 async function fetchUncachedDashboardMarketSnapshot(): Promise<
   DashboardDataResult<DashboardMarketSnapshot>
 > {
-  const [marketResult, conceptsResult, limitUpResult, limitDownResult, brokenResult] = await Promise.allSettled([
+  const [marketResult, conceptsResult, industryResult, limitUpResult, limitDownResult, brokenResult] = await Promise.allSettled([
     sdk.batch.cn(),
     sdk.board.concept.list(),
+    sdk.board.industry.list(),
     sdk.marketEvent.ztPool("zt"),
     sdk.marketEvent.ztPool("dt"),
     sdk.marketEvent.ztPool("broken"),
   ]);
   const previous = latestMarketSnapshot?.data;
-  const errors: Partial<Record<"market" | "concepts" | "limit", string>> = {};
+  const errors: Partial<Record<"market" | "concepts" | "limit" | "industries", string>> = {};
   const asOf = now();
 
   let breadth = previous?.breadth ?? null;
   let trend = previous?.trend ?? null;
+  let topGainers = previous?.topGainers ?? null;
+  let topLosers = previous?.topLosers ?? null;
+  let turnoverLeaders = previous?.turnoverLeaders ?? null;
+  let activeLeaders = previous?.activeLeaders ?? null;
   let marketArea: DashboardSnapshotArea;
   if (marketResult.status === "fulfilled") {
     breadth = buildBreadth(marketResult.value);
     trend = buildTrend(marketResult.value, breadth);
+    const ranks = buildStockRanks(marketResult.value);
+    topGainers = ranks.topGainers;
+    topLosers = ranks.topLosers;
+    turnoverLeaders = ranks.turnoverLeaders;
+    activeLeaders = ranks.activeLeaders;
     marketArea = successfulSnapshotArea(asOf);
   } else {
     const error = rejectionMessage(marketResult) ?? "market snapshot unavailable";
@@ -451,6 +513,17 @@ async function fetchUncachedDashboardMarketSnapshot(): Promise<
     const error = rejectionMessage(conceptsResult) ?? "concept snapshot unavailable";
     errors.concepts = error;
     conceptsArea = failedSnapshotArea(previous?.areas.concepts, error);
+  }
+
+  let industries = previous?.industries ?? null;
+  let industriesArea: DashboardSnapshotArea;
+  if (industryResult.status === "fulfilled") {
+    industries = buildConcepts(industryResult.value);
+    industriesArea = successfulSnapshotArea(asOf);
+  } else {
+    const error = rejectionMessage(industryResult) ?? "industry snapshot unavailable";
+    errors.industries = error;
+    industriesArea = failedSnapshotArea(previous?.areas.industries, error);
   }
 
   let limit = previous?.limit ?? null;
@@ -477,6 +550,7 @@ async function fetchUncachedDashboardMarketSnapshot(): Promise<
   const areas = {
     market: marketArea,
     concepts: conceptsArea,
+    industries: industriesArea,
     limit: limitArea,
   };
   const stale = Object.values(areas).some((area) => area.stale);
@@ -491,6 +565,11 @@ async function fetchUncachedDashboardMarketSnapshot(): Promise<
     trend,
     limit,
     concepts,
+    industries,
+    topGainers,
+    topLosers,
+    turnoverLeaders,
+    activeLeaders,
     areas,
     source: SOURCE,
     asOf: latestSuccessfulAsOf,
@@ -501,7 +580,7 @@ async function fetchUncachedDashboardMarketSnapshot(): Promise<
     data,
     asOf: latestSuccessfulAsOf,
     stale,
-    ...(stale ? { error: errors.market ?? errors.concepts ?? errors.limit } : {}),
+    ...(stale ? { error: errors.market ?? errors.concepts ?? errors.industries ?? errors.limit } : {}),
   };
 
   latestMarketSnapshot = result;

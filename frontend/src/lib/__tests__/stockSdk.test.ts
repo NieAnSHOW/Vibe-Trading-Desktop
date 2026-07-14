@@ -8,6 +8,7 @@ const {
   mockStockChanges,
   mockBatchCn,
   mockConceptList,
+  mockIndustryList,
   mockZtPool,
 } = vi.hoisted(() => ({
   mockCnSimple: vi.fn(),
@@ -16,6 +17,7 @@ const {
   mockStockChanges: vi.fn(),
   mockBatchCn: vi.fn(),
   mockConceptList: vi.fn(),
+  mockIndustryList: vi.fn(),
   mockZtPool: vi.fn(),
 }));
 
@@ -24,7 +26,7 @@ vi.mock("stock-sdk", () => ({
     return {
       quotes: { cnSimple: mockCnSimple, cn: mockCn },
       batch: { cn: mockBatchCn },
-      board: { concept: { list: mockConceptList } },
+      board: { concept: { list: mockConceptList }, industry: { list: mockIndustryList } },
       kline: { cn: mockKlineCn },
       marketEvent: { stockChanges: mockStockChanges, ztPool: mockZtPool },
     };
@@ -41,6 +43,7 @@ import {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockIndustryList.mockResolvedValue([]);
 });
 
 // ---------------------------------------------------------------------------
