@@ -11,4 +11,4 @@
 
 ## 3. Verification and Delivery
 
-- [ ] 3.1 Run focused Vitest, the frontend production build, and strict OpenSpec validation; confirm existing AI summary, watchlist, and Agent handoff behavior does not regress.
+- [x] 3.1 Run focused Vitest, the frontend production build, and strict OpenSpec validation; confirm existing AI summary, watchlist, and Agent handoff behavior does not regress.
