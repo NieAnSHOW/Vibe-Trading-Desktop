@@ -1,0 +1,120 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import i18n from "@/i18n";
+import Indices from "@/pages/Indices";
+import {
+  fetchDashboardDailyBars,
+  fetchDashboardIndexes,
+} from "@/lib/stockSdk";
+
+vi.mock("@/lib/stockSdk", () => ({
+  fetchDashboardIndexes: vi.fn(),
+  fetchDashboardDailyBars: vi.fn(),
+}));
+
+vi.mock("@/components/charts/CandlestickChart", () => ({
+  CandlestickChart: ({ data }: { data: unknown[] }) => (
+    <div data-testid="candlestick-chart" data-count={data.length} />
+  ),
+}));
+
+const indexes = [
+  {
+    code: "000001",
+    name: "上证指数",
+    price: 3200,
+    changePct: 0.5,
+    changeAmt: 16,
+    source: "test",
+    stale: false,
+  },
+  {
+    code: "399001",
+    name: "深证成指",
+    price: 10000,
+    changePct: -0.25,
+    changeAmt: -25,
+    source: "test",
+    stale: false,
+  },
+];
+
+const bars = [
+  {
+    time: "2026-07-13",
+    open: 3180,
+    close: 3200,
+    high: 3210,
+    low: 3175,
+    volume: 100000,
+  },
+];
+
+const mockFetchIndexes = vi.mocked(fetchDashboardIndexes);
+const mockFetchDailyBars = vi.mocked(fetchDashboardDailyBars);
+
+function renderIndices(initialEntry = "/indices") {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <Indices />
+    </MemoryRouter>,
+  );
+}
+
+describe("Indices page", () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("zh-CN");
+    vi.clearAllMocks();
+    mockFetchIndexes.mockResolvedValue({
+      data: indexes,
+      asOf: "2026-07-14T09:30:00Z",
+      stale: false,
+    });
+    mockFetchDailyBars.mockResolvedValue({
+      data: bars,
+      asOf: "2026-07-14T09:30:00Z",
+      stale: false,
+    });
+  });
+
+  it("selects the first supported index and loads its daily history by default", async () => {
+    renderIndices();
+
+    expect(await screen.findByRole("heading", { name: "上证指数" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockFetchDailyBars).toHaveBeenCalledWith("000001");
+    });
+    expect(screen.getByRole("button", { name: /上证指数 000001/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByTestId("candlestick-chart")).toHaveAttribute("data-count", "1");
+  });
+
+  it("uses the symbol search parameter as the selected index", async () => {
+    renderIndices("/indices?symbol=399001");
+
+    expect(await screen.findByRole("heading", { name: "深证成指" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockFetchDailyBars).toHaveBeenCalledWith("399001");
+    });
+    expect(screen.getByRole("button", { name: /深证成指 399001/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("shows an unavailable state instead of a chart when selected daily history is empty", async () => {
+    mockFetchDailyBars.mockResolvedValue({
+      data: [],
+      asOf: "2026-07-14T09:30:00Z",
+      stale: false,
+    });
+
+    renderIndices();
+
+    expect(await screen.findByText("暂无日线数据")).toBeInTheDocument();
+    expect(screen.queryByTestId("candlestick-chart")).not.toBeInTheDocument();
+  });
+});

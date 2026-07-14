@@ -36,6 +36,7 @@ describe("Layout sidebar", () => {
     renderLayout();
 
     expect(screen.getByRole("link", { name: /首页/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /指数/i })).toHaveAttribute("href", "/indices");
     expect(screen.getByText("Dashboard route content")).toBeInTheDocument();
   });
 
@@ -46,8 +47,11 @@ describe("Layout sidebar", () => {
     expect(container.querySelector('[data-testid="web-ui-outlet"]')).toHaveClass("min-h-0", "min-w-0", "overflow-auto");
   });
 
-  it("renders external shortcut buttons in the sidebar", () => {
+  it("renders external shortcut buttons when the group is expanded", async () => {
+    const user = userEvent.setup();
     renderLayout();
+
+    await user.click(screen.getByRole("button", { name: /快捷入口/i }));
 
     expect(screen.getByRole("button", { name: /同花顺/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /腾讯财经/i })).toBeInTheDocument();
@@ -59,6 +63,7 @@ describe("Layout sidebar", () => {
     const user = userEvent.setup();
     renderLayout();
 
+    await user.click(screen.getByRole("button", { name: /快捷入口/i }));
     await user.click(screen.getByRole("button", { name: /同花顺/i }));
 
     const { invoke } = await import("@tauri-apps/api/core");
