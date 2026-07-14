@@ -6,8 +6,8 @@
 ## 2. Dashboard State and UI
 
 - [x] 2.1 Extend the market-dashboard Zustand store so the added snapshot area has independent loading, error, and last-successful-data state and participates in existing visibility polling.
-- [ ] 2.2 Implement responsive breadth, emotion radar, trend, limit-up ladder, and concept-heat cards on `/dashboard`, including local loading, error, and stale states.
-- [ ] 2.3 Add English and Chinese dashboard copy and store/page coverage for the new cards and partial degradation.
+- [x] 2.2 Implement responsive breadth, emotion radar, trend, limit-up ladder, and concept-heat cards on `/dashboard`, including local loading, error, and stale states.
+- [x] 2.3 Add English and Chinese dashboard copy and store/page coverage for the new cards and partial degradation.
 
 ## 3. Verification and Delivery
 

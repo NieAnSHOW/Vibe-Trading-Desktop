@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -14,22 +14,61 @@ const mockStoreRef = {
   selectedCode: null as string | null,
   selectedBars: [] as unknown[],
   summary: null as unknown,
+  marketSnapshot: null as Record<string, unknown> | null,
   indexesLoading: false,
   pulseLoading: false,
   quotesLoading: false,
   summaryLoading: false,
   barsLoading: false,
+  marketSnapshotLoading: false,
   indexesError: null as string | null,
   pulseError: null as string | null,
   quotesError: null as string | null,
   summaryError: null as string | null,
   barsError: null as string | null,
+  marketSnapshotError: null as string | null,
   initialize: vi.fn(),
   refreshMarketData: vi.fn(),
   refreshSummary: vi.fn(),
   setSelectedCode: vi.fn(),
   startPolling: vi.fn(),
   stopPolling: vi.fn(),
+};
+
+const MARKET_SNAPSHOT = {
+  breadth: {
+    total: 4,
+    up: 2,
+    flat: 1,
+    down: 1,
+    upPct: 50,
+    strongUp: 1,
+    strongDown: 1,
+    avgChangePct: 0.25,
+    distribution: [
+      { label: "-3~0%", count: 1, tone: "down" },
+      { label: "0%", count: 1, tone: "flat" },
+      { label: "0~3%", count: 1, tone: "up" },
+      { label: "3~7%", count: 1, tone: "up" },
+    ],
+  },
+  emotion: {
+    score: 62,
+    label: "warm",
+    dimensions: [
+      { key: "breadth", value: 50 },
+      { key: "strength", value: 60 },
+      { key: "highLow", value: 70 },
+      { key: "limit", value: 80 },
+      { key: "quality", value: 50 },
+    ],
+  },
+  trend: { strongUp: 1, strongDown: 1, nearHigh: 2, nearLow: 1, highLowRatio: 67 },
+  limit: { limitUp: 2, limitDown: 1, broken: 1, tiers: [{ boards: 3, count: 1 }, { boards: 2, count: 1 }] },
+  concepts: [{ code: "BK001", name: "人工智能", changePct: 3.2, riseCount: 12, fallCount: 2, leadingStock: "龙头A", leadingStockChangePct: 8.8 }],
+  source: "stock-sdk",
+  asOf: "2026-07-13T10:00:00Z",
+  stale: false,
 };
 
 vi.mock("@/stores/marketDashboard", () => ({
@@ -79,6 +118,7 @@ function stateWithIndexesAndSummary(overrides?: Partial<typeof mockStoreRef>) {
       cached: false,
       stale: false,
     },
+    marketSnapshot: MARKET_SNAPSHOT,
     summaryError: null,
     indexesError: null,
     pulseError: null,
@@ -127,11 +167,13 @@ describe("Dashboard page", () => {
       quotesLoading: false,
       summaryLoading: false,
       barsLoading: false,
+      marketSnapshotLoading: false,
       indexesError: null,
       pulseError: null,
       quotesError: null,
       summaryError: null,
       barsError: null,
+      marketSnapshotError: null,
     });
   });
 
@@ -177,6 +219,28 @@ describe("Dashboard page", () => {
 
       expect(screen.getByText("风险偏好回升")).toBeInTheDocument();
     });
+
+    it("renders breadth, emotion, trend, limit ladder, and concept heat cards from the snapshot", () => {
+      stateWithIndexesAndSummary();
+      renderDashboard();
+
+      expect(screen.getByTestId("market-breadth-card")).toHaveTextContent("4");
+      expect(screen.getByTestId("market-emotion-card")).toHaveTextContent("62");
+      expect(screen.getByTestId("market-trend-card")).toHaveTextContent("2");
+      expect(screen.getByTestId("market-limit-card")).toHaveTextContent("3");
+      expect(screen.getByTestId("market-concepts-card")).toHaveTextContent("人工智能");
+    });
+
+    it("marks only the concept card stale when concept data is unavailable", () => {
+      stateWithIndexesAndSummary({
+        marketSnapshot: { ...MARKET_SNAPSHOT, stale: true, errors: { concepts: "concept source unavailable" } },
+        marketSnapshotError: "concept source unavailable",
+      });
+      renderDashboard();
+
+      expect(screen.getByTestId("market-concepts-card")).toHaveTextContent("concept source unavailable");
+      expect(screen.getByTestId("market-breadth-card")).not.toHaveTextContent("concept source unavailable");
+    });
   });
 
   describe("summary failure resilience", () => {
@@ -215,10 +279,8 @@ describe("Dashboard page", () => {
 
       renderDashboard();
 
-      // Click on a watchlist row — scope to the watchlist table section
-      const watchlistSection = screen.getByText("自选股").closest("div");
-      expect(watchlistSection).not.toBeNull();
-      const row = within(watchlistSection!).getByText("600519").closest("tr");
+      // Click the stock row via its code cell.
+      const row = screen.getByRole("cell", { name: "600519" }).closest("tr");
       expect(row).not.toBeNull();
       if (row) {
         await user.click(row);
