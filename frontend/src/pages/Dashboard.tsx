@@ -1,7 +1,22 @@
-import { useEffect, useCallback, useState, useMemo, type ReactNode } from "react";
+import {
+  useEffect,
+  useCallback,
+  useState,
+  useMemo,
+  type ReactNode,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { RefreshCw, Send, TrendingUp, TrendingDown, Minus, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  RefreshCw,
+  Send,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMarketDashboardStore } from "@/stores/marketDashboard";
 import { CandlestickChart } from "@/components/charts/CandlestickChart";
@@ -49,19 +64,24 @@ function fmtSnapshotTime(value: string): string {
 function combineSnapshotAreas(
   ...areas: Array<DashboardSnapshotArea | undefined>
 ): DashboardSnapshotArea | undefined {
-  const availableAreas = areas.filter((area): area is DashboardSnapshotArea => area != null);
+  const availableAreas = areas.filter(
+    (area): area is DashboardSnapshotArea => area != null,
+  );
   if (availableAreas.length === 0) return undefined;
 
-  const asOf = availableAreas
-    .map((area) => area.asOf)
-    .filter((value): value is string => value != null)
-    .sort()[0] ?? null;
+  const asOf =
+    availableAreas
+      .map((area) => area.asOf)
+      .filter((value): value is string => value != null)
+      .sort()[0] ?? null;
   return {
     source: [...new Set(availableAreas.map((area) => area.source))].join(" / "),
     asOf,
     stale: availableAreas.some((area) => area.stale),
     available: availableAreas.every((area) => area.available),
-    error: availableAreas.map((area) => area.error).find((error) => error != null),
+    error: availableAreas
+      .map((area) => area.error)
+      .find((error) => error != null),
   };
 }
 
@@ -72,7 +92,11 @@ function IndexStrip({ indexes }: { indexes: DashboardIndex[] }) {
   const { t } = useTranslation();
 
   if (indexes.length === 0) {
-    return <p className="text-xs text-muted-foreground py-2">{t("dashboard.noIndexes")}</p>;
+    return (
+      <p className="text-xs text-muted-foreground py-2">
+        {t("dashboard.noIndexes")}
+      </p>
+    );
   }
 
   return (
@@ -82,7 +106,9 @@ function IndexStrip({ indexes }: { indexes: DashboardIndex[] }) {
         return (
           <div key={idx.code} className="rounded-lg border bg-card px-3 py-2.5">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground truncate">{idx.name}</span>
+              <span className="text-xs text-muted-foreground truncate">
+                {idx.name}
+              </span>
               <span className={cn("text-[11px] tabular-nums font-mono", color)}>
                 {fmtPct(idx.changePct)}
               </span>
@@ -116,7 +142,8 @@ function MarketPulseSection({
 }) {
   const { t } = useTranslation();
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState<(typeof PULSE_PAGE_SIZES)[number]>(200);
+  const [pageSize, setPageSize] =
+    useState<(typeof PULSE_PAGE_SIZES)[number]>(200);
 
   // Reset to first page when data refreshes
   useEffect(() => {
@@ -132,15 +159,17 @@ function MarketPulseSection({
 
   if (loading && items.length === 0) {
     return (
-      <div className="rounded-lg border p-4 space-y-3">
+      <div className="rounded-lg border p-4 space-y-3 bg-card">
         <h2 className="text-sm font-semibold">{t("dashboard.marketPulse")}</h2>
-        <p className="text-xs text-muted-foreground">{t("dashboard.loading")}</p>
+        <p className="text-xs text-muted-foreground">
+          {t("dashboard.loading")}
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border p-4 space-y-3">
+    <div className="rounded-lg border p-4 space-y-3 bg-card">
       <h2 className="text-sm font-semibold">{t("dashboard.marketPulse")}</h2>
       {error && items.length === 0 && (
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -149,20 +178,27 @@ function MarketPulseSection({
         </div>
       )}
       {items.length === 0 && !error && (
-        <p className="text-xs text-muted-foreground">{t("dashboard.noPulse")}</p>
+        <p className="text-xs text-muted-foreground">
+          {t("dashboard.noPulse")}
+        </p>
       )}
       {items.length > 0 && (
         <>
           <ul className="space-y-1.5 max-h-[340px] overflow-auto">
             {pageItems.map((item, i) => (
-              <li key={`${item.code}-${safePage * pageSize + i}`} className="text-xs border-b border-border/50 pb-1.5 last:border-0">
+              <li
+                key={`${item.code}-${safePage * pageSize + i}`}
+                className="text-xs border-b border-border/50 pb-1.5 last:border-0"
+              >
                 <div className="flex items-center gap-1.5">
                   <span className="font-medium">{item.name}</span>
                   <span className="text-muted-foreground">{item.code}</span>
                   <span
                     className={cn(
                       "px-1 py-0.5 rounded text-[10px] font-medium",
-                      item.changeType.includes("涨") ? "bg-red-500/10 text-red-500" : "bg-green-500/10 text-green-500",
+                      item.changeType.includes("涨")
+                        ? "bg-red-500/10 text-red-500"
+                        : "bg-green-500/10 text-green-500",
                     )}
                   >
                     {item.changeType}
@@ -171,7 +207,9 @@ function MarketPulseSection({
                 {item.info && (
                   <p className="text-muted-foreground mt-0.5">{item.info}</p>
                 )}
-                <span className="text-muted-foreground/60 text-[10px]">{item.time}</span>
+                <span className="text-muted-foreground/60 text-[10px]">
+                  {item.time}
+                </span>
               </li>
             ))}
           </ul>
@@ -248,7 +286,7 @@ function AiSummarySection({
   const { t } = useTranslation();
 
   return (
-    <div className="rounded-lg border p-4 space-y-3">
+    <div className="rounded-lg border p-4 space-y-3 bg-card">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">{t("dashboard.aiSummary")}</h2>
         <button
@@ -263,7 +301,9 @@ function AiSummarySection({
       </div>
 
       {loading && !summary && (
-        <p className="text-xs text-muted-foreground">{t("dashboard.loading")}</p>
+        <p className="text-xs text-muted-foreground">
+          {t("dashboard.loading")}
+        </p>
       )}
 
       {error && !summary && (
@@ -284,7 +324,9 @@ function AiSummarySection({
               </p>
               <ul className="list-disc pl-4 space-y-0.5">
                 {summary.summary.drivers.map((d, i) => (
-                  <li key={i} className="text-xs text-muted-foreground">{d}</li>
+                  <li key={i} className="text-xs text-muted-foreground">
+                    {d}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -297,7 +339,9 @@ function AiSummarySection({
               </p>
               <ul className="list-disc pl-4 space-y-0.5">
                 {summary.summary.risks.map((r, i) => (
-                  <li key={i} className="text-xs text-muted-foreground">{r}</li>
+                  <li key={i} className="text-xs text-muted-foreground">
+                    {r}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -310,14 +354,18 @@ function AiSummarySection({
               </p>
               <ul className="list-disc pl-4 space-y-0.5">
                 {summary.summary.focus.map((f, i) => (
-                  <li key={i} className="text-xs text-muted-foreground">{f}</li>
+                  <li key={i} className="text-xs text-muted-foreground">
+                    {f}
+                  </li>
                 ))}
               </ul>
             </div>
           )}
 
           {summary.stale && (
-            <p className="text-[10px] text-muted-foreground/60">{t("dashboard.staleData")}</p>
+            <p className="text-[10px] text-muted-foreground/60">
+              {t("dashboard.staleData")}
+            </p>
           )}
         </div>
       )}
@@ -329,7 +377,9 @@ function AiSummarySection({
       )}
 
       {error && summary && (
-        <p className="text-[10px] text-muted-foreground/60">{t("dashboard.staleData")}</p>
+        <p className="text-[10px] text-muted-foreground/60">
+          {t("dashboard.staleData")}
+        </p>
       )}
     </div>
   );
@@ -355,14 +405,23 @@ function MarketCard({
   const { t } = useTranslation();
 
   return (
-    <section data-testid={testId} className="rounded-lg border bg-card p-4 space-y-3">
+    <section
+      data-testid={testId}
+      className="rounded-lg border bg-card p-4 space-y-3"
+    >
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">{title}</h2>
         {error && hasData && (
-          <span className="shrink-0 text-[10px] text-muted-foreground">{t("dashboard.stale")}</span>
+          <span className="shrink-0 text-[10px] text-muted-foreground">
+            {t("dashboard.stale")}
+          </span>
         )}
       </div>
-      {!hasData && loading && <p className="text-xs text-muted-foreground">{t("dashboard.loading")}</p>}
+      {!hasData && loading && (
+        <p className="text-xs text-muted-foreground">
+          {t("dashboard.loading")}
+        </p>
+      )}
       {!hasData && error && (
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <AlertCircle className="h-3 w-3" />
@@ -370,12 +429,18 @@ function MarketCard({
         </div>
       )}
       {hasData && children}
-      {hasData && error && <p className="text-[10px] text-muted-foreground/70">{error}</p>}
+      {hasData && error && (
+        <p className="text-[10px] text-muted-foreground/70">{error}</p>
+      )}
       {hasData && status?.available && (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-border/60 pt-2 text-[10px] text-muted-foreground/70">
-          <span>{t("dashboard.source")}: {status.source}</span>
+          <span>
+            {t("dashboard.source")}: {status.source}
+          </span>
           {status.asOf && (
-            <time dateTime={status.asOf}>{t("dashboard.lastUpdated")}: {fmtSnapshotTime(status.asOf)}</time>
+            <time dateTime={status.asOf}>
+              {t("dashboard.lastUpdated")}: {fmtSnapshotTime(status.asOf)}
+            </time>
           )}
         </div>
       )}
@@ -395,7 +460,14 @@ function MarketMetric({
   return (
     <div className="min-w-0 rounded-md bg-muted/45 px-2 py-1.5">
       <p className="truncate text-[10px] text-muted-foreground">{label}</p>
-      <p className={cn("mt-0.5 truncate font-mono text-sm font-semibold tabular-nums", tone)}>{value}</p>
+      <p
+        className={cn(
+          "mt-0.5 truncate font-mono text-sm font-semibold tabular-nums",
+          tone,
+        )}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -412,10 +484,18 @@ function MarketBreadthCard({
   const { t } = useTranslation();
   const breadth = snapshot?.breadth;
   const marketArea = snapshot?.areas.market;
-  const marketError = marketArea?.error ?? snapshot?.errors?.market ?? (snapshot ? null : error);
+  const marketError =
+    marketArea?.error ?? snapshot?.errors?.market ?? (snapshot ? null : error);
   if (!breadth) {
     return (
-      <MarketCard testId="market-breadth-card" title={t("dashboard.marketBreadth")} hasData={false} loading={loading} error={marketError} status={marketArea}>
+      <MarketCard
+        testId="market-breadth-card"
+        title={t("dashboard.marketBreadth")}
+        hasData={false}
+        loading={loading}
+        error={marketError}
+        status={marketArea}
+      >
         {null}
       </MarketCard>
     );
@@ -424,7 +504,10 @@ function MarketBreadthCard({
   const upWidth = total > 0 ? (breadth!.up / total) * 100 : 0;
   const flatWidth = total > 0 ? (breadth!.flat / total) * 100 : 0;
   const downWidth = total > 0 ? (breadth!.down / total) * 100 : 0;
-  const maxBucketCount = Math.max(...(breadth?.distribution.map((bucket) => bucket.count) ?? []), 1);
+  const maxBucketCount = Math.max(
+    ...(breadth?.distribution.map((bucket) => bucket.count) ?? []),
+    1,
+  );
 
   return (
     <MarketCard
@@ -435,36 +518,78 @@ function MarketBreadthCard({
       error={marketError}
       status={marketArea}
     >
-      <div className="grid h-24 grid-cols-7 items-end gap-1" aria-label={t("dashboard.marketBreadth")}>
+      <div
+        className="grid h-24 grid-cols-7 items-end gap-1"
+        aria-label={t("dashboard.marketBreadth")}
+      >
         {breadth!.distribution.map((bucket) => {
-          const barClass = bucket.tone === "up" ? "bg-red-500/80" : bucket.tone === "down" ? "bg-green-500/80" : "bg-muted-foreground/45";
+          const barClass =
+            bucket.tone === "up"
+              ? "bg-red-500/80"
+              : bucket.tone === "down"
+                ? "bg-green-500/80"
+                : "bg-muted-foreground/45";
           return (
-            <div key={bucket.label} className="flex min-w-0 flex-col items-center justify-end gap-1">
-              <span className="text-[9px] text-muted-foreground tabular-nums">{bucket.count || ""}</span>
+            <div
+              key={bucket.label}
+              className="flex min-w-0 flex-col items-center justify-end gap-1"
+            >
+              <span className="text-[9px] text-muted-foreground tabular-nums">
+                {bucket.count || ""}
+              </span>
               <div
                 className={cn("w-full max-w-3 rounded-sm", barClass)}
-                style={{ height: `${Math.max(4, (bucket.count / maxBucketCount) * 62)}px` }}
+                style={{
+                  height: `${Math.max(4, (bucket.count / maxBucketCount) * 62)}px`,
+                }}
                 title={`${bucket.label}: ${bucket.count}`}
               />
-              <span className="w-full truncate text-center text-[9px] text-muted-foreground">{bucket.label}</span>
+              <span className="w-full truncate text-center text-[9px] text-muted-foreground">
+                {bucket.label}
+              </span>
             </div>
           );
         })}
       </div>
-      <div className="flex h-2 overflow-hidden rounded-full bg-muted" aria-label={t("dashboard.upFlatDown")}>
+      <div
+        className="flex h-2 overflow-hidden rounded-full bg-muted"
+        aria-label={t("dashboard.upFlatDown")}
+      >
         <span className="bg-red-500/80" style={{ width: `${upWidth}%` }} />
-        <span className="bg-muted-foreground/40" style={{ width: `${flatWidth}%` }} />
+        <span
+          className="bg-muted-foreground/40"
+          style={{ width: `${flatWidth}%` }}
+        />
         <span className="bg-green-500/80" style={{ width: `${downWidth}%` }} />
       </div>
       <div className="grid grid-cols-3 gap-2 text-xs">
-        <span className="text-red-500">{t("dashboard.up")} <strong className="font-mono tabular-nums">{breadth!.up}</strong></span>
-        <span className="text-muted-foreground">{t("dashboard.flat")} <strong className="font-mono tabular-nums">{breadth!.flat}</strong></span>
-        <span className="text-green-500 text-right">{t("dashboard.down")} <strong className="font-mono tabular-nums">{breadth!.down}</strong></span>
+        <span className="text-red-500">
+          {t("dashboard.up")}{" "}
+          <strong className="font-mono tabular-nums">{breadth!.up}</strong>
+        </span>
+        <span className="text-muted-foreground">
+          {t("dashboard.flat")}{" "}
+          <strong className="font-mono tabular-nums">{breadth!.flat}</strong>
+        </span>
+        <span className="text-green-500 text-right">
+          {t("dashboard.down")}{" "}
+          <strong className="font-mono tabular-nums">{breadth!.down}</strong>
+        </span>
       </div>
-      <p className="text-[10px] text-muted-foreground">{t("dashboard.totalStocks", { count: breadth.total })}</p>
+      <p className="text-[10px] text-muted-foreground">
+        {t("dashboard.totalStocks", { count: breadth.total })}
+      </p>
       <div className="grid grid-cols-2 gap-2">
-        <MarketMetric label={t("dashboard.averageChange")} value={fmtPct(breadth!.avgChangePct)} tone={changeColor(breadth!.avgChangePct)} />
-        <MarketMetric label={t("dashboard.upRatio")} value={`${breadth!.upPct.toFixed(0)}%`} tone="text-red-500" />
+        <MarketMetric
+          label={t("dashboard.averageChange")}
+          value={fmtPct(breadth!.avgChangePct)}
+          tone={changeColor(breadth!.avgChangePct)}
+        />
+        <MarketMetric
+          label={t("dashboard.upRatio")}
+          value={`${breadth!.upPct.toFixed(0)}%`}
+          tone="text-red-500"
+        />
       </div>
     </MarketCard>
   );
@@ -488,28 +613,81 @@ function EmotionRadar({ emotion }: { emotion: DashboardMarketEmotion }) {
     };
   });
   const polygon = points.map((point) => `${point.x},${point.y}`).join(" ");
-  const gridPolygons = [1, 2 / 3, 1 / 3].map((level) => dimensions.map((_, index) => {
-    const angle = -Math.PI / 2 + (index * Math.PI * 2) / dimensions.length;
-    return `${center + Math.cos(angle) * radius * level},${center + Math.sin(angle) * radius * level}`;
-  }).join(" "));
+  const gridPolygons = [1, 2 / 3, 1 / 3].map((level) =>
+    dimensions
+      .map((_, index) => {
+        const angle = -Math.PI / 2 + (index * Math.PI * 2) / dimensions.length;
+        return `${center + Math.cos(angle) * radius * level},${center + Math.sin(angle) * radius * level}`;
+      })
+      .join(" "),
+  );
 
   return (
     <div className="flex justify-center">
-      <svg viewBox={`0 0 ${size} ${size}`} className="h-52 w-full max-w-[17rem]" role="img" aria-label={t("dashboard.emotionRadar")}>
+      <svg
+        viewBox={`0 0 ${size} ${size}`}
+        className="h-52 w-full max-w-[17rem]"
+        role="img"
+        aria-label={t("dashboard.emotionRadar")}
+      >
         {gridPolygons.map((grid, index) => (
-          <polygon key={grid} points={grid} fill={index % 2 === 0 ? "hsl(var(--muted) / 0.35)" : "transparent"} stroke="hsl(var(--border))" strokeWidth="1" />
+          <polygon
+            key={grid}
+            points={grid}
+            fill={index % 2 === 0 ? "hsl(var(--muted) / 0.35)" : "transparent"}
+            stroke="hsl(var(--border))"
+            strokeWidth="1"
+          />
         ))}
         {points.map((point) => (
-          <line key={`${point.key}-axis`} x1={center} y1={center} x2={point.labelX} y2={point.labelY} stroke="hsl(var(--border))" strokeWidth="1" />
+          <line
+            key={`${point.key}-axis`}
+            x1={center}
+            y1={center}
+            x2={point.labelX}
+            y2={point.labelY}
+            stroke="hsl(var(--border))"
+            strokeWidth="1"
+          />
         ))}
-        <polygon points={polygon} fill="hsl(var(--primary) / 0.18)" stroke="hsl(var(--primary))" strokeWidth="2" />
+        <polygon
+          points={polygon}
+          fill="hsl(var(--primary) / 0.18)"
+          stroke="hsl(var(--primary))"
+          strokeWidth="2"
+        />
         {points.map((point) => (
-          <circle key={point.key} cx={point.x} cy={point.y} r="3" fill="hsl(var(--primary))" />
+          <circle
+            key={point.key}
+            cx={point.x}
+            cy={point.y}
+            r="3"
+            fill="hsl(var(--primary))"
+          />
         ))}
-        <circle cx={center} cy={center} r="27" fill="hsl(var(--card))" stroke="hsl(var(--border))" />
-        <text x={center} y={center + 6} textAnchor="middle" className="fill-foreground text-[22px] font-semibold">{emotion.score}</text>
+        <circle
+          cx={center}
+          cy={center}
+          r="27"
+          fill="hsl(var(--card))"
+          stroke="hsl(var(--border))"
+        />
+        <text
+          x={center}
+          y={center + 6}
+          textAnchor="middle"
+          className="fill-foreground text-[22px] font-semibold"
+        >
+          {emotion.score}
+        </text>
         {points.map((point) => (
-          <text key={`${point.key}-label`} x={point.labelX} y={point.labelY + 3} textAnchor="middle" className="fill-muted-foreground text-[9px]">
+          <text
+            key={`${point.key}-label`}
+            x={point.labelX}
+            y={point.labelY + 3}
+            textAnchor="middle"
+            className="fill-muted-foreground text-[9px]"
+          >
             {t(`dashboard.emotionDimensions.${point.key}`)}
           </text>
         ))}
@@ -529,23 +707,51 @@ function MarketEmotionCard({
 }) {
   const { t } = useTranslation();
   const emotion = snapshot?.emotion;
-  const emotionArea = combineSnapshotAreas(snapshot?.areas.market, snapshot?.areas.limit);
+  const emotionArea = combineSnapshotAreas(
+    snapshot?.areas.market,
+    snapshot?.areas.limit,
+  );
   const emotionError = emotionArea?.error ?? (snapshot ? null : error);
   if (!emotion) {
     return (
-      <MarketCard testId="market-emotion-card" title={t("dashboard.emotionRadar")} hasData={false} loading={loading} error={emotionError} status={emotionArea}>
+      <MarketCard
+        testId="market-emotion-card"
+        title={t("dashboard.emotionRadar")}
+        hasData={false}
+        loading={loading}
+        error={emotionError}
+        status={emotionArea}
+      >
         {null}
       </MarketCard>
     );
   }
-  const emotionTone = emotion.score >= 55 ? "text-red-500" : emotion.score < 45 ? "text-green-500" : "text-foreground";
+  const emotionTone =
+    emotion.score >= 55
+      ? "text-red-500"
+      : emotion.score < 45
+        ? "text-green-500"
+        : "text-foreground";
 
   return (
-    <MarketCard testId="market-emotion-card" title={t("dashboard.emotionRadar")} hasData loading={loading} error={emotionError} status={emotionArea}>
+    <MarketCard
+      testId="market-emotion-card"
+      title={t("dashboard.emotionRadar")}
+      hasData
+      loading={loading}
+      error={emotionError}
+      status={emotionArea}
+    >
       <EmotionRadar emotion={emotion} />
       <div className="flex items-center justify-between text-xs">
-        <span className="text-muted-foreground">{t(`dashboard.emotionLabels.${emotion.label}`)}</span>
-        <span className={cn("font-mono font-semibold tabular-nums", emotionTone)}>{emotion.score} / 100</span>
+        <span className="text-muted-foreground">
+          {t(`dashboard.emotionLabels.${emotion.label}`)}
+        </span>
+        <span
+          className={cn("font-mono font-semibold tabular-nums", emotionTone)}
+        >
+          {emotion.score} / 100
+        </span>
       </div>
     </MarketCard>
   );
@@ -562,31 +768,77 @@ function MarketTrendCard({
 }) {
   const { t } = useTranslation();
   const marketArea = snapshot?.areas.market;
-  const marketError = marketArea?.error ?? snapshot?.errors?.market ?? (snapshot ? null : error);
+  const marketError =
+    marketArea?.error ?? snapshot?.errors?.market ?? (snapshot ? null : error);
   const trend = snapshot?.trend;
   if (!trend) {
     return (
-      <MarketCard testId="market-trend-card" title={t("dashboard.trendStrength")} hasData={false} loading={loading} error={marketError} status={marketArea}>
+      <MarketCard
+        testId="market-trend-card"
+        title={t("dashboard.trendStrength")}
+        hasData={false}
+        loading={loading}
+        error={marketError}
+        status={marketArea}
+      >
         {null}
       </MarketCard>
     );
   }
 
   return (
-    <MarketCard testId="market-trend-card" title={t("dashboard.trendStrength")} hasData={trend != null} loading={loading} error={marketError} status={marketArea}>
+    <MarketCard
+      testId="market-trend-card"
+      title={t("dashboard.trendStrength")}
+      hasData={trend != null}
+      loading={loading}
+      error={marketError}
+      status={marketArea}
+    >
       <div className="grid grid-cols-2 gap-2">
-        <MarketMetric label={t("dashboard.strongUp")} value={trend!.strongUp} tone="text-red-500" />
-        <MarketMetric label={t("dashboard.strongDown")} value={trend!.strongDown} tone="text-green-500" />
-        <MarketMetric label={t("dashboard.nearHigh")} value={trend!.nearHigh} tone="text-red-500" />
-        <MarketMetric label={t("dashboard.nearLow")} value={trend!.nearLow} tone="text-green-500" />
+        <MarketMetric
+          label={t("dashboard.strongUp")}
+          value={trend!.strongUp}
+          tone="text-red-500"
+        />
+        <MarketMetric
+          label={t("dashboard.strongDown")}
+          value={trend!.strongDown}
+          tone="text-green-500"
+        />
+        <MarketMetric
+          label={t("dashboard.nearHigh")}
+          value={trend!.nearHigh}
+          tone="text-red-500"
+        />
+        <MarketMetric
+          label={t("dashboard.nearLow")}
+          value={trend!.nearLow}
+          tone="text-green-500"
+        />
       </div>
       <div className="rounded-md border border-border/70 px-3 py-2">
         <div className="flex items-center justify-between gap-2 text-xs">
-          <span className="text-muted-foreground">{t("dashboard.highLowRatio")}</span>
-          <span className={cn("font-mono font-semibold tabular-nums", trend!.highLowRatio >= 50 ? "text-red-500" : "text-green-500")}>{trend!.highLowRatio.toFixed(0)}%</span>
+          <span className="text-muted-foreground">
+            {t("dashboard.highLowRatio")}
+          </span>
+          <span
+            className={cn(
+              "font-mono font-semibold tabular-nums",
+              trend!.highLowRatio >= 50 ? "text-red-500" : "text-green-500",
+            )}
+          >
+            {trend!.highLowRatio.toFixed(0)}%
+          </span>
         </div>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-          <div className={cn("h-full rounded-full", trend!.highLowRatio >= 50 ? "bg-red-500" : "bg-green-500")} style={{ width: `${trend!.highLowRatio}%` }} />
+          <div
+            className={cn(
+              "h-full rounded-full",
+              trend!.highLowRatio >= 50 ? "bg-red-500" : "bg-green-500",
+            )}
+            style={{ width: `${trend!.highLowRatio}%` }}
+          />
         </div>
       </div>
     </MarketCard>
@@ -605,37 +857,79 @@ function MarketLimitCard({
   const { t } = useTranslation();
   const limit = snapshot?.limit;
   const limitArea = snapshot?.areas.limit;
-  const limitError = limitArea?.error ?? snapshot?.errors?.limit ?? (snapshot ? null : error);
+  const limitError =
+    limitArea?.error ?? snapshot?.errors?.limit ?? (snapshot ? null : error);
   if (!limit) {
     return (
-      <MarketCard testId="market-limit-card" title={t("dashboard.limitLadder")} hasData={false} loading={loading} error={limitError} status={limitArea}>
+      <MarketCard
+        testId="market-limit-card"
+        title={t("dashboard.limitLadder")}
+        hasData={false}
+        loading={loading}
+        error={limitError}
+        status={limitArea}
+      >
         {null}
       </MarketCard>
     );
   }
-  const maxTierCount = Math.max(...(limit?.tiers.map((tier) => tier.count) ?? []), 1);
+  const maxTierCount = Math.max(
+    ...(limit?.tiers.map((tier) => tier.count) ?? []),
+    1,
+  );
 
   return (
-    <MarketCard testId="market-limit-card" title={t("dashboard.limitLadder")} hasData={limit != null} loading={loading} error={limitError} status={limitArea}>
+    <MarketCard
+      testId="market-limit-card"
+      title={t("dashboard.limitLadder")}
+      hasData={limit != null}
+      loading={loading}
+      error={limitError}
+      status={limitArea}
+    >
       <div className="grid grid-cols-3 gap-2">
-        <MarketMetric label={t("dashboard.limitUp")} value={limit!.limitUp} tone="text-red-500" />
-        <MarketMetric label={t("dashboard.limitDown")} value={limit!.limitDown} tone="text-green-500" />
-        <MarketMetric label={t("dashboard.brokenBoard")} value={limit!.broken} tone="text-amber-500" />
+        <MarketMetric
+          label={t("dashboard.limitUp")}
+          value={limit!.limitUp}
+          tone="text-red-500"
+        />
+        <MarketMetric
+          label={t("dashboard.limitDown")}
+          value={limit!.limitDown}
+          tone="text-green-500"
+        />
+        <MarketMetric
+          label={t("dashboard.brokenBoard")}
+          value={limit!.broken}
+          tone="text-amber-500"
+        />
       </div>
       {limit!.tiers.length > 0 ? (
         <div className="space-y-2">
           {limit!.tiers.slice(0, 6).map((tier) => (
-            <div key={tier.boards} className="grid grid-cols-[3rem_minmax(0,1fr)_2rem] items-center gap-2 text-xs">
-              <span className="font-medium text-muted-foreground">{t("dashboard.boards", { count: tier.boards })}</span>
+            <div
+              key={tier.boards}
+              className="grid grid-cols-[3rem_minmax(0,1fr)_2rem] items-center gap-2 text-xs"
+            >
+              <span className="font-medium text-muted-foreground">
+                {t("dashboard.boards", { count: tier.boards })}
+              </span>
               <div className="h-2 overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-red-500/80" style={{ width: `${(tier.count / maxTierCount) * 100}%` }} />
+                <div
+                  className="h-full rounded-full bg-red-500/80"
+                  style={{ width: `${(tier.count / maxTierCount) * 100}%` }}
+                />
               </div>
-              <span className="text-right font-mono tabular-nums text-red-500">{tier.count}</span>
+              <span className="text-right font-mono tabular-nums text-red-500">
+                {tier.count}
+              </span>
             </div>
           ))}
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">{t("dashboard.noLimitData")}</p>
+        <p className="text-xs text-muted-foreground">
+          {t("dashboard.noLimitData")}
+        </p>
       )}
     </MarketCard>
   );
@@ -653,34 +947,66 @@ function MarketConceptsCard({
   const { t } = useTranslation();
   const concepts = snapshot?.concepts;
   const conceptsArea = snapshot?.areas.concepts;
-  const conceptError = conceptsArea?.error ?? snapshot?.errors?.concepts ?? (snapshot ? null : error);
+  const conceptError =
+    conceptsArea?.error ??
+    snapshot?.errors?.concepts ??
+    (snapshot ? null : error);
   if (concepts == null) {
     return (
-      <MarketCard testId="market-concepts-card" title={t("dashboard.conceptHeat")} hasData={false} loading={loading} error={conceptError} status={conceptsArea}>
+      <MarketCard
+        testId="market-concepts-card"
+        title={t("dashboard.conceptHeat")}
+        hasData={false}
+        loading={loading}
+        error={conceptError}
+        status={conceptsArea}
+      >
         {null}
       </MarketCard>
     );
   }
 
   return (
-    <MarketCard testId="market-concepts-card" title={t("dashboard.conceptHeat")} hasData loading={loading} error={conceptError} status={conceptsArea}>
+    <MarketCard
+      testId="market-concepts-card"
+      title={t("dashboard.conceptHeat")}
+      hasData
+      loading={loading}
+      error={conceptError}
+      status={conceptsArea}
+    >
       {concepts.length > 0 ? (
         <ul className="max-h-52 space-y-1 overflow-auto">
           {concepts.slice(0, 8).map((concept) => (
-            <li key={concept.code} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border/50 py-1.5 last:border-0">
+            <li
+              key={concept.code}
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border/50 py-1.5 last:border-0"
+            >
               <div className="min-w-0">
                 <p className="truncate text-xs font-medium">{concept.name}</p>
                 <p className="truncate text-[10px] text-muted-foreground">
-                  {t("dashboard.riseFall", { up: concept.riseCount ?? "-", down: concept.fallCount ?? "-" })}
+                  {t("dashboard.riseFall", {
+                    up: concept.riseCount ?? "-",
+                    down: concept.fallCount ?? "-",
+                  })}
                   {concept.leadingStock ? ` · ${concept.leadingStock}` : ""}
                 </p>
               </div>
-              <span className={cn("font-mono text-xs font-semibold tabular-nums", changeColor(concept.changePct))}>{fmtPct(concept.changePct)}</span>
+              <span
+                className={cn(
+                  "font-mono text-xs font-semibold tabular-nums",
+                  changeColor(concept.changePct),
+                )}
+              >
+                {fmtPct(concept.changePct)}
+              </span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-xs text-muted-foreground">{t("dashboard.noConceptData")}</p>
+        <p className="text-xs text-muted-foreground">
+          {t("dashboard.noConceptData")}
+        </p>
       )}
     </MarketCard>
   );
@@ -700,13 +1026,25 @@ function MarketSnapshotSection({
   return (
     <section aria-label={t("dashboard.marketSnapshot")} className="space-y-4">
       <div className="grid gap-4 lg:grid-cols-3">
-        <MarketBreadthCard snapshot={snapshot} loading={loading} error={error} />
-        <MarketEmotionCard snapshot={snapshot} loading={loading} error={error} />
+        <MarketBreadthCard
+          snapshot={snapshot}
+          loading={loading}
+          error={error}
+        />
+        <MarketEmotionCard
+          snapshot={snapshot}
+          loading={loading}
+          error={error}
+        />
         <MarketTrendCard snapshot={snapshot} loading={loading} error={error} />
       </div>
       <div className="grid gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.2fr)]">
         <MarketLimitCard snapshot={snapshot} loading={loading} error={error} />
-        <MarketConceptsCard snapshot={snapshot} loading={loading} error={error} />
+        <MarketConceptsCard
+          snapshot={snapshot}
+          loading={loading}
+          error={error}
+        />
       </div>
     </section>
   );
@@ -735,19 +1073,27 @@ function WatchlistQuotesSection({
   onSelect: (code: string) => void;
 }) {
   const { t } = useTranslation();
-  const rows = Object.values(quotes).sort((a, b) => a.code.localeCompare(b.code));
+  const rows = Object.values(quotes).sort((a, b) =>
+    a.code.localeCompare(b.code),
+  );
 
   return (
-    <div className="rounded-lg border p-4 space-y-3">
+    <div className="rounded-lg border p-4 space-y-3 bg-card">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">{t("dashboard.watchlistQuotes")}</h2>
+        <h2 className="text-sm font-semibold">
+          {t("dashboard.watchlistQuotes")}
+        </h2>
         {rows.length > 0 && (
-          <span className="text-xs text-muted-foreground tabular-nums">{rows.length}</span>
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {rows.length}
+          </span>
         )}
       </div>
 
       {loading && rows.length === 0 && (
-        <p className="text-xs text-muted-foreground">{t("dashboard.loading")}</p>
+        <p className="text-xs text-muted-foreground">
+          {t("dashboard.loading")}
+        </p>
       )}
 
       {error && rows.length === 0 && (
@@ -758,7 +1104,9 @@ function WatchlistQuotesSection({
       )}
 
       {rows.length === 0 && !loading && !error && (
-        <p className="text-xs text-muted-foreground">{t("dashboard.noWatchlist")}</p>
+        <p className="text-xs text-muted-foreground">
+          {t("dashboard.noWatchlist")}
+        </p>
       )}
 
       {rows.length > 0 && (
@@ -766,10 +1114,18 @@ function WatchlistQuotesSection({
           <table className="w-full text-xs">
             <thead className="sticky top-0 bg-card">
               <tr className="border-b text-muted-foreground">
-                <th className="text-left py-1.5 pr-2 font-medium">{t("dashboard.col.code")}</th>
-                <th className="text-left py-1.5 pr-2 font-medium">{t("dashboard.col.name")}</th>
-                <th className="text-right py-1.5 pr-2 font-medium">{t("dashboard.col.price")}</th>
-                <th className="text-right py-1.5 font-medium">{t("dashboard.col.changePct")}</th>
+                <th className="text-left py-1.5 pr-2 font-medium">
+                  {t("dashboard.col.code")}
+                </th>
+                <th className="text-left py-1.5 pr-2 font-medium">
+                  {t("dashboard.col.name")}
+                </th>
+                <th className="text-right py-1.5 pr-2 font-medium">
+                  {t("dashboard.col.price")}
+                </th>
+                <th className="text-right py-1.5 font-medium">
+                  {t("dashboard.col.changePct")}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -826,21 +1182,26 @@ function StockDetailSection({
 
   if (!code) {
     return (
-      <div className="rounded-lg border p-4 space-y-3">
+      <div className="rounded-lg border p-4 space-y-3 bg-card">
         <h2 className="text-sm font-semibold">{t("dashboard.stockDetail")}</h2>
         <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
           <TrendingUp className="h-6 w-6 text-muted-foreground/40" />
-          <p className="text-xs text-muted-foreground">{t("dashboard.selectStockHint")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("dashboard.selectStockHint")}
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border p-4 space-y-3">
+    <div className="rounded-lg border p-4 space-y-3 bg-card">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">
-          {name || code} <span className="text-muted-foreground font-normal text-xs">({code})</span>
+          {name || code}{" "}
+          <span className="text-muted-foreground font-normal text-xs">
+            ({code})
+          </span>
         </h2>
         <button
           type="button"
@@ -854,7 +1215,9 @@ function StockDetailSection({
       </div>
 
       {loading && (
-        <p className="text-xs text-muted-foreground">{t("dashboard.loading")}</p>
+        <p className="text-xs text-muted-foreground">
+          {t("dashboard.loading")}
+        </p>
       )}
 
       {error && (
@@ -865,12 +1228,12 @@ function StockDetailSection({
       )}
 
       {!loading && !error && bars.length === 0 && (
-        <p className="text-xs text-muted-foreground">{t("charts.noPriceData")}</p>
+        <p className="text-xs text-muted-foreground">
+          {t("charts.noPriceData")}
+        </p>
       )}
 
-      {bars.length > 0 && (
-        <CandlestickChart data={bars} height={440} />
-      )}
+      {bars.length > 0 && <CandlestickChart data={bars} height={440} />}
     </div>
   );
 }
@@ -894,14 +1257,18 @@ export default function Dashboard() {
   const quotesLoading = useMarketDashboardStore((s) => s.quotesLoading);
   const summaryLoading = useMarketDashboardStore((s) => s.summaryLoading);
   const barsLoading = useMarketDashboardStore((s) => s.barsLoading);
-  const marketSnapshotLoading = useMarketDashboardStore((s) => s.marketSnapshotLoading);
+  const marketSnapshotLoading = useMarketDashboardStore(
+    (s) => s.marketSnapshotLoading,
+  );
 
   const indexesError = useMarketDashboardStore((s) => s.indexesError);
   const pulseError = useMarketDashboardStore((s) => s.pulseError);
   const quotesError = useMarketDashboardStore((s) => s.quotesError);
   const summaryError = useMarketDashboardStore((s) => s.summaryError);
   const barsError = useMarketDashboardStore((s) => s.barsError);
-  const marketSnapshotError = useMarketDashboardStore((s) => s.marketSnapshotError);
+  const marketSnapshotError = useMarketDashboardStore(
+    (s) => s.marketSnapshotError,
+  );
 
   const initialize = useMarketDashboardStore((s) => s.initialize);
   const refreshSummary = useMarketDashboardStore((s) => s.refreshSummary);
@@ -919,7 +1286,9 @@ export default function Dashboard() {
   }, [initialize, startPolling, stopPolling]);
 
   // Find selected stock name
-  const selectedName = selectedCode ? (quotes[selectedCode]?.name ?? null) : null;
+  const selectedName = selectedCode
+    ? (quotes[selectedCode]?.name ?? null)
+    : null;
 
   // Navigate to Agent with prefill (do not submit)
   const navigateToAgent = useCallback(
@@ -944,7 +1313,9 @@ export default function Dashboard() {
         </div>
         <IndexStrip indexes={indexes} />
         {indexesError && indexes.length > 0 && (
-          <p className="text-[10px] text-muted-foreground/60">{t("dashboard.staleData")}</p>
+          <p className="text-[10px] text-muted-foreground/60">
+            {t("dashboard.staleData")}
+          </p>
         )}
       </section>
 
@@ -956,7 +1327,11 @@ export default function Dashboard() {
 
       {/* Market Pulse + AI Summary */}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(22rem,1.08fr)]">
-        <MarketPulseSection items={pulse} loading={pulseLoading} error={pulseError} />
+        <MarketPulseSection
+          items={pulse}
+          loading={pulseLoading}
+          error={pulseError}
+        />
         <AiSummarySection
           summary={summary}
           loading={summaryLoading}
