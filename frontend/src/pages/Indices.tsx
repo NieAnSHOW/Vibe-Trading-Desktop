@@ -54,32 +54,40 @@ export default function Indices() {
 
   const requestedCode = searchParams.get("symbol");
   const selectedIndex = useMemo(
-    () => indexes.find((index) => index.code === requestedCode) ?? indexes[0] ?? null,
+    () =>
+      indexes.find((index) => index.code === requestedCode) ??
+      indexes[0] ??
+      null,
     [indexes, requestedCode],
   );
   const selectedCode = selectedIndex?.code ?? "";
   const selectedSymbol = selectedIndex?.symbol ?? "";
   const marketSummary = useMemo(() => {
     const rising = indexes.filter((index) => (index.changePct ?? 0) > 0).length;
-    const falling = indexes.filter((index) => (index.changePct ?? 0) < 0).length;
+    const falling = indexes.filter(
+      (index) => (index.changePct ?? 0) < 0,
+    ).length;
     const changes = indexes
       .map((index) => index.changePct)
       .filter((change): change is number => change != null);
-    const averageChange = changes.length > 0
-      ? changes.reduce((sum, change) => sum + change, 0) / changes.length
-      : null;
+    const averageChange =
+      changes.length > 0
+        ? changes.reduce((sum, change) => sum + change, 0) / changes.length
+        : null;
 
     return { rising, falling, averageChange };
   }, [indexes]);
   const filteredIndexes = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
     return indexes.filter((index) => {
-      const matchesQuery = !normalizedQuery
-        || index.name.toLocaleLowerCase().includes(normalizedQuery)
-        || index.code.toLocaleLowerCase().includes(normalizedQuery);
-      const matchesFilter = indexFilter === "all"
-        || (indexFilter === "up" && (index.changePct ?? 0) > 0)
-        || (indexFilter === "down" && (index.changePct ?? 0) < 0);
+      const matchesQuery =
+        !normalizedQuery ||
+        index.name.toLocaleLowerCase().includes(normalizedQuery) ||
+        index.code.toLocaleLowerCase().includes(normalizedQuery);
+      const matchesFilter =
+        indexFilter === "all" ||
+        (indexFilter === "up" && (index.changePct ?? 0) > 0) ||
+        (indexFilter === "down" && (index.changePct ?? 0) < 0);
       return matchesQuery && matchesFilter;
     });
   }, [indexFilter, indexes, searchQuery]);
@@ -170,46 +178,78 @@ export default function Indices() {
   };
 
   return (
-    <div className="flex h-full w-full flex-col gap-4 p-4 lg:gap-6 lg:p-6">
+    <div className="flex h-full w-full flex-col gap-3 p-3 lg:gap-3 lg:p-5">
       <header className="space-y-1">
-        <h1 className="text-xl font-bold tracking-tight">{t("indices.title", "指数")}</h1>
+        <h1 className="text-xl font-bold tracking-tight">
+          {t("indices.title", "指数")}
+        </h1>
         <p className="text-sm text-muted-foreground">
-          {t("indices.description", "查看主要 A 股宽基指数的当日行情和日线走势")}
+          {t(
+            "indices.description",
+            "查看主要 A 股宽基指数的当日行情和日线走势",
+          )}
         </p>
       </header>
 
-      <section aria-labelledby="indices-overview-title" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <section
+        aria-labelledby="indices-overview-title"
+        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+      >
         <h2 id="indices-overview-title" className="sr-only">
           {t("indices.marketOverview", "市场概览")}
         </h2>
         <div className="rounded-lg border bg-card px-3 py-2.5">
-          <p className="text-xs text-muted-foreground">{t("indices.total", "指数总数")}</p>
-          <p className="mt-1 font-mono text-lg font-semibold tabular-nums">{indexes.length}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("indices.total", "指数总数")}
+          </p>
+          <p className="mt-1 font-mono text-lg font-semibold tabular-nums">
+            {indexes.length}
+          </p>
         </div>
         <div className="rounded-lg border bg-card px-3 py-2.5">
           <p className="flex items-center gap-1 text-xs text-muted-foreground">
-            <TrendingUp className="h-3.5 w-3.5 text-red-500" aria-hidden="true" />
+            <TrendingUp
+              className="h-3.5 w-3.5 text-red-500"
+              aria-hidden="true"
+            />
             {t("indices.rising", "上涨")}
           </p>
-          <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-red-500">{marketSummary.rising}</p>
+          <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-red-500">
+            {marketSummary.rising}
+          </p>
         </div>
         <div className="rounded-lg border bg-card px-3 py-2.5">
           <p className="flex items-center gap-1 text-xs text-muted-foreground">
-            <TrendingDown className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />
+            <TrendingDown
+              className="h-3.5 w-3.5 text-green-500"
+              aria-hidden="true"
+            />
             {t("indices.falling", "下跌")}
           </p>
-          <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-green-500">{marketSummary.falling}</p>
+          <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-green-500">
+            {marketSummary.falling}
+          </p>
         </div>
         <div className="rounded-lg border bg-card px-3 py-2.5">
-          <p className="text-xs text-muted-foreground">{t("indices.averageChange", "平均涨跌幅")}</p>
-          <p className={cn("mt-1 font-mono text-lg font-semibold tabular-nums", changeClass(marketSummary.averageChange))}>
+          <p className="text-xs text-muted-foreground">
+            {t("indices.averageChange", "平均涨跌幅")}
+          </p>
+          <p
+            className={cn(
+              "mt-1 font-mono text-lg font-semibold tabular-nums",
+              changeClass(marketSummary.averageChange),
+            )}
+          >
             {formatChange(marketSummary.averageChange, "%")}
           </p>
         </div>
       </section>
 
-      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(15rem,0.36fr)_minmax(0,1fr)] lg:gap-6">
-        <aside aria-labelledby="indices-list-title" className="min-h-0 rounded-lg border bg-card p-3 lg:overflow-auto">
+      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(15rem,0.36fr)_minmax(0,1fr)] lg:gap-3">
+        <aside
+          aria-labelledby="indices-list-title"
+          className="min-h-0 rounded-lg border bg-card p-3 lg:overflow-auto"
+        >
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="min-w-0">
               <h2 id="indices-list-title" className="text-sm font-semibold">
@@ -222,11 +262,19 @@ export default function Indices() {
                 })}
               </p>
             </div>
-            {indexesLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label={t("indices.loading", "指数行情加载中")} />}
+            {indexesLoading && (
+              <Loader2
+                className="h-4 w-4 animate-spin text-muted-foreground"
+                aria-label={t("indices.loading", "指数行情加载中")}
+              />
+            )}
           </div>
 
           <label className="relative block">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
             <span className="sr-only">{t("indices.search", "搜索指数")}</span>
             <input
               type="search"
@@ -238,12 +286,18 @@ export default function Indices() {
             />
           </label>
 
-          <div className="mt-2 grid grid-cols-3 gap-1 rounded-md bg-muted p-1" role="group" aria-label={t("indices.filter", "筛选指数")}>
-            {([
-              ["all", t("indices.all", "全部")],
-              ["up", t("indices.rising", "上涨")],
-              ["down", t("indices.falling", "下跌")],
-            ] as const).map(([value, label]) => (
+          <div
+            className="mt-2 grid grid-cols-3 gap-1 rounded-md bg-muted p-1"
+            role="group"
+            aria-label={t("indices.filter", "筛选指数")}
+          >
+            {(
+              [
+                ["all", t("indices.all", "全部")],
+                ["up", t("indices.rising", "上涨")],
+                ["down", t("indices.falling", "下跌")],
+              ] as const
+            ).map(([value, label]) => (
               <button
                 key={value}
                 type="button"
@@ -251,7 +305,9 @@ export default function Indices() {
                 aria-pressed={indexFilter === value}
                 className={cn(
                   "rounded px-2 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-                  indexFilter === value ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  indexFilter === value
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {label}
@@ -260,8 +316,14 @@ export default function Indices() {
           </div>
 
           {indexesError && indexes.length === 0 && (
-            <div role="alert" className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive"
+            >
+              <AlertCircle
+                className="mt-0.5 h-4 w-4 shrink-0"
+                aria-hidden="true"
+              />
               <span>{t("indices.quotesError", "指数行情加载失败")}</span>
             </div>
           )}
@@ -284,17 +346,30 @@ export default function Indices() {
                   aria-label={`${index.name} ${index.code}`}
                   className={cn(
                     "w-full rounded-md border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-                    active ? "border-primary/30 bg-primary/10" : "border-transparent hover:bg-muted",
+                    active
+                      ? "border-primary/30 bg-primary/10"
+                      : "border-transparent hover:bg-muted",
                   )}
                 >
                   <span className="flex items-center justify-between gap-3">
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">{index.name}</span>
-                      <span className="block font-mono text-xs text-muted-foreground">{index.code}</span>
+                      <span className="block truncate text-sm font-medium">
+                        {index.name}
+                      </span>
+                      <span className="block font-mono text-xs text-muted-foreground">
+                        {index.code}
+                      </span>
                     </span>
                     <span className="shrink-0 text-right font-mono tabular-nums">
-                      <span className="block text-sm font-medium">{formatNumber(index.price)}</span>
-                      <span className={cn("block text-xs", changeClass(index.changePct))}>
+                      <span className="block text-sm font-medium">
+                        {formatNumber(index.price)}
+                      </span>
+                      <span
+                        className={cn(
+                          "block text-xs",
+                          changeClass(index.changePct),
+                        )}
+                      >
                         {formatChange(index.changePct, "%")}
                       </span>
                     </span>
@@ -302,21 +377,23 @@ export default function Indices() {
                 </button>
               );
             })}
-            {!indexesLoading && indexes.length > 0 && filteredIndexes.length === 0 && (
-              <div className="rounded-md bg-muted p-3 text-center text-sm text-muted-foreground">
-                <p>{t("indices.noMatches", "未找到匹配指数")}</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setIndexFilter("all");
-                  }}
-                  className="mt-2 text-xs font-medium text-primary underline-offset-4 hover:underline"
-                >
-                  {t("indices.clearFilters", "清除筛选")}
-                </button>
-              </div>
-            )}
+            {!indexesLoading &&
+              indexes.length > 0 &&
+              filteredIndexes.length === 0 && (
+                <div className="rounded-md bg-muted p-3 text-center text-sm text-muted-foreground">
+                  <p>{t("indices.noMatches", "未找到匹配指数")}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setIndexFilter("all");
+                    }}
+                    className="mt-2 text-xs font-medium text-primary underline-offset-4 hover:underline"
+                  >
+                    {t("indices.clearFilters", "清除筛选")}
+                  </button>
+                </div>
+              )}
           </div>
 
           {(indexesStale || (indexesError && indexes.length > 0)) && (
@@ -326,33 +403,62 @@ export default function Indices() {
           )}
         </aside>
 
-        <section aria-labelledby="index-detail-title" className="min-h-0 rounded-lg border bg-card p-4 lg:overflow-auto">
+        <section
+          aria-labelledby="index-detail-title"
+          className="min-h-0 rounded-lg border bg-card p-4 lg:overflow-auto"
+        >
           {selectedIndex ? (
             <>
               <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
-                    <h2 id="index-detail-title" className="truncate text-lg font-semibold">
+                    <BarChart3
+                      className="h-5 w-5 shrink-0 text-primary"
+                      aria-hidden="true"
+                    />
+                    <h2
+                      id="index-detail-title"
+                      className="truncate text-lg font-semibold"
+                    >
                       {selectedIndex.name}
                     </h2>
                   </div>
-                  <p className="mt-1 font-mono text-xs text-muted-foreground">{selectedIndex.code}</p>
+                  <p className="mt-1 font-mono text-xs text-muted-foreground">
+                    {selectedIndex.code}
+                  </p>
                 </div>
                 <div className="grid grid-cols-3 gap-4 text-right font-mono tabular-nums">
                   <div>
-                    <p className="text-xs text-muted-foreground">{t("indices.price", "最新价")}</p>
-                    <p className="mt-1 text-base font-semibold">{formatNumber(selectedIndex.price)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t("indices.price", "最新价")}
+                    </p>
+                    <p className="mt-1 text-base font-semibold">
+                      {formatNumber(selectedIndex.price)}
+                    </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">{t("indices.change", "涨跌额")}</p>
-                    <p className={cn("mt-1 text-base font-semibold", changeClass(selectedIndex.changeAmt))}>
+                    <p className="text-xs text-muted-foreground">
+                      {t("indices.change", "涨跌额")}
+                    </p>
+                    <p
+                      className={cn(
+                        "mt-1 text-base font-semibold",
+                        changeClass(selectedIndex.changeAmt),
+                      )}
+                    >
                       {formatChange(selectedIndex.changeAmt)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">{t("indices.changePercent", "涨跌幅")}</p>
-                    <p className={cn("mt-1 text-base font-semibold", changeClass(selectedIndex.changePct))}>
+                    <p className="text-xs text-muted-foreground">
+                      {t("indices.changePercent", "涨跌幅")}
+                    </p>
+                    <p
+                      className={cn(
+                        "mt-1 text-base font-semibold",
+                        changeClass(selectedIndex.changePct),
+                      )}
+                    >
                       {formatChange(selectedIndex.changePct, "%")}
                     </p>
                   </div>
@@ -361,19 +467,34 @@ export default function Indices() {
 
               <div className="mt-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold">{t("indices.dailyHistory", "日线走势")}</h3>
-                  {barsStale && <span role="status" className="text-xs text-muted-foreground">{t("indices.stale", "行情数据可能已过期")}</span>}
+                  <h3 className="text-sm font-semibold">
+                    {t("indices.dailyHistory", "日线走势")}
+                  </h3>
+                  {barsStale && (
+                    <span
+                      role="status"
+                      className="text-xs text-muted-foreground"
+                    >
+                      {t("indices.stale", "行情数据可能已过期")}
+                    </span>
+                  )}
                 </div>
 
                 {barsLoading && (
                   <div className="flex min-h-60 items-center justify-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    <Loader2
+                      className="h-4 w-4 animate-spin"
+                      aria-hidden="true"
+                    />
                     {t("indices.historyLoading", "日线数据加载中")}
                   </div>
                 )}
 
                 {!barsLoading && barsError && (
-                  <div role="alert" className="flex min-h-60 flex-col items-center justify-center gap-2 rounded-md bg-destructive/10 p-4 text-center text-sm text-destructive">
+                  <div
+                    role="alert"
+                    className="flex min-h-60 flex-col items-center justify-center gap-2 rounded-md bg-destructive/10 p-4 text-center text-sm text-destructive"
+                  >
                     <AlertCircle className="h-5 w-5" aria-hidden="true" />
                     <p>{t("indices.historyError", "日线数据加载失败")}</p>
                   </div>
@@ -381,14 +502,21 @@ export default function Indices() {
 
                 {!barsLoading && !barsError && bars.length === 0 && (
                   <div className="flex min-h-60 flex-col items-center justify-center gap-1 rounded-md bg-muted p-4 text-center">
-                    <p className="text-sm font-medium">{t("indices.historyUnavailable", "暂无日线数据")}</p>
+                    <p className="text-sm font-medium">
+                      {t("indices.historyUnavailable", "暂无日线数据")}
+                    </p>
                     <p className="text-xs text-muted-foreground">
-                      {t("indices.historyUnavailableHint", "请选择其他指数后重试")}
+                      {t(
+                        "indices.historyUnavailableHint",
+                        "请选择其他指数后重试",
+                      )}
                     </p>
                   </div>
                 )}
 
-                {bars.length > 0 && <CandlestickChart data={bars} height={460} />}
+                {bars.length > 0 && (
+                  <CandlestickChart data={bars} height={460} />
+                )}
               </div>
             </>
           ) : (

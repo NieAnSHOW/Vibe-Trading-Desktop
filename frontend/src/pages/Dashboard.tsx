@@ -1,9 +1,4 @@
-import {
-  useEffect,
-  useState,
-  useMemo,
-  type ReactNode,
-} from "react";
+import { useEffect, useState, useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   RefreshCw,
@@ -172,7 +167,10 @@ export function MarketPulseSection({
   }
 
   return (
-    <div data-testid="market-pulse-card" className="h-full rounded-lg border p-4 space-y-3 bg-card">
+    <div
+      data-testid="market-pulse-card"
+      className="h-full rounded-lg border p-4 space-y-3 bg-card"
+    >
       <h2 className="text-sm font-semibold">{t("dashboard.marketPulse")}</h2>
       {error && items.length === 0 && (
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -1016,12 +1014,20 @@ function MarketSnapshotSection({
   return (
     <section aria-label={t("dashboard.marketSnapshot")} className="space-y-3">
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 min-[1440px]:grid-cols-4">
-        <MarketBreadthCard snapshot={snapshot} loading={loading} error={error} />
-        <MarketEmotionCard snapshot={snapshot} loading={loading} error={error} />
+        <MarketBreadthCard
+          snapshot={snapshot}
+          loading={loading}
+          error={error}
+        />
+        <MarketEmotionCard
+          snapshot={snapshot}
+          loading={loading}
+          error={error}
+        />
         <MarketTrendCard snapshot={snapshot} loading={loading} error={error} />
         <MarketLimitCard snapshot={snapshot} loading={loading} error={error} />
       </div>
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid gap-2 lg:grid-cols-2">
         <BoardHeatCard
           testId="market-concepts-card"
           title={t("dashboard.conceptHeat")}
@@ -1065,9 +1071,7 @@ function MarketRankingsSection({
   const { t } = useTranslation();
   const marketArea = snapshot?.areas.market;
   const marketError =
-    marketArea?.error ??
-    snapshot?.errors?.market ??
-    (snapshot ? null : error);
+    marketArea?.error ?? snapshot?.errors?.market ?? (snapshot ? null : error);
 
   return (
     <section aria-label={t("dashboard.rankings")}>
@@ -1145,7 +1149,7 @@ export default function Dashboard() {
   }, [initialize, startPolling, stopPolling]);
 
   return (
-    <div className="w-full space-y-5 p-3 sm:p-4 lg:space-y-6 lg:p-5">
+    <div className="w-full space-y-3 p-3 sm:p-4 lg:space-y-3 lg:p-5">
       {/* Market Overview */}
       <section aria-labelledby="market-overview" className="space-y-3">
         <div className="flex items-baseline gap-3">
@@ -1175,7 +1179,6 @@ export default function Dashboard() {
         loading={marketSnapshotLoading}
         error={marketSnapshotError}
       />
-
     </div>
   );
 }
