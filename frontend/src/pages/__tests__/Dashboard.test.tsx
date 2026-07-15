@@ -1,6 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import i18n from "@/i18n";
 import Dashboard from "@/pages/Dashboard";
@@ -91,14 +90,6 @@ vi.mock("@/lib/api", async (importOriginal) => {
   return { ...original, api: { ...original.api, listSessions: vi.fn().mockResolvedValue([]) } };
 });
 
-vi.mock("@/components/charts/CandlestickChart", () => ({
-  CandlestickChart: ({ data }: { data: unknown[] }) => (
-    <div data-testid="candlestick-chart" data-count={data.length}>
-      K-line chart
-    </div>
-  ),
-}));
-
 // ── Helpers ───────────────────────────────────────────────────
 
 /** Build a minimal store snapshot with indexes and a summary */
@@ -148,18 +139,6 @@ function renderDashboard() {
   );
 }
 
-/** Render Dashboard inside a Routes tree so useNavigate works */
-function renderDashboardWithRoutes() {
-  return render(
-    <MemoryRouter initialEntries={["/dashboard"]}>
-      <Routes>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/agent" element={<div>Agent page</div>} />
-      </Routes>
-    </MemoryRouter>,
-  );
-}
-
 // ── Tests ─────────────────────────────────────────────────────
 
 describe("Dashboard page", () => {
@@ -205,6 +184,14 @@ describe("Dashboard page", () => {
   });
 
   describe("market-first layout", () => {
+    it("uses the full available width", () => {
+      stateWithIndexesAndSummary();
+      const { container } = renderDashboard();
+
+      expect(container.firstElementChild).toHaveClass("w-full");
+      expect(container.firstElementChild).not.toHaveClass("max-w-[1440px]");
+    });
+
     it("renders market-first sections before watchlist detail", () => {
       stateWithIndexesAndSummary();
       renderDashboard();
@@ -212,8 +199,8 @@ describe("Dashboard page", () => {
       // The market overview section heading appears
       expect(screen.getByRole("heading", { name: /市场概览|Market Overview/i })).toBeInTheDocument();
 
-      // Watchlist section heading appears
-      expect(screen.queryByText(/自选股|Watchlist/i)).not.toBeNull();
+      // Dashboard no longer owns the watchlist workflow.
+      expect(screen.queryByText(/自选股|Watchlist/i)).toBeNull();
     });
 
     it("shows indexes in the market overview section", () => {
@@ -224,11 +211,11 @@ describe("Dashboard page", () => {
       expect(screen.getByText("深证成指")).toBeInTheDocument();
     });
 
-    it("shows AI summary when available", () => {
+    it("does not render the AI summary after it moves to Home", () => {
       stateWithIndexesAndSummary();
       renderDashboard();
 
-      expect(screen.getByText("风险偏好回升")).toBeInTheDocument();
+      expect(screen.queryByText("风险偏好回升")).toBeNull();
     });
 
     it("renders breadth, emotion, trend, limit ladder, and concept heat cards from the snapshot", () => {
@@ -247,6 +234,8 @@ describe("Dashboard page", () => {
       renderDashboard();
 
       expect(screen.getByTestId("market-industries-card")).toHaveTextContent("半导体");
+      expect(screen.getByTestId("market-pulse-card")).toHaveTextContent("涨停");
+      expect(screen.getByTestId("market-pulse-card").parentElement).toHaveClass("lg:grid-cols-3");
       expect(screen.getByTestId("top-gainers-card")).toHaveTextContent("贵州茅台");
       expect(screen.getByTestId("top-losers-card")).toHaveTextContent("万科A");
       expect(screen.getByTestId("turnover-leaders-card")).toHaveTextContent("中国平安");
@@ -285,86 +274,13 @@ describe("Dashboard page", () => {
     });
   });
 
-  describe("summary failure resilience", () => {
-    it("still shows market data when summary fails", () => {
-      stateWithIndexesAndSummary({
-        summary: null,
-        summaryError: "no_provider",
-      });
-
-      renderDashboard();
-
-      // Market data still present
-      expect(screen.getByText("上证指数")).toBeInTheDocument();
-      // Refresh summary button still available
-      expect(screen.getByRole("button", { name: /刷新.*摘要|Refresh.*Summary/i })).toBeInTheDocument();
-    });
-
-    it("shows refresh summary icon button even when summary unavailable", () => {
-      stateWithIndexesAndSummary({
-        summary: null,
-        summaryError: null,
-      });
-
-      renderDashboard();
-
-      // Refresh summary button still available
-      const refreshBtn = screen.getByRole("button", { name: /刷新.*摘要|Refresh.*Summary/i });
-      expect(refreshBtn).toBeInTheDocument();
-    });
-  });
-
-  describe("watchlist interaction", () => {
-    it("clicking a watchlist row selects the stock and loads K-line", async () => {
-      const user = userEvent.setup();
+  describe("watchlist migration", () => {
+    it("does not render watchlist quotes or K-line detail", () => {
       stateWithIndexesAndSummary();
-
       renderDashboard();
 
-      // Click the stock row via its code cell.
-      const row = screen.getByRole("cell", { name: "600519" }).closest("tr");
-      expect(row).not.toBeNull();
-      if (row) {
-        await user.click(row);
-      }
-
-      expect(mockStoreRef.setSelectedCode).toHaveBeenCalledWith("600519");
-    });
-
-    it("shows K-line chart when bars are available", () => {
-      stateWithIndexesAndSummary({
-        selectedCode: "600519",
-        selectedBars: [
-          { time: "2026-07-10", open: 100, high: 105, low: 99, close: 102, volume: 10000 },
-          { time: "2026-07-11", open: 102, high: 108, low: 101, close: 107, volume: 12000 },
-        ],
-      });
-
-      renderDashboard();
-
-      const chart = screen.getByTestId("candlestick-chart");
-      expect(chart).toBeInTheDocument();
-      expect(chart.dataset.count).toBe("2");
-    });
-  });
-
-  describe("Send to Agent navigation", () => {
-    it("navigates to Agent with prefill but does not submit a message", async () => {
-      const user = userEvent.setup();
-      stateWithIndexesAndSummary({
-        selectedCode: "600519",
-        selectedBars: [{ time: "2026-07-10", open: 100, high: 105, low: 99, close: 102, volume: 10000 }],
-      });
-
-      renderDashboardWithRoutes();
-
-      // Find the "Send to Agent" button
-      const sendBtn = screen.getByRole("button", { name: /发送.*Agent|Send.*Agent/i });
-      await user.click(sendBtn);
-
-      // After click, we should be on the Agent page with prefill param
-      // (The navigate call should have happened — we verify via the rendered Agent page appearing)
-      expect(screen.getByText("Agent page")).toBeInTheDocument();
+      expect(screen.queryByText(/自选股|Watchlist/i)).toBeNull();
+      expect(screen.queryByText(/K-line chart/i)).toBeNull();
     });
   });
 

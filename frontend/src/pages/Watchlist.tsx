@@ -7,11 +7,14 @@ import {
   Trash2,
   Send,
   RefreshCw,
-  CandlestickChart,
+  CandlestickChart as CandlestickIcon,
+  TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWatchlistStore } from "@/stores/watchlist";
-import type { QuoteData } from "@/lib/api";
+import { useMarketDashboardStore } from "@/stores/marketDashboard";
+import { CandlestickChart as CandlestickChartView } from "@/components/charts/CandlestickChart";
+import type { PriceBar, QuoteData } from "@/lib/api";
 import { toast } from "sonner";
 
 /** A 股代码：6 位数字 */
@@ -105,6 +108,67 @@ function SkeletonRow() {
   );
 }
 
+function StockDetailSection({
+  code,
+  name,
+  bars,
+  loading,
+  error,
+  onAnalyze,
+}: {
+  code: string | null;
+  name: string | null;
+  bars: PriceBar[];
+  loading: boolean;
+  error: string | null;
+  onAnalyze: (code: string, name: string) => void;
+}) {
+  const { t } = useTranslation();
+
+  if (!code) {
+    return (
+      <section className="rounded-lg border p-4 space-y-3 bg-card">
+        <h2 className="text-sm font-semibold">{t("dashboard.stockDetail")}</h2>
+        <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+          <TrendingUp className="h-6 w-6 text-muted-foreground/40" />
+          <p className="text-xs text-muted-foreground">{t("dashboard.selectStockHint")}</p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-lg border p-4 space-y-3 bg-card">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold">
+          {name || code} <span className="text-muted-foreground font-normal text-xs">({code})</span>
+        </h2>
+        <button
+          type="button"
+          onClick={() => onAnalyze(code, name || code)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
+          aria-label={t("dashboard.sendToAgent")}
+        >
+          <Send className="h-3 w-3" />
+          {t("dashboard.sendToAgent")}
+        </button>
+      </div>
+
+      {loading && <p className="text-xs text-muted-foreground">{t("dashboard.loading")}</p>}
+      {error && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <AlertCircle className="h-3 w-3" />
+          {error}
+        </div>
+      )}
+      {!loading && !error && bars.length === 0 && (
+        <p className="text-xs text-muted-foreground">{t("charts.noPriceData")}</p>
+      )}
+      {bars.length > 0 && <CandlestickChartView data={bars} height={440} />}
+    </section>
+  );
+}
+
 export default function WatchlistPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -128,6 +192,14 @@ export default function WatchlistPage() {
   const [adding, setAdding] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const selectedCode = useMarketDashboardStore((s) => s.selectedCode);
+  const selectedBars = useMarketDashboardStore((s) => s.selectedBars);
+  const barsLoading = useMarketDashboardStore((s) => s.barsLoading);
+  const barsError = useMarketDashboardStore((s) => s.barsError);
+  const setSelectedCode = useMarketDashboardStore((s) => s.setSelectedCode);
+  const activeSelectedCode = selectedCode && stocks.some((stock) => stock.code === selectedCode)
+    ? selectedCode
+    : null;
 
   // 初始加载
   useEffect(() => {
@@ -222,6 +294,11 @@ export default function WatchlistPage() {
         : `帮我分析以下股票的走势和投资机会：${names.join("、")}`;
     clearSelection();
     navigate(`/agent?prefill=${encodeURIComponent(prefill)}`);
+  }
+
+  function handleAnalyze(code: string, name: string) {
+    const message = `请分析 ${name} (${code}) 的近期走势和技术指标`;
+    navigate(`/agent?prefill=${encodeURIComponent(message)}`);
   }
 
   const colLabels = {
@@ -370,9 +447,10 @@ export default function WatchlistPage() {
                       className={cn(
                         "border-t transition-colors cursor-pointer hover:bg-muted/40",
                         isSelected && "bg-primary/[0.06]",
+                        activeSelectedCode === stock.code && "ring-1 ring-inset ring-primary/40",
                         q?.stale && "opacity-50",
                       )}
-                      onClick={() => toggleSelection(stock.code)}
+                      onClick={() => void setSelectedCode(stock.code)}
                     >
                       <td
                         className="px-3 py-2.5"
@@ -449,7 +527,7 @@ export default function WatchlistPage() {
                               aria-label={t("watchlist.kline", "同花顺 K 线")}
                               data-testid={`kline-${stock.code}`}
                             >
-                              <CandlestickChart size={14} />
+                              <CandlestickIcon size={14} />
                             </a>
                             <button
                               onClick={() => handleDelete(stock.code)}
@@ -469,6 +547,15 @@ export default function WatchlistPage() {
               </tbody>
             </table>
           </div>
+
+          <StockDetailSection
+            code={activeSelectedCode}
+            name={activeSelectedCode ? quotes[activeSelectedCode]?.name ?? null : null}
+            bars={selectedBars}
+            loading={barsLoading}
+            error={barsError}
+            onAnalyze={handleAnalyze}
+          />
 
           {/* Send to Agent */}
           {selected.size > 0 && (

@@ -13,6 +13,20 @@ vi.mock("@/stores/watchlist");
 import { useWatchlistStore } from "@/stores/watchlist";
 const mockStore = vi.mocked(useWatchlistStore);
 
+vi.mock("@/stores/marketDashboard", () => ({
+  useMarketDashboardStore: vi.fn(),
+}));
+import { useMarketDashboardStore } from "@/stores/marketDashboard";
+const mockMarketStore = vi.mocked(useMarketDashboardStore);
+
+vi.mock("@/components/charts/CandlestickChart", () => ({
+  CandlestickChart: ({ data }: { data: unknown[] }) => (
+    <div data-testid="candlestick-chart" data-count={data.length}>
+      K-line chart
+    </div>
+  ),
+}));
+
 // Minimal Agent stub that reads prefill
 function AgentStub() {
   const [searchParams] = (function() {
@@ -25,7 +39,18 @@ function AgentStub() {
 
 import WatchlistPage from "../Watchlist";
 
-function renderWatchlistWithAgent(storeState: Record<string, unknown> = {}) {
+function renderWatchlistWithAgent(
+  storeState: Record<string, unknown> = {},
+  marketState: Record<string, unknown> = {},
+) {
+  mockMarketStore.mockImplementation((selector) => selector({
+    selectedCode: null,
+    selectedBars: [],
+    barsLoading: false,
+    barsError: null,
+    setSelectedCode: vi.fn(),
+    ...marketState,
+  } as never));
   mockStore.mockReturnValue({
     stocks: [{ code: "000001", name: "平安银行", market: "a_stock", added_at: "" }],
     quotes: { "000001": { code: "000001", name: "平安银行", price: 10.5, change_pct: 1.2, change_amt: 0.12 } },
@@ -72,5 +97,23 @@ describe("Watchlist → Agent prefill integration", () => {
     });
     // No send-to-agent button when nothing selected
     expect(screen.queryByTestId("send-to-agent")).toBeNull();
+  });
+
+  it("clicking a watchlist row loads and renders its K-line detail", async () => {
+    const setSelectedCode = vi.fn();
+    renderWatchlistWithAgent({}, {
+      selectedCode: "000001",
+      selectedBars: [{ time: "2026-07-10", open: 10, high: 11, low: 9, close: 10.5, volume: 1000 }],
+      barsLoading: false,
+      barsError: null,
+      setSelectedCode,
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("000001"));
+    });
+
+    expect(setSelectedCode).toHaveBeenCalledWith("000001");
+    expect(screen.getByTestId("candlestick-chart")).toHaveAttribute("data-count", "1");
   });
 });
