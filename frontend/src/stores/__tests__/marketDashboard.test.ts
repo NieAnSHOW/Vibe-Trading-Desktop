@@ -108,6 +108,36 @@ describe("useMarketDashboardStore", () => {
     });
   });
 
+  describe("refreshPulse", () => {
+    it("updates only pulse state from the Market Pulse endpoint", async () => {
+      const pulse = [{
+        code: "600519",
+        name: "贵州茅台",
+        time: "10:00",
+        changeType: "涨停",
+        info: "白酒板块走强",
+        source: "test",
+        stale: false,
+      }];
+      mockFetchPulse.mockResolvedValue({
+        data: pulse,
+        asOf: "2026-07-13T10:00:00Z",
+        stale: false,
+      });
+
+      await useMarketDashboardStore.getState().refreshPulse();
+
+      const state = useMarketDashboardStore.getState();
+      expect(mockFetchPulse).toHaveBeenCalledOnce();
+      expect(mockFetchIndexes).not.toHaveBeenCalled();
+      expect(mockFetchWatchlist).not.toHaveBeenCalled();
+      expect(mockFetchMarketSnapshot).not.toHaveBeenCalled();
+      expect(state.pulse).toEqual(pulse);
+      expect(state.pulseLoading).toBe(false);
+      expect(state.pulseError).toBeNull();
+    });
+  });
+
   describe("refreshMarketData", () => {
     it("updates indexes, pulse, quotes on success", async () => {
       mockFetchIndexes.mockResolvedValue({

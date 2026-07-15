@@ -132,10 +132,9 @@ function IndexStrip({ indexes }: { indexes: DashboardIndex[] }) {
   );
 }
 
-/** Market pulse / 异动 section */
 const PULSE_PAGE_SIZES = [200, 500, 1000] as const;
 
-function MarketPulseSection({
+export function MarketPulseSection({
   items,
   loading,
   error,
@@ -1007,16 +1006,10 @@ function MarketSnapshotSection({
   snapshot,
   loading,
   error,
-  pulse,
-  pulseLoading,
-  pulseError,
 }: {
   snapshot: DashboardMarketSnapshot | null;
   loading: boolean;
   error: string | null;
-  pulse: MarketPulseItem[];
-  pulseLoading: boolean;
-  pulseError: string | null;
 }) {
   const { t } = useTranslation();
 
@@ -1055,7 +1048,6 @@ function MarketSnapshotSection({
           }
           loading={loading}
         />
-        <MarketPulseSection items={pulse} loading={pulseLoading} error={pulseError} />
       </div>
     </section>
   );
@@ -1127,17 +1119,14 @@ export default function Dashboard() {
   const { t } = useTranslation();
 
   const indexes = useMarketDashboardStore((s) => s.indexes);
-  const pulse = useMarketDashboardStore((s) => s.pulse);
   const marketSnapshot = useMarketDashboardStore((s) => s.marketSnapshot);
 
   const indexesLoading = useMarketDashboardStore((s) => s.indexesLoading);
-  const pulseLoading = useMarketDashboardStore((s) => s.pulseLoading);
   const marketSnapshotLoading = useMarketDashboardStore(
     (s) => s.marketSnapshotLoading,
   );
 
   const indexesError = useMarketDashboardStore((s) => s.indexesError);
-  const pulseError = useMarketDashboardStore((s) => s.pulseError);
   const marketSnapshotError = useMarketDashboardStore(
     (s) => s.marketSnapshotError,
   );
@@ -1179,9 +1168,6 @@ export default function Dashboard() {
         snapshot={marketSnapshot}
         loading={marketSnapshotLoading}
         error={marketSnapshotError}
-        pulse={pulse}
-        pulseLoading={pulseLoading}
-        pulseError={pulseError}
       />
 
       <MarketRankingsSection

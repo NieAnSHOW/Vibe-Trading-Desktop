@@ -5,7 +5,7 @@ import WatchlistPage from "../Watchlist";
 
 // Mock i18n
 vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (k: string, d?: string) => d ?? k }),
+  useTranslation: () => ({ t: (k: string, d?: string | object) => typeof d === "string" ? d : k }),
 }));
 
 // Mock sonner
@@ -22,6 +22,12 @@ vi.mock("react-router-dom", async (orig) => {
 vi.mock("@/stores/watchlist");
 import { useWatchlistStore } from "@/stores/watchlist";
 const mockStore = vi.mocked(useWatchlistStore);
+
+vi.mock("@/stores/marketDashboard", () => ({
+  useMarketDashboardStore: vi.fn(),
+}));
+import { useMarketDashboardStore } from "@/stores/marketDashboard";
+const mockMarketStore = vi.mocked(useMarketDashboardStore);
 
 function baseStore(overrides: Record<string, unknown> = {}) {
   return {
@@ -40,8 +46,27 @@ function baseStore(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function renderPage(storeOverrides: Record<string, unknown> = {}) {
+function baseMarketStore(overrides: Record<string, unknown> = {}) {
+  return {
+    selectedCode: null,
+    selectedBars: [],
+    barsLoading: false,
+    barsError: null,
+    setSelectedCode: vi.fn(),
+    pulse: [],
+    pulseLoading: false,
+    pulseError: null,
+    refreshPulse: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
+function renderPage(
+  storeOverrides: Record<string, unknown> = {},
+  marketOverrides: Record<string, unknown> = {},
+) {
   mockStore.mockReturnValue(baseStore(storeOverrides) as ReturnType<typeof useWatchlistStore>);
+  mockMarketStore.mockImplementation((selector) => selector(baseMarketStore(marketOverrides) as never));
   return render(
     <MemoryRouter initialEntries={["/watchlist"]}>
       <WatchlistPage />
@@ -57,6 +82,22 @@ describe("WatchlistPage — empty state", () => {
   it("shows empty state message when no stocks", () => {
     renderPage();
     expect(screen.getByText(/暂无自选股|No stocks yet/i)).toBeTruthy();
+  });
+
+  it("renders Market Pulse with no saved stocks", () => {
+    renderPage({}, {
+      pulse: [{ code: "600519", name: "贵州茅台", time: "10:00", changeType: "涨停", info: "白酒板块走强", source: "test", stale: false }],
+    });
+
+    expect(screen.getByTestId("watchlist-market-pulse")).toHaveClass("w-full");
+    expect(screen.getByTestId("market-pulse-card")).toHaveTextContent("涨停");
+  });
+
+  it("refreshes Market Pulse when Watchlist mounts", () => {
+    const refreshPulse = vi.fn().mockResolvedValue(undefined);
+    renderPage({}, { refreshPulse });
+
+    expect(refreshPulse).toHaveBeenCalledOnce();
   });
 });
 

@@ -234,8 +234,7 @@ describe("Dashboard page", () => {
       renderDashboard();
 
       expect(screen.getByTestId("market-industries-card")).toHaveTextContent("半导体");
-      expect(screen.getByTestId("market-pulse-card")).toHaveTextContent("涨停");
-      expect(screen.getByTestId("market-pulse-card").parentElement).toHaveClass("lg:grid-cols-3");
+      expect(screen.queryByTestId("market-pulse-card")).toBeNull();
       expect(screen.getByTestId("top-gainers-card")).toHaveTextContent("贵州茅台");
       expect(screen.getByTestId("top-losers-card")).toHaveTextContent("万科A");
       expect(screen.getByTestId("turnover-leaders-card")).toHaveTextContent("中国平安");
@@ -247,7 +246,6 @@ describe("Dashboard page", () => {
       renderDashboard();
 
       const cardIds = [
-        "market-pulse-card",
         "market-concepts-card",
         "market-industries-card",
         "top-gainers-card",

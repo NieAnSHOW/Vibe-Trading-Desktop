@@ -38,6 +38,7 @@ export interface MarketDashboardState {
 
   initialize: () => Promise<void>;
   refreshMarketData: () => Promise<void>;
+  refreshPulse: () => Promise<void>;
   refreshSummary: (force?: boolean) => Promise<void>;
   setSelectedCode: (code: string) => Promise<void>;
   startPolling: () => void;
@@ -77,6 +78,18 @@ export const useMarketDashboardStore = create<MarketDashboardState>((set, get) =
     await get().refreshSummary(false);
   },
 
+  refreshPulse: async () => {
+    set({ pulseLoading: true });
+    try {
+      const result = await fetchMarketPulse();
+      set({ pulse: result.data, pulseError: null });
+    } catch (error) {
+      set({ pulseError: (error as Error)?.message ?? "pulse failed" });
+    } finally {
+      set({ pulseLoading: false });
+    }
+  },
+
   refreshMarketData: async () => {
     set({
       indexesLoading: true,
@@ -85,9 +98,9 @@ export const useMarketDashboardStore = create<MarketDashboardState>((set, get) =
       marketSnapshotLoading: true,
     });
 
-    const [indexesResult, pulseResult, stocksResult, marketSnapshotResult] = await Promise.allSettled([
+    const [indexesResult, , stocksResult, marketSnapshotResult] = await Promise.allSettled([
       fetchDashboardIndexes(),
-      fetchMarketPulse(),
+      get().refreshPulse(),
       fetchWatchlistStocks(),
       fetchDashboardMarketSnapshot(),
     ]);
@@ -97,13 +110,6 @@ export const useMarketDashboardStore = create<MarketDashboardState>((set, get) =
       set({ indexes: indexesResult.value.data, indexesError: null });
     } else {
       set({ indexesError: (indexesResult.reason as Error)?.message ?? "indexes failed" });
-    }
-
-    // Pulse
-    if (pulseResult.status === "fulfilled") {
-      set({ pulse: pulseResult.value.data, pulseError: null });
-    } else {
-      set({ pulseError: (pulseResult.reason as Error)?.message ?? "pulse failed" });
     }
 
     // Full-market snapshot
