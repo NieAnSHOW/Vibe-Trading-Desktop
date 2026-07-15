@@ -131,7 +131,9 @@ function StockDetailSection({
         <h2 className="text-sm font-semibold">{t("dashboard.stockDetail")}</h2>
         <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
           <TrendingUp className="h-6 w-6 text-muted-foreground/40" />
-          <p className="text-xs text-muted-foreground">{t("dashboard.selectStockHint")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("dashboard.selectStockHint")}
+          </p>
         </div>
       </section>
     );
@@ -141,7 +143,10 @@ function StockDetailSection({
     <section className="rounded-lg border p-4 space-y-3 bg-card">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">
-          {name || code} <span className="text-muted-foreground font-normal text-xs">({code})</span>
+          {name || code}{" "}
+          <span className="text-muted-foreground font-normal text-xs">
+            ({code})
+          </span>
         </h2>
         <button
           type="button"
@@ -154,7 +159,11 @@ function StockDetailSection({
         </button>
       </div>
 
-      {loading && <p className="text-xs text-muted-foreground">{t("dashboard.loading")}</p>}
+      {loading && (
+        <p className="text-xs text-muted-foreground">
+          {t("dashboard.loading")}
+        </p>
+      )}
       {error && (
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <AlertCircle className="h-3 w-3" />
@@ -162,9 +171,13 @@ function StockDetailSection({
         </div>
       )}
       {!loading && !error && bars.length === 0 && (
-        <p className="text-xs text-muted-foreground">{t("charts.noPriceData")}</p>
+        <p className="text-xs text-muted-foreground">
+          {t("charts.noPriceData")}
+        </p>
       )}
-      {bars.length > 0 && <CandlestickChartView data={bars} height={440} defaultRange="3M" />}
+      {bars.length > 0 && (
+        <CandlestickChartView data={bars} height={440} defaultRange="3M" />
+      )}
     </section>
   );
 }
@@ -197,9 +210,10 @@ export default function WatchlistPage() {
   const barsLoading = useMarketDashboardStore((s) => s.barsLoading);
   const barsError = useMarketDashboardStore((s) => s.barsError);
   const setSelectedCode = useMarketDashboardStore((s) => s.setSelectedCode);
-  const activeSelectedCode = selectedCode && stocks.some((stock) => stock.code === selectedCode)
-    ? selectedCode
-    : null;
+  const activeSelectedCode =
+    selectedCode && stocks.some((stock) => stock.code === selectedCode)
+      ? selectedCode
+      : null;
 
   // 初始加载
   useEffect(() => {
@@ -407,17 +421,18 @@ export default function WatchlistPage() {
       {!loading && stocks.length === 0 && (
         <div className="flex flex-col items-center justify-center flex-1 gap-3 py-16 text-center">
           <div className="flex items-center justify-center w-16 h-16 rounded-full bg-muted">
-            <Eye size={28} strokeWidth={1.5} className="text-muted-foreground" />
+            <Eye
+              size={28}
+              strokeWidth={1.5}
+              className="text-muted-foreground"
+            />
           </div>
           <div className="space-y-1.5">
             <p className="text-base font-medium">
               {t("watchlist.empty", "暂无自选股，请添加股票代码")}
             </p>
             <p className="text-sm text-muted-foreground max-w-xs">
-              {t(
-                "watchlist.emptyHint",
-                "盯盘你关注的股票，涨跌实时刷新",
-              )}
+              {t("watchlist.emptyHint", "盯盘你关注的股票，涨跌实时刷新")}
             </p>
           </div>
         </div>
@@ -425,11 +440,21 @@ export default function WatchlistPage() {
 
       {/* Quotes Table */}
       {stocks.length > 0 && (
-        <div data-testid="watchlist-workspace" className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(24rem,0.85fr)_minmax(0,1.35fr)] lg:gap-6">
-          <section data-testid="watchlist-chart-panel" className="order-2 min-w-0 lg:order-2">
+        <div
+          data-testid="watchlist-workspace"
+          className="grid h-500px gap-4 lg:grid-cols-[minmax(24rem,0.85fr)_minmax(0,1.35fr)] lg:gap-6"
+        >
+          <section
+            data-testid="watchlist-chart-panel"
+            className="order-2 min-w-0 lg:order-2"
+          >
             <StockDetailSection
               code={activeSelectedCode}
-              name={activeSelectedCode ? quotes[activeSelectedCode]?.name ?? null : null}
+              name={
+                activeSelectedCode
+                  ? (quotes[activeSelectedCode]?.name ?? null)
+                  : null
+              }
               bars={selectedBars}
               loading={barsLoading}
               error={barsError}
@@ -437,7 +462,10 @@ export default function WatchlistPage() {
             />
           </section>
 
-          <aside data-testid="watchlist-list-panel" className="order-1 min-w-0 space-y-3 lg:order-1">
+          <aside
+            data-testid="watchlist-list-panel"
+            className="order-1 min-w-0 space-y-3 lg:order-1"
+          >
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full text-sm">
                 <thead className="bg-muted/40">
@@ -455,16 +483,24 @@ export default function WatchlistPage() {
                     return (
                       <tr
                         key={stock.code}
-                        title={q?.stale ? t("watchlist.stale", "行情延迟") : undefined}
+                        title={
+                          q?.stale
+                            ? t("watchlist.stale", "行情延迟")
+                            : undefined
+                        }
                         className={cn(
                           "border-t transition-colors cursor-pointer hover:bg-muted/40",
                           isSelected && "bg-primary/[0.06]",
-                          activeSelectedCode === stock.code && "ring-1 ring-inset ring-primary/40",
+                          activeSelectedCode === stock.code &&
+                            "ring-1 ring-inset ring-primary/40",
                           q?.stale && "opacity-50",
                         )}
                         onClick={() => void setSelectedCode(stock.code)}
                       >
-                        <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                        <td
+                          className="px-3 py-2.5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <input
                             type="checkbox"
                             checked={isSelected}
@@ -473,29 +509,78 @@ export default function WatchlistPage() {
                             aria-label={`${t("watchlist.select", "选择")} ${stock.code}`}
                           />
                         </td>
-                        <td className="px-3 py-2.5 font-mono tabular-nums">{stock.code}</td>
-                        <td className="px-3 py-2.5 max-w-[8rem] truncate">{q?.name ?? stock.name ?? "—"}</td>
-                        <td className={cn("px-3 py-2.5 text-right font-mono tabular-nums", changeColor(pct))}>{fmtPrice(q?.price)}</td>
-                        <td className={cn("px-3 py-2.5 text-right font-mono tabular-nums", changeColor(pct))}>{fmtAmt(q?.change_amt)}</td>
-                        <td className="px-3 py-2.5 text-right">
-                          <span className={cn("inline-block min-w-[3.75rem] px-1.5 py-0.5 rounded text-xs font-mono tabular-nums text-right", pctChipClass(pct))}>{fmtPct(pct)}</span>
+                        <td className="px-3 py-2.5 font-mono tabular-nums">
+                          {stock.code}
                         </td>
-                        <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-3 py-2.5 max-w-[8rem] truncate">
+                          {q?.name ?? stock.name ?? "—"}
+                        </td>
+                        <td
+                          className={cn(
+                            "px-3 py-2.5 text-right font-mono tabular-nums",
+                            changeColor(pct),
+                          )}
+                        >
+                          {fmtPrice(q?.price)}
+                        </td>
+                        <td
+                          className={cn(
+                            "px-3 py-2.5 text-right font-mono tabular-nums",
+                            changeColor(pct),
+                          )}
+                        >
+                          {fmtAmt(q?.change_amt)}
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <span
+                            className={cn(
+                              "inline-block min-w-[3.75rem] px-1.5 py-0.5 rounded text-xs font-mono tabular-nums text-right",
+                              pctChipClass(pct),
+                            )}
+                          >
+                            {fmtPct(pct)}
+                          </span>
+                        </td>
+                        <td
+                          className="px-3 py-2.5 text-center"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           {confirmDelete === stock.code ? (
                             <span className="flex items-center gap-1 justify-center">
-                              <button onClick={() => handleDelete(stock.code)} className="text-xs font-medium text-red-600 hover:text-red-700 px-2 py-1 rounded hover:bg-red-500/10 transition-colors" data-testid={`confirm-delete-${stock.code}`}>
+                              <button
+                                onClick={() => handleDelete(stock.code)}
+                                className="text-xs font-medium text-red-600 hover:text-red-700 px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
+                                data-testid={`confirm-delete-${stock.code}`}
+                              >
                                 {t("watchlist.confirmDelete", "确认删除")}
                               </button>
-                              <button onClick={() => setConfirmDelete(null)} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted/60 transition-colors">
+                              <button
+                                onClick={() => setConfirmDelete(null)}
+                                className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted/60 transition-colors"
+                              >
                                 {t("watchlist.cancelDelete", "取消")}
                               </button>
                             </span>
                           ) : (
                             <span className="flex items-center gap-1 justify-center">
-                              <a href={`https://stockpage.10jqka.com.cn/${stock.code}`} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors inline-flex" title={t("watchlist.kline", "同花顺 K 线")} aria-label={t("watchlist.kline", "同花顺 K 线")} data-testid={`kline-${stock.code}`}>
+                              <a
+                                href={`https://stockpage.10jqka.com.cn/${stock.code}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors inline-flex"
+                                title={t("watchlist.kline", "同花顺 K 线")}
+                                aria-label={t("watchlist.kline", "同花顺 K 线")}
+                                data-testid={`kline-${stock.code}`}
+                              >
                                 <CandlestickIcon size={14} />
                               </a>
-                              <button onClick={() => handleDelete(stock.code)} className="p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors" title={t("watchlist.delete", "删除")} aria-label={t("watchlist.delete", "删除")} data-testid={`delete-${stock.code}`}>
+                              <button
+                                onClick={() => handleDelete(stock.code)}
+                                className="p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
+                                title={t("watchlist.delete", "删除")}
+                                aria-label={t("watchlist.delete", "删除")}
+                                data-testid={`delete-${stock.code}`}
+                              >
                                 <Trash2 size={14} />
                               </button>
                             </span>
@@ -510,10 +595,16 @@ export default function WatchlistPage() {
 
             {selected.size > 0 && (
               <div className="flex justify-end">
-                <button onClick={handleSendToAgent} className="flex items-center gap-2 px-4 py-2.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background transition-colors" data-testid="send-to-agent">
+                <button
+                  onClick={handleSendToAgent}
+                  className="flex items-center gap-2 px-4 py-2.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background transition-colors"
+                  data-testid="send-to-agent"
+                >
                   <Send size={14} />
                   <span>{t("watchlist.sendToAgent", "发给 Agent 分析")}</span>
-                  <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-primary-foreground/25 text-xs font-medium tabular-nums">{selected.size}</span>
+                  <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-primary-foreground/25 text-xs font-medium tabular-nums">
+                    {selected.size}
+                  </span>
                 </button>
               </div>
             )}

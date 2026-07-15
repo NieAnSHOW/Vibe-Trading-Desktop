@@ -1,4 +1,4 @@
-import i18n from '@/i18n';
+// import i18n from "@/i18n";
 import { memo, useCallback, useEffect, useState } from "react";
 import {
   Activity,
@@ -7,7 +7,7 @@ import {
   ShieldCheck,
   Clock,
   Loader2,
-  ChevronDown,
+  // ChevronDown,
   CircleDot,
   CircleSlash,
   OctagonX,
@@ -40,9 +40,12 @@ function formatUsd(value: number | undefined): string {
 
 function formatRelative(value: string | number | null | undefined): string {
   if (value == null || value === "") return "never";
-  const then = typeof value === "number"
-    ? (value < 1_000_000_000_000 ? value * 1000 : value)
-    : new Date(value).getTime();
+  const then =
+    typeof value === "number"
+      ? value < 1_000_000_000_000
+        ? value * 1000
+        : value
+      : new Date(value).getTime();
   if (!Number.isFinite(then)) return "unknown";
   const deltaSec = Math.round((Date.now() - then) / 1000);
   if (deltaSec < 0) return "just now";
@@ -52,10 +55,15 @@ function formatRelative(value: string | number | null | undefined): string {
   return `${Math.floor(deltaSec / 86_400)}d ago`;
 }
 
-function formatCountdown(iso: string | undefined): { label: string; expired: boolean; soon: boolean } {
+function formatCountdown(iso: string | undefined): {
+  label: string;
+  expired: boolean;
+  soon: boolean;
+} {
   if (!iso) return { label: "—", expired: false, soon: false };
   const target = new Date(iso).getTime();
-  if (!Number.isFinite(target)) return { label: "unknown", expired: false, soon: false };
+  if (!Number.isFinite(target))
+    return { label: "unknown", expired: false, soon: false };
   const deltaSec = Math.round((target - Date.now()) / 1000);
   if (deltaSec <= 0) return { label: "expired", expired: true, soon: false };
   const days = Math.floor(deltaSec / 86_400);
@@ -63,16 +71,22 @@ function formatCountdown(iso: string | undefined): { label: string; expired: boo
   const minutes = Math.floor((deltaSec % 3600) / 60);
   const soon = deltaSec < 86_400;
   if (days > 0) return { label: `${days}d ${hours}h`, expired: false, soon };
-  if (hours > 0) return { label: `${hours}h ${minutes}m`, expired: false, soon };
+  if (hours > 0)
+    return { label: `${hours}h ${minutes}m`, expired: false, soon };
   return { label: `${minutes}m`, expired: false, soon };
 }
 
 function summarizeLimits(limits: LiveMandateLimits | undefined): string {
   if (!limits) return "";
   const parts: string[] = [];
-  if (limits.max_order_notional_usd != null) parts.push(`≤${formatUsd(limits.max_order_notional_usd)}/order`);
-  if (limits.max_trades_per_day != null) parts.push(`${limits.max_trades_per_day}/day`);
-  if (limits.max_leverage != null) parts.push(limits.max_leverage <= 1 ? "no leverage" : `${limits.max_leverage}×`);
+  if (limits.max_order_notional_usd != null)
+    parts.push(`≤${formatUsd(limits.max_order_notional_usd)}/order`);
+  if (limits.max_trades_per_day != null)
+    parts.push(`${limits.max_trades_per_day}/day`);
+  if (limits.max_leverage != null)
+    parts.push(
+      limits.max_leverage <= 1 ? "no leverage" : `${limits.max_leverage}×`,
+    );
   return parts.join(" · ");
 }
 
@@ -90,24 +104,33 @@ function BrokerRow({
   onRefresh: () => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [authorizeHint, setAuthorizeHint] = useState<LiveAuthorizeResponse | null>(null);
+  const [authorizeHint, setAuthorizeHint] =
+    useState<LiveAuthorizeResponse | null>(null);
   const [authorizeFailed, setAuthorizeFailed] = useState(false);
   const brokerKey = broker.auth.broker;
   const authorized = broker.auth.oauth_token_present;
   const runnerAlive = broker.runner?.alive ?? false;
   const mandate = broker.mandate ?? null;
   const countdown = formatCountdown(mandate?.expires_at);
-  const authorizeInstruction = authorizeHint?.instruction
-    ?? (authorizeFailed ? fallbackAuthorizeInstruction() : "Loading connector authorization instructions...");
-  const authorizeNote = "The connector channel stays read-only until OAuth succeeds and a mandate is committed.";
+  const authorizeInstruction =
+    authorizeHint?.instruction ??
+    (authorizeFailed
+      ? fallbackAuthorizeInstruction()
+      : "Loading connector authorization instructions...");
+  const authorizeNote =
+    "The connector channel stays read-only until OAuth succeeds and a mandate is committed.";
 
   useEffect(() => {
     let cancelled = false;
     setAuthorizeHint(null);
     setAuthorizeFailed(false);
-    if (authorized || !brokerKey) return () => { cancelled = true; };
+    if (authorized || !brokerKey)
+      return () => {
+        cancelled = true;
+      };
 
-    api.authorizeLive(brokerKey)
+    api
+      .authorizeLive(brokerKey)
       .then((response) => {
         if (!cancelled) setAuthorizeHint(response);
       })
@@ -115,7 +138,9 @@ function BrokerRow({
         if (!cancelled) setAuthorizeFailed(true);
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [authorized, brokerKey]);
 
   const toggleRunner = useCallback(async () => {
@@ -131,7 +156,9 @@ function BrokerRow({
       }
       onRefresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Runner control failed.");
+      toast.error(
+        error instanceof Error ? error.message : "Runner control failed.",
+      );
     } finally {
       setBusy(false);
     }
@@ -141,7 +168,9 @@ function BrokerRow({
     <div className="grid gap-2 rounded-lg border bg-muted/20 p-2.5">
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-xs font-semibold capitalize text-foreground">{brokerKey}</span>
+          <span className="truncate text-xs font-semibold capitalize text-foreground">
+            {brokerKey}
+          </span>
           {authorized ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
               <ShieldCheck className="h-2.5 w-2.5" />
@@ -179,10 +208,22 @@ function BrokerRow({
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-md border bg-background/60 p-2">
               <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                <CircleDot className={["h-2.5 w-2.5", runnerAlive ? "text-emerald-500" : "text-muted-foreground"].join(" ")} />
+                <CircleDot
+                  className={[
+                    "h-2.5 w-2.5",
+                    runnerAlive ? "text-emerald-500" : "text-muted-foreground",
+                  ].join(" ")}
+                />
                 Runner
               </div>
-              <div className={["mt-0.5 text-xs font-semibold", runnerAlive ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"].join(" ")}>
+              <div
+                className={[
+                  "mt-0.5 text-xs font-semibold",
+                  runnerAlive
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-muted-foreground",
+                ].join(" ")}
+              >
                 {runnerAlive ? "Running" : "Stopped"}
               </div>
             </div>
@@ -217,7 +258,9 @@ function BrokerRow({
                     title={`Expires ${new Date(mandate.expires_at).toLocaleString()}`}
                   >
                     <Clock className="h-2.5 w-2.5" />
-                    {countdown.expired ? "expired" : `expires in ${countdown.label}`}
+                    {countdown.expired
+                      ? "expired"
+                      : `expires in ${countdown.label}`}
                   </span>
                 )}
               </div>
@@ -227,7 +270,8 @@ function BrokerRow({
             </div>
           ) : (
             <div className="rounded-md border border-dashed bg-background/40 p-2 text-[10px] text-muted-foreground">
-              No active mandate. Ask the agent to propose one, then commit it before starting the connector runtime.
+              No active mandate. Ask the agent to propose one, then commit it
+              before starting the connector runtime.
             </div>
           )}
 
@@ -252,9 +296,17 @@ function BrokerRow({
                   ? "border-destructive/40 text-destructive hover:bg-destructive/10"
                   : "border-primary/40 text-primary hover:bg-primary/10",
               ].join(" ")}
-              title={runnerAlive ? "Stop the persistent runner" : "Start the persistent runner"}
+              title={
+                runnerAlive
+                  ? "Stop the persistent runner"
+                  : "Start the persistent runner"
+              }
             >
-              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Power className="h-3 w-3" />}
+              {busy ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Power className="h-3 w-3" />
+              )}
               {runnerAlive ? "Stop runner" : "Start runner"}
             </button>
           </div>
@@ -275,7 +327,12 @@ function BrokerRow({
  * runtime execution. Runner start/stop are privileged surface fetches (`api.startLiveRunner` /
  * `api.stopLiveRunner`), never chat messages. Collapses to a compact toggle.
  */
-export const RunnerStatus = memo(function RunnerStatus({ status, unavailable, halted, onRefresh }: Props) {
+export const RunnerStatus = memo(function RunnerStatus({
+  status,
+  unavailable,
+  halted,
+  onRefresh,
+}: Props) {
   const [open, setOpen] = useState(false);
 
   if (unavailable) return null;
@@ -283,11 +340,13 @@ export const RunnerStatus = memo(function RunnerStatus({ status, unavailable, ha
 
   const isHalted = halted ?? status.global_halted;
   const anyRunning = status.brokers.some((b) => b.runner?.alive);
-  const authorizedCount = status.brokers.filter((b) => b.auth.oauth_token_present).length;
+  const authorizedCount = status.brokers.filter(
+    (b) => b.auth.oauth_token_present,
+  ).length;
 
   return (
     <div className="grid gap-2">
-      <button
+      {/* <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="inline-flex max-w-full items-center gap-1.5 justify-self-start rounded-lg bg-primary/10 px-2.5 py-1 text-left text-xs font-medium text-primary transition-colors hover:bg-primary/15"
@@ -312,12 +371,17 @@ export const RunnerStatus = memo(function RunnerStatus({ status, unavailable, ha
           </span>
         )}
         <ChevronDown className={["h-3 w-3 shrink-0 transition-transform", open ? "rotate-180" : ""].join(" ")} aria-hidden="true" />
-      </button>
+      </button> */}
 
       {open && (
         <div className="grid gap-2 rounded-xl border border-primary/20 bg-background/95 p-3 shadow-sm">
           {status.brokers.map((broker) => (
-            <BrokerRow key={broker.auth.broker} broker={broker} halted={isHalted || broker.halted} onRefresh={onRefresh} />
+            <BrokerRow
+              key={broker.auth.broker}
+              broker={broker}
+              halted={isHalted || broker.halted}
+              onRefresh={onRefresh}
+            />
           ))}
         </div>
       )}
