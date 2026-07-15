@@ -170,7 +170,7 @@ export default function Indices() {
   };
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col gap-4 p-4 lg:gap-6 lg:p-6">
+    <div className="flex h-full w-full flex-col gap-4 p-4 lg:gap-6 lg:p-6">
       <header className="space-y-1">
         <h1 className="text-xl font-bold tracking-tight">{t("indices.title", "指数")}</h1>
         <p className="text-sm text-muted-foreground">

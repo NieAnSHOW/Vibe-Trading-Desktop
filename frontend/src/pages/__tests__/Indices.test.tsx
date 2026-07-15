@@ -87,6 +87,13 @@ describe("Indices page", () => {
     });
   });
 
+  it("uses the full available page width", () => {
+    const { container } = renderIndices();
+
+    expect(container.firstElementChild).toHaveClass("w-full");
+    expect(container.firstElementChild).not.toHaveClass("max-w-[1440px]");
+  });
+
   it("selects the first supported index and loads its daily history by default", async () => {
     renderIndices();
 

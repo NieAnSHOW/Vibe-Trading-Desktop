@@ -20,8 +20,8 @@ import { useMarketDashboardStore } from "@/stores/marketDashboard";
 const mockMarketStore = vi.mocked(useMarketDashboardStore);
 
 vi.mock("@/components/charts/CandlestickChart", () => ({
-  CandlestickChart: ({ data }: { data: unknown[] }) => (
-    <div data-testid="candlestick-chart" data-count={data.length}>
+  CandlestickChart: ({ data, defaultRange }: { data: unknown[]; defaultRange?: string }) => (
+    <div data-testid="candlestick-chart" data-count={data.length} data-default-range={defaultRange}>
       K-line chart
     </div>
   ),
@@ -115,5 +115,19 @@ describe("Watchlist → Agent prefill integration", () => {
 
     expect(setSelectedCode).toHaveBeenCalledWith("000001");
     expect(screen.getByTestId("candlestick-chart")).toHaveAttribute("data-count", "1");
+  });
+
+  it("uses a full-width responsive workspace with watchlist left and K-line right", () => {
+    const { container } = renderWatchlistWithAgent({}, {
+      selectedCode: "000001",
+      selectedBars: [{ time: "2026-07-10", open: 10, high: 11, low: 9, close: 10.5, volume: 1000 }],
+    });
+
+    expect(container.firstElementChild).toHaveClass("w-full");
+    expect(container.firstElementChild).not.toHaveClass("max-w-4xl");
+    expect(screen.getByTestId("watchlist-workspace")).toHaveClass("lg:grid-cols-[minmax(24rem,0.85fr)_minmax(0,1.35fr)]");
+    expect(screen.getByTestId("watchlist-chart-panel")).toHaveClass("lg:order-2");
+    expect(screen.getByTestId("watchlist-list-panel")).toHaveClass("lg:order-1");
+    expect(screen.getByTestId("candlestick-chart")).toHaveAttribute("data-default-range", "3M");
   });
 });
