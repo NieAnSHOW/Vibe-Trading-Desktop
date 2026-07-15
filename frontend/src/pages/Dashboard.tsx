@@ -188,7 +188,7 @@ function MarketPulseSection({
       )}
       {items.length > 0 && (
         <>
-          <ul className="space-y-1.5 max-h-[340px] overflow-auto">
+          <ul className="space-y-1.5">
             {pageItems.map((item, i) => (
               <li
                 key={`${item.code}-${safePage * pageSize + i}`}
@@ -868,7 +868,7 @@ function BoardHeatCard({
       status={area}
     >
       {boards.length > 0 ? (
-        <ul className="max-h-48 space-y-1 overflow-auto">
+        <ul className="space-y-1">
           {boards.slice(0, 8).map((board) => (
             <li
               key={board.code}
@@ -931,7 +931,7 @@ function StockRankCard({
       status={status}
     >
       {rows && rows.length > 0 ? (
-        <ul className="max-h-64 space-y-1 overflow-auto">
+        <ul className="space-y-1">
           {rows.map((row, i) => (
             <li
               key={`${row.code}-${i}`}

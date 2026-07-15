@@ -242,6 +242,28 @@ describe("Dashboard page", () => {
       expect(screen.getByTestId("active-leaders-card")).toHaveTextContent("宁德时代");
     });
 
+    it("lets dashboard data-card lists expand without internal scrolling", () => {
+      stateWithIndexesAndSummary();
+      renderDashboard();
+
+      const cardIds = [
+        "market-pulse-card",
+        "market-concepts-card",
+        "market-industries-card",
+        "top-gainers-card",
+        "top-losers-card",
+        "turnover-leaders-card",
+        "active-leaders-card",
+      ];
+
+      for (const cardId of cardIds) {
+        const list = screen.getByTestId(cardId).querySelector("ul");
+        expect(list).not.toBeNull();
+        expect(list).not.toHaveClass("overflow-auto");
+        expect(list?.className).not.toMatch(/max-h-/);
+      }
+    });
+
     it("marks only the concept card stale when concept data is unavailable", () => {
       stateWithIndexesAndSummary({
         marketSnapshot: { ...MARKET_SNAPSHOT, stale: true, errors: { concepts: "concept source unavailable" } },
