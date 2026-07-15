@@ -181,7 +181,7 @@ export const useMarketDashboardStore = create<MarketDashboardState>((set, get) =
 
     try {
       const result = await fetchDashboardDailyBars(code);
-      set({ selectedBars: result.data, barsError: null });
+      set({ selectedBars: result.data, barsError: result.error ?? null });
     } catch (e) {
       set({ barsError: (e as Error)?.message ?? "bars failed" });
     }

@@ -1,5 +1,6 @@
 import { StockSDK } from "stock-sdk";
-import type { PriceBar } from "@/lib/api";
+import { api } from "@/lib/api";
+import type { DashboardBoardHeatItem, PriceBar } from "@/lib/api";
 
 const sdk = new StockSDK();
 const SOURCE = "stock-sdk";
@@ -157,16 +158,6 @@ type SnapshotQuote = {
   turnoverRate: unknown;
 };
 
-type SnapshotConcept = {
-  code: unknown;
-  name: unknown;
-  changePercent: unknown;
-  riseCount: unknown;
-  fallCount: unknown;
-  leadingStock: unknown;
-  leadingStockChangePercent: unknown;
-};
-
 type SnapshotLimitItem = {
   continuousBoardCount: unknown;
 };
@@ -295,19 +286,16 @@ function buildLimit(upRows: SnapshotLimitItem[], downRows: SnapshotLimitItem[], 
   };
 }
 
-function buildConcepts(rows: SnapshotConcept[]): DashboardConceptHeat[] {
-  return rows
-    .map((row) => ({
-      code: String(row.code ?? ""),
-      name: String(row.name ?? row.code ?? ""),
-      changePct: fin(row.changePercent),
-      riseCount: fin(row.riseCount),
-      fallCount: fin(row.fallCount),
-      leadingStock: row.leadingStock == null ? null : String(row.leadingStock),
-      leadingStockChangePct: fin(row.leadingStockChangePercent),
-    }))
-    .sort((a, b) => (b.changePct ?? -Infinity) - (a.changePct ?? -Infinity))
-    .slice(0, 10);
+function buildApiBoardHeat(rows: DashboardBoardHeatItem[]): DashboardConceptHeat[] {
+  return rows.map((row) => ({
+    code: row.code,
+    name: row.name,
+    changePct: fin(row.change_pct),
+    riseCount: fin(row.rise_count),
+    fallCount: fin(row.fall_count),
+    leadingStock: row.leading_stock,
+    leadingStockChangePct: fin(row.leading_stock_change_pct),
+  }));
 }
 
 const RANK_SIZE = 10;
@@ -472,8 +460,8 @@ async function fetchUncachedDashboardMarketSnapshot(): Promise<
 > {
   const [marketResult, conceptsResult, industryResult, limitUpResult, limitDownResult, brokenResult] = await Promise.allSettled([
     sdk.batch.cn(),
-    sdk.board.concept.list(),
-    sdk.board.industry.list(),
+    api.getDashboardBoardHeat("concept"),
+    api.getDashboardBoardHeat("industry"),
     sdk.marketEvent.ztPool("zt"),
     sdk.marketEvent.ztPool("dt"),
     sdk.marketEvent.ztPool("broken"),
@@ -507,8 +495,11 @@ async function fetchUncachedDashboardMarketSnapshot(): Promise<
   let concepts = previous?.concepts ?? null;
   let conceptsArea: DashboardSnapshotArea;
   if (conceptsResult.status === "fulfilled") {
-    concepts = buildConcepts(conceptsResult.value);
-    conceptsArea = successfulSnapshotArea(asOf);
+    concepts = buildApiBoardHeat(conceptsResult.value.data);
+    conceptsArea = {
+      ...successfulSnapshotArea(conceptsResult.value.as_of),
+      source: conceptsResult.value.source,
+    };
   } else {
     const error = rejectionMessage(conceptsResult) ?? "concept snapshot unavailable";
     errors.concepts = error;
@@ -518,8 +509,11 @@ async function fetchUncachedDashboardMarketSnapshot(): Promise<
   let industries = previous?.industries ?? null;
   let industriesArea: DashboardSnapshotArea;
   if (industryResult.status === "fulfilled") {
-    industries = buildConcepts(industryResult.value);
-    industriesArea = successfulSnapshotArea(asOf);
+    industries = buildApiBoardHeat(industryResult.value.data);
+    industriesArea = {
+      ...successfulSnapshotArea(industryResult.value.as_of),
+      source: industryResult.value.source,
+    };
   } else {
     const error = rejectionMessage(industryResult) ?? "industry snapshot unavailable";
     errors.industries = error;
@@ -598,16 +592,12 @@ export async function fetchDashboardDailyBars(
   code: string,
 ): Promise<DashboardDataResult<PriceBar[]>> {
   try {
-    const rows = await sdk.kline.cn(code, { period: "daily" });
-    const data: PriceBar[] = rows.map((row) => ({
-      time: String(row.date),
-      open: Number(row.open),
-      close: Number(row.close),
-      high: Number(row.high),
-      low: Number(row.low),
-      volume: Number(row.volume ?? 0),
-    }));
-    return { data, asOf: now(), stale: false };
+    const response = await api.getDashboardDailyBars(code);
+    return {
+      data: response.data,
+      asOf: response.as_of,
+      stale: response.stale,
+    };
   } catch (error) {
     return staleResult([], error);
   }

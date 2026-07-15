@@ -290,6 +290,21 @@ describe("useMarketDashboardStore", () => {
       expect(s.selectedCode).toBe("600519");
       expect(s.barsError).toBe("kline failed");
     });
+
+    it("keeps the provider error when K-line returns a stale empty result", async () => {
+      mockFetchDailyBars.mockResolvedValue({
+        data: [],
+        asOf: "2026-07-13T10:00:00Z",
+        stale: true,
+        error: "K-line source unavailable",
+      });
+
+      await useMarketDashboardStore.getState().setSelectedCode("600519");
+
+      const s = useMarketDashboardStore.getState();
+      expect(s.selectedBars).toEqual([]);
+      expect(s.barsError).toBe("K-line source unavailable");
+    });
   });
 
   describe("polling visibility", () => {

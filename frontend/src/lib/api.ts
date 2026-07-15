@@ -257,6 +257,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  getDashboardBoardHeat: (kind: "concept" | "industry") =>
+    request<DashboardBoardHeatResponse>(
+      `/dashboard/board-heat?kind=${encodeURIComponent(kind)}`,
+    ),
+  getDashboardDailyBars: (symbol: string) =>
+    request<DashboardDailyBarsResponse>(
+      `/dashboard/daily-bars?symbol=${encodeURIComponent(symbol)}`,
+    ),
 };
 
 // --- Swarm types ---
@@ -1120,4 +1128,28 @@ export interface MarketSnapshotRequest {
   indices: Array<{ code: string; name: string; price: number; change_pct: number }>;
   sectors: Array<{ name: string; change_pct: number }>;
   watchlist: Array<{ code: string; name: string; change_pct: number | null }>;
+}
+
+export interface DashboardBoardHeatItem {
+  code: string;
+  name: string;
+  change_pct: number | null;
+  rise_count: number | null;
+  fall_count: number | null;
+  leading_stock: string | null;
+  leading_stock_change_pct: number | null;
+}
+
+export interface DashboardBoardHeatResponse {
+  data: DashboardBoardHeatItem[];
+  as_of: string;
+  source: string;
+  stale: boolean;
+}
+
+export interface DashboardDailyBarsResponse {
+  data: PriceBar[];
+  as_of: string;
+  source: string;
+  stale: boolean;
 }

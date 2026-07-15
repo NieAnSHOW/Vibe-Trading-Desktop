@@ -10,6 +10,8 @@ const {
   mockConceptList,
   mockIndustryList,
   mockZtPool,
+  mockGetDashboardBoardHeat,
+  mockGetDashboardDailyBars,
 } = vi.hoisted(() => ({
   mockCnSimple: vi.fn(),
   mockCn: vi.fn(),
@@ -19,7 +21,21 @@ const {
   mockConceptList: vi.fn(),
   mockIndustryList: vi.fn(),
   mockZtPool: vi.fn(),
+  mockGetDashboardBoardHeat: vi.fn(),
+  mockGetDashboardDailyBars: vi.fn(),
 }));
+
+vi.mock("@/lib/api", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/api")>();
+  return {
+    ...original,
+    api: {
+      ...original.api,
+      getDashboardBoardHeat: mockGetDashboardBoardHeat,
+      getDashboardDailyBars: mockGetDashboardDailyBars,
+    },
+  };
+});
 
 vi.mock("stock-sdk", () => ({
   StockSDK: vi.fn(function () {
@@ -44,6 +60,12 @@ import {
 beforeEach(() => {
   vi.clearAllMocks();
   mockIndustryList.mockResolvedValue([]);
+  mockGetDashboardBoardHeat.mockResolvedValue({
+    data: [],
+    as_of: "2026-07-14T10:00:00Z",
+    source: "10jqka-hot-list",
+    stale: false,
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -134,11 +156,33 @@ describe("fetchDashboardQuotes", () => {
 // fetchDashboardDailyBars
 // ---------------------------------------------------------------------------
 describe("fetchDashboardDailyBars", () => {
-  it("maps HistoryKline rows to PriceBar shape", async () => {
-    mockKlineCn.mockResolvedValueOnce([
-      { date: "2026-07-13", open: 1490, close: 1500, high: 1510, low: 1488, volume: 1200 },
-      { date: "2026-07-12", open: 1480, close: 1490, high: 1495, low: 1478, volume: 1000 },
-    ]);
+  it("loads daily bars through the local dashboard API", async () => {
+    mockGetDashboardDailyBars.mockResolvedValueOnce({
+      data: [
+        { time: "2026-07-14", open: 10, high: 11, low: 9, close: 10.5, volume: 1000 },
+      ],
+      as_of: "2026-07-14T10:00:00Z",
+      source: "tencent",
+      stale: false,
+    });
+
+    const result = await fetchDashboardDailyBars("sh000001");
+
+    expect(mockGetDashboardDailyBars).toHaveBeenCalledWith("sh000001");
+    expect(mockKlineCn).not.toHaveBeenCalled();
+    expect(result.data[0]).toMatchObject({ time: "2026-07-14", close: 10.5 });
+  });
+
+  it("preserves the PriceBar response from the local API", async () => {
+    mockGetDashboardDailyBars.mockResolvedValueOnce({
+      data: [
+        { time: "2026-07-13", open: 1490, close: 1500, high: 1510, low: 1488, volume: 1200 },
+        { time: "2026-07-12", open: 1480, close: 1490, high: 1495, low: 1478, volume: 1000 },
+      ],
+      as_of: "2026-07-14T10:00:00Z",
+      source: "tencent",
+      stale: false,
+    });
 
     const result = await fetchDashboardDailyBars("600519");
 
@@ -154,10 +198,15 @@ describe("fetchDashboardDailyBars", () => {
     });
   });
 
-  it("handles nullable kline fields", async () => {
-    mockKlineCn.mockResolvedValueOnce([
-      { date: "2026-07-13", open: null, close: null, high: null, low: null, volume: null },
-    ]);
+  it("preserves zero-valued K-line fields", async () => {
+    mockGetDashboardDailyBars.mockResolvedValueOnce({
+      data: [
+        { time: "2026-07-13", open: 0, close: 0, high: 0, low: 0, volume: 0 },
+      ],
+      as_of: "2026-07-14T10:00:00Z",
+      source: "tencent",
+      stale: false,
+    });
 
     const result = await fetchDashboardDailyBars("600519");
 
@@ -171,8 +220,8 @@ describe("fetchDashboardDailyBars", () => {
     });
   });
 
-  it("returns stale on SDK error", async () => {
-    mockKlineCn.mockRejectedValueOnce(new Error("network error"));
+  it("returns stale on local API error", async () => {
+    mockGetDashboardDailyBars.mockRejectedValueOnce(new Error("network error"));
 
     const result = await fetchDashboardDailyBars("600519");
 
@@ -287,6 +336,25 @@ describe("fetchDashboardMarketSnapshot", () => {
     }
   ).fetchDashboardMarketSnapshot;
 
+  function boardHeatResponse(kind: string, changePct = 4.1) {
+    return {
+      data: [
+        {
+          code: kind === "concept" ? "885959" : "881270",
+          name: kind === "concept" ? "PCB概念" : "元件",
+          change_pct: changePct,
+          rise_count: null,
+          fall_count: null,
+          leading_stock: null,
+          leading_stock_change_pct: null,
+        },
+      ],
+      as_of: "2026-07-14T10:00:00Z",
+      source: "10jqka-hot-list",
+      stale: false,
+    };
+  }
+
   function seedMarketSnapshotSources() {
     mockBatchCn.mockResolvedValue([
       { code: "600001", name: "强势股", price: 10, changePercent: 4, high52w: 10.1, low52w: 5 },
@@ -294,10 +362,9 @@ describe("fetchDashboardMarketSnapshot", () => {
       { code: "600003", name: "平盘股", price: 10, changePercent: 0, high52w: 12, low52w: 8 },
       { code: "600004", name: "弱势股", price: 5, changePercent: -4, high52w: 12, low52w: 5.05 },
     ]);
-    mockConceptList.mockResolvedValue([
-      { code: "BK001", name: "人工智能", changePercent: 3.2, riseCount: 12, fallCount: 2, leadingStock: "龙头A", leadingStockChangePercent: 8.8 },
-      { code: "BK002", name: "半导体", changePercent: 1.4, riseCount: 8, fallCount: 5, leadingStock: "龙头B", leadingStockChangePercent: 5.2 },
-    ]);
+    mockGetDashboardBoardHeat.mockImplementation((kind: string) =>
+      Promise.resolve(boardHeatResponse(kind)),
+    );
     mockZtPool.mockImplementation((type: string) => {
       if (type === "zt") {
         return Promise.resolve([
@@ -315,7 +382,6 @@ describe("fetchDashboardMarketSnapshot", () => {
     vi.setSystemTime(new Date("2000-01-01T00:00:00Z"));
     try {
       mockBatchCn.mockRejectedValueOnce(new Error("market source unavailable"));
-      mockConceptList.mockResolvedValueOnce([]);
       mockZtPool.mockResolvedValue([]);
       const fetchSnapshot = snapshotFetcher();
 
@@ -352,7 +418,7 @@ describe("fetchDashboardMarketSnapshot", () => {
       { boards: 3, count: 1 },
       { boards: 2, count: 1 },
     ]);
-    expect(concepts[0]).toMatchObject({ code: "BK001", name: "人工智能", changePct: 3.2 });
+    expect(concepts[0]).toMatchObject({ code: "885959", name: "PCB概念", changePct: 4.1 });
     expect(second).toBe(first);
     expect(mockBatchCn).toHaveBeenCalledTimes(1);
   });
@@ -368,7 +434,11 @@ describe("fetchDashboardMarketSnapshot", () => {
       if (!fetchSnapshot) return;
 
       const first = await fetchSnapshot();
-      mockConceptList.mockRejectedValueOnce(new Error("concept source unavailable"));
+      mockGetDashboardBoardHeat.mockImplementation((kind: string) =>
+        kind === "concept"
+          ? Promise.reject(new Error("concept source unavailable"))
+          : Promise.resolve(boardHeatResponse(kind)),
+      );
       mockBatchCn.mockResolvedValueOnce([
         { code: "600001", name: "强势股", price: 10, changePercent: 4, high52w: 10.1, low52w: 5 },
         { code: "600002", name: "普通上涨", price: 10, changePercent: 1, high52w: 12, low52w: 6 },
@@ -398,7 +468,11 @@ describe("fetchDashboardMarketSnapshot", () => {
       if (!fetchSnapshot) return;
 
       await fetchSnapshot();
-      mockConceptList.mockRejectedValueOnce(new Error("concept source unavailable"));
+      mockGetDashboardBoardHeat.mockImplementation((kind: string) =>
+        kind === "concept"
+          ? Promise.reject(new Error("concept source unavailable"))
+          : Promise.resolve(boardHeatResponse(kind)),
+      );
       mockBatchCn.mockResolvedValueOnce([
         { code: "600001", name: "强势股", price: 10, changePercent: 4, high52w: 10.1, low52w: 5 },
         { code: "600002", name: "转强股", price: 10, changePercent: 2, high52w: 12, low52w: 6 },
@@ -430,16 +504,20 @@ describe("fetchDashboardMarketSnapshot", () => {
 
       await fetchSnapshot();
       vi.advanceTimersByTime(61_000);
-      mockConceptList.mockRejectedValueOnce(new Error("concept source unavailable"));
+      mockGetDashboardBoardHeat.mockImplementation((kind: string) =>
+        kind === "concept"
+          ? Promise.reject(new Error("concept source unavailable"))
+          : Promise.resolve(boardHeatResponse(kind)),
+      );
       const partial = await fetchSnapshot();
       expect(partial.stale).toBe(true);
 
       mockBatchCn.mockResolvedValueOnce([
         { code: "600001", name: "转强股", price: 10, changePercent: 2, high52w: 10.1, low52w: 5 },
       ]);
-      mockConceptList.mockResolvedValueOnce([
-        { code: "BK001", name: "人工智能", changePercent: 4, riseCount: 12, fallCount: 2, leadingStock: "龙头A", leadingStockChangePercent: 8.8 },
-      ]);
+      mockGetDashboardBoardHeat.mockImplementation((kind: string) =>
+        Promise.resolve(boardHeatResponse(kind, 4)),
+      );
       vi.advanceTimersByTime(15_000);
       const recovered = await fetchSnapshot();
 
@@ -459,7 +537,6 @@ describe("fetchDashboardMarketSnapshot", () => {
       mockBatchCn.mockImplementationOnce(() => new Promise((resolve) => {
         resolveBatch = resolve;
       }));
-      mockConceptList.mockResolvedValueOnce([]);
       mockZtPool.mockResolvedValue([]);
       const fetchSnapshot = snapshotFetcher();
 
@@ -473,6 +550,32 @@ describe("fetchDashboardMarketSnapshot", () => {
       resolveBatch?.([]);
       const [firstResult, secondResult] = await Promise.all([first, second]);
       expect(secondResult).toBe(firstResult);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("loads concept and industry heat through the local dashboard API", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2400-01-01T00:00:00Z"));
+    try {
+      seedMarketSnapshotSources();
+      const fetchSnapshot = snapshotFetcher();
+
+      expect(fetchSnapshot).toEqual(expect.any(Function));
+      if (!fetchSnapshot) return;
+      const result = await fetchSnapshot();
+
+      expect(mockGetDashboardBoardHeat).toHaveBeenCalledWith("concept");
+      expect(mockGetDashboardBoardHeat).toHaveBeenCalledWith("industry");
+      expect(mockConceptList).not.toHaveBeenCalled();
+      expect(mockIndustryList).not.toHaveBeenCalled();
+      expect(result.data.concepts).toEqual([
+        expect.objectContaining({ code: "885959", name: "PCB概念", changePct: 4.1 }),
+      ]);
+      expect(result.data.industries).toEqual([
+        expect.objectContaining({ code: "881270", name: "元件", changePct: 4.1 }),
+      ]);
     } finally {
       vi.useRealTimers();
     }

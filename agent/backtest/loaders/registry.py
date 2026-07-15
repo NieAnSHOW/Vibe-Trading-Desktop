@@ -77,7 +77,7 @@ def register(cls: Type[Any]) -> Type[Any]:
 _CHINA_DIRECT_NO_PROXY = (
     "eastmoney.com,gtimg.cn,qq.com,sina.com.cn,sina.cn,sinajs.cn,"
     "cninfo.com.cn,szse.cn,sseinfo.com,legulegu.com,jin10.com,jisilu.cn,"
-    "xueqiu.com,baidu.com,dfcfw.com,futunn.com,akshare.org"
+    "xueqiu.com,baidu.com,dfcfw.com,futunn.com,akshare.org,10jqka.com.cn"
 )
 
 

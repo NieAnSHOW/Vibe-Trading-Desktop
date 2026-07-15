@@ -12,14 +12,17 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time as _time
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal, Optional, Union
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from backtest.loaders._http import throttled_get_json
+from backtest.loaders.registry import _apply_china_direct_no_proxy
 from src.providers.llm import build_llm
 
 logger = logging.getLogger(__name__)
@@ -76,6 +79,39 @@ class MarketSummaryResponse(BaseModel):
     summary: Optional[SummaryContent] = None
     error_code: Optional[str] = None
     cached_at: Optional[str] = None
+    stale: bool = False
+
+
+class BoardHeatItem(BaseModel):
+    code: str
+    name: str
+    change_pct: Optional[float] = None
+    rise_count: Optional[float] = None
+    fall_count: Optional[float] = None
+    leading_stock: Optional[str] = None
+    leading_stock_change_pct: Optional[float] = None
+
+
+class BoardHeatResponse(BaseModel):
+    data: list[BoardHeatItem]
+    as_of: str
+    source: str = "10jqka-hot-list"
+    stale: bool = False
+
+
+class DailyBar(BaseModel):
+    time: str
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+
+
+class DailyBarsResponse(BaseModel):
+    data: list[DailyBar]
+    as_of: str
+    source: str = "tencent"
     stale: bool = False
 
 
@@ -229,6 +265,99 @@ class _SummaryService:
 
 _summary_service = _SummaryService()
 
+
+# ---------------------------------------------------------------------------
+# Read-only market data providers
+# ---------------------------------------------------------------------------
+
+_THS_HOT_LIST_URL = (
+    "https://dq.10jqka.com.cn/fuyao/hot_list_data/out/hot_list/v1/plate"
+)
+_A_SHARE_SYMBOL = re.compile(r"^(?:(sh|sz))?(\d{6})(?:\.(SH|SZ))?$", re.IGNORECASE)
+
+
+def _optional_float(value) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed == parsed else None
+
+
+def _fetch_board_heat(kind: Literal["concept", "industry"]) -> list[dict]:
+    """Fetch the current 10jqka hot-board ranking and normalize its rows."""
+    _apply_china_direct_no_proxy()
+    payload = throttled_get_json(
+        _THS_HOT_LIST_URL,
+        host_key="10jqka-hot-list",
+        min_interval=0.2,
+        params={"type": kind},
+        headers={
+            "Accept": "application/json",
+            "Referer": "https://eq.10jqka.com.cn/",
+        },
+    )
+    data = payload.get("data") if isinstance(payload, dict) else None
+    rows = data.get("plate_list") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        raise ValueError("10jqka board response did not contain plate_list")
+
+    normalized = []
+    for row in rows:
+        if not isinstance(row, dict) or not row.get("code") or not row.get("name"):
+            continue
+        normalized.append(
+            {
+                "code": str(row["code"]),
+                "name": str(row["name"]),
+                "change_pct": _optional_float(row.get("rise_and_fall")),
+                "rise_count": None,
+                "fall_count": None,
+                "leading_stock": None,
+                "leading_stock_change_pct": None,
+            }
+        )
+    return normalized
+
+
+def _qualify_a_share_symbol(symbol: str) -> str:
+    match = _A_SHARE_SYMBOL.fullmatch(symbol.strip())
+    if match is None:
+        raise ValueError("symbol must be a 6-digit A-share code with an optional sh/sz prefix")
+    prefix, code, suffix = match.groups()
+    exchange = (suffix or prefix or ("SH" if code.startswith(("5", "6", "9")) else "SZ")).upper()
+    return f"{code}.{exchange}"
+
+
+def _fetch_daily_bars(symbol: str) -> list[dict]:
+    """Load two years of daily A-share/index bars from the Tencent loader."""
+    from backtest.loaders.tencent_loader import DataLoader
+
+    qualified = _qualify_a_share_symbol(symbol)
+    end_date = date.today()
+    start_date = end_date - timedelta(days=800)
+    frames = DataLoader().fetch(
+        [qualified],
+        start_date.isoformat(),
+        end_date.isoformat(),
+        interval="1D",
+    )
+    frame = frames.get(qualified)
+    if frame is None or frame.empty:
+        return []
+
+    return [
+        {
+            "time": index.strftime("%Y-%m-%d"),
+            "open": float(row["open"]),
+            "high": float(row["high"]),
+            "low": float(row["low"]),
+            "close": float(row["close"]),
+            "volume": float(row.get("volume", 0) or 0),
+        }
+        for index, row in frame.iterrows()
+    ]
+
 # ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
@@ -248,6 +377,34 @@ async def create_market_summary(snapshot: MarketSnapshot):
     return result
 
 
+@router.get("/board-heat", response_model=BoardHeatResponse)
+async def get_board_heat(kind: Literal["concept", "industry"]):
+    try:
+        rows = await asyncio.to_thread(_fetch_board_heat, kind)
+    except Exception as exc:
+        logger.warning("dashboard board heat failed for %s: %s", kind, exc)
+        raise HTTPException(status_code=503, detail=f"{kind} board data unavailable") from exc
+    return BoardHeatResponse(
+        data=rows,
+        as_of=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@router.get("/daily-bars", response_model=DailyBarsResponse)
+async def get_daily_bars(symbol: str):
+    try:
+        rows = await asyncio.to_thread(_fetch_daily_bars, symbol)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.warning("dashboard daily bars failed for %s: %s", symbol, exc)
+        raise HTTPException(status_code=503, detail="daily bars unavailable") from exc
+    return DailyBarsResponse(
+        data=rows,
+        as_of=datetime.now(timezone.utc).isoformat(),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
@@ -259,12 +416,7 @@ def register_dashboard_routes(app, require_auth=None) -> None:
     When require_auth is provided, the route is protected by that dependency.
     """
     if require_auth is not None:
-        # Mutate the route's dependencies list in place
-        route = None
         for r in router.routes:
-            if r.path == "/dashboard/market-summary" and "POST" in r.methods:
-                route = r
-                break
-        if route is not None:
-            route.dependencies.append(Depends(require_auth))
+            if not any(dependency.dependency is require_auth for dependency in r.dependencies):
+                r.dependencies.append(Depends(require_auth))
     app.include_router(router)

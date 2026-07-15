@@ -311,3 +311,78 @@ def test_too_many_watchlist_rejected(client):
     bad["watchlist"] = [{"code": f"00000{i}", "name": f"Stock{i}", "change_pct": 1.0} for i in range(31)]
     resp = client.post("/dashboard/market-summary", json=bad)
     assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Read-only dashboard market data
+# ---------------------------------------------------------------------------
+
+
+def test_board_heat_returns_normalized_provider_rows(client, monkeypatch):
+    from src.api import dashboard_routes as routes
+
+    monkeypatch.setattr(
+        routes,
+        "_fetch_board_heat",
+        lambda kind: [
+            {
+                "code": "885959",
+                "name": "PCB概念",
+                "change_pct": 4.1278,
+                "rise_count": None,
+                "fall_count": None,
+                "leading_stock": None,
+                "leading_stock_change_pct": None,
+            }
+        ],
+    )
+
+    resp = client.get("/dashboard/board-heat?kind=concept")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["source"] == "10jqka-hot-list"
+    assert body["stale"] is False
+    assert body["data"][0] == {
+        "code": "885959",
+        "name": "PCB概念",
+        "change_pct": 4.1278,
+        "rise_count": None,
+        "fall_count": None,
+        "leading_stock": None,
+        "leading_stock_change_pct": None,
+    }
+
+
+def test_board_heat_rejects_unknown_kind(client):
+    resp = client.get("/dashboard/board-heat?kind=region")
+    assert resp.status_code == 422
+
+
+def test_daily_bars_returns_tencent_history(client, monkeypatch):
+    from src.api import dashboard_routes as routes
+
+    seen = []
+
+    def fake_fetch(symbol):
+        seen.append(symbol)
+        return [
+            {
+                "time": "2026-07-14",
+                "open": 3909.27,
+                "high": 3967.13,
+                "low": 3869.3,
+                "close": 3967.13,
+                "volume": 579982052.0,
+            }
+        ]
+
+    monkeypatch.setattr(routes, "_fetch_daily_bars", fake_fetch)
+
+    resp = client.get("/dashboard/daily-bars?symbol=sh000001")
+
+    assert resp.status_code == 200
+    assert seen == ["sh000001"]
+    body = resp.json()
+    assert body["source"] == "tencent"
+    assert body["data"][0]["close"] == 3967.13
