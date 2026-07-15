@@ -252,6 +252,13 @@ describe("fetchDashboardIndexes", () => {
       price: 3250,
       source: "stock-sdk",
     });
+    expect(mockCn).toHaveBeenCalledWith(expect.arrayContaining([
+      "sh000016",
+      "sh000300",
+      "sh000905",
+      "sh000688",
+      "sz399852",
+    ]));
   });
 
   it("strips sh/sz prefixes from index codes", async () => {

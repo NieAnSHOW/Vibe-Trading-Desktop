@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, BarChart3, Loader2 } from "lucide-react";
+import {
+  AlertCircle,
+  BarChart3,
+  Loader2,
+  Search,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import { CandlestickChart } from "@/components/charts/CandlestickChart";
 import {
   fetchDashboardDailyBars,
@@ -29,6 +36,8 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
 }
 
+type IndexFilter = "all" | "up" | "down";
+
 export default function Indices() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -36,6 +45,8 @@ export default function Indices() {
   const [indexesLoading, setIndexesLoading] = useState(true);
   const [indexesError, setIndexesError] = useState<string | null>(null);
   const [indexesStale, setIndexesStale] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [indexFilter, setIndexFilter] = useState<IndexFilter>("all");
   const [bars, setBars] = useState<PriceBar[]>([]);
   const [barsLoading, setBarsLoading] = useState(false);
   const [barsError, setBarsError] = useState<string | null>(null);
@@ -48,6 +59,30 @@ export default function Indices() {
   );
   const selectedCode = selectedIndex?.code ?? "";
   const selectedSymbol = selectedIndex?.symbol ?? "";
+  const marketSummary = useMemo(() => {
+    const rising = indexes.filter((index) => (index.changePct ?? 0) > 0).length;
+    const falling = indexes.filter((index) => (index.changePct ?? 0) < 0).length;
+    const changes = indexes
+      .map((index) => index.changePct)
+      .filter((change): change is number => change != null);
+    const averageChange = changes.length > 0
+      ? changes.reduce((sum, change) => sum + change, 0) / changes.length
+      : null;
+
+    return { rising, falling, averageChange };
+  }, [indexes]);
+  const filteredIndexes = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
+    return indexes.filter((index) => {
+      const matchesQuery = !normalizedQuery
+        || index.name.toLocaleLowerCase().includes(normalizedQuery)
+        || index.code.toLocaleLowerCase().includes(normalizedQuery);
+      const matchesFilter = indexFilter === "all"
+        || (indexFilter === "up" && (index.changePct ?? 0) > 0)
+        || (indexFilter === "down" && (index.changePct ?? 0) < 0);
+      return matchesQuery && matchesFilter;
+    });
+  }, [indexFilter, indexes, searchQuery]);
 
   useEffect(() => {
     let active = true;
@@ -139,17 +174,89 @@ export default function Indices() {
       <header className="space-y-1">
         <h1 className="text-xl font-bold tracking-tight">{t("indices.title", "指数")}</h1>
         <p className="text-sm text-muted-foreground">
-          {t("indices.description", "查看主要 A 股指数的当日行情和日线走势")}
+          {t("indices.description", "查看主要 A 股宽基指数的当日行情和日线走势")}
         </p>
       </header>
 
+      <section aria-labelledby="indices-overview-title" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <h2 id="indices-overview-title" className="sr-only">
+          {t("indices.marketOverview", "市场概览")}
+        </h2>
+        <div className="rounded-lg border bg-card px-3 py-2.5">
+          <p className="text-xs text-muted-foreground">{t("indices.total", "指数总数")}</p>
+          <p className="mt-1 font-mono text-lg font-semibold tabular-nums">{indexes.length}</p>
+        </div>
+        <div className="rounded-lg border bg-card px-3 py-2.5">
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <TrendingUp className="h-3.5 w-3.5 text-red-500" aria-hidden="true" />
+            {t("indices.rising", "上涨")}
+          </p>
+          <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-red-500">{marketSummary.rising}</p>
+        </div>
+        <div className="rounded-lg border bg-card px-3 py-2.5">
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <TrendingDown className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />
+            {t("indices.falling", "下跌")}
+          </p>
+          <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-green-500">{marketSummary.falling}</p>
+        </div>
+        <div className="rounded-lg border bg-card px-3 py-2.5">
+          <p className="text-xs text-muted-foreground">{t("indices.averageChange", "平均涨跌幅")}</p>
+          <p className={cn("mt-1 font-mono text-lg font-semibold tabular-nums", changeClass(marketSummary.averageChange))}>
+            {formatChange(marketSummary.averageChange, "%")}
+          </p>
+        </div>
+      </section>
+
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(15rem,0.36fr)_minmax(0,1fr)] lg:gap-6">
         <aside aria-labelledby="indices-list-title" className="min-h-0 rounded-lg border bg-card p-3 lg:overflow-auto">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <h2 id="indices-list-title" className="text-sm font-semibold">
-              {t("indices.supported", "支持的指数")}
-            </h2>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h2 id="indices-list-title" className="text-sm font-semibold">
+                {t("indices.supported", "支持的指数")}
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {t("indices.showing", "显示 {{count}} / {{total}}", {
+                  count: filteredIndexes.length,
+                  total: indexes.length,
+                })}
+              </p>
+            </div>
             {indexesLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label={t("indices.loading", "指数行情加载中")} />}
+          </div>
+
+          <label className="relative block">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <span className="sr-only">{t("indices.search", "搜索指数")}</span>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder={t("indices.searchPlaceholder", "按名称或代码搜索")}
+              aria-label={t("indices.search", "搜索指数")}
+              className="h-9 w-full rounded-md border bg-background pl-8 pr-3 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-primary/40"
+            />
+          </label>
+
+          <div className="mt-2 grid grid-cols-3 gap-1 rounded-md bg-muted p-1" role="group" aria-label={t("indices.filter", "筛选指数")}>
+            {([
+              ["all", t("indices.all", "全部")],
+              ["up", t("indices.rising", "上涨")],
+              ["down", t("indices.falling", "下跌")],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setIndexFilter(value)}
+                aria-pressed={indexFilter === value}
+                className={cn(
+                  "rounded px-2 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                  indexFilter === value ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
           {indexesError && indexes.length === 0 && (
@@ -165,8 +272,8 @@ export default function Indices() {
             </p>
           )}
 
-          <div className="space-y-1" aria-busy={indexesLoading}>
-            {indexes.map((index) => {
+          <div className="mt-3 space-y-1" aria-busy={indexesLoading}>
+            {filteredIndexes.map((index) => {
               const active = index.code === selectedCode;
               return (
                 <button
@@ -195,6 +302,21 @@ export default function Indices() {
                 </button>
               );
             })}
+            {!indexesLoading && indexes.length > 0 && filteredIndexes.length === 0 && (
+              <div className="rounded-md bg-muted p-3 text-center text-sm text-muted-foreground">
+                <p>{t("indices.noMatches", "未找到匹配指数")}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setIndexFilter("all");
+                  }}
+                  className="mt-2 text-xs font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  {t("indices.clearFilters", "清除筛选")}
+                </button>
+              </div>
+            )}
           </div>
 
           {(indexesStale || (indexesError && indexes.length > 0)) && (

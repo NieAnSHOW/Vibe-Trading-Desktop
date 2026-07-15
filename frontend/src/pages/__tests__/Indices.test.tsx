@@ -142,4 +142,24 @@ describe("Indices page", () => {
     expect(await screen.findByText("暂无日线数据")).toBeInTheDocument();
     expect(screen.queryByTestId("candlestick-chart")).not.toBeInTheDocument();
   });
+
+  it("shows a market summary for the loaded indices", async () => {
+    renderIndices();
+
+    expect(await screen.findByText("显示 2 / 2")).toBeInTheDocument();
+    expect(screen.getAllByText("上涨").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("下跌").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("filters the index list by name without changing the selected detail", async () => {
+    const user = userEvent.setup();
+    renderIndices();
+
+    const search = await screen.findByRole("searchbox", { name: "搜索指数" });
+    await user.type(search, "深证");
+
+    expect(screen.getByRole("button", { name: /深证成指 399001/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /上证指数 000001/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "上证指数" })).toBeInTheDocument();
+  });
 });

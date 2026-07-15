@@ -369,7 +369,18 @@ function rejectionMessage(result: PromiseSettledResult<unknown>): string | null 
 
 // ── Major A-share indexes for dashboard header ───────────────
 
-const INDEX_CODES = ["sh000001", "sz399001", "sz399006"];
+// Keep the list explicit so the indices page remains useful even when the
+// upstream provider does not expose a discoverable index catalogue.
+const INDEX_CODES = [
+  "sh000001", // 上证指数
+  "sz399001", // 深证成指
+  "sz399006", // 创业板指
+  "sh000016", // 上证 50
+  "sh000300", // 沪深 300
+  "sh000905", // 中证 500
+  "sh000688", // 科创 50
+  "sz399852", // 中证 1000
+];
 
 // ── Public API ──────────────────────────────────────────────
 
