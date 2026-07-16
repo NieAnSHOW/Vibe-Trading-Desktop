@@ -130,6 +130,24 @@ describe("MarketPulsePanel", () => {
     expect(screen.getByRole("button", { name: /下一页/i })).toBeDisabled();
   });
 
+  it("confines scrolling to event rows while controls and pagination remain fixed", () => {
+    renderPanel({ pulse: [limitUpItem] });
+
+    const panel = screen.getByTestId("market-pulse-panel");
+    const eventCard = screen.getByTestId("market-pulse-event-card");
+    const controls = screen.getByTestId("market-pulse-event-controls");
+    const scrollRegion = screen.getByTestId("market-pulse-event-scroll-region");
+    const pagination = screen.getByTestId("market-pulse-event-pagination");
+
+    expect(panel).toHaveClass("h-full", "min-h-0", "overflow-hidden");
+    expect(eventCard).toHaveClass("flex", "min-h-0", "flex-col", "overflow-hidden");
+    expect(scrollRegion).toHaveClass("min-h-0", "flex-1", "overflow-y-auto");
+    expect(controls.contains(scrollRegion)).toBe(false);
+    expect(scrollRegion.contains(pagination)).toBe(false);
+    expect(controls.compareDocumentPosition(scrollRegion) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(scrollRegion.compareDocumentPosition(pagination) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("combines downward and limit-down-broken events in the decline summary", () => {
     renderPanel({ pulse: [downwardItem, limitDownBrokenItem] });
 
