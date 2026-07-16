@@ -252,6 +252,29 @@ describe("Dashboard page", () => {
       }
     });
 
+    it("anchors each rendered market card source footer to the card bottom", () => {
+      stateWithIndexesAndSummary();
+      renderDashboard();
+
+      const cardIds = [
+        "market-breadth-card",
+        "market-emotion-card",
+        "market-trend-card",
+        "market-limit-card",
+        "market-concepts-card",
+        "market-industries-card",
+        "top-gainers-card",
+        "top-losers-card",
+        "turnover-leaders-card",
+        "active-leaders-card",
+      ];
+
+      for (const cardId of cardIds) {
+        const footer = screen.getByTestId(cardId).querySelector("footer");
+        expect(footer).toHaveClass("mt-auto");
+      }
+    });
+
     it("marks only the concept card stale when concept data is unavailable", () => {
       stateWithIndexesAndSummary({
         marketSnapshot: { ...MARKET_SNAPSHOT, stale: true, errors: { concepts: "concept source unavailable" } },
@@ -259,7 +282,9 @@ describe("Dashboard page", () => {
       });
       renderDashboard();
 
-      expect(screen.getByTestId("market-concepts-card")).toHaveTextContent("concept source unavailable");
+      const conceptCard = screen.getByTestId("market-concepts-card");
+      expect(conceptCard).toHaveTextContent("concept source unavailable");
+      expect(conceptCard.querySelector("footer")).toHaveClass("mt-auto");
       expect(screen.getByTestId("market-breadth-card")).not.toHaveTextContent("concept source unavailable");
     });
 

@@ -143,7 +143,7 @@ function MarketCard({
   return (
     <section
       data-testid={testId}
-      className="h-full space-y-2.5 rounded-lg border bg-card p-3"
+      className="flex h-full flex-col rounded-lg border bg-card p-3"
     >
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">{title}</h2>
@@ -153,33 +153,35 @@ function MarketCard({
           </span>
         )}
       </div>
-      {!hasData && loading && (
-        <p className="text-xs text-muted-foreground">
-          {t("dashboard.loading")}
-        </p>
-      )}
-      {!hasData && error && (
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <AlertCircle className="h-3 w-3" />
-          {error}
-        </div>
-      )}
-      {hasData && children}
-      {hasData && error && (
-        <p className="text-[10px] text-muted-foreground/70">{error}</p>
-      )}
-      {hasData && status?.available && (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-border/60 pt-2 text-[10px] text-muted-foreground/70">
-          <span>
-            {t("dashboard.source")}: {status.source}
-          </span>
-          {status.asOf && (
-            <time dateTime={status.asOf}>
-              {t("dashboard.lastUpdated")}: {fmtSnapshotTime(status.asOf)}
-            </time>
-          )}
-        </div>
-      )}
+      <div className="mt-2.5 flex min-h-0 flex-1 flex-col">
+        {!hasData && loading && (
+          <p className="text-xs text-muted-foreground">
+            {t("dashboard.loading")}
+          </p>
+        )}
+        {!hasData && error && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <AlertCircle className="h-3 w-3" />
+            {error}
+          </div>
+        )}
+        {hasData && <div className="space-y-2.5">{children}</div>}
+        {hasData && error && (
+          <p className="mt-2.5 text-[10px] text-muted-foreground/70">{error}</p>
+        )}
+        {hasData && status?.available && (
+          <footer className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-border/60 pt-2 text-[10px] text-muted-foreground/70">
+            <span>
+              {t("dashboard.source")}: {status.source}
+            </span>
+            {status.asOf && (
+              <time dateTime={status.asOf}>
+                {t("dashboard.lastUpdated")}: {fmtSnapshotTime(status.asOf)}
+              </time>
+            )}
+          </footer>
+        )}
+      </div>
     </section>
   );
 }
