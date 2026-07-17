@@ -127,20 +127,20 @@ function StockDetailSection({
 
   if (!code) {
     return (
-      <section className="rounded-lg border p-4 space-y-3 bg-card">
+      <div className="flex h-full flex-col space-y-3">
         <h2 className="text-sm font-semibold">{t("dashboard.stockDetail")}</h2>
-        <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center">
           <TrendingUp className="h-6 w-6 text-muted-foreground/40" />
           <p className="text-xs text-muted-foreground">
             {t("dashboard.selectStockHint")}
           </p>
         </div>
-      </section>
+      </div>
     );
   }
 
   return (
-    <section className="rounded-lg border p-4 space-y-3 bg-card">
+    <div className="flex h-full flex-col space-y-3">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">
           {name || code}{" "}
@@ -178,7 +178,7 @@ function StockDetailSection({
       {bars.length > 0 && (
         <CandlestickChartView data={bars} height={440} defaultRange="3M" />
       )}
-    </section>
+    </div>
   );
 }
 
@@ -326,20 +326,65 @@ export default function WatchlistPage() {
   };
   const allSelected = selected.size === stocks.length && stocks.length > 0;
   const showSkeleton = loading && stocks.length === 0;
+  const marketSummary = (() => {
+    const changes = stocks
+      .map((stock) => quotes[stock.code]?.change_pct)
+      .filter((change): change is number => change != null);
+    const rising = changes.filter((change) => change > 0).length;
+    const falling = changes.filter((change) => change < 0).length;
+    const averageChange =
+      changes.length > 0
+        ? changes.reduce((sum, change) => sum + change, 0) / changes.length
+        : null;
+
+    return { rising, falling, averageChange };
+  })();
+  const addForm = (
+    <form onSubmit={handleAdd} className="flex items-start gap-2">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <input
+          type="text"
+          value={inputCode}
+          onChange={(e) => {
+            setInputCode(e.target.value);
+            setInputError("");
+          }}
+          placeholder={t("watchlist.placeholder", "输入 6 位股票代码")}
+          maxLength={6}
+          inputMode="numeric"
+          className="h-9 w-full border rounded-md bg-background px-3 text-sm placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 transition-shadow"
+          aria-label={t("watchlist.placeholder", "输入 6 位股票代码")}
+          aria-invalid={!!inputError}
+        />
+        {inputError && (
+          <span className="flex items-center gap-1 text-xs text-red-500">
+            <AlertCircle size={12} />
+            {inputError}
+          </span>
+        )}
+      </div>
+      <button
+        type="submit"
+        disabled={adding}
+        className="h-9 shrink-0 rounded-md bg-primary px-3 text-sm text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background transition-colors"
+      >
+        {adding
+          ? t("watchlist.adding", "添加中…")
+          : t("watchlist.add", "添加")}
+      </button>
+    </form>
+  );
 
   return (
-    <div className="flex h-full w-full flex-col gap-4 p-4">
-      {/* Header */}
-      <header className="flex items-center justify-between">
-        <div className="flex items-baseline gap-2.5">
-          <h1 className="text-xl font-semibold tracking-tight">
+    <div className="flex h-full w-full flex-col gap-3 p-3 lg:gap-3 lg:p-5">
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <h1 className="text-xl font-bold tracking-tight">
             {t("watchlist.title", "A股自选")}
           </h1>
-          {stocks.length > 0 && (
-            <span className="text-xs font-medium tabular-nums text-muted-foreground bg-muted rounded-full px-2 py-0.5">
-              {stocks.length}
-            </span>
-          )}
+          <p className="text-sm text-muted-foreground">
+            {t("watchlist.description", "关注股票的实时行情与日线走势")}
+          </p>
         </div>
         <button
           onClick={() => {
@@ -354,42 +399,49 @@ export default function WatchlistPage() {
         </button>
       </header>
 
-      {/* Add Form */}
-      <form onSubmit={handleAdd} className="flex gap-2 items-start">
-        <div className="flex flex-col gap-1">
-          <input
-            type="text"
-            value={inputCode}
-            onChange={(e) => {
-              setInputCode(e.target.value);
-              setInputError("");
-            }}
-            placeholder={t("watchlist.placeholder", "输入 6 位股票代码")}
-            maxLength={6}
-            inputMode="numeric"
-            className="border rounded-lg px-3 py-2 text-sm w-44 bg-background placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-shadow"
-            aria-label={t("watchlist.placeholder", "输入 6 位股票代码")}
-            aria-invalid={!!inputError}
-          />
-          {inputError && (
-            <span className="flex items-center gap-1 text-xs text-red-500">
-              <AlertCircle size={12} />
-              {inputError}
-            </span>
-          )}
+      <section
+        aria-label={t("watchlist.marketOverview", "市场概览")}
+        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+      >
+        <div className="rounded-lg border bg-card px-3 py-2.5">
+          <p className="text-xs text-muted-foreground">
+            {t("watchlist.total", "自选总数")}
+          </p>
+          <p className="mt-1 font-mono text-lg font-semibold tabular-nums">
+            {stocks.length}
+          </p>
         </div>
-        <button
-          type="submit"
-          disabled={adding}
-          className="px-3.5 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background transition-colors"
-        >
-          {adding
-            ? t("watchlist.adding", "添加中…")
-            : t("watchlist.add", "添加")}
-        </button>
-      </form>
+        <div className="rounded-lg border bg-card px-3 py-2.5">
+          <p className="text-xs text-muted-foreground">
+            {t("watchlist.rising", "上涨")}
+          </p>
+          <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-red-500">
+            {marketSummary.rising}
+          </p>
+        </div>
+        <div className="rounded-lg border bg-card px-3 py-2.5">
+          <p className="text-xs text-muted-foreground">
+            {t("watchlist.falling", "下跌")}
+          </p>
+          <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-green-500">
+            {marketSummary.falling}
+          </p>
+        </div>
+        <div className="rounded-lg border bg-card px-3 py-2.5">
+          <p className="text-xs text-muted-foreground">
+            {t("watchlist.averageChange", "平均涨跌幅")}
+          </p>
+          <p
+            className={cn(
+              "mt-1 font-mono text-lg font-semibold tabular-nums",
+              changeColor(marketSummary.averageChange),
+            )}
+          >
+            {fmtPct(marketSummary.averageChange)}
+          </p>
+        </div>
+      </section>
 
-      {/* Error */}
       {error && (
         <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/5 border border-destructive/20 rounded-lg px-3 py-2">
           <AlertCircle size={14} className="shrink-0" />
@@ -397,7 +449,8 @@ export default function WatchlistPage() {
         </div>
       )}
 
-      {/* Skeleton：首次加载 */}
+      {stocks.length === 0 && addForm}
+
       {showSkeleton && (
         <div className="overflow-hidden rounded-lg border">
           <table className="w-full text-sm">
@@ -417,7 +470,6 @@ export default function WatchlistPage() {
         </div>
       )}
 
-      {/* Empty State */}
       {!loading && stocks.length === 0 && (
         <div className="flex flex-col items-center justify-center flex-1 gap-3 py-16 text-center">
           <div className="flex items-center justify-center w-16 h-16 rounded-full bg-muted">
@@ -438,35 +490,31 @@ export default function WatchlistPage() {
         </div>
       )}
 
-      {/* Quotes Table */}
       {stocks.length > 0 && (
         <div
           data-testid="watchlist-workspace"
-          className="grid h-500px gap-4 lg:grid-cols-[minmax(24rem,0.85fr)_minmax(0,1.35fr)] lg:gap-6"
+          className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(19rem,0.42fr)_minmax(0,1fr)]"
         >
-          <section
-            data-testid="watchlist-chart-panel"
-            className="order-2 min-w-0 lg:order-2"
-          >
-            <StockDetailSection
-              code={activeSelectedCode}
-              name={
-                activeSelectedCode
-                  ? (quotes[activeSelectedCode]?.name ?? null)
-                  : null
-              }
-              bars={selectedBars}
-              loading={barsLoading}
-              error={barsError}
-              onAnalyze={handleAnalyze}
-            />
-          </section>
-
           <aside
             data-testid="watchlist-list-panel"
-            className="order-1 min-w-0 space-y-3 lg:order-1"
+            className="min-h-0 min-w-0 space-y-3 rounded-lg border bg-card p-3 lg:overflow-auto"
           >
-            <div className="overflow-x-auto rounded-lg border">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold">
+                  {t("watchlist.listTitle", "自选列表")}
+                </h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {t("watchlist.showing", "共 {{count}} 只股票", {
+                    count: stocks.length,
+                  })}
+                </p>
+              </div>
+            </div>
+
+            {addForm}
+
+            <div className="overflow-x-auto rounded-md border">
               <table className="w-full text-sm">
                 <thead className="bg-muted/40">
                   <HeaderRow
@@ -609,6 +657,24 @@ export default function WatchlistPage() {
               </div>
             )}
           </aside>
+
+          <section
+            data-testid="watchlist-chart-panel"
+            className="min-h-0 min-w-0 rounded-lg border bg-card p-4"
+          >
+            <StockDetailSection
+              code={activeSelectedCode}
+              name={
+                activeSelectedCode
+                  ? (quotes[activeSelectedCode]?.name ?? null)
+                  : null
+              }
+              bars={selectedBars}
+              loading={barsLoading}
+              error={barsError}
+              onAnalyze={handleAnalyze}
+            />
+          </section>
         </div>
       )}
     </div>

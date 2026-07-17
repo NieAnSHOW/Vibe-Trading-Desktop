@@ -120,6 +120,42 @@ describe("WatchlistPage — quotes table", () => {
     expect(screen.getByText("000001")).toBeTruthy();
   });
 
+  it("shows the indices-style market overview for populated quotes", () => {
+    const overviewStocks = [
+      ...stocks,
+      { code: "600519", name: "贵州茅台", market: "a_stock", added_at: "" },
+      { code: "300750", name: "宁德时代", market: "a_stock", added_at: "" },
+    ];
+    const overviewQuotes = {
+      "000001": { ...quotes["000001"], change_pct: 1.2 },
+      "600519": {
+        code: "600519",
+        name: "贵州茅台",
+        price: 1500,
+        change_pct: -0.4,
+        change_amt: -6,
+      },
+      "300750": {
+        code: "300750",
+        name: "宁德时代",
+        price: 200,
+        change_pct: null,
+        change_amt: null,
+      },
+    };
+
+    renderPage({ stocks: overviewStocks, quotes: overviewQuotes });
+
+    expect(
+      screen.getByRole("region", { name: /市场概览|Market overview/i }),
+    ).toBeTruthy();
+    expect(screen.getByText(/自选总数|Watchlist total/i)).toBeTruthy();
+    expect(screen.getByText("3")).toBeTruthy();
+    expect(screen.getByText(/上涨|Rising/i)).toBeTruthy();
+    expect(screen.getByText(/下跌|Falling/i)).toBeTruthy();
+    expect(screen.getByText("+0.40%")).toBeTruthy();
+  });
+
   it("applies red class for positive change_pct (A股上涨红)", () => {
     renderPage({ stocks, quotes });
     const cells = screen.getAllByText("+1.20%");
