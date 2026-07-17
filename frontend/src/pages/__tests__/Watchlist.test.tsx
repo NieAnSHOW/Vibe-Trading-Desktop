@@ -111,11 +111,57 @@ describe("WatchlistPage — add form validation", () => {
   });
 });
 
-describe("WatchlistPage — quotes table", () => {
+describe("WatchlistPage — quotes list", () => {
   const stocks = [{ code: "000001", name: "平安银行", market: "a_stock", added_at: "" }];
   const quotes = { "000001": { code: "000001", name: "平安银行", price: 10.5, change_pct: 1.2, change_amt: 0.12 } };
 
-  it("renders stock code in table", () => {
+  it("renders independent compact cards instead of a table", () => {
+    const twoStocks = [
+      ...stocks,
+      { code: "600519", name: "贵州茅台", market: "a_stock", added_at: "" },
+    ];
+    const twoQuotes = {
+      ...quotes,
+      "600519": {
+        code: "600519",
+        name: "贵州茅台",
+        price: 1500,
+        change_pct: -0.4,
+        change_amt: -6,
+      },
+    };
+
+    renderPage({ stocks: twoStocks, quotes: twoQuotes });
+
+    const firstCard = screen.getByTestId("watchlist-card-000001");
+    const secondCard = screen.getByTestId("watchlist-card-600519");
+    expect(firstCard).toBeTruthy();
+    expect(secondCard).toBeTruthy();
+    expect(firstCard).not.toBe(secondCard);
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("selects a chart when a card detail control is clicked", () => {
+    const setSelectedCode = vi.fn();
+    renderPage({ stocks, quotes }, { setSelectedCode });
+
+    fireEvent.click(screen.getByTestId("watchlist-card-select-000001"));
+
+    expect(setSelectedCode).toHaveBeenCalledWith("000001");
+  });
+
+  it("keeps checkbox selection isolated from card detail selection", () => {
+    const toggleSelection = vi.fn();
+    const setSelectedCode = vi.fn();
+    renderPage({ stocks, quotes, toggleSelection }, { setSelectedCode });
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /选择 000001/i }));
+
+    expect(toggleSelection).toHaveBeenCalledWith("000001");
+    expect(setSelectedCode).not.toHaveBeenCalled();
+  });
+
+  it("renders stock code in its card", () => {
     renderPage({ stocks, quotes });
     expect(screen.getByText("000001")).toBeTruthy();
   });
@@ -175,10 +221,12 @@ describe("WatchlistPage — delete confirmation", () => {
 
   it("first click shows confirm button (two-step delete)", async () => {
     const remove = vi.fn();
-    renderPage({ stocks, remove });
+    const setSelectedCode = vi.fn();
+    renderPage({ stocks, remove }, { setSelectedCode });
     const deleteBtn = screen.getByTestId("delete-000001");
     await act(async () => { fireEvent.click(deleteBtn); });
     expect(remove).not.toHaveBeenCalled();
+    expect(setSelectedCode).not.toHaveBeenCalled();
     expect(screen.getByTestId("confirm-delete-000001")).toBeTruthy();
   });
 

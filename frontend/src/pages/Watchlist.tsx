@@ -53,58 +53,132 @@ function fmtAmt(v: number | null | undefined): string {
   return `${sign}${v.toFixed(2)}`;
 }
 
-/** 表头行：真实表与骨架表共用，保证列宽一致 */
-function HeaderRow({
-  selectAllChecked,
-  onSelectAll,
-  labels,
-}: {
-  selectAllChecked: boolean;
-  onSelectAll: () => void;
-  labels: {
-    selectAll: string;
-    code: string;
-    name: string;
-    price: string;
-    changeAmt: string;
-    changePct: string;
-    actions: string;
-  };
-}) {
+function WatchlistStockCardSkeleton() {
   return (
-    <tr className="text-xs font-medium text-muted-foreground">
-      <th className="px-3 py-2.5 text-left w-8">
-        <input
-          type="checkbox"
-          checked={selectAllChecked}
-          onChange={onSelectAll}
-          className="accent-primary"
-          aria-label={labels.selectAll}
-        />
-      </th>
-      <th className="px-3 py-2.5 text-left">{labels.code}</th>
-      <th className="px-3 py-2.5 text-left">{labels.name}</th>
-      <th className="px-3 py-2.5 text-right">{labels.price}</th>
-      <th className="px-3 py-2.5 text-right">{labels.changeAmt}</th>
-      <th className="px-3 py-2.5 text-right">{labels.changePct}</th>
-      <th className="px-3 py-2.5 text-center">{labels.actions}</th>
-    </tr>
+    <li className="h-[4.5rem] rounded-md border bg-card p-3">
+      <div className="grid h-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+        <div className="h-3.5 w-3.5 rounded bg-muted/60 animate-pulse" />
+        <div className="space-y-2">
+          <div className="h-3.5 w-28 rounded bg-muted/60 animate-pulse" />
+          <div className="h-3 w-40 rounded bg-muted/60 animate-pulse" />
+        </div>
+        <div className="h-7 w-14 rounded bg-muted/60 animate-pulse" />
+      </div>
+    </li>
   );
 }
 
-/** 骨架行：首次加载占位，避免空白闪烁 */
-function SkeletonRow() {
+function WatchlistStockCard({
+  stock,
+  quote,
+  isSelected,
+  isActive,
+  confirmingDelete,
+  labels,
+  detailLabel,
+  onToggleSelection,
+  onSelectDetail,
+  onDelete,
+  onCancelDelete,
+}: {
+  stock: { code: string; name?: string | null };
+  quote?: QuoteData;
+  isSelected: boolean;
+  isActive: boolean;
+  confirmingDelete: boolean;
+  labels: Record<string, string>;
+  detailLabel: string;
+  onToggleSelection: () => void;
+  onSelectDetail: () => void;
+  onDelete: () => void;
+  onCancelDelete: () => void;
+}) {
+  const name = quote?.name ?? stock.name ?? "—";
+  const pct = quote?.change_pct;
+
   return (
-    <tr className="border-t">
-      <td className="px-3 py-3">
-        <div className="h-3.5 w-3 rounded bg-muted/60 animate-pulse" />
-      </td>
-      {["w-14", "w-20", "w-16", "w-14", "w-16", "w-16"].map((w, i) => (
-        <td key={i} className="px-3 py-3">
-          <div className={cn("h-3.5 rounded bg-muted/60 animate-pulse", w)} />
-        </td>
-      ))}
-    </tr>
+    <li>
+      <article
+        data-testid={`watchlist-card-${stock.code}`}
+        title={quote?.stale ? labels.stale : undefined}
+        className={cn(
+          "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md border p-3 transition-colors hover:bg-muted/40",
+          isSelected && "bg-primary/[0.06]",
+          isActive && "bg-primary/[0.1] ring-1 ring-inset ring-primary/40",
+          quote?.stale && "opacity-50",
+        )}
+      >
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={onToggleSelection}
+          className="accent-primary"
+          aria-label={`${labels.select} ${stock.code}`}
+        />
+        <button
+          type="button"
+          onClick={onSelectDetail}
+          data-testid={`watchlist-card-select-${stock.code}`}
+          aria-pressed={isActive}
+          aria-label={detailLabel}
+          className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        >
+          <span className="block truncate text-sm font-medium">
+            {name} <span className="font-mono text-xs text-muted-foreground tabular-nums">{stock.code}</span>
+          </span>
+          <span className="mt-1 flex items-center gap-2 font-mono text-xs tabular-nums">
+            <span className={changeColor(pct)}>{fmtPrice(quote?.price)}</span>
+            <span className={changeColor(pct)}>{fmtAmt(quote?.change_amt)}</span>
+            <span className={cn("rounded px-1.5 py-0.5", pctChipClass(pct))}>{fmtPct(pct)}</span>
+          </span>
+        </button>
+        <div className="flex items-center gap-1">
+          {confirmingDelete ? (
+            <>
+              <button
+                type="button"
+                onClick={onDelete}
+                className="rounded px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 hover:text-red-700"
+                data-testid={`confirm-delete-${stock.code}`}
+              >
+                {labels.confirmDelete}
+              </button>
+              <button
+                type="button"
+                onClick={onCancelDelete}
+                className="rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+              >
+                {labels.cancelDelete}
+              </button>
+            </>
+          ) : (
+            <>
+              <a
+                href={`https://stockpage.10jqka.com.cn/${stock.code}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                title={labels.kline}
+                aria-label={labels.kline}
+                data-testid={`kline-${stock.code}`}
+              >
+                <CandlestickIcon size={14} />
+              </a>
+              <button
+                type="button"
+                onClick={onDelete}
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                title={labels.delete}
+                aria-label={labels.delete}
+                data-testid={`delete-${stock.code}`}
+              >
+                <Trash2 size={14} />
+              </button>
+            </>
+          )}
+        </div>
+      </article>
+    </li>
   );
 }
 
@@ -315,14 +389,14 @@ export default function WatchlistPage() {
     navigate(`/agent?prefill=${encodeURIComponent(message)}`);
   }
 
-  const colLabels = {
+  const cardLabels = {
     selectAll: t("watchlist.selectAll", "全选"),
-    code: t("watchlist.col.code", "代码"),
-    name: t("watchlist.col.name", "名称"),
-    price: t("watchlist.col.price", "最新价"),
-    changeAmt: t("watchlist.col.changeAmt", "涨跌额"),
-    changePct: t("watchlist.col.changePct", "涨跌幅"),
-    actions: t("watchlist.col.actions", "操作"),
+    select: t("watchlist.select", "选择"),
+    stale: t("watchlist.stale", "行情延迟"),
+    kline: t("watchlist.kline", "同花顺 K 线"),
+    delete: t("watchlist.delete", "删除"),
+    confirmDelete: t("watchlist.confirmDelete", "确认删除"),
+    cancelDelete: t("watchlist.cancelDelete", "取消"),
   };
   const allSelected = selected.size === stocks.length && stocks.length > 0;
   const showSkeleton = loading && stocks.length === 0;
@@ -452,22 +526,11 @@ export default function WatchlistPage() {
       {stocks.length === 0 && addForm}
 
       {showSkeleton && (
-        <div className="overflow-hidden rounded-lg border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40">
-              <HeaderRow
-                selectAllChecked={false}
-                onSelectAll={() => {}}
-                labels={colLabels}
-              />
-            </thead>
-            <tbody>
-              {Array.from({ length: 4 }).map((_, i) => (
-                <SkeletonRow key={i} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ul role="list" className="space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <WatchlistStockCardSkeleton key={i} />
+          ))}
+        </ul>
       )}
 
       {!loading && stocks.length === 0 && (
@@ -510,136 +573,41 @@ export default function WatchlistPage() {
                   })}
                 </p>
               </div>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={handleSelectAll}
+                  className="accent-primary"
+                />
+                {cardLabels.selectAll}
+              </label>
             </div>
 
             {addForm}
 
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40">
-                  <HeaderRow
-                    selectAllChecked={allSelected}
-                    onSelectAll={handleSelectAll}
-                    labels={colLabels}
-                  />
-                </thead>
-                <tbody>
-                  {stocks.map((stock) => {
-                    const q: QuoteData | undefined = quotes[stock.code];
-                    const pct = q?.change_pct;
-                    const isSelected = selected.has(stock.code);
-                    return (
-                      <tr
-                        key={stock.code}
-                        title={
-                          q?.stale
-                            ? t("watchlist.stale", "行情延迟")
-                            : undefined
-                        }
-                        className={cn(
-                          "border-t transition-colors cursor-pointer hover:bg-muted/40",
-                          isSelected && "bg-primary/[0.06]",
-                          activeSelectedCode === stock.code &&
-                            "ring-1 ring-inset ring-primary/40",
-                          q?.stale && "opacity-50",
-                        )}
-                        onClick={() => void setSelectedCode(stock.code)}
-                      >
-                        <td
-                          className="px-3 py-2.5"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleSelection(stock.code)}
-                            className="accent-primary"
-                            aria-label={`${t("watchlist.select", "选择")} ${stock.code}`}
-                          />
-                        </td>
-                        <td className="px-3 py-2.5 font-mono tabular-nums">
-                          {stock.code}
-                        </td>
-                        <td className="px-3 py-2.5 max-w-[8rem] truncate">
-                          {q?.name ?? stock.name ?? "—"}
-                        </td>
-                        <td
-                          className={cn(
-                            "px-3 py-2.5 text-right font-mono tabular-nums",
-                            changeColor(pct),
-                          )}
-                        >
-                          {fmtPrice(q?.price)}
-                        </td>
-                        <td
-                          className={cn(
-                            "px-3 py-2.5 text-right font-mono tabular-nums",
-                            changeColor(pct),
-                          )}
-                        >
-                          {fmtAmt(q?.change_amt)}
-                        </td>
-                        <td className="px-3 py-2.5 text-right">
-                          <span
-                            className={cn(
-                              "inline-block min-w-[3.75rem] px-1.5 py-0.5 rounded text-xs font-mono tabular-nums text-right",
-                              pctChipClass(pct),
-                            )}
-                          >
-                            {fmtPct(pct)}
-                          </span>
-                        </td>
-                        <td
-                          className="px-3 py-2.5 text-center"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {confirmDelete === stock.code ? (
-                            <span className="flex items-center gap-1 justify-center">
-                              <button
-                                onClick={() => handleDelete(stock.code)}
-                                className="text-xs font-medium text-red-600 hover:text-red-700 px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
-                                data-testid={`confirm-delete-${stock.code}`}
-                              >
-                                {t("watchlist.confirmDelete", "确认删除")}
-                              </button>
-                              <button
-                                onClick={() => setConfirmDelete(null)}
-                                className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted/60 transition-colors"
-                              >
-                                {t("watchlist.cancelDelete", "取消")}
-                              </button>
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1 justify-center">
-                              <a
-                                href={`https://stockpage.10jqka.com.cn/${stock.code}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors inline-flex"
-                                title={t("watchlist.kline", "同花顺 K 线")}
-                                aria-label={t("watchlist.kline", "同花顺 K 线")}
-                                data-testid={`kline-${stock.code}`}
-                              >
-                                <CandlestickIcon size={14} />
-                              </a>
-                              <button
-                                onClick={() => handleDelete(stock.code)}
-                                className="p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
-                                title={t("watchlist.delete", "删除")}
-                                aria-label={t("watchlist.delete", "删除")}
-                                data-testid={`delete-${stock.code}`}
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <ul role="list" className="space-y-2">
+              {stocks.map((stock) => (
+                <WatchlistStockCard
+                  key={stock.code}
+                  stock={stock}
+                  quote={quotes[stock.code]}
+                  isSelected={selected.has(stock.code)}
+                  isActive={activeSelectedCode === stock.code}
+                  confirmingDelete={confirmDelete === stock.code}
+                  labels={cardLabels}
+                  detailLabel={t(
+                    "watchlist.viewDetail",
+                    "查看 {{name}}（{{code}}）详情",
+                    { name: quotes[stock.code]?.name ?? stock.name ?? "—", code: stock.code },
+                  )}
+                  onToggleSelection={() => toggleSelection(stock.code)}
+                  onSelectDetail={() => void setSelectedCode(stock.code)}
+                  onDelete={() => void handleDelete(stock.code)}
+                  onCancelDelete={() => setConfirmDelete(null)}
+                />
+              ))}
+            </ul>
 
             {selected.size > 0 && (
               <div className="flex justify-end">
