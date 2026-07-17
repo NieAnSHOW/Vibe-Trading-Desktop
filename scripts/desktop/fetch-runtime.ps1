@@ -3,10 +3,14 @@
 # 下载 python-build-standalone (install_only) 并解压到指定目录。
 # 用法: $env:PBS_TAG="20260610"; $env:PBS_ASSET="cpython-3.12.13+20260610-x86_64-pc-windows-msvc-install_only.tar.gz"; .\scripts\desktop\fetch-runtime.ps1 [-OutDir <path>]
 param(
-    [string]$OutDir = ".\.desktop-build\python-runtime"
+    [string]$OutDir
 )
 
 $ErrorActionPreference = "Stop"
+$Root = (Resolve-Path "$PSScriptRoot\..\..").Path
+if (-not $OutDir) {
+    $OutDir = Join-Path $Root ".desktop-build\python-runtime"
+}
 
 $PBS_TAG = $env:PBS_TAG
 if (-not $PBS_TAG) {
