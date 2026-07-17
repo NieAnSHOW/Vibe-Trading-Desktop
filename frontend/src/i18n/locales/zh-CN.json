@@ -989,7 +989,7 @@
     "watchlistQuotes": "自选股",
     "stockDetail": "个股详情",
     "selectStockHint": "选择一只股票查看 K 线图",
-    "sendToAgent": "发送到 Agent 分析",
+    "sendToAgent": "AI 分析",
     "loading": "加载中…",
     "noPulse": "暂无异动数据",
     "noIndexes": "暂无指数数据",
@@ -1111,7 +1111,7 @@
     "stale": "行情延迟",
     "select": "选择",
     "selectAll": "全选",
-    "sendToAgent": "发给 Agent 分析",
+    "sendToAgent": "AI 分析",
     "col": {
       "code": "代码",
       "name": "名称",

@@ -131,7 +131,9 @@ function WatchlistStockCard({
           </span>
           <span className="mt-1 flex items-center gap-2 font-mono text-xs tabular-nums">
             <span className={changeColor(pct)}>{fmtPrice(quote?.price)}</span>
-            <span className={changeColor(pct)}>{fmtAmt(quote?.change_amt)}</span>
+            <span className={changeColor(pct)}>
+              {fmtAmt(quote?.change_amt)}
+            </span>
             <span
               className={cn(
                 "inline-block min-w-[3.75rem] rounded px-1.5 py-0.5 text-right font-mono tabular-nums",
@@ -452,10 +454,20 @@ export default function WatchlistPage() {
         disabled={adding}
         className="h-9 shrink-0 rounded-md bg-primary px-3 text-sm text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background transition-colors"
       >
-        {adding
-          ? t("watchlist.adding", "添加中…")
-          : t("watchlist.add", "添加")}
+        {adding ? t("watchlist.adding", "添加中…") : t("watchlist.add", "添加")}
       </button>
+      {selected.size > 0 && (
+        <button
+          onClick={handleSendToAgent}
+          data-testid="send-to-agent"
+          className="flex text-center justify-center items-center gap-2  h-9 shrink-0 rounded-md bg-primary px-3 text-sm text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background transition-colors"
+        >
+          <span>{t("watchlist.sendToAgent", "发给 AI")}</span>
+          <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-primary-foreground/25 text-xs font-medium tabular-nums">
+            {selected.size}
+          </span>
+        </button>
+      )}
     </form>
   );
 
@@ -609,7 +621,10 @@ export default function WatchlistPage() {
                   detailLabel={t(
                     "watchlist.viewDetail",
                     "查看 {{name}}（{{code}}）详情",
-                    { name: quotes[stock.code]?.name ?? stock.name ?? "—", code: stock.code },
+                    {
+                      name: quotes[stock.code]?.name ?? stock.name ?? "—",
+                      code: stock.code,
+                    },
                   )}
                   onToggleSelection={() => toggleSelection(stock.code)}
                   onSelectDetail={() => void setSelectedCode(stock.code)}
@@ -618,22 +633,6 @@ export default function WatchlistPage() {
                 />
               ))}
             </ul>
-
-            {selected.size > 0 && (
-              <div className="flex justify-end">
-                <button
-                  onClick={handleSendToAgent}
-                  className="flex items-center gap-2 px-4 py-2.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background transition-colors"
-                  data-testid="send-to-agent"
-                >
-                  <Send size={14} />
-                  <span>{t("watchlist.sendToAgent", "发给 Agent 分析")}</span>
-                  <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-primary-foreground/25 text-xs font-medium tabular-nums">
-                    {selected.size}
-                  </span>
-                </button>
-              </div>
-            )}
           </aside>
 
           <section

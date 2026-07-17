@@ -317,13 +317,7 @@ export function Layout() {
             collapsed={collapsed}
             isActive={isActive("/")}
           />
-          <NavLink
-            to="/agent"
-            icon={Bot}
-            label={t("layout.agent")}
-            collapsed={collapsed}
-            isActive={isActive("/agent")}
-          />
+
           <NavLink
             to="/dashboard"
             icon={LayoutDashboard}
@@ -351,6 +345,13 @@ export function Layout() {
             label={t("layout.watchlist")}
             collapsed={collapsed}
             isActive={isActive("/watchlist")}
+          />
+          <NavLink
+            to="/agent"
+            icon={Bot}
+            label={t("layout.agent")}
+            collapsed={collapsed}
+            isActive={isActive("/agent")}
           />
           <NavLink
             to="/reports"

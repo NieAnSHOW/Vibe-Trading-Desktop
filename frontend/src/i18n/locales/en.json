@@ -989,7 +989,7 @@
     "watchlistQuotes": "Watchlist",
     "stockDetail": "Stock Detail",
     "selectStockHint": "Select a stock to view K-line chart",
-    "sendToAgent": "Send to Agent",
+    "sendToAgent": "Send to AI",
     "loading": "Loading…",
     "noPulse": "No market pulse data",
     "noIndexes": "No index data",
@@ -1111,7 +1111,7 @@
     "stale": "Delayed quote",
     "select": "Select",
     "selectAll": "Select all",
-    "sendToAgent": "Analyze with Agent",
+    "sendToAgent": "Analyze with AI",
     "col": {
       "code": "Code",
       "name": "Name",
