@@ -123,13 +123,23 @@ function WatchlistStockCard({
           aria-label={detailLabel}
           className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         >
-          <span className="block truncate text-sm font-medium">
-            {name} <span className="font-mono text-xs text-muted-foreground tabular-nums">{stock.code}</span>
+          <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+            <span className="min-w-0 truncate">{name}</span>
+            <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
+              {stock.code}
+            </span>
           </span>
           <span className="mt-1 flex items-center gap-2 font-mono text-xs tabular-nums">
             <span className={changeColor(pct)}>{fmtPrice(quote?.price)}</span>
             <span className={changeColor(pct)}>{fmtAmt(quote?.change_amt)}</span>
-            <span className={cn("rounded px-1.5 py-0.5", pctChipClass(pct))}>{fmtPct(pct)}</span>
+            <span
+              className={cn(
+                "inline-block min-w-[3.75rem] rounded px-1.5 py-0.5 text-right font-mono tabular-nums",
+                pctChipClass(pct),
+              )}
+            >
+              {fmtPct(pct)}
+            </span>
           </span>
         </button>
         <div className="flex items-center gap-1">

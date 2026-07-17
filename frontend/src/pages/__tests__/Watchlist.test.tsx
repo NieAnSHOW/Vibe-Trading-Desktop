@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import WatchlistPage from "../Watchlist";
 
@@ -164,6 +164,24 @@ describe("WatchlistPage — quotes list", () => {
   it("renders stock code in its card", () => {
     renderPage({ stocks, quotes });
     expect(screen.getByText("000001")).toBeTruthy();
+  });
+
+  it("keeps a long stock name truncatable without hiding its code", () => {
+    const longName = "这是一个很长很长很长很长很长很长很长很长很长很长的股票名称";
+    renderPage({ stocks, quotes: { "000001": { ...quotes["000001"], name: longName } } });
+
+    const card = screen.getByTestId("watchlist-card-000001");
+    expect(within(card).getByText(longName).className).toContain("min-w-0");
+    expect(within(card).getByText("000001").className).toContain("shrink-0");
+  });
+
+  it("uses a fixed-width numeric layout for the percentage chip", () => {
+    renderPage({ stocks, quotes });
+
+    const percentageChip = within(screen.getByTestId("watchlist-card-000001")).getByText("+1.20%");
+    expect(percentageChip.className).toContain("min-w-[3.75rem]");
+    expect(percentageChip.className).toContain("text-right");
+    expect(percentageChip.className).toContain("tabular-nums");
   });
 
   it("shows the indices-style market overview for populated quotes", () => {
