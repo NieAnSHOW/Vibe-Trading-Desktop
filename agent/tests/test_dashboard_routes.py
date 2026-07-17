@@ -354,6 +354,34 @@ def test_board_heat_returns_normalized_provider_rows(client, monkeypatch):
     }
 
 
+def test_fetch_board_heat_loads_provider_dependencies_on_demand(monkeypatch):
+    from backtest.loaders import _http, registry
+    from src.api import dashboard_routes as routes
+
+    applied = []
+    monkeypatch.setattr(registry, "_apply_china_direct_no_proxy", lambda: applied.append(True))
+    monkeypatch.setattr(
+        _http,
+        "throttled_get_json",
+        lambda *_args, **_kwargs: {
+            "data": {"plate_list": [{"code": "885959", "name": "PCB概念", "rise_and_fall": "4.1278"}]}
+        },
+    )
+
+    assert routes._fetch_board_heat("concept") == [
+        {
+            "code": "885959",
+            "name": "PCB概念",
+            "change_pct": 4.1278,
+            "rise_count": None,
+            "fall_count": None,
+            "leading_stock": None,
+            "leading_stock_change_pct": None,
+        }
+    ]
+    assert applied == [True]
+
+
 def test_board_heat_rejects_unknown_kind(client):
     resp = client.get("/dashboard/board-heat?kind=region")
     assert resp.status_code == 422

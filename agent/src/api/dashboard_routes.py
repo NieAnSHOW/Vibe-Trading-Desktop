@@ -21,8 +21,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from backtest.loaders._http import throttled_get_json
-from backtest.loaders.registry import _apply_china_direct_no_proxy
 from src.providers.llm import build_llm
 
 logger = logging.getLogger(__name__)
@@ -286,6 +284,9 @@ def _optional_float(value) -> float | None:
 
 def _fetch_board_heat(kind: Literal["concept", "industry"]) -> list[dict]:
     """Fetch the current 10jqka hot-board ranking and normalize its rows."""
+    from backtest.loaders._http import throttled_get_json
+    from backtest.loaders.registry import _apply_china_direct_no_proxy
+
     _apply_china_direct_no_proxy()
     payload = throttled_get_json(
         _THS_HOT_LIST_URL,

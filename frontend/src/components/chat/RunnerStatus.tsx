@@ -333,46 +333,15 @@ export const RunnerStatus = memo(function RunnerStatus({
   halted,
   onRefresh,
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const [open] = useState(false);
 
   if (unavailable) return null;
   if (!status || status.brokers.length === 0) return null;
 
   const isHalted = halted ?? status.global_halted;
-  const anyRunning = status.brokers.some((b) => b.runner?.alive);
-  const authorizedCount = status.brokers.filter(
-    (b) => b.auth.oauth_token_present,
-  ).length;
 
   return (
     <div className="grid gap-2">
-      {/* <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="inline-flex max-w-full items-center gap-1.5 justify-self-start rounded-lg bg-primary/10 px-2.5 py-1 text-left text-xs font-medium text-primary transition-colors hover:bg-primary/15"
-        aria-label={i18n.t("runnerStatus.connectorRuntime")}
-        aria-expanded={open}
-      >
-        <Activity className="h-3 w-3 shrink-0" />
-        <span className="shrink-0">{i18n.t("runnerStatus.connectorRuntime")}</span>
-        <span className="truncate text-muted-foreground">
-          {authorizedCount > 0 ? i18n.t("runnerStatus.connected", { count: authorizedCount }) : i18n.t("runnerStatus.noConnector")}
-        </span>
-        {anyRunning && !isHalted && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-            <CircleDot className="h-2.5 w-2.5" />
-            {i18n.t("runnerStatus.running")}
-          </span>
-        )}
-        {isHalted && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
-            <OctagonX className="h-2.5 w-2.5" />
-            {i18n.t("runnerStatus.halted")}
-          </span>
-        )}
-        <ChevronDown className={["h-3 w-3 shrink-0 transition-transform", open ? "rotate-180" : ""].join(" ")} aria-hidden="true" />
-      </button> */}
-
       {open && (
         <div className="grid gap-2 rounded-xl border border-primary/20 bg-background/95 p-3 shadow-sm">
           {status.brokers.map((broker) => (
