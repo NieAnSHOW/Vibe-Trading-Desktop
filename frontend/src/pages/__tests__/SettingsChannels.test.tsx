@@ -222,7 +222,7 @@ describe("Settings IM channels panel", () => {
     expect(screen.queryByLabelText(/Timeout/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Reasoning effort/)).not.toBeInTheDocument();
 
-    const connection = screen.getByRole("heading", { name: "Connection" }).closest("section");
+    const connection = screen.getByRole("heading", { name: "LLM Settings" }).closest("section");
     expect(connection).toContainElement(screen.getByRole("button", { name: "Save" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -291,17 +291,17 @@ describe("Settings IM channels panel", () => {
     await screen.findByText("IM Channels");
 
     // 扫码登录按钮在微信行渲染
-    expect(screen.getByText("扫码登录")).toBeInTheDocument();
+    expect(screen.getByText("Scan to login")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("扫码登录"));
+    fireEvent.click(screen.getByText("Scan to login"));
     await waitFor(() => expect(apiMock.startWeixinLogin).toHaveBeenCalledTimes(1));
 
     // ponytail: modal 为「等待轮询」UI(commit 9a2c93e),不再是二维码图片
-    expect(await screen.findByText("微信扫码登录")).toBeInTheDocument();
-    expect(screen.getByText(/请在已打开的页面完成微信扫码登录/)).toBeInTheDocument();
+    expect(await screen.findByText("WeChat Scan Login")).toBeInTheDocument();
+    expect(screen.getByText(/Please complete WeChat scan login in the opened page/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("取消"));
-    await waitFor(() => expect(screen.queryByText("微信扫码登录")).not.toBeInTheDocument());
+    fireEvent.click(screen.getByText("Cancel"));
+    await waitFor(() => expect(screen.queryByText("WeChat Scan Login")).not.toBeInTheDocument());
   });
 
   it("flags weixin login-expired when health=expired despite poll loop running", async () => {
@@ -331,7 +331,7 @@ describe("Settings IM channels panel", () => {
 
     expect(await screen.findByText("Login expired · rescan required")).toBeInTheDocument();
     // 恢复动作(扫码)在该行仍可用
-    expect(screen.getByText("扫码登录")).toBeInTheDocument();
+    expect(screen.getByText("Scan to login")).toBeInTheDocument();
   });
 
   it("closes QR modal and refreshes status on confirmed login", async () => {
@@ -341,13 +341,13 @@ describe("Settings IM channels panel", () => {
     render(<MemoryRouter><Settings /></MemoryRouter>);
     await screen.findByText("IM Channels");
 
-    fireEvent.click(screen.getByText("扫码登录"));
-    expect(await screen.findByText("微信扫码登录")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Scan to login"));
+    expect(await screen.findByText("WeChat Scan Login")).toBeInTheDocument();
 
     // Advance past one polling interval; confirmed status closes the modal
     await vi.advanceTimersByTimeAsync(2500);
 
-    await waitFor(() => expect(screen.queryByText("微信扫码登录")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText("WeChat Scan Login")).not.toBeInTheDocument());
     // getChannelStatus was called: once on mount, + at least one refresh after confirmed
     expect(apiMock.getChannelStatus.mock.calls.length).toBeGreaterThanOrEqual(2);
 

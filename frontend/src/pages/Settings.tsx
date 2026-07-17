@@ -140,7 +140,7 @@ export function Settings() {
   //     }
   //   } catch (error) {
   //     toast.error(
-  //       `上传失败:${error instanceof Error ? error.message : "Unknown error"}`,
+  //       `上传失败:${error instanceof Error ? error.message : t("settings.unknownError")}`,
   //     );
   //   } finally {
   //     setFlushing(false);
@@ -179,12 +179,12 @@ export function Settings() {
           const message =
             llmResult.reason instanceof Error
               ? llmResult.reason.message
-              : "Unknown error";
+              : t("settings.unknownError");
           setSettingsLoadError(message);
           if (isAuthRequiredError(llmResult.reason)) {
             toast.error(message);
           } else {
-            toast.error(`Failed to load LLM settings: ${message}`);
+            toast.error(t("settings.loadLlmSettingsFailed", { message }));
           }
         }
 
@@ -194,12 +194,12 @@ export function Settings() {
           const message =
             dataSourceResult.reason instanceof Error
               ? dataSourceResult.reason.message
-              : "Unknown error";
+              : t("settings.unknownError");
           setSettingsLoadError(message);
           if (isAuthRequiredError(dataSourceResult.reason)) {
             toast.error(message);
           } else {
-            toast.error(`Failed to load data source settings: ${message}`);
+            toast.error(t("settings.loadDataSourceSettingsFailed", { message }));
           }
         }
 
@@ -210,8 +210,8 @@ export function Settings() {
           const message =
             channelResult.reason instanceof Error
               ? channelResult.reason.message
-              : "Unknown error";
-          toast.error(`Failed to load channel status: ${message}`);
+              : t("settings.unknownError");
+          toast.error(t("settings.loadChannelStatusFailed", { message }));
           setChannelStatus(null);
         }
 
@@ -239,7 +239,7 @@ export function Settings() {
       setOptionalDeps(depsData);
     } catch (error) {
       toast.error(
-        `${t("settings.channels.refreshFailed")}: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `${t("settings.channels.refreshFailed")}: ${error instanceof Error ? error.message : t("settings.unknownError")}`,
       );
     } finally {
       setChannelRefreshing(false);
@@ -288,7 +288,7 @@ export function Settings() {
       await refreshChannelStatus();
     } catch (error) {
       toast.error(
-        `${t("settings.channels.depInstallFailed")}: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `${t("settings.channels.depInstallFailed")}: ${error instanceof Error ? error.message : t("settings.unknownError")}`,
       );
     } finally {
       setInstallingPkg(null);
@@ -310,7 +310,7 @@ export function Settings() {
       );
     } catch (error) {
       toast.error(
-        `${action === "start" ? t("settings.channels.startFailed") : t("settings.channels.stopFailed")}: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `${action === "start" ? t("settings.channels.startFailed") : t("settings.channels.stopFailed")}: ${error instanceof Error ? error.message : t("settings.unknownError")}`,
       );
     } finally {
       setChannelAction(null);
@@ -331,9 +331,7 @@ export function Settings() {
       toast.success(updated.reply);
       setPairingCommand("");
     } catch (error) {
-      toast.error(
-        `Failed to run pairing command: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      toast.error(t("settings.runPairingFailed", { message: error instanceof Error ? error.message : t("settings.unknownError") }));
     } finally {
       setPairingBusy(false);
     }
@@ -349,9 +347,7 @@ export function Settings() {
         window.open(qr_image, "_blank", "noopener,noreferrer");
       }
     } catch (error) {
-      toast.error(
-        `获取微信二维码失败: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      toast.error(t("settings.weixin.qrFailed", { message: error instanceof Error ? error.message : t("settings.unknownError") }));
     }
   };
 
@@ -366,7 +362,7 @@ export function Settings() {
           clearInterval(id);
           setWeixinQr(null);
           setWeixinPolling(false);
-          toast.success("微信登录成功");
+          toast.success(t("settings.weixin.loginSuccess"));
           // 后端在 login/status 确认时已自动重启 weixin 通道加载新身份;
           // 前端只需刷新状态展示。
           await refreshChannelStatus();
@@ -374,7 +370,7 @@ export function Settings() {
           clearInterval(id);
           setWeixinQr(null);
           setWeixinPolling(false);
-          toast.error("二维码已过期，请重新获取");
+          toast.error(t("settings.weixin.qrExpired"));
         }
         // wait / scaned_but_redirect: continue polling
       } catch {
@@ -427,11 +423,9 @@ export function Settings() {
       if (models[0] && form) {
         setForm({ ...form, model_name: models[0] });
       }
-      toast.success("VIP model list updated");
+      toast.success(t("settings.vipModelsUpdated"));
     } catch (error) {
-      toast.error(
-        `Failed to get VIP model list: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      toast.error(t("settings.vipModelsFailed", { message: error instanceof Error ? error.message : t("settings.unknownError") }));
     } finally {
       setVipModelsLoading(false);
     }
@@ -440,7 +434,7 @@ export function Settings() {
   const submitLocalApiKey = (event: FormEvent) => {
     event.preventDefault();
     setApiAuthKey(localApiKey);
-    toast.success("Local API key saved");
+    toast.success(t("settings.localApiKeySaved"));
     window.location.reload();
   };
 
@@ -459,11 +453,9 @@ export function Settings() {
       setForm(toForm(updated));
       setApiKey("");
       setClearApiKey(false);
-      toast.success("LLM settings saved");
+      toast.success(t("settings.llmSettingsSaved"));
     } catch (error) {
-      toast.error(
-        `Failed to save LLM settings: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      toast.error(t("settings.saveLlmSettingsFailed", { message: error instanceof Error ? error.message : t("settings.unknownError") }));
     } finally {
       setSaving(false);
     }
@@ -480,11 +472,9 @@ export function Settings() {
       setDataSettings(updated);
       setTushareToken("");
       setClearTushareToken(false);
-      toast.success("Data source settings saved");
+      toast.success(t("settings.dataSourceSettingsSaved"));
     } catch (error) {
-      toast.error(
-        `Failed to save data source settings: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      toast.error(t("settings.saveDataSourceSettingsFailed", { message: error instanceof Error ? error.message : t("settings.unknownError") }));
     } finally {
       setDataSaving(false);
     }
@@ -498,24 +488,24 @@ export function Settings() {
       <div className="mb-4 space-y-1">
         <div className="flex items-center gap-2">
           <KeyRound className="h-4 w-4 text-primary" />
-          <h2 className="text-base font-semibold">{"Local API access"}</h2>
+          <h2 className="text-base font-semibold">{i18n.t("settings.localApiAccess")}</h2>
         </div>
         <p className="text-sm text-muted-foreground">
           {
-            "For remote or private Web UI deployments, enter the server API key once in this browser. Localhost use can stay blank."
+            i18n.t("settings.localApiAccessDesc")
           }
         </p>
       </div>
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
         <label className="grid gap-2">
-          <span className={labelClass}>{"Server API key"}</span>
+          <span className={labelClass}>{i18n.t("settings.serverApiKey")}</span>
           <input
             type="password"
             value={localApiKey}
             onChange={(event) => setLocalApiKeyState(event.target.value)}
             className={fieldClass}
             placeholder={
-              "Stored only in this browser. Leave blank to clear it."
+              i18n.t("settings.storedInBrowser")
             }
             autoComplete="current-password"
           />
@@ -529,7 +519,7 @@ export function Settings() {
         </button>
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        {"Stored only in this browser. Leave blank to clear it."}
+        {i18n.t("settings.storedInBrowser")}
       </p>
     </form>
   );
@@ -539,11 +529,11 @@ export function Settings() {
       <div className="mx-auto max-w-5xl space-y-6 p-6">
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">
-            {"Settings"}
+            {i18n.t("settings.title")}
           </h1>
           <p className="max-w-3xl text-sm text-muted-foreground">
             {
-              "Configure model credentials and market data source tokens for this local project."
+              i18n.t("settings.subtitle")
             }
           </p>
         </div>
@@ -575,14 +565,14 @@ export function Settings() {
           {settingsLoadError ? (
             <div className="text-center">
               <div className="font-medium text-foreground">
-                {"Settings are unavailable"}
+                {i18n.t("settings.unavailable")}
               </div>
               <div className="mt-1">{settingsLoadError}</div>
             </div>
           ) : (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {"Loading..."}
+              {i18n.t("settings.loading")}
             </>
           )}
         </div>
@@ -591,20 +581,20 @@ export function Settings() {
   }
 
   const keyStatus = settings.api_key_configured
-    ? "Configured"
+    ? t("settings.configured")
     : settings.api_key_required
-      ? "Leave blank to keep the current key"
+      ? t("settings.keepCurrentKey")
       : selectedProvider?.auth_type === "oauth" &&
           selectedProvider.login_command
-        ? `This provider uses OAuth. Run: ${selectedProvider.login_command}`
-        : "This provider does not require an API key.";
+        ? t("settings.providerUsesOauth", { command: selectedProvider.login_command })
+        : t("settings.noApiKeyRequired");
   const apiKeyDisabled = !selectedProvider?.api_key_required || clearApiKey;
   const vipModelOptions = Array.from(
     new Set([form.model_name, ...vipModels].filter(Boolean)),
   );
   const tushareStatus = dataSettings.tushare_token_configured
-    ? "Configured"
-    : "Leave blank to keep the current token";
+    ? t("settings.configured")
+    : t("settings.keepCurrentToken");
   // ponytail: 仅展示微信渠道。其他 IM 渠道暂不开放,不在 WebUI 中露出。
   const channelRows = Object.entries(channelStatus?.channels ?? {})
     .filter(([name]) => name === "weixin")
@@ -628,10 +618,10 @@ export function Settings() {
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{"Settings"}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{i18n.t("settings.title")}</h1>
         <p className="max-w-3xl text-sm text-muted-foreground">
           {
-            "Configure model credentials and market data source tokens for this local project."
+            i18n.t("settings.subtitle")
           }
         </p>
       </div>
@@ -641,29 +631,15 @@ export function Settings() {
       {hideLlm ? (
         <div className="rounded-lg border bg-card p-5 shadow-sm flex items-center gap-3 text-sm text-muted-foreground">
           <Server className="h-4 w-4 text-primary shrink-0" />
-          <span>大模型已由桌面端登录自动配置（VIP），无需手动设置。</span>
+          <span>{i18n.t("settings.hideLlmNotice")}</span>
         </div>
       ) : (
         <>
-          <div className="space-y-2">
-            <h2 className="text-lg font-semibold tracking-tight">
-              {"LLM Settings"}
-            </h2>
-            <p className="max-w-3xl text-sm text-muted-foreground">
-              {
-                "Choose the model used by the agent and save it to the project-local agent/.env file."
-              }
-            </p>
-          </div>
-
-          <form
-            onSubmit={submit}
-            className="grid gap-6"
-          >
+          <form onSubmit={submit} className="grid gap-6">
             <section className="rounded-lg border bg-card p-5 shadow-sm">
               <div className="mb-5 flex items-center gap-2">
                 <Server className="h-4 w-4 text-primary" />
-                <h2 className="text-base font-semibold">{"Connection"}</h2>
+                <h2 className="text-base font-semibold">{i18n.t("settings.llmSettings")}</h2>
               </div>
 
               <div className="grid gap-4">
@@ -684,14 +660,14 @@ export function Settings() {
                   </select>
                   <span className={hintClass}>
                     {
-                      "Changing providers updates the recommended model and endpoint."
+                      i18n.t("settings.providerChangeHint")
                     }
                   </span>
                 </label>
 
                 {form.provider === VIP_PROVIDER_NAME ? (
                   <label className="grid gap-2">
-                    <span className={labelClass}>{"Model"}</span>
+                    <span className={labelClass}>{i18n.t("settings.model")}</span>
                     <div className="flex gap-2">
                       <select
                         value={form.model_name}
@@ -719,17 +695,17 @@ export function Settings() {
                           <RefreshCw className="h-4 w-4" />
                         )}
                         <span className="hidden sm:inline">
-                          {"Get model list"}
+                          {i18n.t("settings.getVipModels")}
                         </span>
                       </button>
                     </div>
                     <span className={hintClass}>
-                      {"Retrieve models available to your VIP Server."}
+                      {i18n.t("settings.vipModelsHint")}
                     </span>
                   </label>
                 ) : (
                   <label className="grid gap-2">
-                    <span className={labelClass}>{"Model"}</span>
+                    <span className={labelClass}>{i18n.t("settings.model")}</span>
                     <div className="flex gap-2">
                       <input
                         value={form.model_name}
@@ -743,16 +719,16 @@ export function Settings() {
                         type="button"
                         onClick={() => applyProviderDefaults()}
                         className="inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                        title={"Use provider defaults"}
+                        title={i18n.t("settings.useProviderDefaults")}
                       >
                         <RotateCcw className="h-4 w-4" />
                         <span className="hidden sm:inline">
-                          {"Use provider defaults"}
+                          {i18n.t("settings.useProviderDefaults")}
                         </span>
                       </button>
                     </div>
                     <span className={hintClass}>
-                      {"Use the exact model id required by your provider."}
+                      {i18n.t("settings.modelIdHint")}
                     </span>
                   </label>
                 )}
@@ -777,8 +753,8 @@ export function Settings() {
                 <label className="grid gap-2">
                   <span className={labelClass}>
                     {selectedProvider?.auth_type === "oauth"
-                      ? "OAuth"
-                      : "API key"}
+                      ? i18n.t("settings.oauth")
+                      : i18n.t("settings.apiKey")}
                   </span>
                   <div className="relative">
                     <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -805,7 +781,7 @@ export function Settings() {
                           }}
                           className="h-3.5 w-3.5 accent-primary"
                         />
-                        {"Clear saved API key"}
+                        {i18n.t("settings.clearApiKey")}
                       </label>
                     ) : null}
                   </div>
@@ -814,15 +790,17 @@ export function Settings() {
               <div className="mt-5 grid gap-4 border-t pt-5">
                 <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">
-                    {i18n.t("settings.saved")}: {" "}
+                    {i18n.t("settings.saved")}:{" "}
                   </span>
-                  <span className="break-all font-mono">{settings.env_path}</span>
+                  <span className="break-all font-mono">
+                    {settings.env_path}
+                  </span>
                 </div>
 
                 <button
                   type="submit"
                   disabled={saving}
-                  className="inline-flex items-center justify-center gap-2 justify-self-start rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="w-full inline-flex items-center justify-center gap-2 justify-self-start rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {saving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -1056,7 +1034,7 @@ export function Settings() {
                           ) : (
                             <QrCode className="h-3 w-3" />
                           )}
-                          扫码登录
+                          {i18n.t("settings.weixin.scanLogin")}
                         </button>
                       )}
                     </div>
@@ -1073,7 +1051,7 @@ export function Settings() {
           className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]"
         >
           <label className="grid gap-2">
-            <span className={labelClass}>{"Pairing command"}</span>
+            <span className={labelClass}>{i18n.t("settings.pairingCommand")}</span>
             <input
               value={pairingCommand}
               onChange={(event) => setPairingCommand(event.target.value)}
@@ -1091,7 +1069,7 @@ export function Settings() {
             ) : (
               <MessageSquareMore className="h-4 w-4" />
             )}
-            {"Run pairing"}
+            {i18n.t("settings.runPairing")}
           </button>
         </form>
       </section>
@@ -1104,12 +1082,12 @@ export function Settings() {
           <div className="flex items-center gap-2">
             <Database className="h-4 w-4 text-primary" />
             <h2 className="text-base font-semibold">
-              {"Data Source Settings"}
+              {i18n.t("settings.dataSourceSettings")}
             </h2>
           </div>
           <p className="text-sm text-muted-foreground">
             {
-              "Configure optional market data credentials used by backtests and research agents."
+              i18n.t("settings.dataSourceSettingsDesc")
             }
           </p>
         </div>
@@ -1117,7 +1095,7 @@ export function Settings() {
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
           <div className="grid gap-4">
             <label className="grid gap-2">
-              <span className={labelClass}>{"Tushare token"}</span>
+              <span className={labelClass}>{i18n.t("settings.tushareToken")}</span>
               <div className="relative">
                 <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <input
@@ -1133,7 +1111,7 @@ export function Settings() {
               <div className="flex items-center justify-between gap-3">
                 <span className={hintClass}>
                   {
-                    "Used for China A-share, futures, fund, and macro data. If unset, the project falls back to AKShare where available."
+                    i18n.t("settings.tushareTokenHint")
                   }
                 </span>
                 <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
@@ -1146,7 +1124,7 @@ export function Settings() {
                     }}
                     className="h-3.5 w-3.5 accent-primary"
                   />
-                  {"Clear saved Tushare token"}
+                  {i18n.t("settings.clearTushareToken")}
                 </label>
               </div>
             </label>
@@ -1172,27 +1150,27 @@ export function Settings() {
               )}
               {dataSaving
                 ? i18n.t("settings.saving")
-                : "Save data source settings"}
+                : i18n.t("settings.saveDataSourceSettings")}
             </button>
           </div>
 
           <div className="rounded-md border bg-muted/20 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <span className="text-sm font-medium">{"BaoStock"}</span>
+              <span className="text-sm font-medium">{i18n.t("settings.baostock")}</span>
               <span
                 className={`rounded-full px-2 py-0.5 text-xs ${dataSettings.baostock_supported ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}
               >
                 {dataSettings.baostock_supported
-                  ? "Loader available"
-                  : "No project loader"}
+                  ? i18n.t("settings.loaderAvailable")
+                  : i18n.t("settings.noProjectLoader")}
               </span>
             </div>
             <div className="space-y-2 text-sm text-muted-foreground">
               <p>{dataSettings.baostock_message}</p>
               <p>
                 {dataSettings.baostock_installed
-                  ? "Python package installed"
-                  : "Python package not installed"}
+                  ? i18n.t("settings.pythonPackageInstalled")
+                  : i18n.t("settings.pythonPackageNotInstalled")}
               </p>
             </div>
           </div>
@@ -1203,10 +1181,10 @@ export function Settings() {
       <section className="mt-6 rounded-xl border bg-card p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Package className="h-5 w-5" />
-          <h2 className="text-lg font-semibold">券商支持 (可选依赖)</h2>
+          <h2 className="text-lg font-semibold">{i18n.t("settings.brokerSupportTitle")}</h2>
         </div>
         <p className="text-sm text-muted-foreground">
-          按需安装券商 SDK。安装到本地可写目录，不影响核心依赖。
+          {i18n.t("settings.brokerSupportDesc")}
         </p>
         <OptionalDepsManager />
       </section>
@@ -1221,13 +1199,13 @@ export function Settings() {
             className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold mb-4">微信扫码登录</h3>
+            <h3 className="text-lg font-semibold mb-4">{i18n.t("settings.weixin.scanTitle")}</h3>
             <div className="flex flex-col items-center gap-3 py-4">
               <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
               <p className="text-sm text-gray-500 text-center">
-                请在已打开的页面完成微信扫码登录
+                {i18n.t("settings.weixin.scanHint")}
                 <br />
-                本窗口会自动检测登录状态…
+                {i18n.t("settings.weixin.autoDetect")}
               </p>
               {weixinQr.image?.startsWith("http") && (
                 <button
@@ -1236,7 +1214,7 @@ export function Settings() {
                   }
                   className="text-xs text-blue-600 hover:underline"
                 >
-                  未弹出页面?点此重新打开登录链接
+                  {i18n.t("settings.weixin.reopenLink")}
                 </button>
               )}
             </div>
@@ -1244,7 +1222,7 @@ export function Settings() {
               onClick={() => setWeixinQr(null)}
               className="mt-4 w-full rounded-md border px-3 py-2 text-sm"
             >
-              取消
+              {i18n.t("settings.cancel")}
             </button>
           </div>
         </div>

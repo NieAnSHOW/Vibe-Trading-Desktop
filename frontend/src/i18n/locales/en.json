@@ -397,6 +397,33 @@
       "description": "Help us improve. We collect only anonymous usage stats (page views, feature counts) — never your conversations, queries, trades, or holdings. Buffered history uploads once on next launch, then stops.",
       "on": "Anonymous usage stats on",
       "off": "Usage data collection off"
+    },
+    "unknownError": "Unknown error",
+    "loadChannelStatusFailed": "Failed to load channel status: {{message}}",
+    "runPairingFailed": "Failed to run pairing command: {{message}}",
+    "vipModelsUpdated": "VIP model list updated",
+    "vipModelsFailed": "Failed to get VIP model list: {{message}}",
+    "hideLlmNotice": "The LLM is auto-configured by desktop login (VIP); no manual setup needed.",
+    "providerChangeHint": "Changing providers updates the recommended model and endpoint.",
+    "getVipModels": "Get model list",
+    "vipModelsHint": "Retrieve models available to your VIP Server.",
+    "oauth": "OAuth",
+    "apiKey": "API key",
+    "tushareTokenHint": "Used for China A-share, futures, fund, and macro data. If unset, the project falls back to AKShare where available.",
+    "pairingCommand": "Pairing command",
+    "runPairing": "Run pairing",
+    "brokerSupportTitle": "Broker Support (Optional)",
+    "brokerSupportDesc": "Install broker SDKs on demand. Installed to a local writable directory without affecting core dependencies.",
+    "cancel": "Cancel",
+    "weixin": {
+      "qrFailed": "Failed to get WeChat QR code: {{message}}",
+      "loginSuccess": "WeChat login successful",
+      "qrExpired": "QR code expired, please retry",
+      "scanTitle": "WeChat Scan Login",
+      "scanHint": "Please complete WeChat scan login in the opened page",
+      "autoDetect": "This window will auto-detect login status…",
+      "reopenLink": "No page popped up? Click to reopen the login link",
+      "scanLogin": "Scan to login"
     }
   },
   "qveris": {

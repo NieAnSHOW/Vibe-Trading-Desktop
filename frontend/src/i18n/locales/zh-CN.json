@@ -392,6 +392,33 @@
       "description": "帮助我们改进产品。仅采集匿名使用统计（页面浏览、功能使用频次），绝不采集对话、查询、交易或持仓内容。已采集的历史数据会在下次启动上传一次后停止。",
       "on": "已开启匿名使用统计",
       "off": "已关闭使用数据采集"
+    },
+    "unknownError": "未知错误",
+    "loadChannelStatusFailed": "加载通道状态失败: {{message}}",
+    "runPairingFailed": "运行配对命令失败: {{message}}",
+    "vipModelsUpdated": "VIP 模型列表已更新",
+    "vipModelsFailed": "获取 VIP 模型列表失败: {{message}}",
+    "hideLlmNotice": "大模型已由桌面端登录自动配置（VIP），无需手动设置。",
+    "providerChangeHint": "更换提供商会自动更新推荐的模型与端点。",
+    "getVipModels": "获取模型列表",
+    "vipModelsHint": "获取 VIP Server 上可用的模型。",
+    "oauth": "OAuth",
+    "apiKey": "API 密钥",
+    "tushareTokenHint": "用于 A 股、期货、基金和宏观数据。若未设置，项目会在可用时回退到 AKShare。",
+    "pairingCommand": "配对命令",
+    "runPairing": "运行配对",
+    "brokerSupportTitle": "券商支持（可选依赖）",
+    "brokerSupportDesc": "按需安装券商 SDK。安装到本地可写目录，不影响核心依赖。",
+    "cancel": "取消",
+    "weixin": {
+      "qrFailed": "获取微信二维码失败: {{message}}",
+      "loginSuccess": "微信登录成功",
+      "qrExpired": "二维码已过期，请重新获取",
+      "scanTitle": "微信扫码登录",
+      "scanHint": "请在已打开的页面完成微信扫码登录",
+      "autoDetect": "本窗口会自动检测登录状态…",
+      "reopenLink": "未弹出页面?点此重新打开登录链接",
+      "scanLogin": "扫码登录"
     }
   },
   "qveris": {
