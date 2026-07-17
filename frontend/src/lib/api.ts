@@ -339,6 +339,7 @@ export interface VIPModelListResponse {
 
 export interface VIPModelListRequest {
   api_key?: string;
+  base_url?: string;
 }
 
 export interface DataSourceSettings {

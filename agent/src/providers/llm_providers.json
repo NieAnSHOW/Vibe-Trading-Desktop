@@ -5,7 +5,7 @@
     "api_key_env": "VIP_API_KEY",
     "base_url_env": "VIP_BASE_URL",
     "default_model": "deepseek-v4-flash",
-    "default_base_url": "https://aiyfy.cn/v1",
+    "default_base_url": "https://new.ailjf.cc/v1",
     "api_key_required": true
   },
   {

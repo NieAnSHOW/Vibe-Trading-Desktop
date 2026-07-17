@@ -69,7 +69,7 @@ function toForm(settings: LLMSettings): LLMFormState {
 const VIP_PROVIDER_NAME = "vip_server";
 const VIP_DEFAULTS = {
   model: "deepseek-v4-flash",
-  base_url: "https://aiyfy.cn/v1",
+  base_url: "https://new.ailjf.cc/v1",
 } as const;
 
 // ponytail: "用户是否主动切换过 provider"的本地标记。
@@ -199,7 +199,9 @@ export function Settings() {
           if (isAuthRequiredError(dataSourceResult.reason)) {
             toast.error(message);
           } else {
-            toast.error(t("settings.loadDataSourceSettingsFailed", { message }));
+            toast.error(
+              t("settings.loadDataSourceSettingsFailed", { message }),
+            );
           }
         }
 
@@ -331,7 +333,12 @@ export function Settings() {
       toast.success(updated.reply);
       setPairingCommand("");
     } catch (error) {
-      toast.error(t("settings.runPairingFailed", { message: error instanceof Error ? error.message : t("settings.unknownError") }));
+      toast.error(
+        t("settings.runPairingFailed", {
+          message:
+            error instanceof Error ? error.message : t("settings.unknownError"),
+        }),
+      );
     } finally {
       setPairingBusy(false);
     }
@@ -347,7 +354,12 @@ export function Settings() {
         window.open(qr_image, "_blank", "noopener,noreferrer");
       }
     } catch (error) {
-      toast.error(t("settings.weixin.qrFailed", { message: error instanceof Error ? error.message : t("settings.unknownError") }));
+      toast.error(
+        t("settings.weixin.qrFailed", {
+          message:
+            error instanceof Error ? error.message : t("settings.unknownError"),
+        }),
+      );
     }
   };
 
@@ -416,16 +428,23 @@ export function Settings() {
     setVipModelsLoading(true);
     try {
       const submittedApiKey = apiKey.trim();
-      const { models } = await api.getVipModels(
-        submittedApiKey ? { api_key: submittedApiKey } : {},
-      );
+      const submittedBaseUrl = form?.base_url.trim();
+      const { models } = await api.getVipModels({
+        ...(submittedApiKey ? { api_key: submittedApiKey } : {}),
+        ...(submittedBaseUrl ? { base_url: submittedBaseUrl } : {}),
+      });
       setVipModels(models);
       if (models[0] && form) {
         setForm({ ...form, model_name: models[0] });
       }
       toast.success(t("settings.vipModelsUpdated"));
     } catch (error) {
-      toast.error(t("settings.vipModelsFailed", { message: error instanceof Error ? error.message : t("settings.unknownError") }));
+      toast.error(
+        t("settings.vipModelsFailed", {
+          message:
+            error instanceof Error ? error.message : t("settings.unknownError"),
+        }),
+      );
     } finally {
       setVipModelsLoading(false);
     }
@@ -455,7 +474,12 @@ export function Settings() {
       setClearApiKey(false);
       toast.success(t("settings.llmSettingsSaved"));
     } catch (error) {
-      toast.error(t("settings.saveLlmSettingsFailed", { message: error instanceof Error ? error.message : t("settings.unknownError") }));
+      toast.error(
+        t("settings.saveLlmSettingsFailed", {
+          message:
+            error instanceof Error ? error.message : t("settings.unknownError"),
+        }),
+      );
     } finally {
       setSaving(false);
     }
@@ -474,7 +498,12 @@ export function Settings() {
       setClearTushareToken(false);
       toast.success(t("settings.dataSourceSettingsSaved"));
     } catch (error) {
-      toast.error(t("settings.saveDataSourceSettingsFailed", { message: error instanceof Error ? error.message : t("settings.unknownError") }));
+      toast.error(
+        t("settings.saveDataSourceSettingsFailed", {
+          message:
+            error instanceof Error ? error.message : t("settings.unknownError"),
+        }),
+      );
     } finally {
       setDataSaving(false);
     }
@@ -488,12 +517,12 @@ export function Settings() {
       <div className="mb-4 space-y-1">
         <div className="flex items-center gap-2">
           <KeyRound className="h-4 w-4 text-primary" />
-          <h2 className="text-base font-semibold">{i18n.t("settings.localApiAccess")}</h2>
+          <h2 className="text-base font-semibold">
+            {i18n.t("settings.localApiAccess")}
+          </h2>
         </div>
         <p className="text-sm text-muted-foreground">
-          {
-            i18n.t("settings.localApiAccessDesc")
-          }
+          {i18n.t("settings.localApiAccessDesc")}
         </p>
       </div>
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
@@ -504,9 +533,7 @@ export function Settings() {
             value={localApiKey}
             onChange={(event) => setLocalApiKeyState(event.target.value)}
             className={fieldClass}
-            placeholder={
-              i18n.t("settings.storedInBrowser")
-            }
+            placeholder={i18n.t("settings.storedInBrowser")}
             autoComplete="current-password"
           />
         </label>
@@ -532,9 +559,7 @@ export function Settings() {
             {i18n.t("settings.title")}
           </h1>
           <p className="max-w-3xl text-sm text-muted-foreground">
-            {
-              i18n.t("settings.subtitle")
-            }
+            {i18n.t("settings.subtitle")}
           </p>
         </div>
         {localApiAccessSection}
@@ -586,7 +611,9 @@ export function Settings() {
       ? t("settings.keepCurrentKey")
       : selectedProvider?.auth_type === "oauth" &&
           selectedProvider.login_command
-        ? t("settings.providerUsesOauth", { command: selectedProvider.login_command })
+        ? t("settings.providerUsesOauth", {
+            command: selectedProvider.login_command,
+          })
         : t("settings.noApiKeyRequired");
   const apiKeyDisabled = !selectedProvider?.api_key_required || clearApiKey;
   const vipModelOptions = Array.from(
@@ -618,11 +645,11 @@ export function Settings() {
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{i18n.t("settings.title")}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {i18n.t("settings.title")}
+        </h1>
         <p className="max-w-3xl text-sm text-muted-foreground">
-          {
-            i18n.t("settings.subtitle")
-          }
+          {i18n.t("settings.subtitle")}
         </p>
       </div>
 
@@ -639,7 +666,9 @@ export function Settings() {
             <section className="rounded-lg border bg-card p-5 shadow-sm">
               <div className="mb-5 flex items-center gap-2">
                 <Server className="h-4 w-4 text-primary" />
-                <h2 className="text-base font-semibold">{i18n.t("settings.llmSettings")}</h2>
+                <h2 className="text-base font-semibold">
+                  {i18n.t("settings.llmSettings")}
+                </h2>
               </div>
 
               <div className="grid gap-4">
@@ -659,15 +688,15 @@ export function Settings() {
                     ))}
                   </select>
                   <span className={hintClass}>
-                    {
-                      i18n.t("settings.providerChangeHint")
-                    }
+                    {i18n.t("settings.providerChangeHint")}
                   </span>
                 </label>
 
                 {form.provider === VIP_PROVIDER_NAME ? (
                   <label className="grid gap-2">
-                    <span className={labelClass}>{i18n.t("settings.model")}</span>
+                    <span className={labelClass}>
+                      {i18n.t("settings.model")}
+                    </span>
                     <div className="flex gap-2">
                       <select
                         value={form.model_name}
@@ -705,7 +734,9 @@ export function Settings() {
                   </label>
                 ) : (
                   <label className="grid gap-2">
-                    <span className={labelClass}>{i18n.t("settings.model")}</span>
+                    <span className={labelClass}>
+                      {i18n.t("settings.model")}
+                    </span>
                     <div className="flex gap-2">
                       <input
                         value={form.model_name}
@@ -1051,7 +1082,9 @@ export function Settings() {
           className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]"
         >
           <label className="grid gap-2">
-            <span className={labelClass}>{i18n.t("settings.pairingCommand")}</span>
+            <span className={labelClass}>
+              {i18n.t("settings.pairingCommand")}
+            </span>
             <input
               value={pairingCommand}
               onChange={(event) => setPairingCommand(event.target.value)}
@@ -1086,16 +1119,16 @@ export function Settings() {
             </h2>
           </div>
           <p className="text-sm text-muted-foreground">
-            {
-              i18n.t("settings.dataSourceSettingsDesc")
-            }
+            {i18n.t("settings.dataSourceSettingsDesc")}
           </p>
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
           <div className="grid gap-4">
             <label className="grid gap-2">
-              <span className={labelClass}>{i18n.t("settings.tushareToken")}</span>
+              <span className={labelClass}>
+                {i18n.t("settings.tushareToken")}
+              </span>
               <div className="relative">
                 <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <input
@@ -1110,9 +1143,7 @@ export function Settings() {
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className={hintClass}>
-                  {
-                    i18n.t("settings.tushareTokenHint")
-                  }
+                  {i18n.t("settings.tushareTokenHint")}
                 </span>
                 <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                   <input
@@ -1156,7 +1187,9 @@ export function Settings() {
 
           <div className="rounded-md border bg-muted/20 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <span className="text-sm font-medium">{i18n.t("settings.baostock")}</span>
+              <span className="text-sm font-medium">
+                {i18n.t("settings.baostock")}
+              </span>
               <span
                 className={`rounded-full px-2 py-0.5 text-xs ${dataSettings.baostock_supported ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}
               >
@@ -1181,7 +1214,9 @@ export function Settings() {
       <section className="mt-6 rounded-xl border bg-card p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Package className="h-5 w-5" />
-          <h2 className="text-lg font-semibold">{i18n.t("settings.brokerSupportTitle")}</h2>
+          <h2 className="text-lg font-semibold">
+            {i18n.t("settings.brokerSupportTitle")}
+          </h2>
         </div>
         <p className="text-sm text-muted-foreground">
           {i18n.t("settings.brokerSupportDesc")}
@@ -1199,7 +1234,9 @@ export function Settings() {
             className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold mb-4">{i18n.t("settings.weixin.scanTitle")}</h3>
+            <h3 className="text-lg font-semibold mb-4">
+              {i18n.t("settings.weixin.scanTitle")}
+            </h3>
             <div className="flex flex-col items-center gap-3 py-4">
               <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
               <p className="text-sm text-gray-500 text-center">

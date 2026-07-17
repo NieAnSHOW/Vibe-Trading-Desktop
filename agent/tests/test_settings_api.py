@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import api_server
-from src.api import helpers
+from src.api import helpers, settings_routes
 
 
 def test_env_updates_are_atomic_and_owner_only(tmp_path: Path) -> None:
@@ -219,6 +219,75 @@ def test_vip_model_list_proxies_models_without_exposing_credentials(
     assert "vip-secret-value" not in response.text
     assert "form-vip-key" not in response.text
     assert "vip.example" not in response.text
+
+
+def test_vip_model_list_uses_transient_vip_default_base_url(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / ".env").write_text(
+        "VIP_BASE_URL=https://stale.example/v1\nVIP_API_KEY=vip-secret-value\n",
+        encoding="utf-8",
+    )
+    captured: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        captured["authorization"] = request.headers["authorization"]
+        return httpx.Response(200, json={"data": [{"id": "gpt-5-mini"}]})
+
+    transport = httpx.MockTransport(handler)
+
+    class MockedAsyncClient(httpx.AsyncClient):
+        def __init__(self, *args, **kwargs):
+            kwargs["transport"] = transport
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(api_server.httpx, "AsyncClient", MockedAsyncClient)
+
+    vip_default_base_url = settings_routes.LLM_PROVIDER_BY_NAME["vip_server"].default_base_url
+    response = client.post(
+        "/settings/llm/vip-models",
+        json={"base_url": vip_default_base_url},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"models": ["gpt-5-mini"]}
+    assert captured == {
+        "url": f"{vip_default_base_url}/models",
+        "authorization": "Bearer vip-secret-value",
+    }
+
+
+def test_vip_model_list_rejects_non_vip_base_url(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / ".env").write_text(
+        "VIP_BASE_URL=https://stale.example/v1\nVIP_API_KEY=vip-secret-value\n",
+        encoding="utf-8",
+    )
+    requested_urls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested_urls.append(str(request.url))
+        return httpx.Response(200, json={"data": []})
+
+    transport = httpx.MockTransport(handler)
+
+    class MockedAsyncClient(httpx.AsyncClient):
+        def __init__(self, *args, **kwargs):
+            kwargs["transport"] = transport
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(api_server.httpx, "AsyncClient", MockedAsyncClient)
+
+    response = client.post(
+        "/settings/llm/vip-models",
+        json={"api_key": "form-vip-key", "base_url": "https://untrusted.example/v1"},
+    )
+
+    assert response.status_code == 400
+    assert requested_urls == []
+    assert "vip-secret-value" not in response.text
 
 
 @pytest.mark.parametrize("placeholder", ["sk-xxx", "xxx", "gsk_xxx"])

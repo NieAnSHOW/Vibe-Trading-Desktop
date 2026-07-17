@@ -83,9 +83,10 @@ class VIPModelListResponse(BaseModel):
 
 
 class VIPModelListRequest(BaseModel):
-    """Optional transient VIP credential for model discovery."""
+    """Optional transient VIP connection details for model discovery."""
 
     api_key: Optional[str] = None
+    base_url: Optional[str] = None
 
 
 class DataSourceSettingsResponse(BaseModel):
@@ -266,16 +267,32 @@ def _build_data_source_settings_response(
     )
 
 
-async def _fetch_vip_model_ids(api_key_override: Optional[str] = None) -> List[str]:
+async def _fetch_vip_model_ids(
+    api_key_override: Optional[str] = None,
+    base_url_override: Optional[str] = None,
+) -> List[str]:
     """Retrieve OpenAI-compatible model IDs without exposing VIP credentials."""
     host = _host()
     provider = LLM_PROVIDER_BY_NAME["vip_server"]
     values = _read_settings_env_values()
-    api_key = (api_key_override or values.get(provider.api_key_env or "", "")).strip()
+    submitted_api_key = (api_key_override or "").strip()
+    api_key = (submitted_api_key or values.get(provider.api_key_env or "", "")).strip()
     if not host._is_configured_secret(api_key, LLM_API_KEY_PLACEHOLDERS):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="VIP Server API key is not configured")
 
-    base_url = values.get(provider.base_url_env, provider.default_base_url).strip()
+    configured_base_url = values.get(provider.base_url_env, provider.default_base_url).strip()
+    submitted_base_url = (base_url_override or "").strip()
+    trusted_base_urls = {
+        configured_base_url.rstrip("/"),
+        provider.default_base_url.rstrip("/"),
+    }
+    if submitted_base_url and submitted_base_url.rstrip("/") not in trusted_base_urls:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="VIP Server base URL is not supported",
+        )
+
+    base_url = submitted_base_url or configured_base_url
     models_url = f"{base_url.rstrip('/')}/models"
     try:
         async with host.httpx.AsyncClient(timeout=10.0) as client:
@@ -418,7 +435,9 @@ def register_settings_routes(
     )
     async def get_vip_models(payload: VIPModelListRequest):
         """Return configured VIP Server models without exposing its connection details."""
-        return VIPModelListResponse(models=await _fetch_vip_model_ids(payload.api_key))
+        return VIPModelListResponse(
+            models=await _fetch_vip_model_ids(payload.api_key, payload.base_url)
+        )
 
     @app.put(
         "/settings/llm",

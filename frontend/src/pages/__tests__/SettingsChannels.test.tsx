@@ -101,6 +101,19 @@ function vipLlmSettings() {
   };
 }
 
+function vipProvider() {
+  return {
+    name: "vip_server",
+    label: "VIP Server",
+    api_key_env: "VIP_API_KEY",
+    base_url_env: "VIP_BASE_URL",
+    default_model: "deepseek-v4-flash",
+    default_base_url: "https://vip.example/v1",
+    api_key_required: true,
+    auth_type: "api_key",
+  };
+}
+
 function channelStatus(overrides = {}) {
   return {
     running: false,
@@ -172,11 +185,37 @@ describe("Settings IM channels panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Get model list" }));
 
     await waitFor(() =>
-      expect(apiMock.getVipModels).toHaveBeenCalledWith({ api_key: "new-vip-key" }),
+      expect(apiMock.getVipModels).toHaveBeenCalledWith({
+        api_key: "new-vip-key",
+        base_url: "https://vip.example/v1",
+      }),
     );
     expect(await screen.findByRole("option", { name: "gpt-5" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "gpt-5-mini" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: /Model/ })).toHaveValue("gpt-5-mini");
+  });
+
+  it("uses the VIP base URL when loading models after switching providers", async () => {
+    window.localStorage.setItem("vt_provider_picked", "1");
+    apiMock.getLLMSettings.mockResolvedValue({
+      ...llmSettings(),
+      providers: [...llmSettings().providers, vipProvider()],
+    });
+    apiMock.getVipModels.mockResolvedValue({ models: ["gpt-5-mini"] });
+
+    render(<MemoryRouter><Settings /></MemoryRouter>);
+    await screen.findByText("LLM Settings");
+
+    fireEvent.change(screen.getByRole("combobox", { name: /^Provider/ }), {
+      target: { value: "vip_server" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Get model list" }));
+
+    await waitFor(() =>
+      expect(apiMock.getVipModels).toHaveBeenCalledWith({
+        base_url: "https://vip.example/v1",
+      }),
+    );
   });
 
   it("persists the user-selected VIP model without refreshing the model list", async () => {
