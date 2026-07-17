@@ -34,7 +34,7 @@ import { useAgentStore } from "@/stores/agent";
 import { ConnectionBanner } from "@/components/layout/ConnectionBanner";
 
 // Bump on each release; one place keeps the footer in sync with package.json.
-const APP_VERSION = "v0.1.10";
+const APP_VERSION = `v${import.meta.env.VITE_DESKTOP_VERSION}_desktop`;
 
 type ExternalShortcut = {
   id: string;
@@ -145,11 +145,13 @@ function NavLink({
         className={cn(
           base,
           collapsed ? "justify-center p-2" : "gap-3 px-3 py-2",
-          "text-muted-foreground hover:bg-muted hover:text-foreground"
+          "text-muted-foreground hover:bg-muted hover:text-foreground",
         )}
         title={collapsed ? label : undefined}
         onClick={() => {
-          try { track("feature_use", { nav_target: to }, { name: "nav_sidebar" }); } catch {}
+          try {
+            track("feature_use", { nav_target: to }, { name: "nav_sidebar" });
+          } catch {}
         }}
       >
         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -166,11 +168,13 @@ function NavLink({
         collapsed ? "justify-center p-2" : "gap-3 px-3 py-2",
         isActive
           ? "bg-primary/10 text-primary font-medium"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
       title={collapsed ? label : undefined}
       onClick={() => {
-        try { track("feature_use", { nav_target: to }, { name: "nav_sidebar" }); } catch {}
+        try {
+          track("feature_use", { nav_target: to }, { name: "nav_sidebar" });
+        } catch {}
       }}
     >
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -196,10 +200,14 @@ export function Layout() {
   // ── telemetry ──
   const startedAtRef = useRef(Date.now());
   useEffect(() => {
-    try { track("session_start", {}); } catch {}
+    try {
+      track("session_start", {});
+    } catch {}
     const onHide = () => {
       try {
-        track("session_end", { duration_ms: Date.now() - startedAtRef.current });
+        track("session_end", {
+          duration_ms: Date.now() - startedAtRef.current,
+        });
       } catch {}
     };
     window.addEventListener("pagehide", onHide);
@@ -207,7 +215,9 @@ export function Layout() {
   }, []);
 
   useEffect(() => {
-    try { track("page_view", { route: pathname }); } catch {}
+    try {
+      track("page_view", { route: pathname });
+    } catch {}
   }, [pathname]);
 
   const { dark, toggle } = useDarkMode();
@@ -216,7 +226,7 @@ export function Layout() {
   const sseStatus = useAgentStore((s) => s.sseStatus);
   const sseRetryAttempt = useAgentStore((s) => s.sseRetryAttempt);
   const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem("qa-sidebar") === "collapsed"
+    () => localStorage.getItem("qa-sidebar") === "collapsed",
   );
   const [showExternal, setShowExternal] = useState(false);
 
@@ -248,20 +258,27 @@ export function Layout() {
     try {
       await api.deleteSession(sid);
       setSessions((prev) => prev.filter((s) => s.session_id !== sid));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setDeleteTarget(null);
   };
 
   const renameSession = async (sid: string) => {
-    if (!renameValue.trim()) { setRenameTarget(null); return; }
+    if (!renameValue.trim()) {
+      setRenameTarget(null);
+      return;
+    }
     try {
       await api.renameSession(sid, renameValue.trim());
       setSessions((prev) =>
         prev.map((s) =>
-          s.session_id === sid ? { ...s, title: renameValue.trim() } : s
-        )
+          s.session_id === sid ? { ...s, title: renameValue.trim() } : s,
+        ),
       );
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setRenameTarget(null);
   };
 
@@ -284,27 +301,95 @@ export function Layout() {
       <aside
         className={cn(
           "border-r bg-card flex flex-col shrink-0 transition-all duration-200",
-          collapsed ? "w-12" : "w-60"
+          collapsed ? "w-12" : "w-60",
         )}
       >
         {/* ── top: user + primary nav ── */}
         <nav className={cn("space-y-0.5", collapsed ? "p-1" : "p-2")}>
-          {!collapsed && <SectionLabel>{t("layout.section.workspace")}</SectionLabel>}
+          {!collapsed && (
+            <SectionLabel>{t("layout.section.workspace")}</SectionLabel>
+          )}
 
-          <NavLink to="/" icon={BarChart3} label={t("layout.home")} collapsed={collapsed} isActive={isActive("/")} />
-          <NavLink to="/dashboard" icon={LayoutDashboard} label={t("layout.dashboard")} collapsed={collapsed} isActive={isActive("/dashboard")} />
-          <NavLink to="/market-pulse" icon={Activity} label={t("layout.marketPulse")} collapsed={collapsed} isActive={isActive("/market-pulse")} />
-          <NavLink to="/indices" icon={LineChart} label={t("layout.indices", "指数")} collapsed={collapsed} isActive={isActive("/indices")} />
-          <NavLink to="/agent" icon={Bot} label={t("layout.agent")} collapsed={collapsed} isActive={isActive("/agent")} />
-          <NavLink to="/watchlist" icon={Eye} label={t("layout.watchlist")} collapsed={collapsed} isActive={isActive("/watchlist")} />
-          <NavLink to="/reports" icon={FileText} label={t("layout.reports")} collapsed={collapsed} isActive={isActive("/reports")} />
-          <NavLink to="/alpha-zoo" icon={Layers} label={t("layout.alphaZoo")} collapsed={collapsed} isActive={isActive("/alpha-zoo")} />
-
-          {!collapsed && <SectionLabel>{t("layout.section.tools")}</SectionLabel>}
-
-          <NavLink to="/correlation" icon={BarChart3} label={t("layout.correlation")} collapsed={collapsed} isActive={isActive("/correlation")} />
-          <NavLink to="/runtime" icon={Activity} label={t("layout.runtime")} collapsed={collapsed} isActive={isActive("/runtime")} />
-          <NavLink to="/settings" icon={Settings} label={t("layout.settings")} collapsed={collapsed} isActive={isActive("/settings")} />
+          <NavLink
+            to="/"
+            icon={BarChart3}
+            label={t("layout.home")}
+            collapsed={collapsed}
+            isActive={isActive("/")}
+          />
+          <NavLink
+            to="/agent"
+            icon={Bot}
+            label={t("layout.agent")}
+            collapsed={collapsed}
+            isActive={isActive("/agent")}
+          />
+          <NavLink
+            to="/dashboard"
+            icon={LayoutDashboard}
+            label={t("layout.dashboard")}
+            collapsed={collapsed}
+            isActive={isActive("/dashboard")}
+          />
+          <NavLink
+            to="/market-pulse"
+            icon={Activity}
+            label={t("layout.marketPulse")}
+            collapsed={collapsed}
+            isActive={isActive("/market-pulse")}
+          />
+          <NavLink
+            to="/indices"
+            icon={LineChart}
+            label={t("layout.indices", "指数")}
+            collapsed={collapsed}
+            isActive={isActive("/indices")}
+          />
+          <NavLink
+            to="/watchlist"
+            icon={Eye}
+            label={t("layout.watchlist")}
+            collapsed={collapsed}
+            isActive={isActive("/watchlist")}
+          />
+          <NavLink
+            to="/reports"
+            icon={FileText}
+            label={t("layout.reports")}
+            collapsed={collapsed}
+            isActive={isActive("/reports")}
+          />
+          <NavLink
+            to="/alpha-zoo"
+            icon={Layers}
+            label={t("layout.alphaZoo")}
+            collapsed={collapsed}
+            isActive={isActive("/alpha-zoo")}
+          />
+          {!collapsed && (
+            <SectionLabel>{t("layout.section.tools")}</SectionLabel>
+          )}
+          <NavLink
+            to="/correlation"
+            icon={BarChart3}
+            label={t("layout.correlation")}
+            collapsed={collapsed}
+            isActive={isActive("/correlation")}
+          />
+          <NavLink
+            to="/runtime"
+            icon={Activity}
+            label={t("layout.runtime")}
+            collapsed={collapsed}
+            isActive={isActive("/runtime")}
+          />
+          <NavLink
+            to="/settings"
+            icon={Settings}
+            label={t("layout.settings")}
+            collapsed={collapsed}
+            isActive={isActive("/settings")}
+          />
 
           {/* docs */}
           <NavLink
@@ -325,8 +410,15 @@ export function Layout() {
                 className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <Globe2 className="h-4 w-4 shrink-0" />
-                <span className="flex-1 text-left">{t("layout.externalShortcuts.title")}</span>
-                <span className={cn("text-[10px] text-muted-foreground/50 transition-transform", showExternal && "rotate-90")}>
+                <span className="flex-1 text-left">
+                  {t("layout.externalShortcuts.title")}
+                </span>
+                <span
+                  className={cn(
+                    "text-[10px] text-muted-foreground/50 transition-transform",
+                    showExternal && "rotate-90",
+                  )}
+                >
                   ▶
                 </span>
               </button>
@@ -336,7 +428,13 @@ export function Layout() {
                     key={s.id}
                     type="button"
                     onClick={() => {
-                      try { track("feature_use", { shortcut_id: s.id }, { name: "external_shortcut" }); } catch {}
+                      try {
+                        track(
+                          "feature_use",
+                          { shortcut_id: s.id },
+                          { name: "external_shortcut" },
+                        );
+                      } catch {}
                       openExternalUrl(s.url);
                     }}
                     className="flex items-center gap-3 rounded-md pl-8 pr-3 py-1.5 text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground w-full text-left"
@@ -354,7 +452,13 @@ export function Layout() {
                 key={s.id}
                 type="button"
                 onClick={() => {
-                  try { track("feature_use", { shortcut_id: s.id }, { name: "external_shortcut" }); } catch {}
+                  try {
+                    track(
+                      "feature_use",
+                      { shortcut_id: s.id },
+                      { name: "external_shortcut" },
+                    );
+                  } catch {}
                   openExternalUrl(s.url);
                 }}
                 className="flex items-center justify-center p-2 w-full rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
@@ -377,7 +481,9 @@ export function Layout() {
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded"
                 title={t("layout.newChat")}
                 onClick={() => {
-                  try { track("feature_use", {}, { name: "session_new" }); } catch {}
+                  try {
+                    track("feature_use", {}, { name: "session_new" });
+                  } catch {}
                 }}
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -388,7 +494,10 @@ export function Layout() {
               {sessionsLoading ? (
                 <div className="space-y-1.5 px-2 py-1">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-7 rounded-md bg-muted/50 animate-pulse" />
+                    <div
+                      key={i}
+                      className="h-7 rounded-md bg-muted/50 animate-pulse"
+                    />
                   ))}
                 </div>
               ) : sessions.length === 0 ? (
@@ -401,7 +510,10 @@ export function Layout() {
                 const isDeleting = deleteTarget === s.session_id;
                 const isRenaming = renameTarget === s.session_id;
                 return (
-                  <div key={s.session_id} className="group relative flex items-center">
+                  <div
+                    key={s.session_id}
+                    className="group relative flex items-center"
+                  >
                     {isRenaming ? (
                       <input
                         autoFocus
@@ -422,7 +534,7 @@ export function Layout() {
                           "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
                           active
                             ? "bg-primary/10 text-primary font-medium"
-                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground",
                         )}
                         title={s.title || s.session_id}
                       >
@@ -433,7 +545,9 @@ export function Layout() {
                             <span
                               className={cn(
                                 "h-1.5 w-1.5 rounded-full shrink-0",
-                                active ? "bg-primary/70" : "bg-muted-foreground/40"
+                                active
+                                  ? "bg-primary/70"
+                                  : "bg-muted-foreground/40",
                               )}
                             />
                           )}
@@ -445,7 +559,13 @@ export function Layout() {
                       <div className="absolute right-0.5 flex items-center gap-0.5">
                         <button
                           onClick={() => {
-                            try { track("feature_use", {}, { name: "session_delete" }); } catch {}
+                            try {
+                              track(
+                                "feature_use",
+                                {},
+                                { name: "session_delete" },
+                              );
+                            } catch {}
                             deleteSession(s.session_id);
                           }}
                           className="p-1 text-danger hover:bg-danger/10 rounded text-[10px] font-medium"
@@ -500,24 +620,34 @@ export function Layout() {
         <div
           className={cn(
             "border-t",
-            collapsed ? "p-1 flex flex-col items-center gap-1" : "px-3 py-2.5 flex items-center justify-between"
+            collapsed
+              ? "p-1 flex flex-col items-center gap-1"
+              : "px-3 py-2.5 flex items-center justify-between",
           )}
         >
           {collapsed ? (
             <>
               <button
                 onClick={() => {
-                  try { track("feature_use", {}, { name: "theme_toggle" }); } catch {}
+                  try {
+                    track("feature_use", {}, { name: "theme_toggle" });
+                  } catch {}
                   toggle();
                 }}
                 className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
                 title={dark ? t("layout.light") : t("layout.dark")}
               >
-                {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                {dark ? (
+                  <Sun className="h-3.5 w-3.5" />
+                ) : (
+                  <Moon className="h-3.5 w-3.5" />
+                )}
               </button>
               <button
                 onClick={() => {
-                  try { track("feature_use", {}, { name: "sidebar_toggle" }); } catch {}
+                  try {
+                    track("feature_use", {}, { name: "sidebar_toggle" });
+                  } catch {}
                   setCollapsed(false);
                 }}
                 className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
@@ -530,20 +660,28 @@ export function Layout() {
             <>
               <button
                 onClick={() => {
-                  try { track("feature_use", {}, { name: "theme_toggle" }); } catch {}
+                  try {
+                    track("feature_use", {}, { name: "theme_toggle" });
+                  } catch {}
                   toggle();
                 }}
                 className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors rounded"
                 title={dark ? t("layout.light") : t("layout.dark")}
               >
-                {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                {dark ? (
+                  <Sun className="h-3.5 w-3.5" />
+                ) : (
+                  <Moon className="h-3.5 w-3.5" />
+                )}
               </button>
 
               <button
                 onClick={() => {
-                  try { track("feature_use", {}, { name: "lang_toggle" }); } catch {}
+                  try {
+                    track("feature_use", {}, { name: "lang_toggle" });
+                  } catch {}
                   i18nHook.changeLanguage(
-                    i18nHook.language === "zh-CN" ? "en" : "zh-CN"
+                    i18nHook.language === "zh-CN" ? "en" : "zh-CN",
                   );
                 }}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors rounded"
@@ -558,7 +696,9 @@ export function Layout() {
 
               <button
                 onClick={() => {
-                  try { track("feature_use", {}, { name: "sidebar_toggle" }); } catch {}
+                  try {
+                    track("feature_use", {}, { name: "sidebar_toggle" });
+                  } catch {}
                   setCollapsed(true);
                 }}
                 className="p-0.5 text-muted-foreground hover:text-foreground rounded transition-colors"
