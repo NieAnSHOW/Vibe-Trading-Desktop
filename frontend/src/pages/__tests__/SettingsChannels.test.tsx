@@ -13,6 +13,7 @@ const apiMock = vi.hoisted(() => ({
   startChannels: vi.fn(),
   stopChannels: vi.fn(),
   runChannelPairingCommand: vi.fn(),
+  getVipModels: vi.fn(),
   updateLLMSettings: vi.fn(),
   updateDataSourceSettings: vi.fn(),
   startWeixinLogin: vi.fn(),
@@ -78,6 +79,28 @@ function dataSourceSettings() {
   };
 }
 
+function vipLlmSettings() {
+  return {
+    ...llmSettings(),
+    provider: "vip_server",
+    model_name: "deepseek-v4-flash",
+    base_url: "https://vip.example/v1",
+    api_key_env: "VIP_API_KEY",
+    providers: [
+      {
+        name: "vip_server",
+        label: "VIP Server",
+        api_key_env: "VIP_API_KEY",
+        base_url_env: "VIP_BASE_URL",
+        default_model: "deepseek-v4-flash",
+        default_base_url: "https://vip.example/v1",
+        api_key_required: true,
+        auth_type: "api_key",
+      },
+    ],
+  };
+}
+
 function channelStatus(overrides = {}) {
   return {
     running: false,
@@ -104,9 +127,11 @@ function channelStatus(overrides = {}) {
 
 describe("Settings IM channels panel", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     // ponytail: fork tests mutate the global i18n language; this suite asserts
     // English copy, so reset to "en" for isolation in the full-suite run.
     i18n.changeLanguage("en");
+    window.localStorage.clear();
     apiMock.getLLMSettings.mockResolvedValue(llmSettings());
     apiMock.getDataSourceSettings.mockResolvedValue(dataSourceSettings());
     apiMock.getChannelStatus.mockResolvedValue(channelStatus());
@@ -129,6 +154,108 @@ describe("Settings IM channels panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
 
     await waitFor(() => expect(apiMock.getChannelStatus).toHaveBeenCalledTimes(2));
+  });
+
+  it("retrieves VIP models into a selectable list without displaying the base URL", async () => {
+    window.localStorage.setItem("vt_provider_picked", "1");
+    apiMock.getLLMSettings.mockResolvedValue(vipLlmSettings());
+    apiMock.getVipModels.mockResolvedValue({ models: ["gpt-5-mini", "gpt-5"] });
+
+    render(<MemoryRouter><Settings /></MemoryRouter>);
+
+    await screen.findByText("LLM Settings");
+    expect(screen.queryByDisplayValue("https://vip.example/v1")).not.toBeInTheDocument();
+    fireEvent.change(screen.getAllByPlaceholderText("Leave blank to keep the current key")[0], {
+      target: { value: "new-vip-key" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Get model list" }));
+
+    await waitFor(() =>
+      expect(apiMock.getVipModels).toHaveBeenCalledWith({ api_key: "new-vip-key" }),
+    );
+    expect(await screen.findByRole("option", { name: "gpt-5" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "gpt-5-mini" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /Model/ })).toHaveValue("gpt-5-mini");
+  });
+
+  it("persists the user-selected VIP model without refreshing the model list", async () => {
+    window.localStorage.setItem("vt_provider_picked", "1");
+    apiMock.getLLMSettings.mockResolvedValue(vipLlmSettings());
+    apiMock.getVipModels.mockResolvedValue({ models: ["gpt-5-mini", "gpt-5"] });
+    apiMock.updateLLMSettings.mockResolvedValue({
+      ...vipLlmSettings(),
+      model_name: "gpt-5",
+    });
+
+    render(<MemoryRouter><Settings /></MemoryRouter>);
+    await screen.findByText("LLM Settings");
+
+    fireEvent.click(screen.getByRole("button", { name: "Get model list" }));
+    await screen.findByRole("option", { name: "gpt-5" });
+    fireEvent.change(screen.getByRole("combobox", { name: /Model/ }), {
+      target: { value: "gpt-5" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(apiMock.updateLLMSettings).toHaveBeenCalledOnce());
+    expect(apiMock.getVipModels).toHaveBeenCalledOnce();
+    expect(apiMock.updateLLMSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "vip_server",
+        model_name: "gpt-5",
+      }),
+    );
+    expect(screen.getByRole("combobox", { name: /Model/ })).toHaveValue("gpt-5");
+  });
+
+  it("hides generation controls and saves the fixed generation defaults from Connection", async () => {
+    window.localStorage.setItem("vt_provider_picked", "1");
+    apiMock.getLLMSettings.mockResolvedValue(vipLlmSettings());
+    apiMock.updateLLMSettings.mockResolvedValue(vipLlmSettings());
+
+    render(<MemoryRouter><Settings /></MemoryRouter>);
+
+    await screen.findByText("LLM Settings");
+    expect(screen.queryByText("Generation")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Temperature/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Timeout/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Reasoning effort/)).not.toBeInTheDocument();
+
+    const connection = screen.getByRole("heading", { name: "Connection" }).closest("section");
+    expect(connection).toContainElement(screen.getByRole("button", { name: "Save" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(apiMock.updateLLMSettings).toHaveBeenCalledOnce());
+    expect(apiMock.updateLLMSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        temperature: 0.7,
+        timeout_seconds: 200,
+        reasoning_effort: "high",
+      }),
+    );
+  });
+
+  it("saves a cleared VIP key without attempting to refresh its models", async () => {
+    window.localStorage.setItem("vt_provider_picked", "1");
+    apiMock.getLLMSettings.mockResolvedValue(vipLlmSettings());
+    apiMock.updateLLMSettings.mockResolvedValue({
+      ...vipLlmSettings(),
+      api_key_configured: false,
+    });
+
+    render(<MemoryRouter><Settings /></MemoryRouter>);
+    await screen.findByText("LLM Settings");
+
+    fireEvent.click(screen.getByLabelText("Clear saved API key"));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(apiMock.updateLLMSettings).toHaveBeenCalledOnce());
+    expect(apiMock.getVipModels).not.toHaveBeenCalled();
+    expect(apiMock.updateLLMSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ clear_api_key: true }),
+    );
   });
 
   it("starts channels from the settings control surface", async () => {

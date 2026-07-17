@@ -148,6 +148,11 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(settings),
     }),
+  getVipModels: (body: VIPModelListRequest = {}) =>
+    request<VIPModelListResponse>("/settings/llm/vip-models", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   getDataSourceSettings: () => request<DataSourceSettings>("/settings/data-sources"),
   updateDataSourceSettings: (settings: UpdateDataSourceSettingsRequest) =>
     request<DataSourceSettings>("/settings/data-sources", {
@@ -326,6 +331,14 @@ export interface UpdateLLMSettingsRequest {
   timeout_seconds: number;
   max_retries: number;
   reasoning_effort?: string;
+}
+
+export interface VIPModelListResponse {
+  models: string[];
+}
+
+export interface VIPModelListRequest {
+  api_key?: string;
 }
 
 export interface DataSourceSettings {

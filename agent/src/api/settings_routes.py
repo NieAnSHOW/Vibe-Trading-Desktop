@@ -76,6 +76,18 @@ class UpdateLLMSettingsRequest(BaseModel):
     reasoning_effort: Optional[str] = None
 
 
+class VIPModelListResponse(BaseModel):
+    """Model IDs available from the configured VIP Server."""
+
+    models: List[str]
+
+
+class VIPModelListRequest(BaseModel):
+    """Optional transient VIP credential for model discovery."""
+
+    api_key: Optional[str] = None
+
+
 class DataSourceSettingsResponse(BaseModel):
     """Current data source credential settings."""
 
@@ -254,6 +266,45 @@ def _build_data_source_settings_response(
     )
 
 
+async def _fetch_vip_model_ids(api_key_override: Optional[str] = None) -> List[str]:
+    """Retrieve OpenAI-compatible model IDs without exposing VIP credentials."""
+    host = _host()
+    provider = LLM_PROVIDER_BY_NAME["vip_server"]
+    values = _read_settings_env_values()
+    api_key = (api_key_override or values.get(provider.api_key_env or "", "")).strip()
+    if not host._is_configured_secret(api_key, LLM_API_KEY_PLACEHOLDERS):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="VIP Server API key is not configured")
+
+    base_url = values.get(provider.base_url_env, provider.default_base_url).strip()
+    models_url = f"{base_url.rstrip('/')}/models"
+    try:
+        async with host.httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                models_url,
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+            response.raise_for_status()
+            payload = response.json()
+    except (host.httpx.HTTPError, ValueError, TypeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to fetch VIP Server models",
+        ) from exc
+
+    entries = payload.get("data", []) if isinstance(payload, dict) else []
+    models: List[str] = []
+    seen: set[str] = set()
+    for entry in entries:
+        model_id = entry.get("id") if isinstance(entry, dict) else None
+        if not isinstance(model_id, str):
+            continue
+        model_id = model_id.strip()
+        if model_id and model_id not in seen:
+            seen.add(model_id)
+            models.append(model_id)
+    return models
+
+
 def _sync_runtime_env(provider: LLMProviderOption, updates: Dict[str, str]) -> None:
     """Apply saved LLM settings to the running API process."""
     host = _host()
@@ -359,6 +410,15 @@ def register_settings_routes(
     async def get_llm_settings():
         """Return project-local LLM settings for the Web UI."""
         return _build_llm_settings_response()
+
+    @app.post(
+        "/settings/llm/vip-models",
+        response_model=VIPModelListResponse,
+        dependencies=[Depends(require_settings_write_auth)],
+    )
+    async def get_vip_models(payload: VIPModelListRequest):
+        """Return configured VIP Server models without exposing its connection details."""
+        return VIPModelListResponse(models=await _fetch_vip_model_ids(payload.api_key))
 
     @app.put(
         "/settings/llm",

@@ -17,7 +17,6 @@ import {
   RotateCcw,
   Save,
   Server,
-  SlidersHorizontal,
   Square,
   // Upload,
 } from "lucide-react";
@@ -49,16 +48,19 @@ const fieldClass =
   "w-full rounded-md border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60";
 const labelClass = "text-sm font-medium";
 const hintClass = "text-xs text-muted-foreground";
+const DEFAULT_LLM_GENERATION = {
+  temperature: 0.7,
+  timeout_seconds: 200,
+  reasoning_effort: "high",
+} as const;
 
 function toForm(settings: LLMSettings): LLMFormState {
   return {
     provider: settings.provider,
     model_name: settings.model_name,
     base_url: settings.base_url,
-    temperature: settings.temperature,
-    timeout_seconds: settings.timeout_seconds,
+    ...DEFAULT_LLM_GENERATION,
     max_retries: settings.max_retries,
-    reasoning_effort: settings.reasoning_effort || "",
   };
 }
 
@@ -66,8 +68,8 @@ function toForm(settings: LLMSettings): LLMFormState {
 // capabilities.py::_PROVIDERS)。前端只保留默认值/判定常量,与后端 json 对齐。
 const VIP_PROVIDER_NAME = "vip_server";
 const VIP_DEFAULTS = {
-  model: "hy3",
-  base_url: "https://new.ailjf.cc/v1",
+  model: "deepseek-v4-flash",
+  base_url: "https://aiyfy.cn/v1",
 } as const;
 
 // ponytail: "用户是否主动切换过 provider"的本地标记。
@@ -104,6 +106,8 @@ export function Settings() {
   // const [flushing, setFlushing] = useState(false);
   const [optionalDeps, setOptionalDeps] = useState<any>(null);
   const [installingPkg, setInstallingPkg] = useState<string | null>(null);
+  const [vipModels, setVipModels] = useState<string[]>([]);
+  const [vipModelsLoading, setVipModelsLoading] = useState(false);
 
   // WeChat QR login state
   const [weixinQr, setWeixinQr] = useState<{
@@ -412,6 +416,27 @@ export function Settings() {
     setClearApiKey(false);
   };
 
+  const fetchVipModels = async () => {
+    setVipModelsLoading(true);
+    try {
+      const submittedApiKey = apiKey.trim();
+      const { models } = await api.getVipModels(
+        submittedApiKey ? { api_key: submittedApiKey } : {},
+      );
+      setVipModels(models);
+      if (models[0] && form) {
+        setForm({ ...form, model_name: models[0] });
+      }
+      toast.success("VIP model list updated");
+    } catch (error) {
+      toast.error(
+        `Failed to get VIP model list: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    } finally {
+      setVipModelsLoading(false);
+    }
+  };
+
   const submitLocalApiKey = (event: FormEvent) => {
     event.preventDefault();
     setApiAuthKey(localApiKey);
@@ -426,6 +451,7 @@ export function Settings() {
     try {
       const updated = await api.updateLLMSettings({
         ...form,
+        ...DEFAULT_LLM_GENERATION,
         api_key: apiKey.trim() || undefined,
         clear_api_key: clearApiKey,
       });
@@ -573,6 +599,9 @@ export function Settings() {
         ? `This provider uses OAuth. Run: ${selectedProvider.login_command}`
         : "This provider does not require an API key.";
   const apiKeyDisabled = !selectedProvider?.api_key_required || clearApiKey;
+  const vipModelOptions = Array.from(
+    new Set([form.model_name, ...vipModels].filter(Boolean)),
+  );
   const tushareStatus = dataSettings.tushare_token_configured
     ? "Configured"
     : "Leave blank to keep the current token";
@@ -629,7 +658,7 @@ export function Settings() {
 
           <form
             onSubmit={submit}
-            className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]"
+            className="grid gap-6"
           >
             <section className="rounded-lg border bg-card p-5 shadow-sm">
               <div className="mb-5 flex items-center gap-2">
@@ -660,7 +689,45 @@ export function Settings() {
                   </span>
                 </label>
 
-                {form.provider !== VIP_PROVIDER_NAME && (
+                {form.provider === VIP_PROVIDER_NAME ? (
+                  <label className="grid gap-2">
+                    <span className={labelClass}>{"Model"}</span>
+                    <div className="flex gap-2">
+                      <select
+                        value={form.model_name}
+                        onChange={(event) =>
+                          setForm({ ...form, model_name: event.target.value })
+                        }
+                        className={fieldClass}
+                        required
+                      >
+                        {vipModelOptions.map((model) => (
+                          <option key={model} value={model}>
+                            {model}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={fetchVipModels}
+                        disabled={vipModelsLoading}
+                        className="inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {vipModelsLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4" />
+                        )}
+                        <span className="hidden sm:inline">
+                          {"Get model list"}
+                        </span>
+                      </button>
+                    </div>
+                    <span className={hintClass}>
+                      {"Retrieve models available to your VIP Server."}
+                    </span>
+                  </label>
+                ) : (
                   <label className="grid gap-2">
                     <span className={labelClass}>{"Model"}</span>
                     <div className="flex gap-2">
@@ -744,110 +811,18 @@ export function Settings() {
                   </div>
                 </label>
               </div>
-            </section>
-
-            <section className="rounded-lg border bg-card p-5 shadow-sm">
-              <div className="mb-5 flex items-center gap-2">
-                <SlidersHorizontal className="h-4 w-4 text-primary" />
-                <h2 className="text-base font-semibold">{"Generation"}</h2>
-              </div>
-
-              <div className="grid gap-4">
-                <label className="grid gap-2">
-                  <span className={labelClass}>
-                    {i18n.t("settings.temperature")}
-                  </span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={2}
-                    step={0.1}
-                    value={form.temperature}
-                    onChange={(event) =>
-                      setForm({
-                        ...form,
-                        temperature: Number(event.target.value),
-                      })
-                    }
-                    className={fieldClass}
-                  />
-                </label>
-
-                <label className="grid gap-2">
-                  <span className={labelClass}>
-                    {i18n.t("settings.timeoutSeconds")}
-                  </span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={3600}
-                    step={1}
-                    value={form.timeout_seconds}
-                    onChange={(event) =>
-                      setForm({
-                        ...form,
-                        timeout_seconds: Number(event.target.value),
-                      })
-                    }
-                    className={fieldClass}
-                  />
-                </label>
-
-                <label className="grid gap-2">
-                  <span className={labelClass}>{"Max retries"}</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={20}
-                    step={1}
-                    value={form.max_retries}
-                    onChange={(event) =>
-                      setForm({
-                        ...form,
-                        max_retries: Number(event.target.value),
-                      })
-                    }
-                    className={fieldClass}
-                  />
-                </label>
-
-                <label className="grid gap-2">
-                  <span className={labelClass}>
-                    {i18n.t("settings.reasoningEffort")}
-                  </span>
-                  <select
-                    value={form.reasoning_effort}
-                    onChange={(event) =>
-                      setForm({ ...form, reasoning_effort: event.target.value })
-                    }
-                    className={fieldClass}
-                  >
-                    <option value="">{"Off"}</option>
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                    <option value="max">max</option>
-                  </select>
-                  <span className={hintClass}>
-                    {
-                      "How hard the model thinks before answering. Higher is more thorough but slower; leave Off for fastest replies."
-                    }
-                  </span>
-                </label>
-
+              <div className="mt-5 grid gap-4 border-t pt-5">
                 <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">
-                    {i18n.t("settings.saved")}:{" "}
+                    {i18n.t("settings.saved")}: {" "}
                   </span>
-                  <span className="break-all font-mono">
-                    {settings.env_path}
-                  </span>
+                  <span className="break-all font-mono">{settings.env_path}</span>
                 </div>
 
                 <button
                   type="submit"
                   disabled={saving}
-                  className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="inline-flex items-center justify-center gap-2 justify-self-start rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {saving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

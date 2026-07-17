@@ -6,6 +6,7 @@ from pathlib import Path
 import asyncio
 import stat
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -169,6 +170,55 @@ def test_get_llm_settings_is_side_effect_free_and_hides_placeholders(
     assert body["env_path"].endswith(".env")
     assert body["reasoning_effort"] == "max"
     assert not (tmp_path / ".env").exists()
+
+
+def test_vip_model_list_proxies_models_without_exposing_credentials(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / ".env").write_text(
+        "\n".join(
+            [
+                "LANGCHAIN_PROVIDER=vip_server",
+                "VIP_BASE_URL=https://vip.example/v1",
+                "VIP_API_KEY=vip-secret-value",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    captured: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        captured["authorization"] = request.headers["authorization"]
+        return httpx.Response(
+            200,
+            json={"data": [{"id": "gpt-5-mini"}, {"id": "gpt-5"}, {"id": "gpt-5"}]},
+        )
+
+    transport = httpx.MockTransport(handler)
+
+    class MockedAsyncClient(httpx.AsyncClient):
+        def __init__(self, *args, **kwargs):
+            kwargs["transport"] = transport
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(api_server.httpx, "AsyncClient", MockedAsyncClient)
+
+    response = client.post(
+        "/settings/llm/vip-models",
+        json={"api_key": "form-vip-key"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"models": ["gpt-5-mini", "gpt-5"]}
+    assert captured == {
+        "url": "https://vip.example/v1/models",
+        "authorization": "Bearer form-vip-key",
+    }
+    assert "vip-secret-value" not in response.text
+    assert "form-vip-key" not in response.text
+    assert "vip.example" not in response.text
 
 
 @pytest.mark.parametrize("placeholder", ["sk-xxx", "xxx", "gsk_xxx"])
