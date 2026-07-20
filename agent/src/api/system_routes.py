@@ -5,6 +5,7 @@ Mounted by ``agent/api_server.py`` via ``register_system_routes(app, ...)``.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import signal
 import threading
@@ -39,14 +40,23 @@ _correlation_request_times: dict[str, deque[float]] = defaultdict(deque)
 _correlation_rate_lock = threading.Lock()
 
 
+def _prune_expired_correlation_rate_limits(now: float) -> None:
+    """Remove client buckets whose rate-limit window has elapsed."""
+    cutoff = now - _CORRELATION_RATE_WINDOW_SECONDS
+    for client, requests in list(_correlation_request_times.items()):
+        while requests and requests[0] <= cutoff:
+            requests.popleft()
+        if not requests:
+            del _correlation_request_times[client]
+
+
 def _enforce_correlation_rate_limit(request: Request) -> None:
     """Limit expensive correlation requests per client address."""
     client = request.client.host if request.client else "unknown"
     now = time.monotonic()
     with _correlation_rate_lock:
+        _prune_expired_correlation_rate_limits(now)
         requests = _correlation_request_times[client]
-        while requests and requests[0] <= now - _CORRELATION_RATE_WINDOW_SECONDS:
-            requests.popleft()
         if len(requests) >= _CORRELATION_RATE_LIMIT:
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many correlation requests")
         requests.append(now)
@@ -132,7 +142,9 @@ def register_system_routes(
             raise HTTPException(status_code=400, detail="method must be 'pearson' or 'spearman'")
 
         try:
-            result = compute_correlation_matrix(codes=code_list, days=days, method=method)
+            result = await asyncio.to_thread(
+                compute_correlation_matrix, codes=code_list, days=days, method=method
+            )
             return result
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))

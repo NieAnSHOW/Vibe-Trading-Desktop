@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+import time
 from pathlib import Path
 from typing import Dict
 
@@ -70,18 +71,34 @@ async def _spa_html_deep_link_fallback(request: Request, call_next):
 # Dotenv helpers
 # ============================================================================
 
+_TRANSIENT_WINDOWS_REPLACE_ERRORS = (5, 32)
+_ENV_REPLACE_BACKOFF_SECONDS = (0.025, 0.05, 0.1, 0.2, 0.4)
+
+
+def _replace_env_file_with_retry(temporary_name: str, path: Path) -> None:
+    """Replace a dotenv file, retrying Windows sharing violations briefly."""
+    for delay in (*_ENV_REPLACE_BACKOFF_SECONDS, None):
+        try:
+            os.replace(temporary_name, path)
+            return
+        except OSError as exc:
+            if getattr(exc, "winerror", None) not in _TRANSIENT_WINDOWS_REPLACE_ERRORS or delay is None:
+                raise
+            time.sleep(delay)
+
 
 def _write_env_text_atomically(path: Path, content: str) -> None:
-    """Replace a dotenv file atomically with owner-only permissions."""
+    """Replace a dotenv file atomically with owner-only POSIX permissions when supported."""
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
-        os.fchmod(fd, 0o600)
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
             stream.write(content)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary_name, path)
+        _replace_env_file_with_retry(temporary_name, path)
         # os.replace preserves the temporary file mode. Reassert it for filesystems
         # that apply platform-specific defaults during replacement.
         os.chmod(path, 0o600)
