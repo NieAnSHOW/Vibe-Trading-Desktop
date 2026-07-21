@@ -2,6 +2,7 @@
 change: investment-news-hub
 design-doc: docs/superpowers/specs/2026-07-20-investment-news-hub-design.md
 base-ref: 0110027377a045c029f8d67f37bfc96ae823b18c
+archived-with: 2026-07-21-investment-news-hub
 ---
 
 # 投资资讯模块实施计划
@@ -26,6 +27,7 @@ base-ref: 0110027377a045c029f8d67f37bfc96ae823b18c
 - 所有 API 复用 `require_auth`；日志、API、快照与任务状态不得包含凭据、原始 Provider 异常、提示词或完整带 query 的 URL。
 - 常规测试不得访问真实 feed 或真实 LLM；每个实现任务遵循 RED-GREEN-REFACTOR，并使用 `git commit -s`。
 
+archived-with: 2026-07-21-investment-news-hub
 ---
 
 ## 文件结构
@@ -976,6 +978,7 @@ git add openspec/changes/investment-news-hub/tasks.md
 git commit -s -m "docs(news): record independent build review"
 ```
 
+archived-with: 2026-07-21-investment-news-hub
 ---
 
 ## 计划完成检查

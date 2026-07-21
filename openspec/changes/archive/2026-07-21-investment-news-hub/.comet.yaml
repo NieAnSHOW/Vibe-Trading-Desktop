@@ -18,7 +18,7 @@ verification_report: docs/superpowers/reports/2026-07-21-investment-news-hub-ver
 branch_status: handled
 created_at: 2026-07-20
 verified_at: 2026-07-21
-archived: false
+archived: true
 direct_override: null
 handoff_context: openspec/changes/investment-news-hub/.comet/handoff/design-context.json
 handoff_hash: 61aa03e1c87def6297486c1440203c5c2febf2a8fe69a802760f33bd8d31ded9

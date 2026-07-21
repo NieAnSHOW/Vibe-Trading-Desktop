@@ -2,6 +2,8 @@
 comet_change: investment-news-hub
 role: technical-design
 canonical_spec: openspec
+archived-with: 2026-07-21-investment-news-hub
+status: final
 ---
 
 # 投资资讯模块技术设计
