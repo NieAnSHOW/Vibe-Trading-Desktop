@@ -904,6 +904,25 @@ class AgentLoop:
                     react_trace.append({"type": "answer", "content": final_content[:500]})
                     break
 
+                # Safety net for the last iteration: even if the model
+                # returned tool calls (e.g. provider hallucination when
+                # tool_defs=None), force the text content as the final
+                # answer instead of executing phantom tool calls and
+                # silently exhausting the iteration budget.
+                if is_last_iteration:
+                    final_content = response.content or ""
+                    if not final_content:
+                        empty_model_response_iter = iteration
+                        trace.write(
+                            {
+                                "type": "empty_model_response",
+                                "iter": current_iter,
+                                "provider": os.getenv("LANGCHAIN_PROVIDER", "openai"),
+                                "model": getattr(self.llm, "model_name", None) or os.getenv("LANGCHAIN_MODEL_NAME", ""),
+                            }
+                        )
+                    break
+
                 assistant_message = context.format_assistant_tool_calls(
                     response.tool_calls,
                     content=response.content,

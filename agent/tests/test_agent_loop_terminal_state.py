@@ -329,7 +329,9 @@ def test_provider_stream_error_returns_structured_failure(tmp_path: Path) -> Non
 
 
 def test_true_max_iterations_still_returns_max_iteration_reason(tmp_path: Path) -> None:
-    """A provider that ignores the forced text-only last turn is still max-iter."""
+    """A provider that ignores the forced text-only last turn: content is
+    empty so it is now correctly diagnosed as empty_model_response rather
+    than the generic "reached max iterations" error."""
     agent = _build_agent(
         _StubLLMIgnoresForcedTextOnly(), max_iter=1, tmp_run_dir=tmp_path / "run"
     )
@@ -337,7 +339,7 @@ def test_true_max_iterations_still_returns_max_iteration_reason(tmp_path: Path) 
     result = agent.run(user_message="do something")
 
     assert result["status"] == "failed"
-    assert result["reason"] == "reached max iterations (1) without final answer"
+    assert "empty_model_response" in result["reason"]
     assert result["iterations"] == 1
 
 
