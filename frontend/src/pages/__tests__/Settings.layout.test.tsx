@@ -160,6 +160,7 @@ describe("Settings workspace layout", () => {
       screen.getByRole("heading", { name: "Data Source Settings" }),
     );
     expect(helperColumn.tagName).toBe("ASIDE");
+    expect(helperColumn).toHaveClass("[&>section>form]:grid-cols-1");
     expect(helperColumn).toContainElement(qVerisHeading);
     expect(helperColumn).toContainElement(screen.getByRole("switch"));
 

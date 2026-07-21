@@ -893,7 +893,7 @@ export function Settings() {
           </form>
         </div>
 
-        <aside className="grid content-start gap-3">
+        <aside className="grid content-start gap-3 [&>section>form]:grid-cols-1">
           {/* QVERIS-INTEGRATION */}
           <QVerisSettings />
 
