@@ -596,19 +596,19 @@ export function MarketPulsePanel() {
 
               <div className="space-y-4 pt-4">
                 <ExplanationSection
-                  heading="信号含义"
+                  heading={t("marketPulse.explanation.signal", "信号含义")}
                   value={selectedExplanation?.signal ?? ""}
                 />
                 <ExplanationSection
-                  heading="盘面解读"
+                  heading={t("marketPulse.explanation.interpretation", "盘面解读")}
                   value={selectedExplanation?.interpretation ?? ""}
                 />
                 <ExplanationSection
-                  heading="关注风险"
+                  heading={t("marketPulse.explanation.risk", "关注风险")}
                   value={selectedExplanation?.risk ?? ""}
                 />
                 <ExplanationSection
-                  heading="原始异动说明"
+                  heading={t("marketPulse.explanation.rawInfo", "原始异动说明")}
                   value={selectedEvent.item.info || t("marketPulse.noInfo", "暂无补充说明")}
                   tone={eventTone(selectedEvent.item.changeType)}
                 />
@@ -684,8 +684,11 @@ function WatchlistAction({
   onAdd: (code: string) => Promise<void>;
   showLabel?: boolean;
 }) {
+  const { t } = useTranslation();
   const disabled = watched || adding;
-  const label = watched ? `已自选 ${code}` : `加入自选 ${code}`;
+  const label = watched
+    ? t("marketPulse.watchlist.added", "已自选 {{code}}", { code })
+    : t("marketPulse.watchlist.add", "加入自选 {{code}}", { code });
 
   return (
     <button
@@ -701,7 +704,15 @@ function WatchlistAction({
       )}
     >
       {watched ? <Check className="h-4 w-4" aria-hidden="true" /> : <Star className="h-4 w-4" aria-hidden="true" />}
-      {showLabel && <span>{watched ? "已自选" : adding ? "添加中" : "加入自选"}</span>}
+      {showLabel && (
+        <span>
+          {watched
+            ? t("marketPulse.watchlist.addedShort", "已自选")
+            : adding
+              ? t("marketPulse.watchlist.adding", "添加中")
+              : t("marketPulse.watchlist.addShort", "加入自选")}
+        </span>
+      )}
     </button>
   );
 }
