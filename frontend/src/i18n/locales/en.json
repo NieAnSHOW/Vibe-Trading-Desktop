@@ -175,7 +175,12 @@
     "return": "Return",
     "sharpe": "Sharpe",
     "fullReport": "Full Report",
-    "compare": "Compare"
+    "compare": "Compare",
+    "overview": "Report overview",
+    "filters": "Filters",
+    "results": "Report results",
+    "success": "Success",
+    "clearFilters": "Clear filters"
   },
   "connection": {
     "reconnecting": "Connection lost, reconnecting (attempt {{attempt}})…",

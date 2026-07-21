@@ -108,7 +108,12 @@
     "return": "수익률",
     "sharpe": "Sharpe",
     "fullReport": "전체 리포트",
-    "compare": "비교"
+    "compare": "비교",
+    "overview": "리포트 개요",
+    "filters": "필터",
+    "results": "리포트 결과",
+    "success": "성공",
+    "clearFilters": "필터 지우기"
   },
   "connection": {
     "reconnecting": "연결이 끊겼습니다. 재연결 중입니다({{attempt}}번째 시도)…",

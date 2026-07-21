@@ -108,7 +108,12 @@
     "return": "リターン",
     "sharpe": "Sharpe",
     "fullReport": "完全なレポート",
-    "compare": "比較"
+    "compare": "比較",
+    "overview": "レポートの概要",
+    "filters": "フィルター",
+    "results": "レポート結果",
+    "success": "成功",
+    "clearFilters": "フィルターをクリア"
   },
   "connection": {
     "reconnecting": "接続が切断されました。再接続中です({{attempt}} 回目)…",

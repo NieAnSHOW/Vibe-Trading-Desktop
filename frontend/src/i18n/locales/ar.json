@@ -108,7 +108,12 @@
     "return": "العائد",
     "sharpe": "Sharpe",
     "fullReport": "التقرير الكامل",
-    "compare": "مقارنة"
+    "compare": "مقارنة",
+    "overview": "نظرة عامة على التقارير",
+    "filters": "عوامل التصفية",
+    "results": "نتائج التقارير",
+    "success": "ناجح",
+    "clearFilters": "مسح عوامل التصفية"
   },
   "connection": {
     "reconnecting": "فُقد الاتصال، تتم إعادة الاتصال (المحاولة {{attempt}})…",

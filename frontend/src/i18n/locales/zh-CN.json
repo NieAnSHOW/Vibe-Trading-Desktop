@@ -170,7 +170,12 @@
     "return": "收益率",
     "sharpe": "夏普",
     "fullReport": "完整报告",
-    "compare": "对比"
+    "compare": "对比",
+    "overview": "报告概览",
+    "filters": "筛选",
+    "results": "报告结果",
+    "success": "成功",
+    "clearFilters": "清除筛选"
   },
   "connection": {
     "reconnecting": "连接已断开，正在重连（第 {{attempt}} 次）…",

@@ -62,6 +62,23 @@ export function Reports() {
     return ["all", ...values];
   }, [runs]);
 
+  const reportSummary = useMemo(() => {
+    const completed = runs.filter((run) => isSuccessfulRun(run.status));
+    const returns = runs
+      .map((run) => run.total_return)
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+    const sharpes = runs
+      .map((run) => run.sharpe)
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+
+    return {
+      total: runs.length,
+      completed: completed.length,
+      averageReturn: averageMetric(returns),
+      averageSharpe: averageMetric(sharpes),
+    };
+  }, [runs]);
+
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const startMs = startDate ? Date.parse(startDate) : Number.NEGATIVE_INFINITY;
@@ -86,118 +103,188 @@ export function Reports() {
       .sort((left, right) => compareRuns(left, right, sortMode));
   }, [runs, query, statusFilter, startDate, endDate, sortMode]);
 
+  function clearFilters() {
+    setQuery("");
+    setStatusFilter("all");
+    setStartDate("");
+    setEndDate("");
+    setSortMode("created_desc");
+  }
+
   return (
-    <div className="min-h-screen p-6 lg:p-8">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <section className="flex flex-col gap-4 border-b pb-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground">
-              <FileText className="h-3.5 w-3.5" />
-              {t("reports.badge")}
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">{t("reports.title")}</h1>
-              <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t("reports.subtitle")}</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => void loadReports("refresh")}
-            disabled={refreshing}
-            className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
-          >
-            {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            {t("reports.refresh")}
-          </button>
-        </section>
-
-        <section className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_160px_150px_150px_170px]">
-          <label className="relative block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t("reports.searchPlaceholder")}
-              className="w-full rounded-md border bg-background py-2 pl-9 pr-3 text-sm outline-none transition focus:border-primary"
-            />
-          </label>
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            className="rounded-md border bg-background px-3 py-2 text-sm"
-          >
-            {statusOptions.map((status) => (
-              <option key={status} value={status}>
-                {status === "all" ? t("reports.allStatuses") : status}
-              </option>
-            ))}
-          </select>
-          <input
-            type="date"
-            value={startDate}
-            onChange={(event) => setStartDate(event.target.value)}
-            className="rounded-md border bg-background px-3 py-2 text-sm"
-            aria-label={t("reports.startDate")}
-          />
-          <input
-            type="date"
-            value={endDate}
-            onChange={(event) => setEndDate(event.target.value)}
-            className="rounded-md border bg-background px-3 py-2 text-sm"
-            aria-label={t("reports.endDate")}
-          />
-          <select
-            value={sortMode}
-            onChange={(event) => setSortMode(event.target.value as SortMode)}
-            className="rounded-md border bg-background px-3 py-2 text-sm"
-            aria-label={t("reports.sort")}
-          >
-            <option value="created_desc">{t("reports.sortNewest")}</option>
-            <option value="created_asc">{t("reports.sortOldest")}</option>
-            <option value="return_desc">{t("reports.sortReturn")}</option>
-            <option value="sharpe_desc">{t("reports.sortSharpe")}</option>
-          </select>
-        </section>
-
-        <div className="text-sm text-muted-foreground">
-          {t("reports.count", { shown: filtered.length, total: runs.length })}
+    <div className="flex h-full min-h-0 w-full flex-col gap-3 p-3 lg:p-5">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">{t("reports.title")}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t("reports.subtitle")}</p>
         </div>
+        <button
+          type="button"
+          onClick={() => void loadReports("refresh")}
+          disabled={refreshing}
+          className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-muted disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        >
+          {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          {t("reports.refresh")}
+        </button>
+      </header>
 
-        {loading ? (
-          <div className="grid gap-3">
-            {[1, 2, 3, 4].map((item) => (
-              <div key={item} className="h-28 animate-pulse rounded-md border bg-muted/40" />
-            ))}
-          </div>
-        ) : null}
+      <section aria-labelledby="reports-overview-title" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <h2 id="reports-overview-title" className="sr-only">
+          {t("reports.overview")}
+        </h2>
+        <OverviewMetric label={t("reports.badge")} value={String(reportSummary.total)} />
+        <OverviewMetric label={t("reports.success")} value={String(reportSummary.completed)} />
+        <OverviewMetric
+          label={t("reports.return")}
+          value={formatOptionalMetric("total_return", reportSummary.averageReturn)}
+        />
+        <OverviewMetric
+          label={t("reports.sharpe")}
+          value={formatOptionalMetric("sharpe", reportSummary.averageSharpe)}
+        />
+      </section>
 
-        {!loading && error ? (
-          <section className="rounded-md border border-amber-500/30 bg-amber-500/5 p-5">
-            <div className="flex items-center gap-2 font-medium text-amber-700 dark:text-amber-300">
-              <AlertTriangle className="h-5 w-5" />
-              {t("reports.unavailable")}
-            </div>
-            <p className="mt-2 text-sm text-muted-foreground">{error}</p>
-          </section>
-        ) : null}
-
-        {!loading && !error && filtered.length === 0 ? (
-          <section className="rounded-md border border-dashed p-8 text-center">
-            <FileText className="mx-auto h-8 w-8 text-muted-foreground" />
-            <h2 className="mt-3 font-medium">{runs.length === 0 ? t("reports.emptyTitle") : t("reports.noMatchesTitle")}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {runs.length === 0 ? t("reports.emptyBody") : t("reports.noMatchesBody")}
+      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(15rem,0.36fr)_minmax(0,1fr)]">
+        <aside aria-labelledby="reports-filters-title" className="rounded-lg border bg-card p-3 lg:overflow-auto">
+          <div className="mb-3">
+            <h2 id="reports-filters-title" className="text-sm font-semibold">
+              {t("reports.filters")}
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {t("reports.count", { shown: filtered.length, total: runs.length })}
             </p>
-          </section>
-        ) : null}
+          </div>
 
-        {!loading && !error && filtered.length > 0 ? (
-          <section className="grid gap-3">
-            {filtered.map((run) => (
-              <ReportRow key={run.run_id} run={run} />
-            ))}
-          </section>
-        ) : null}
+          <div className="space-y-3">
+            <label className="relative block">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <span className="sr-only">{t("reports.searchPlaceholder")}</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t("reports.searchPlaceholder")}
+                className="h-9 w-full rounded-md border bg-background pl-8 pr-3 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-primary/40"
+              />
+            </label>
+
+            <label className="block space-y-1">
+              <span className="text-xs text-muted-foreground">{t("reports.allStatuses")}</span>
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              >
+                {statusOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {status === "all" ? t("reports.allStatuses") : status}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block space-y-1">
+                <span className="text-xs text-muted-foreground">{t("reports.startDate")}</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(event) => setStartDate(event.target.value)}
+                  aria-label={t("reports.startDate")}
+                  className="h-9 w-full rounded-md border bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs text-muted-foreground">{t("reports.endDate")}</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(event) => setEndDate(event.target.value)}
+                  aria-label={t("reports.endDate")}
+                  className="h-9 w-full rounded-md border bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                />
+              </label>
+            </div>
+
+            <label className="block space-y-1">
+              <span className="text-xs text-muted-foreground">{t("reports.sort")}</span>
+              <select
+                value={sortMode}
+                onChange={(event) => setSortMode(event.target.value as SortMode)}
+                aria-label={t("reports.sort")}
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              >
+                <option value="created_desc">{t("reports.sortNewest")}</option>
+                <option value="created_asc">{t("reports.sortOldest")}</option>
+                <option value="return_desc">{t("reports.sortReturn")}</option>
+                <option value="sharpe_desc">{t("reports.sortSharpe")}</option>
+              </select>
+            </label>
+          </div>
+        </aside>
+
+        <section
+          aria-labelledby="reports-results-title"
+          className="min-h-0 rounded-lg border bg-card p-3 lg:overflow-auto"
+        >
+          <div className="flex items-center justify-between gap-3 border-b pb-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <FileText className="h-4 w-4 shrink-0 text-primary" />
+              <h2 id="reports-results-title" className="truncate text-sm font-semibold">
+                {t("reports.results")}
+              </h2>
+            </div>
+            {refreshing ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" /> : null}
+          </div>
+
+          {loading ? (
+            <div className="mt-3 grid gap-2">
+              {[1, 2, 3, 4].map((item) => (
+                <div key={item} className="h-28 animate-pulse rounded-md bg-muted/40" />
+              ))}
+            </div>
+          ) : null}
+
+          {!loading && error ? (
+            <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-4">
+              <div className="flex items-center gap-2 font-medium text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="h-4 w-4" />
+                {t("reports.unavailable")}
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">{error}</p>
+            </div>
+          ) : null}
+
+          {!loading && !error && filtered.length === 0 ? (
+            <div className="mt-3 flex min-h-60 flex-col items-center justify-center rounded-md bg-muted p-4 text-center">
+              <FileText className="h-8 w-8 text-muted-foreground" />
+              <h2 className="mt-3 font-medium">
+                {runs.length === 0 ? t("reports.emptyTitle") : t("reports.noMatchesTitle")}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {runs.length === 0 ? t("reports.emptyBody") : t("reports.noMatchesBody")}
+              </p>
+              {runs.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="mt-3 text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                >
+                  {t("reports.clearFilters")}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {!loading && !error && filtered.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {filtered.map((run) => (
+                <ReportRow key={run.run_id} run={run} />
+              ))}
+            </div>
+          ) : null}
+        </section>
       </div>
     </div>
   );
@@ -206,7 +293,7 @@ export function Reports() {
 function ReportRow({ run }: { run: RunListItem }) {
   const { t } = useTranslation();
   return (
-    <article className="rounded-md border p-4 transition hover:border-primary/40 hover:bg-muted/30">
+    <article className="rounded-lg border p-4 transition hover:border-primary/40 hover:bg-muted/30">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -239,13 +326,13 @@ function ReportRow({ run }: { run: RunListItem }) {
           <div className="flex flex-wrap gap-2 lg:justify-end">
             <Link
               to={`/runs/${run.run_id}`}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:opacity-90"
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               {t("reports.fullReport")} <ArrowRight className="h-3.5 w-3.5" />
             </Link>
             <Link
               to="/compare"
-              className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition hover:bg-muted"
+              className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               <GitCompare className="h-3.5 w-3.5" />
               {t("reports.compare")}
@@ -277,7 +364,16 @@ function MetricPill({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border px-3 py-1.5">
       <div className="text-[11px] uppercase text-muted-foreground">{label}</div>
-      <div className="font-mono text-sm font-medium">{value}</div>
+      <div className="font-mono text-sm font-medium tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+function OverviewMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border bg-card px-3 py-2.5">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 font-mono text-lg font-semibold tabular-nums">{value}</p>
     </div>
   );
 }
@@ -295,6 +391,11 @@ function compareRuns(left: RunListItem, right: RunListItem, mode: SortMode): num
 
 function metric(value: number | undefined): number {
   return Number.isFinite(value) ? Number(value) : Number.NEGATIVE_INFINITY;
+}
+
+function averageMetric(values: number[]): number | undefined {
+  if (values.length === 0) return undefined;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 function formatOptionalMetric(key: string, value: number | undefined): string {
@@ -315,4 +416,8 @@ function formatRunDate(value: string): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(parsed);
+}
+
+function isSuccessfulRun(status: string | undefined): boolean {
+  return ["success", "done", "completed", "complete"].includes((status || "").toLowerCase());
 }
