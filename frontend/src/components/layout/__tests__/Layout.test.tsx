@@ -36,7 +36,7 @@ describe("Layout sidebar", () => {
   it("renders the sidebar with nav links and route outlet", () => {
     renderLayout();
 
-    expect(screen.getByRole("link", { name: /首页/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /首页/i })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /指数/i })).toHaveAttribute("href", "/indices");
     expect(screen.getByText("Dashboard route content")).toBeInTheDocument();
   });

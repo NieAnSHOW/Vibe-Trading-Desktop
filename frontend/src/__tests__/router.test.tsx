@@ -9,7 +9,21 @@ vi.mock("@/pages/Settings", () => ({
   Settings: () => <div>Settings page</div>,
 }));
 
+vi.mock("@/pages/Dashboard", () => ({
+  default: () => <div>Dashboard page</div>,
+}));
+
 import { router } from "@/router";
+
+describe("dashboard routes", () => {
+  it("renders Dashboard at the root route", async () => {
+    render(<RouterProvider router={router} />);
+
+    await waitFor(() =>
+      expect(screen.getByText("Dashboard page")).toBeInTheDocument(),
+    );
+  });
+});
 
 describe("legacy runtime route", () => {
   it("redirects to settings", async () => {

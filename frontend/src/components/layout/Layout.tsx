@@ -311,14 +311,6 @@ export function Layout() {
           )}
 
           <NavLink
-            to="/"
-            icon={BarChart3}
-            label={t("layout.home")}
-            collapsed={collapsed}
-            isActive={isActive("/")}
-          />
-
-          <NavLink
             to="/dashboard"
             icon={LayoutDashboard}
             label={t("layout.dashboard")}
