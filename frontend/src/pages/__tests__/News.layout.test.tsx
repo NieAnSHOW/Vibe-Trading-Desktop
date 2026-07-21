@@ -70,18 +70,33 @@ vi.mock("@/hooks/useNews", () => ({
 import { News } from "../News";
 
 describe("News responsive layout contract", () => {
-  it("constrains root content and keeps desktop tracks in a fixed-height horizontal scroller", () => {
+  it("uses an Indices-style desktop workspace with a bounded navigator and detail surface", () => {
     render(<News />);
 
-    expect(screen.getByTestId("news-workspace")).toHaveClass("min-w-0");
-    expect(screen.getByRole("tablist")).toHaveClass("overflow-x-auto", "h-11");
+    expect(screen.getByTestId("news-workspace")).toHaveClass(
+      "min-w-0",
+      "lg:grid",
+      "lg:grid-cols-[minmax(15rem,0.36fr)_minmax(0,1fr)]",
+      "lg:grid-rows-[auto_minmax(0,1fr)]",
+    );
+    expect(screen.getByTestId("news-desktop-tracks")).toHaveClass(
+      "hidden",
+      "lg:flex",
+      "rounded-lg",
+      "bg-card",
+    );
+    expect(screen.getByTestId("news-detail-surface")).toHaveClass(
+      "rounded-lg",
+      "bg-card",
+      "lg:overflow-auto",
+    );
   });
 
-  it("uses mutually exclusive desktop tabs and mobile select controls", () => {
+  it("uses a mobile selector and keeps desktop navigation out of the mobile layout", () => {
     render(<News />);
 
-    expect(screen.getByTestId("news-desktop-tracks")).toHaveClass("hidden", "md:block");
-    expect(screen.getByTestId("news-mobile-tracks")).toHaveClass("md:hidden");
+    expect(screen.getByTestId("news-desktop-tracks")).toHaveClass("hidden", "lg:flex");
+    expect(screen.getByTestId("news-mobile-tracks")).toHaveClass("lg:hidden");
   });
 
   it("allows long article titles to wrap without widening the workspace", () => {

@@ -155,6 +155,9 @@ export function News() {
   const visibleError = requestError ?? statusError ?? envelopeError;
   const refreshLabel = t("news.refresh");
   const activeTrackId = selectedTrackId ?? TRACK_IDS[0];
+  const snapshotGeneratedAt = snapshot
+    ? new Date(snapshot.generated_at).toLocaleString(i18n.resolvedLanguage)
+    : null;
 
   const handleTrackKeyDown = (
     event: KeyboardEvent<HTMLButtonElement>,
@@ -183,27 +186,27 @@ export function News() {
   return (
     <div
       data-testid="news-workspace"
-      className="mx-auto flex min-h-full w-full min-w-0 max-w-6xl flex-col px-4 py-5 sm:px-6 lg:px-8"
+      className="flex h-full w-full min-w-0 flex-col gap-3 p-3 lg:grid lg:grid-cols-[minmax(15rem,0.36fr)_minmax(0,1fr)] lg:grid-rows-[auto_minmax(0,1fr)] lg:gap-3 lg:p-5"
     >
-      <header className="flex min-w-0 items-start justify-between gap-4 border-b border-border pb-5">
-        <div className="flex min-w-0 items-start gap-3">
+      <header className="flex min-w-0 items-start justify-between gap-3 lg:col-span-2">
+        <div className="flex min-w-0 items-start gap-2.5">
           <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"
             aria-hidden="true"
           >
-            <Newspaper className="h-5 w-5" />
+            <Newspaper className="h-4 w-4" />
           </div>
-          <div className="min-w-0 pt-0.5">
-            <h1 className="break-words text-xl font-semibold leading-6 sm:text-2xl">
+          <div className="min-w-0">
+            <h1 className="break-words text-xl font-semibold leading-6">
               {t("news.title")}
             </h1>
-            {snapshot && (
+            {snapshot && snapshotGeneratedAt && (
               <time
                 dateTime={snapshot.generated_at}
-                className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+                className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground"
               >
-                <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
-                {new Date(snapshot.generated_at).toLocaleString(i18n.resolvedLanguage)}
+                <Clock3 className="h-3 w-3" aria-hidden="true" />
+                {snapshotGeneratedAt}
               </time>
             )}
           </div>
@@ -214,7 +217,7 @@ export function News() {
           title={refreshLabel}
           disabled={isRefreshing}
           onClick={() => void refreshNews()}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border bg-card text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-card text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw
             className={cn("h-4 w-4", isRefreshing && "animate-spin")}
@@ -223,14 +226,27 @@ export function News() {
         </button>
       </header>
 
-      <div data-testid="news-desktop-tracks" className="hidden border-b border-border md:block">
+      <aside
+        data-testid="news-desktop-tracks"
+        aria-label={t("news.trackList")}
+        className="hidden min-h-0 flex-col rounded-lg border bg-card p-3 lg:flex lg:overflow-auto"
+      >
         <div
           role="tablist"
           aria-label={t("news.trackList")}
-          className="h-11 overflow-x-auto overscroll-x-contain"
+          className="space-y-1"
         >
-          <div className="flex h-full min-w-max items-stretch gap-1">
-            {TRACK_IDS.map((trackId) => (
+          {TRACK_IDS.map((trackId) => {
+            const track = snapshot?.tracks.find((item) => item.track_id === trackId);
+            const unavailable = track?.state === "unavailable";
+            const outOfDate = stale || track?.stale;
+            const stateLabel = unavailable
+              ? t("news.unavailable")
+              : outOfDate
+                ? t("news.stale")
+                : t("news.fresh");
+
+            return (
               <button
                 key={trackId}
                 id={`news-tab-${trackId}`}
@@ -242,20 +258,34 @@ export function News() {
                 onClick={() => selectTrack(trackId)}
                 onKeyDown={(event) => handleTrackKeyDown(event, trackId)}
                 className={cn(
-                  "relative h-full shrink-0 px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40",
+                  "flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                   activeTrackId === trackId
-                    ? "font-medium text-primary after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary"
-                    : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                    ? "border-primary/30 bg-primary/10 font-medium text-foreground"
+                    : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                {t(`news.tracks.${trackId}`)}
+                <span className="min-w-0 truncate">{t(`news.tracks.${trackId}`)}</span>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <span
+                    aria-hidden="true"
+                    title={stateLabel}
+                    className={cn(
+                      "h-1.5 w-1.5 rounded-full",
+                      unavailable
+                        ? "bg-muted-foreground"
+                        : outOfDate
+                          ? "bg-amber-500"
+                        : "bg-emerald-500",
+                    )}
+                  />
+                </span>
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
-      </div>
+      </aside>
 
-      <div data-testid="news-mobile-tracks" className="border-b border-border py-3 md:hidden">
+      <div data-testid="news-mobile-tracks" className="rounded-lg border bg-card p-3 lg:hidden">
         <label htmlFor="news-track-select" className="sr-only">
           {t("news.selectTrack")}
         </label>
@@ -264,7 +294,7 @@ export function News() {
           aria-label={t("news.selectTrack")}
           value={selectedTrackId ?? ""}
           onChange={(event) => selectTrack(event.target.value as NewsTrackId)}
-          className="h-10 w-full min-w-0 rounded-md border bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         >
           {TRACK_IDS.map((trackId) => (
             <option key={trackId} value={trackId}>
@@ -274,48 +304,52 @@ export function News() {
         </select>
       </div>
 
-      {isRefreshing && refreshStatus && (
-        <div
-          role="status"
-          className="border-b border-border py-3 text-sm text-muted-foreground"
-        >
-          {t("news.refreshProgress", {
-            processedEndpoints: refreshStatus.processed_endpoints,
-            totalEndpoints: refreshStatus.total_endpoints,
-            processedTracks: refreshStatus.processed_tracks,
-            totalTracks: refreshStatus.total_tracks,
-          })}
-        </div>
-      )}
-
-      {visibleError && (
-        <div
-          role="alert"
-          className="flex min-w-0 items-start gap-2 border-b border-danger/30 py-3 text-sm text-danger"
-        >
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <div className="min-w-0">
-            <p className="font-medium">{t("news.error")}</p>
-            <p className="break-words text-xs opacity-80">{visibleError}</p>
-          </div>
-        </div>
-      )}
-
-      {TRACK_IDS.filter((trackId) => trackId !== activeTrackId).map((trackId) => (
-        <div
-          key={trackId}
-          id={`news-panel-${trackId}`}
-          role="tabpanel"
-          aria-labelledby={`news-tab-${trackId}`}
-          hidden
-        />
-      ))}
-      <div
-        id={`news-panel-${activeTrackId}`}
-        role="tabpanel"
-        aria-labelledby={`news-tab-${activeTrackId}`}
-        className="flex min-w-0 flex-1 flex-col"
+      <section
+        data-testid="news-detail-surface"
+        className="min-h-0 min-w-0 rounded-lg border bg-card p-4 lg:overflow-auto"
       >
+        {isRefreshing && refreshStatus && (
+          <div
+            role="status"
+            className="mb-4 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground"
+          >
+            {t("news.refreshProgress", {
+              processedEndpoints: refreshStatus.processed_endpoints,
+              totalEndpoints: refreshStatus.total_endpoints,
+              processedTracks: refreshStatus.processed_tracks,
+              totalTracks: refreshStatus.total_tracks,
+            })}
+          </div>
+        )}
+
+        {visibleError && (
+          <div
+            role="alert"
+            className="mb-4 flex min-w-0 items-start gap-2 rounded-md bg-danger/10 p-3 text-sm text-danger"
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="font-medium">{t("news.error")}</p>
+              <p className="break-words text-xs opacity-80">{visibleError}</p>
+            </div>
+          </div>
+        )}
+
+        {TRACK_IDS.filter((trackId) => trackId !== activeTrackId).map((trackId) => (
+          <div
+            key={trackId}
+            id={`news-panel-${trackId}`}
+            role="tabpanel"
+            aria-labelledby={`news-tab-${trackId}`}
+            hidden
+          />
+        ))}
+        <div
+          id={`news-panel-${activeTrackId}`}
+          role="tabpanel"
+          aria-labelledby={`news-tab-${activeTrackId}`}
+          className="flex min-w-0 flex-1 flex-col"
+        >
         {isLoading && !snapshot ? (
           <div className="flex min-w-0 flex-1 flex-col">
             <p className="sr-only" role="status">
@@ -328,26 +362,36 @@ export function News() {
             {t("news.emptySnapshot")}
           </div>
         ) : selectedTrack ? (
-          <div className="min-w-0 py-6">
-            <div className="flex flex-wrap items-center gap-2 border-b border-border/70 pb-4">
-              {selectedTrack.state === "unavailable" ? (
-                <span className="inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                  {t("news.unavailable")}
-                </span>
-              ) : stale || selectedTrack.stale ? (
-                <span className="inline-flex items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
-                  {t("news.stale")}
-                </span>
-              ) : (
-                <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                  {t("news.fresh")}
-                </span>
-              )}
-              {selectedTrack.partial && (
-                <span className="inline-flex items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
-                  {t("news.partial")}
-                </span>
-              )}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <Newspaper className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                  <h2 className="truncate text-lg font-semibold">
+                    {t(`news.tracks.${activeTrackId}`)}
+                  </h2>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {selectedTrack.state === "unavailable" ? (
+                  <span className="inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                    {t("news.unavailable")}
+                  </span>
+                ) : stale || selectedTrack.stale ? (
+                  <span className="inline-flex items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                    {t("news.stale")}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                    {t("news.fresh")}
+                  </span>
+                )}
+                {selectedTrack.partial && (
+                  <span className="inline-flex items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                    {t("news.partial")}
+                  </span>
+                )}
+              </div>
             </div>
 
             <section
@@ -401,7 +445,8 @@ export function News() {
             {t("news.emptySnapshot")}
           </div>
         )}
-      </div>
+        </div>
+      </section>
     </div>
   );
 }
