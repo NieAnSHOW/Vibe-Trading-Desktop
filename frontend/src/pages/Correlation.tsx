@@ -70,7 +70,10 @@ export function Correlation() {
           <div className="flex flex-wrap gap-4">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">{i18n.t("correlation.windowDays")}</label>
-              <div className="flex gap-1.5">
+              <div
+                data-testid="correlation-windows"
+                className="flex flex-wrap gap-1.5"
+              >
                 {WINDOWS.map((w) => (
                   <button
                     key={w}
@@ -89,7 +92,10 @@ export function Correlation() {
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">{i18n.t("correlation.method")}</label>
-              <div className="flex gap-1.5">
+              <div
+                data-testid="correlation-methods"
+                className="flex flex-wrap gap-1.5"
+              >
                 {(["pearson", "spearman"] as const).map((m) => (
                   <button
                     key={m}

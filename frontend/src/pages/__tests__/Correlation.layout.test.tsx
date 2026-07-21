@@ -44,6 +44,8 @@ describe("Correlation responsive layout contract", () => {
       "bg-card",
       "lg:overflow-auto",
     );
+    expect(screen.getByTestId("correlation-windows")).toHaveClass("flex-wrap");
+    expect(screen.getByTestId("correlation-methods")).toHaveClass("flex-wrap");
     expect(
       screen
         .getByTestId("correlation-controls")
@@ -64,5 +66,21 @@ describe("Correlation responsive layout contract", () => {
       );
     });
     expect(await screen.findByTestId("correlation-matrix")).toHaveTextContent("000001.SZ");
+  });
+
+  it("keeps wrapped window and method selections in the compute request", async () => {
+    const user = userEvent.setup();
+    render(<Correlation />);
+
+    await user.click(screen.getByRole("button", { name: "30d" }));
+    await user.click(screen.getByRole("button", { name: "Spearman" }));
+    await user.click(screen.getByRole("button", { name: "Compute" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/correlation?codes=000001.SZ%2C600519.SH%2C000858.SZ%2C601318.SH&days=30&method=spearman",
+        expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
+      );
+    });
   });
 });
