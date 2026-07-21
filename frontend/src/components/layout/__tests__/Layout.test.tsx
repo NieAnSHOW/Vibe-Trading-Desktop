@@ -37,6 +37,10 @@ describe("Layout sidebar", () => {
     renderLayout();
 
     expect(screen.queryByRole("link", { name: /首页/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /市场看板/i })).toHaveClass(
+      "bg-primary/10",
+      "text-primary",
+    );
     expect(screen.getByRole("link", { name: /指数/i })).toHaveAttribute("href", "/indices");
     expect(screen.getByText("Dashboard route content")).toBeInTheDocument();
   });

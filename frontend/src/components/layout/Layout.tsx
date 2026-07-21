@@ -315,7 +315,7 @@ export function Layout() {
             icon={LayoutDashboard}
             label={t("layout.dashboard")}
             collapsed={collapsed}
-            isActive={isActive("/dashboard")}
+            isActive={pathname === "/" || isActive("/dashboard")}
           />
           <NavLink
             to="/market-pulse"
