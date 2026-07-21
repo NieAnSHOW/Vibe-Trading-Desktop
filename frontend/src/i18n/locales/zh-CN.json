@@ -8,7 +8,6 @@
       "workspace": "工作区",
       "tools": "工具"
     },
-    "home": "首页",
     "agent": "智能体",
     "runtime": "运行时",
     "reports": "报告",
@@ -836,19 +835,6 @@
     "shadowReport": "影子报告",
     "shadowReportPdf": "导出 PDF"
   },
-  "home": {
-    "title": "AI 驱动的量化策略研究",
-    "subtitle": "用自然语言描述交易策略。智能体自动生成代码、运行回测并优化 —— 全部实时完成。",
-    "startResearch": "开始研究",
-    "featureAgent": "AI 智能体",
-    "featureAgentDesc": "基于 ReAct 推理的自然语言策略生成",
-    "featureBacktest": "内置回测引擎",
-    "featureBacktestDesc": "7 大数据源，覆盖 A股、港美股与加密货币",
-    "featureStreaming": "实时流式输出",
-    "featureStreamingDesc": "观看智能体思考、调用工具和迭代的全过程",
-    "featureReplay": "策略回放",
-    "featureReplayDesc": "交易日志分析器 + 影子账户 —— 提取你的规则、回测验证、归因盈亏差异"
-  },
   "errorBoundary": {
     "somethingWrong": "出了点问题"
   },
@@ -983,8 +969,6 @@
   "dashboard": {
     "title": "市场概览",
     "marketPulse": "市场异动",
-    "aiSummary": "AI 摘要",
-    "refreshSummary": "刷新 AI 摘要",
     "watchlistQuotes": "自选股",
     "stockDetail": "个股详情",
     "selectStockHint": "选择一只股票查看 K 线图",
@@ -1046,11 +1030,7 @@
       "limit": "涨停",
       "quality": "封板"
     },
-    "summaryUnavailable": "摘要暂不可用",
     "staleData": "数据可能不是最新，请手动刷新",
-    "drivers": "驱动因素",
-    "risks": "风险提示",
-    "focus": "关注方向",
     "col": {
       "code": "代码",
       "name": "名称",

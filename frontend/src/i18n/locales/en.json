@@ -13,7 +13,6 @@
       "workspace": "Workspace",
       "tools": "Tools"
     },
-    "home": "Home",
     "agent": "Agent",
     "runtime": "Runtime",
     "reports": "Reports",
@@ -841,19 +840,6 @@
     "shadowReport": "Shadow Report",
     "shadowReportPdf": "Export PDF"
   },
-  "home": {
-    "title": "AI-Powered Quant Strategy Research",
-    "subtitle": "Describe a trading strategy in natural language. The agent generates code, runs backtests, and optimizes — all in real time.",
-    "startResearch": "Start Research",
-    "featureAgent": "AI Agent",
-    "featureAgentDesc": "Natural language strategy generation with ReAct reasoning",
-    "featureBacktest": "Built-in Backtest",
-    "featureBacktestDesc": "Multiple data sources covering A-shares quantitative analysis",
-    "featureStreaming": "Real-time Streaming",
-    "featureStreamingDesc": "Watch the agent think, call tools, and iterate",
-    "featureReplay": "Strategy Replay",
-    "featureReplayDesc": "Trade journal analyzer + Shadow Account — extract your rules, backtest them, attribute PnL delta"
-  },
   "errorBoundary": {
     "somethingWrong": "Something went wrong"
   },
@@ -983,8 +969,6 @@
   "dashboard": {
     "title": "Market Overview",
     "marketPulse": "Market Pulse",
-    "aiSummary": "AI Summary",
-    "refreshSummary": "Refresh AI Summary",
     "watchlistQuotes": "Watchlist",
     "stockDetail": "Stock Detail",
     "selectStockHint": "Select a stock to view K-line chart",
@@ -1046,11 +1030,7 @@
       "limit": "Limit",
       "quality": "Quality"
     },
-    "summaryUnavailable": "Summary unavailable",
     "staleData": "Data may be stale, please refresh manually",
-    "drivers": "Drivers",
-    "risks": "Risks",
-    "focus": "Focus",
     "col": {
       "code": "Code",
       "name": "Name",

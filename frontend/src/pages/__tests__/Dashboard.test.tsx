@@ -11,21 +11,17 @@ const mockStoreRef = {
   quotes: {} as Record<string, unknown>,
   selectedCode: null as string | null,
   selectedBars: [] as unknown[],
-  summary: null as unknown,
   marketSnapshot: null as Record<string, unknown> | null,
   indexesLoading: false,
   quotesLoading: false,
-  summaryLoading: false,
   barsLoading: false,
   marketSnapshotLoading: false,
   indexesError: null as string | null,
   quotesError: null as string | null,
-  summaryError: null as string | null,
   barsError: null as string | null,
   marketSnapshotError: null as string | null,
   initialize: vi.fn(),
   refreshMarketData: vi.fn(),
-  refreshSummary: vi.fn(),
   setSelectedCode: vi.fn(),
   startPolling: vi.fn(),
   stopPolling: vi.fn(),
@@ -89,8 +85,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
 
 // ── Helpers ───────────────────────────────────────────────────
 
-/** Build a minimal store snapshot with indexes and a summary */
-function stateWithIndexesAndSummary(overrides?: Partial<typeof mockStoreRef>) {
+/** Build a minimal store snapshot with market data. */
+function stateWithMarketData(overrides?: Partial<typeof mockStoreRef>) {
   Object.assign(mockStoreRef, {
     indexes: [
       { code: "000001", name: "上证指数", price: 3000, changePct: 0.5, changeAmt: 15, source: "test", stale: false },
@@ -101,21 +97,7 @@ function stateWithIndexesAndSummary(overrides?: Partial<typeof mockStoreRef>) {
     },
     selectedCode: null,
     selectedBars: [],
-    summary: {
-      available: true,
-      summary: {
-        headline: "风险偏好回升",
-        drivers: ["外资流入", "政策利好"],
-        risks: ["地缘风险"],
-        focus: ["消费板块"],
-      },
-      market_as_of: "2026-07-13T10:00:00Z",
-      generated_at: "2026-07-13T10:00:00Z",
-      cached: false,
-      stale: false,
-    },
     marketSnapshot: MARKET_SNAPSHOT,
-    summaryError: null,
     indexesError: null,
     quotesError: null,
     barsError: null,
@@ -143,15 +125,12 @@ describe("Dashboard page", () => {
       quotes: {},
       selectedCode: null,
       selectedBars: [],
-      summary: null,
       indexesLoading: false,
       quotesLoading: false,
-      summaryLoading: false,
       barsLoading: false,
       marketSnapshotLoading: false,
       indexesError: null,
       quotesError: null,
-      summaryError: null,
       barsError: null,
       marketSnapshotError: null,
     });
@@ -175,7 +154,7 @@ describe("Dashboard page", () => {
 
   describe("market-first layout", () => {
     it("uses the full available width", () => {
-      stateWithIndexesAndSummary();
+      stateWithMarketData();
       const { container } = renderDashboard();
 
       expect(container.firstElementChild).toHaveClass("w-full");
@@ -183,7 +162,7 @@ describe("Dashboard page", () => {
     });
 
     it("renders market-first sections before watchlist detail", () => {
-      stateWithIndexesAndSummary();
+      stateWithMarketData();
       renderDashboard();
 
       // The market overview section heading appears
@@ -194,22 +173,15 @@ describe("Dashboard page", () => {
     });
 
     it("shows indexes in the market overview section", () => {
-      stateWithIndexesAndSummary();
+      stateWithMarketData();
       renderDashboard();
 
       expect(screen.getByText("上证指数")).toBeInTheDocument();
       expect(screen.getByText("深证成指")).toBeInTheDocument();
     });
 
-    it("does not render the AI summary after it moves to Home", () => {
-      stateWithIndexesAndSummary();
-      renderDashboard();
-
-      expect(screen.queryByText("风险偏好回升")).toBeNull();
-    });
-
     it("renders breadth, emotion, trend, limit ladder, and concept heat cards from the snapshot", () => {
-      stateWithIndexesAndSummary();
+      stateWithMarketData();
       renderDashboard();
 
       expect(screen.getByTestId("market-breadth-card")).toHaveTextContent("4");
@@ -220,7 +192,7 @@ describe("Dashboard page", () => {
     });
 
     it("renders industry heat and ranking cards from the snapshot", () => {
-      stateWithIndexesAndSummary();
+      stateWithMarketData();
       renderDashboard();
 
       expect(screen.getByTestId("market-industries-card")).toHaveTextContent("半导体");
@@ -232,7 +204,7 @@ describe("Dashboard page", () => {
     });
 
     it("lets dashboard data-card lists expand without internal scrolling", () => {
-      stateWithIndexesAndSummary();
+      stateWithMarketData();
       renderDashboard();
 
       const cardIds = [
@@ -253,7 +225,7 @@ describe("Dashboard page", () => {
     });
 
     it("anchors each rendered market card source footer to the card bottom", () => {
-      stateWithIndexesAndSummary();
+      stateWithMarketData();
       renderDashboard();
 
       const cardIds = [
@@ -276,7 +248,7 @@ describe("Dashboard page", () => {
     });
 
     it("marks only the concept card stale when concept data is unavailable", () => {
-      stateWithIndexesAndSummary({
+      stateWithMarketData({
         marketSnapshot: { ...MARKET_SNAPSHOT, stale: true, errors: { concepts: "concept source unavailable" } },
         marketSnapshotError: "concept source unavailable",
       });
@@ -289,7 +261,7 @@ describe("Dashboard page", () => {
     });
 
     it("shows source and last successful time for every market snapshot card", () => {
-      stateWithIndexesAndSummary();
+      stateWithMarketData();
       renderDashboard();
 
       const expectations = [
@@ -311,7 +283,7 @@ describe("Dashboard page", () => {
 
   describe("watchlist migration", () => {
     it("does not render watchlist quotes or K-line detail", () => {
-      stateWithIndexesAndSummary();
+      stateWithMarketData();
       renderDashboard();
 
       expect(screen.queryByText(/自选股|Watchlist/i)).toBeNull();
@@ -322,7 +294,7 @@ describe("Dashboard page", () => {
   describe("i18n labels", () => {
     it("shows dashboard navigation label in Chinese", () => {
       i18n.changeLanguage("zh-CN");
-      stateWithIndexesAndSummary();
+      stateWithMarketData();
       renderDashboard();
 
       expect(screen.getByRole("heading", { name: /市场概览/i })).toBeInTheDocument();
@@ -330,7 +302,7 @@ describe("Dashboard page", () => {
 
     it("shows dashboard navigation label in English", () => {
       i18n.changeLanguage("en");
-      stateWithIndexesAndSummary();
+      stateWithMarketData();
       renderDashboard();
 
       expect(screen.getByRole("heading", { name: /Market Overview/i })).toBeInTheDocument();

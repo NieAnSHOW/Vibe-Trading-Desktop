@@ -4,7 +4,7 @@
   },
   "layout": {
     "news": "투자 뉴스",
-    "section": { "workspace": "Workspace", "tools": "Tools" }, "home": "홈",
+    "section": { "workspace": "Workspace", "tools": "Tools" },
     "agent": "에이전트",
     "runtime": "런타임",
     "reports": "리포트",
@@ -737,19 +737,7 @@
     "pineScript": "Pine Script",
     "shadowReport": "섀도우 리포트"
   },
-  "section": { "workspace": "Workspace", "tools": "Tools" }, "home": {
-    "title": "AI 기반 퀀트 전략 리서치",
-    "subtitle": "자연어로 거래 전략을 설명하세요. 에이전트가 코드를 생성하고, 백테스트를 실행하고, 최적화하는 모든 과정을 실시간으로 보여줍니다.",
-    "startResearch": "리서치 시작",
-    "featureAgent": "AI 에이전트",
-    "featureAgentDesc": "ReAct 추론 기반의 자연어 전략 생성",
-    "featureBacktest": "내장 백테스트",
-    "featureBacktestDesc": "A주, 미국/HK, 암호화폐를 아우르는 7개 데이터 소스",
-    "featureStreaming": "실시간 스트리밍",
-    "featureStreamingDesc": "에이전트의 사고, 도구 호출, 반복 과정을 지켜보세요",
-    "featureReplay": "전략 리플레이",
-    "featureReplayDesc": "매매 일지 분석 + 섀도우 계좌 — 규칙 추출, 백테스트, PnL 차이 귀인 분석"
-  },
+  "section": { "workspace": "Workspace", "tools": "Tools" },
   "errorBoundary": {
     "somethingWrong": "문제가 발생했습니다"
   },

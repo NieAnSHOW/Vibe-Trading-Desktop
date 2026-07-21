@@ -13,10 +13,6 @@ vi.mock("@/lib/api", async (importOriginal) => {
   return {
     ...original,
     fetchWatchlistStocks: vi.fn(),
-    api: {
-      ...original.api,
-      createMarketSummary: vi.fn(),
-    },
   };
 });
 
@@ -27,7 +23,7 @@ import {
   fetchDashboardDailyBars,
   fetchDashboardMarketSnapshot,
 } from "@/lib/stockSdk";
-import { fetchWatchlistStocks, api } from "@/lib/api";
+import { fetchWatchlistStocks } from "@/lib/api";
 import { useMarketDashboardStore } from "../marketDashboard";
 
 const mockFetchIndexes = vi.mocked(fetchDashboardIndexes);
@@ -36,7 +32,6 @@ const mockFetchQuotes = vi.mocked(fetchDashboardQuotes);
 const mockFetchDailyBars = vi.mocked(fetchDashboardDailyBars);
 const mockFetchMarketSnapshot = vi.mocked(fetchDashboardMarketSnapshot);
 const mockFetchWatchlist = vi.mocked(fetchWatchlistStocks);
-const mockCreateSummary = vi.mocked(api.createMarketSummary);
 
 const MARKET_SNAPSHOT = {
   breadth: { total: 4, up: 2, flat: 1, down: 1, upPct: 50, strongUp: 1, strongDown: 1, avgChangePct: 0, distribution: [] },
@@ -57,18 +52,15 @@ const defaultState = {
   quotes: {} as Record<string, unknown>,
   selectedCode: null as string | null,
   selectedBars: [],
-  summary: null,
   marketSnapshot: null,
   indexesLoading: false,
   pulseLoading: false,
   quotesLoading: false,
-  summaryLoading: false,
   barsLoading: false,
   marketSnapshotLoading: false,
   indexesError: null as string | null,
   pulseError: null as string | null,
   quotesError: null as string | null,
-  summaryError: null as string | null,
   barsError: null as string | null,
   marketSnapshotError: null as string | null,
   pollingTimerId: null as ReturnType<typeof setInterval> | null,
@@ -85,6 +77,15 @@ beforeEach(() => {
 });
 
 describe("useMarketDashboardStore", () => {
+  describe("initialize", () => {
+    it("initializes market data without requesting an AI summary", async () => {
+      await useMarketDashboardStore.getState().initialize();
+
+      expect(mockFetchIndexes).toHaveBeenCalled();
+      expect(useMarketDashboardStore.getState()).not.toHaveProperty("refreshSummary");
+    });
+  });
+
   describe("initial state", () => {
     it("has empty defaults", () => {
       const s = useMarketDashboardStore.getState();
@@ -95,18 +96,15 @@ describe("useMarketDashboardStore", () => {
       expect(s.quotes).toEqual({});
       expect(s.selectedCode).toBeNull();
       expect(s.selectedBars).toEqual([]);
-      expect(s.summary).toBeNull();
       expect(s.marketSnapshot).toBeNull();
       expect(s.indexesLoading).toBe(false);
       expect(s.pulseLoading).toBe(false);
       expect(s.quotesLoading).toBe(false);
-      expect(s.summaryLoading).toBe(false);
       expect(s.barsLoading).toBe(false);
       expect(s.marketSnapshotLoading).toBe(false);
       expect(s.indexesError).toBeNull();
       expect(s.pulseError).toBeNull();
       expect(s.quotesError).toBeNull();
-      expect(s.summaryError).toBeNull();
       expect(s.barsError).toBeNull();
       expect(s.marketSnapshotError).toBeNull();
     });
@@ -267,62 +265,6 @@ describe("useMarketDashboardStore", () => {
     });
   });
 
-  describe("refreshSummary", () => {
-    it("passes force_refresh: true when force=true", async () => {
-      mockCreateSummary.mockResolvedValue({
-        available: true,
-        summary: { headline: "test", drivers: [], risks: [], focus: [] },
-        market_as_of: "2026-07-13T10:00:00Z",
-        generated_at: "2026-07-13T10:00:00Z",
-        cached: false,
-        stale: false,
-      });
-
-      await useMarketDashboardStore.getState().refreshSummary(true);
-
-      const callArg = mockCreateSummary.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
-      expect(callArg?.force_refresh).toBe(true);
-    });
-
-    it("does not call force_refresh by default", async () => {
-      mockCreateSummary.mockResolvedValue({
-        available: true,
-        summary: { headline: "test", drivers: [], risks: [], focus: [] },
-        market_as_of: "2026-07-13T10:00:00Z",
-        generated_at: "2026-07-13T10:00:00Z",
-        cached: false,
-        stale: false,
-      });
-
-      await useMarketDashboardStore.getState().refreshSummary();
-
-      const callArg = mockCreateSummary.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
-      expect(callArg?.force_refresh).toBeFalsy();
-    });
-
-    it("does not clear indexes when summary unavailable", async () => {
-      useMarketDashboardStore.setState({
-        indexes: [{ code: "000001", name: "上证指数", price: 3000, changePct: 0.5, changeAmt: 15, source: "test", stale: false }] as never,
-      });
-
-      mockCreateSummary.mockResolvedValue({
-        available: false,
-        summary: null,
-        market_as_of: null,
-        generated_at: null,
-        cached: false,
-        stale: false,
-        error_code: "no_provider",
-      });
-
-      await useMarketDashboardStore.getState().refreshSummary(false);
-
-      const s = useMarketDashboardStore.getState();
-      expect(s.indexes).toHaveLength(1);
-      expect(s.summaryError).toBe("no_provider");
-    });
-  });
-
   describe("setSelectedCode", () => {
     it("triggers K-line load for selected symbol only", async () => {
       mockFetchDailyBars.mockResolvedValue({
@@ -465,35 +407,4 @@ describe("useMarketDashboardStore", () => {
     });
   });
 
-  describe("initialize", () => {
-    it("calls refreshMarketData and non-forced refreshSummary", async () => {
-      mockFetchIndexes.mockResolvedValue({
-        data: [],
-        asOf: "2026-07-13T10:00:00Z",
-        stale: false,
-      });
-      mockFetchPulse.mockResolvedValue({
-        data: [],
-        asOf: "2026-07-13T10:00:00Z",
-        stale: false,
-      });
-      mockFetchWatchlist.mockResolvedValue({ stocks: [] });
-      mockCreateSummary.mockResolvedValue({
-        available: false,
-        summary: null,
-        market_as_of: null,
-        generated_at: null,
-        cached: false,
-        stale: false,
-      });
-
-      await useMarketDashboardStore.getState().initialize();
-
-      expect(mockFetchIndexes).toHaveBeenCalled();
-      expect(mockCreateSummary).toHaveBeenCalled();
-      // verify non-forced
-      const callArg = mockCreateSummary.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
-      expect(callArg?.force_refresh).toBeFalsy();
-    });
-  });
 });

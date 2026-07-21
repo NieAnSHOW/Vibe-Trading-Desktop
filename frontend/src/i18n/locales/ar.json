@@ -4,7 +4,7 @@
   },
   "layout": {
     "news": "أخبار الاستثمار",
-    "section": { "workspace": "Workspace", "tools": "Tools" }, "home": "الرئيسية",
+    "section": { "workspace": "Workspace", "tools": "Tools" },
     "agent": "الوكيل",
     "runtime": "وقت التشغيل",
     "reports": "التقارير",
@@ -737,19 +737,7 @@
     "pineScript": "Pine Script",
     "shadowReport": "تقرير الظلّ"
   },
-  "section": { "workspace": "Workspace", "tools": "Tools" }, "home": {
-    "title": "بحث استراتيجيات الكمّ مدعوم بالذكاء الاصطناعي",
-    "subtitle": "صف استراتيجية تداول بلغة طبيعية. يُولِّد الوكيل الشفرة، ويُجري الاختبارات العكسية، ويُحسّن — كل ذلك في الوقت الفعلي.",
-    "startResearch": "ابدأ البحث",
-    "featureAgent": "وكيل ذكاء اصطناعي",
-    "featureAgentDesc": "توليد استراتيجيات من اللغة الطبيعية باستدلال ReAct",
-    "featureBacktest": "اختبار عكسي مدمج",
-    "featureBacktestDesc": "7 مصادر بيانات عبر الأسهم الصينية، هونج كونج/أمريكا، والعملات الرقمية",
-    "featureStreaming": "بث في الوقت الفعلي",
-    "featureStreamingDesc": "راقب الوكيل وهو يفكّر، ويستدعي الأدوات، ويتكرّر",
-    "featureReplay": "إعادة تشغيل الاستراتيجية",
-    "featureReplayDesc": "محلّل يومية التداول + الحساب الظلّي — استخرج قواعدك، واختبرها عكسيًا، وأرجع فرق الأرباح والخسائر"
-  },
+  "section": { "workspace": "Workspace", "tools": "Tools" },
   "errorBoundary": {
     "somethingWrong": "حدث خطأ ما"
   },

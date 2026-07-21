@@ -4,7 +4,7 @@
   },
   "layout": {
     "news": "投資ニュース",
-    "section": { "workspace": "Workspace", "tools": "Tools" }, "home": "ホーム",
+    "section": { "workspace": "Workspace", "tools": "Tools" },
     "agent": "エージェント",
     "runtime": "ランタイム",
     "reports": "レポート",
@@ -737,19 +737,7 @@
     "pineScript": "Pine Script",
     "shadowReport": "シャドウレポート"
   },
-  "section": { "workspace": "Workspace", "tools": "Tools" }, "home": {
-    "title": "AI 駆動のクォント戦略リサーチ",
-    "subtitle": "自然言語で取引戦略を記述してください。エージェントがコードを生成し、バックテストを実行し、最適化をリアルタイムで行います。",
-    "startResearch": "リサーチを開始",
-    "featureAgent": "AI エージェント",
-    "featureAgentDesc": "ReAct 推論による自然言語の戦略生成",
-    "featureBacktest": "内蔵バックテスト",
-    "featureBacktestDesc": "A株、米国/HK、暗号資産をカバーする 7 つのデータソース",
-    "featureStreaming": "リアルタイムストリーミング",
-    "featureStreamingDesc": "エージェントの思考、ツール呼び出し、反復を観察",
-    "featureReplay": "戦略リプレイ",
-    "featureReplayDesc": "トレードジャーナル分析 + シャドウアカウント — ルールを抽出しバックテスト、損益差分を要因分解"
-  },
+  "section": { "workspace": "Workspace", "tools": "Tools" },
   "errorBoundary": {
     "somethingWrong": "問題が発生しました"
   },
