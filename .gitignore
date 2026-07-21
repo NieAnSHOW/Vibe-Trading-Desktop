@@ -114,6 +114,7 @@ src-tauri/gen/
 # Codegraph index
 .codegraph/
 .superpowers/
+.worktrees/
 .comet
 .idea
 .agents/
