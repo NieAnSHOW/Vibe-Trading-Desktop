@@ -7,6 +7,7 @@ const apiMock = vi.hoisted(() => ({
   getLLMSettings: vi.fn(),
   getDataSourceSettings: vi.fn(),
   getChannelStatus: vi.fn(),
+  getLiveStatus: vi.fn(),
   startChannels: vi.fn(),
   stopChannels: vi.fn(),
   updateLLMSettings: vi.fn(),
@@ -147,6 +148,7 @@ describe("Settings QVeris card", () => {
     apiMock.getLLMSettings.mockResolvedValue(llmSettings());
     apiMock.getDataSourceSettings.mockResolvedValue(dataSourceSettings());
     apiMock.getChannelStatus.mockResolvedValue(channelStatus());
+    apiMock.getLiveStatus.mockResolvedValue({ global_halted: false, brokers: [] });
     apiMock.startChannels.mockResolvedValue(channelStatus());
     apiMock.stopChannels.mockResolvedValue(channelStatus());
   });
@@ -161,6 +163,7 @@ describe("Settings QVeris card", () => {
 
     render(<Settings />);
 
+    expect(await screen.findByRole("heading", { name: "LLM Settings" })).toBeInTheDocument();
     expect(await screen.findByText("QVeris Tool Marketplace")).toBeInTheDocument();
     expect(await screen.findByDisplayValue("https://qveris.ai/api/v1")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("sk-...8TI")).toBeInTheDocument();

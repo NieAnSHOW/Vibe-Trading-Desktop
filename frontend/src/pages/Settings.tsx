@@ -491,7 +491,10 @@ export function Settings() {
 
   if (loading || !form || !settings || !dataSettings) {
     return (
-      <div className="mx-auto max-w-5xl space-y-6 p-6">
+      <div
+        data-testid="settings-workspace"
+        className="flex h-full w-full flex-col gap-3 p-3 lg:gap-3 lg:p-5"
+      >
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">
             {i18n.t("settings.title")}
@@ -538,6 +541,7 @@ export function Settings() {
               {i18n.t("settings.loading")}
             </>
           )}
+
         </div>
       </div>
     );
@@ -581,7 +585,10 @@ export function Settings() {
   const hideLlm = !!settings.desktop_login_provisioned;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6">
+    <div
+      data-testid="settings-workspace"
+      className="flex h-full w-full flex-col gap-3 p-3 lg:gap-3 lg:p-5"
+    >
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">
           {i18n.t("settings.title")}
@@ -592,16 +599,17 @@ export function Settings() {
       </div>
 
       {/* {localApiAccessSection} */}
-      {/* LLM Settings */}
-      {hideLlm ? (
-        <div className="rounded-lg border bg-card p-5 shadow-sm flex items-center gap-3 text-sm text-muted-foreground">
-          <Server className="h-4 w-4 text-primary shrink-0" />
-          <span>{i18n.t("settings.hideLlmNotice")}</span>
-        </div>
-      ) : (
-        <>
-          <form onSubmit={submit} className="grid gap-6">
-            <section className="rounded-lg border bg-card p-5 shadow-sm">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)]">
+        <div className="grid content-start gap-3">
+          {/* LLM Settings */}
+          {hideLlm ? (
+            <div className="flex items-center gap-3 rounded-lg border bg-card p-4 text-sm text-muted-foreground shadow-sm">
+              <Server className="h-4 w-4 shrink-0 text-primary" />
+              <span>{i18n.t("settings.hideLlmNotice")}</span>
+            </div>
+          ) : (
+            <form onSubmit={submit} className="grid gap-3">
+              <section className="rounded-lg border bg-card p-4 shadow-sm">
               <div className="mb-5 flex items-center gap-2">
                 <Server className="h-4 w-4 text-primary" />
                 <h2 className="text-base font-semibold">
@@ -779,51 +787,156 @@ export function Settings() {
                   {saving ? i18n.t("settings.saving") : i18n.t("settings.save")}
                 </button>
               </div>
-            </section>
-          </form>
-        </>
-      )}
-      {/* QVERIS-INTEGRATION */}
-      <QVerisSettings />
-
-      {/* Usage data consent */}
-      <div className="rounded-lg border bg-card p-5 shadow-sm">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-base font-semibold">
-            {i18n.t("settings.usageData.title")}
-          </h2>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={usageDataOn}
-            onClick={() => toggleUsageData(!usageDataOn)}
-            className={`relative h-6 w-11 rounded-full transition ${usageDataOn ? "bg-primary" : "bg-muted"}`}
-          >
-            <span
-              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${usageDataOn ? "left-[22px]" : "left-0.5"}`}
-            />
-          </button>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          {i18n.t("settings.usageData.description")}
-        </p>
-        {/* <button
-          type="button"
-          onClick={handleTestUpload}
-          disabled={flushing}
-          className="mt-3 inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {flushing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Upload className="h-3.5 w-3.5" />
+              </section>
+            </form>
           )}
-          测试上传埋点数据
-        </button> */}
+
+          <form
+            onSubmit={submitDataSources}
+            className="rounded-lg border bg-card p-4 shadow-sm"
+          >
+            <div className="mb-5 space-y-1">
+              <div className="flex items-center gap-2">
+                <Database className="h-4 w-4 text-primary" />
+                <h2 className="text-base font-semibold">
+                  {i18n.t("settings.dataSourceSettings")}
+                </h2>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {i18n.t("settings.dataSourceSettingsDesc")}
+              </p>
+            </div>
+
+            <div className="grid gap-5">
+              <label className="grid gap-2">
+                <span className={labelClass}>
+                  {i18n.t("settings.tushareToken")}
+                </span>
+                <div className="relative">
+                  <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="password"
+                    value={tushareToken}
+                    onChange={(event) => setTushareToken(event.target.value)}
+                    className={`${fieldClass} pl-9`}
+                    placeholder={tushareStatus}
+                    autoComplete="current-password"
+                    disabled={clearTushareToken}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className={hintClass}>
+                    {i18n.t("settings.tushareTokenHint")}
+                  </span>
+                  <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={clearTushareToken}
+                      onChange={(event) => {
+                        setClearTushareToken(event.target.checked);
+                        if (event.target.checked) setTushareToken("");
+                      }}
+                      className="h-3.5 w-3.5 accent-primary"
+                    />
+                    {i18n.t("settings.clearTushareToken")}
+                  </label>
+                </div>
+              </label>
+
+              <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  {i18n.t("settings.saved")}: {" "}
+                </span>
+                <span className="break-all font-mono">
+                  {dataSettings.env_path}
+                </span>
+              </div>
+
+              <button
+                type="submit"
+                disabled={dataSaving}
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {dataSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {dataSaving
+                  ? i18n.t("settings.saving")
+                  : i18n.t("settings.saveDataSourceSettings")}
+              </button>
+
+              <div className="rounded-md border bg-muted/20 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium">
+                    {i18n.t("settings.baostock")}
+                  </span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs ${dataSettings.baostock_supported ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}
+                  >
+                    {dataSettings.baostock_supported
+                      ? i18n.t("settings.loaderAvailable")
+                      : i18n.t("settings.noProjectLoader")}
+                  </span>
+                </div>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p>{dataSettings.baostock_message}</p>
+                  <p>
+                    {dataSettings.baostock_installed
+                      ? i18n.t("settings.pythonPackageInstalled")
+                      : i18n.t("settings.pythonPackageNotInstalled")}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <aside className="grid content-start gap-3">
+          {/* QVERIS-INTEGRATION */}
+          <QVerisSettings />
+
+          {/* Usage data consent */}
+          <div className="rounded-lg border bg-card p-4 shadow-sm">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-base font-semibold">
+                {i18n.t("settings.usageData.title")}
+              </h2>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={usageDataOn}
+                onClick={() => toggleUsageData(!usageDataOn)}
+                className={`relative h-6 w-11 rounded-full transition ${usageDataOn ? "bg-primary" : "bg-muted"}`}
+              >
+                <span
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${usageDataOn ? "left-[22px]" : "left-0.5"}`}
+                />
+              </button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {i18n.t("settings.usageData.description")}
+            </p>
+            {/* <button
+              type="button"
+              onClick={handleTestUpload}
+              disabled={flushing}
+              className="mt-3 inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {flushing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Upload className="h-3.5 w-3.5" />
+              )}
+              测试上传埋点数据
+            </button> */}
+          </div>
+        </aside>
       </div>
 
       {/* IM channels */}
-      <section className="rounded-lg border bg-card p-5 shadow-sm">
+      <section className="rounded-lg border bg-card p-4 shadow-sm">
         <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -1025,109 +1138,6 @@ export function Settings() {
           </button>
         </form>
       </section>
-
-      <form
-        onSubmit={submitDataSources}
-        className="rounded-lg border bg-card p-5 shadow-sm"
-      >
-        <div className="mb-5 space-y-1">
-          <div className="flex items-center gap-2">
-            <Database className="h-4 w-4 text-primary" />
-            <h2 className="text-base font-semibold">
-              {i18n.t("settings.dataSourceSettings")}
-            </h2>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {i18n.t("settings.dataSourceSettingsDesc")}
-          </p>
-        </div>
-
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
-          <div className="grid gap-4">
-            <label className="grid gap-2">
-              <span className={labelClass}>
-                {i18n.t("settings.tushareToken")}
-              </span>
-              <div className="relative">
-                <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <input
-                  type="password"
-                  value={tushareToken}
-                  onChange={(event) => setTushareToken(event.target.value)}
-                  className={`${fieldClass} pl-9`}
-                  placeholder={tushareStatus}
-                  autoComplete="current-password"
-                  disabled={clearTushareToken}
-                />
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className={hintClass}>
-                  {i18n.t("settings.tushareTokenHint")}
-                </span>
-                <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={clearTushareToken}
-                    onChange={(event) => {
-                      setClearTushareToken(event.target.checked);
-                      if (event.target.checked) setTushareToken("");
-                    }}
-                    className="h-3.5 w-3.5 accent-primary"
-                  />
-                  {i18n.t("settings.clearTushareToken")}
-                </label>
-              </div>
-            </label>
-
-            <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">
-                {i18n.t("settings.saved")}:{" "}
-              </span>
-              <span className="break-all font-mono">
-                {dataSettings.env_path}
-              </span>
-            </div>
-
-            <button
-              type="submit"
-              disabled={dataSaving}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {dataSaving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              {dataSaving
-                ? i18n.t("settings.saving")
-                : i18n.t("settings.saveDataSourceSettings")}
-            </button>
-          </div>
-
-          <div className="rounded-md border bg-muted/20 p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <span className="text-sm font-medium">
-                {i18n.t("settings.baostock")}
-              </span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs ${dataSettings.baostock_supported ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}
-              >
-                {dataSettings.baostock_supported
-                  ? i18n.t("settings.loaderAvailable")
-                  : i18n.t("settings.noProjectLoader")}
-              </span>
-            </div>
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <p>{dataSettings.baostock_message}</p>
-              <p>
-                {dataSettings.baostock_installed
-                  ? i18n.t("settings.pythonPackageInstalled")
-                  : i18n.t("settings.pythonPackageNotInstalled")}
-              </p>
-            </div>
-          </div>
-        </div>
-      </form>
 
       <RuntimeStatus />
 
