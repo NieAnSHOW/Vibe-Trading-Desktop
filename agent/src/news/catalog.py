@@ -24,6 +24,11 @@ EXPECTED_SOURCE_COUNT = 108
 EXPECTED_ENDPOINT_COUNT = 106
 
 
+def _canonical_manifest_bytes(value: bytes) -> bytes:
+    """Normalize Git's Windows CRLF checkout back to the pinned LF bytes."""
+    return value.replace(b"\r\n", b"\n")
+
+
 @dataclass(frozen=True)
 class SourceAssignment:
     id: str
@@ -53,12 +58,13 @@ class NewsCatalog:
 def load_catalog() -> NewsCatalog:
     package_files = files("src.news")
     manifest_bytes = package_files.joinpath("upstream_manifest.json").read_bytes()
-    actual_digest = hashlib.sha256(manifest_bytes).hexdigest()
+    canonical_manifest_bytes = _canonical_manifest_bytes(manifest_bytes)
+    actual_digest = hashlib.sha256(canonical_manifest_bytes).hexdigest()
     sidecar_digest = package_files.joinpath("upstream_manifest.sha256").read_text(encoding="utf-8").strip()
     if actual_digest != sidecar_digest or actual_digest != GOLDEN_MANIFEST_SHA256:
         raise ValueError("catalog manifest digest mismatch")
 
-    data = json.loads(manifest_bytes)
+    data = json.loads(canonical_manifest_bytes)
     _validate_manifest(data)
     assignments = tuple(
         SourceAssignment(

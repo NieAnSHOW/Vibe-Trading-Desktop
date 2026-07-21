@@ -25,6 +25,10 @@ STATIC_ARTIFACTS = (
 )
 
 
+def _canonical_manifest_bytes(value: bytes) -> bytes:
+    return value.replace(b"\r\n", b"\n")
+
+
 def _load_mutated_catalog(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -99,7 +103,7 @@ def test_manifest_hash_and_mit_notice_are_pinned() -> None:
     digest = NEWS_DIR / "upstream_manifest.sha256"
     notice = NEWS_DIR / "THIRD_PARTY_NOTICES.md"
 
-    assert hashlib.sha256(manifest.read_bytes()).hexdigest() == GOLDEN_MANIFEST_SHA256
+    assert hashlib.sha256(_canonical_manifest_bytes(manifest.read_bytes())).hexdigest() == GOLDEN_MANIFEST_SHA256
     assert digest.read_text(encoding="utf-8").strip() == GOLDEN_MANIFEST_SHA256
     payload = json.loads(manifest.read_text(encoding="utf-8"))
     assert payload["repository"] == FIXED_UPSTREAM_REPOSITORY
@@ -107,6 +111,23 @@ def test_manifest_hash_and_mit_notice_are_pinned() -> None:
     assert payload["schema_version"] == 1
     assert "MIT License" in notice.read_text(encoding="utf-8")
     assert "Copyright (c) 2026 simonlin1212" in notice.read_text(encoding="utf-8")
+
+
+def test_load_catalog_accepts_a_manifest_with_windows_line_endings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = _canonical_manifest_bytes((NEWS_DIR / "upstream_manifest.json").read_bytes()).replace(
+        b"\n", b"\r\n"
+    )
+    (tmp_path / "upstream_manifest.json").write_bytes(manifest)
+    (tmp_path / "upstream_manifest.sha256").write_text(
+        GOLDEN_MANIFEST_SHA256 + "\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(catalog, "files", lambda _: tmp_path)
+
+    loaded = load_catalog()
+
+    assert loaded.commit == FIXED_UPSTREAM_COMMIT
 
 
 def test_load_catalog_rejects_a_manifest_that_does_not_match_its_sidecar(

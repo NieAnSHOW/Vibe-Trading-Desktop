@@ -1,0 +1,2 @@
+# The pinned manifest digest is calculated from LF bytes.
+agent/src/news/upstream_manifest.json text eol=lf
