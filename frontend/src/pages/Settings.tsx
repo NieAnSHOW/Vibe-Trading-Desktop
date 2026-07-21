@@ -48,33 +48,24 @@ const fieldClass =
   "w-full rounded-md border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60";
 const labelClass = "text-sm font-medium";
 const hintClass = "text-xs text-muted-foreground";
-const DEFAULT_LLM_GENERATION = {
-  temperature: 0.7,
-  timeout_seconds: 200,
-  reasoning_effort: "high",
-} as const;
 
+// ponytail: 直接映射后端 GET /settings/llm 的 .env 真实值,不再用前端默认值覆盖。
+// 否则换浏览器/清缓存/origin 端口变化时,用户已配置的 temperature 等会被重写成默认值。
 function toForm(settings: LLMSettings): LLMFormState {
   return {
     provider: settings.provider,
     model_name: settings.model_name,
     base_url: settings.base_url,
-    ...DEFAULT_LLM_GENERATION,
+    temperature: settings.temperature,
+    timeout_seconds: settings.timeout_seconds,
     max_retries: settings.max_retries,
+    reasoning_effort: settings.reasoning_effort,
   };
 }
 
-// VIP Server 现为后端一等公民 provider(agent/src/providers/llm_providers.json +
-// capabilities.py::_PROVIDERS)。前端只保留默认值/判定常量,与后端 json 对齐。
+// VIP Server 为后端一等公民 provider(agent/src/providers/llm_providers.json)。
+// 前端仅用此常量判定"当前是否 VIP provider"以切换 UI(VIP 走模型下拉,其他走自由输入)。
 const VIP_PROVIDER_NAME = "vip_server";
-const VIP_DEFAULTS = {
-  model: "deepseek-v4-flash",
-  base_url: "https://new.ailjf.cc/v1",
-} as const;
-
-// ponytail: "用户是否已对 LLM 做过主动选择"的本地标记(切换 provider 或保存过配置)。
-// 未标记 = 全新安装/未配置过 → 默认 VIP;一旦切换 provider 或保存过就置 "1",之后尊重 .env 当前值。
-const PROVIDER_PICKED_KEY = "vt_provider_picked";
 
 // ponytail: VIP 已获取模型列表的本地缓存,跨页面/重挂载保留,避免每次重进设置页都要重新点"获取"。
 const VIP_MODELS_KEY = "vt_vip_models";
@@ -175,22 +166,11 @@ export function Settings() {
         if (!alive) return;
 
         // ponytail: allSettled — 单接口失败不拖垮整页 (upstream 容错语义)。
-        // LLM 分支保留 fork 的 VIP 默认值逻辑 (未主动选过 provider 时默认 VIP)。
+        // LLM 直接信任后端返回的 .env 真实值,不再用本地标记/硬编码默认值覆盖。
         if (llmResult.status === "fulfilled") {
           const llmData = llmResult.value;
           setSettings(llmData);
-          const picked = localStorage.getItem(PROVIDER_PICKED_KEY) === "1";
-          const formInit = toForm(llmData);
-          setForm(
-            picked
-              ? formInit
-              : {
-                  ...formInit,
-                  provider: VIP_PROVIDER_NAME,
-                  model_name: VIP_DEFAULTS.model,
-                  base_url: VIP_DEFAULTS.base_url,
-                },
-          );
+          setForm(toForm(llmData));
         } else {
           const message =
             llmResult.reason instanceof Error
@@ -429,7 +409,6 @@ export function Settings() {
   const onProviderChange = (name: string) => {
     const provider = providers.find((item) => item.name === name);
     if (!provider || !form) return;
-    localStorage.setItem(PROVIDER_PICKED_KEY, "1");
     setForm({
       ...form,
       provider: provider.name,
@@ -485,13 +464,10 @@ export function Settings() {
     try {
       const updated = await api.updateLLMSettings({
         ...form,
-        ...DEFAULT_LLM_GENERATION,
         api_key: apiKey.trim() || undefined,
         clear_api_key: clearApiKey,
       });
       setSettings(updated);
-      // 保存即"用户已做出选择":置位后重进页面走 picked 分支,用后端实际值,不再被 VIP 默认值覆盖。
-      localStorage.setItem(PROVIDER_PICKED_KEY, "1");
       setForm(toForm(updated));
       setApiKey("");
       setClearApiKey(false);
