@@ -42,17 +42,19 @@ function safeArticleUrl(value: string): string | null {
 function errorMessage(error: unknown): string | null {
   if (error instanceof Error && error.message) return error.message;
   if (
-    error
-    && typeof error === "object"
-    && "message" in error
-    && typeof error.message === "string"
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof error.message === "string"
   ) {
     return error.message;
   }
   return null;
 }
 
-function publicErrorMessage(error: NewsPublicError | null | undefined): string | null {
+function publicErrorMessage(
+  error: NewsPublicError | null | undefined,
+): string | null {
   return error?.message ?? null;
 }
 
@@ -92,7 +94,9 @@ function ArticleRow({ article }: { article: NewsArticle }) {
         <span aria-hidden="true" className="h-1 w-1 rounded-full bg-border" />
         {article.published_at ? (
           <time dateTime={article.published_at}>
-            {new Date(article.published_at).toLocaleString(i18n.resolvedLanguage)}
+            {new Date(article.published_at).toLocaleString(
+              i18n.resolvedLanguage,
+            )}
           </time>
         ) : (
           <span>{t("news.unknownTime")}</span>
@@ -104,7 +108,11 @@ function ArticleRow({ article }: { article: NewsArticle }) {
 
 function NewsLoadingSkeleton() {
   return (
-    <div data-testid="news-loading-skeleton" className="min-w-0 py-6" aria-hidden="true">
+    <div
+      data-testid="news-loading-skeleton"
+      className="min-w-0 py-6"
+      aria-hidden="true"
+    >
       <div className="rounded-lg border bg-muted/30 px-4 py-4 sm:px-5">
         <Skeleton className="h-4 w-24" />
         <div className="mt-4 grid gap-3 lg:grid-cols-2">
@@ -146,9 +154,9 @@ export function News() {
     refreshNews,
   } = useNews();
 
-  const selectedTrack = snapshot?.tracks.find(
-    (track) => track.track_id === selectedTrackId,
-  ) ?? null;
+  const selectedTrack =
+    snapshot?.tracks.find((track) => track.track_id === selectedTrackId) ??
+    null;
   const requestError = errorMessage(error);
   const statusError = publicErrorMessage(refreshStatus?.error);
   const envelopeError = publicErrorMessage(snapshotError);
@@ -190,12 +198,6 @@ export function News() {
     >
       <header className="flex min-w-0 items-start justify-between gap-3 lg:col-span-2">
         <div className="flex min-w-0 items-start gap-2.5">
-          <div
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"
-            aria-hidden="true"
-          >
-            <Newspaper className="h-4 w-4" />
-          </div>
           <div className="min-w-0">
             <h1 className="break-words text-xl font-semibold leading-6">
               {t("news.title")}
@@ -237,7 +239,9 @@ export function News() {
           className="space-y-1"
         >
           {TRACK_IDS.map((trackId) => {
-            const track = snapshot?.tracks.find((item) => item.track_id === trackId);
+            const track = snapshot?.tracks.find(
+              (item) => item.track_id === trackId,
+            );
             const unavailable = track?.state === "unavailable";
             const outOfDate = stale || track?.stale;
             const stateLabel = unavailable
@@ -264,7 +268,9 @@ export function News() {
                     : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                <span className="min-w-0 truncate">{t(`news.tracks.${trackId}`)}</span>
+                <span className="min-w-0 truncate">
+                  {t(`news.tracks.${trackId}`)}
+                </span>
                 <span className="flex shrink-0 items-center gap-1.5">
                   <span
                     aria-hidden="true"
@@ -275,7 +281,7 @@ export function News() {
                         ? "bg-muted-foreground"
                         : outOfDate
                           ? "bg-amber-500"
-                        : "bg-emerald-500",
+                          : "bg-emerald-500",
                     )}
                   />
                 </span>
@@ -285,7 +291,10 @@ export function News() {
         </div>
       </aside>
 
-      <div data-testid="news-mobile-tracks" className="rounded-lg border bg-card p-3 lg:hidden">
+      <div
+        data-testid="news-mobile-tracks"
+        className="rounded-lg border bg-card p-3 lg:hidden"
+      >
         <label htmlFor="news-track-select" className="sr-only">
           {t("news.selectTrack")}
         </label>
@@ -327,7 +336,10 @@ export function News() {
             role="alert"
             className="mb-4 flex min-w-0 items-start gap-2 rounded-md bg-danger/10 p-3 text-sm text-danger"
           >
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <AlertCircle
+              className="mt-0.5 h-4 w-4 shrink-0"
+              aria-hidden="true"
+            />
             <div className="min-w-0">
               <p className="font-medium">{t("news.error")}</p>
               <p className="break-words text-xs opacity-80">{visibleError}</p>
@@ -335,116 +347,135 @@ export function News() {
           </div>
         )}
 
-        {TRACK_IDS.filter((trackId) => trackId !== activeTrackId).map((trackId) => (
-          <div
-            key={trackId}
-            id={`news-panel-${trackId}`}
-            role="tabpanel"
-            aria-labelledby={`news-tab-${trackId}`}
-            hidden
-          />
-        ))}
+        {TRACK_IDS.filter((trackId) => trackId !== activeTrackId).map(
+          (trackId) => (
+            <div
+              key={trackId}
+              id={`news-panel-${trackId}`}
+              role="tabpanel"
+              aria-labelledby={`news-tab-${trackId}`}
+              hidden
+            />
+          ),
+        )}
         <div
           id={`news-panel-${activeTrackId}`}
           role="tabpanel"
           aria-labelledby={`news-tab-${activeTrackId}`}
           className="flex min-w-0 flex-1 flex-col"
         >
-        {isLoading && !snapshot ? (
-          <div className="flex min-w-0 flex-1 flex-col">
-            <p className="sr-only" role="status">
-              {t("news.loading")}
-            </p>
-            <NewsLoadingSkeleton />
-          </div>
-        ) : !snapshot ? (
-          <div className="flex flex-1 items-center justify-center py-16 text-sm text-muted-foreground">
-            {t("news.emptySnapshot")}
-          </div>
-        ) : selectedTrack ? (
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
-              <div className="min-w-0">
+          {isLoading && !snapshot ? (
+            <div className="flex min-w-0 flex-1 flex-col">
+              <p className="sr-only" role="status">
+                {t("news.loading")}
+              </p>
+              <NewsLoadingSkeleton />
+            </div>
+          ) : !snapshot ? (
+            <div className="flex flex-1 items-center justify-center py-16 text-sm text-muted-foreground">
+              {t("news.emptySnapshot")}
+            </div>
+          ) : selectedTrack ? (
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Newspaper
+                      className="h-5 w-5 shrink-0 text-primary"
+                      aria-hidden="true"
+                    />
+                    <h2 className="truncate text-lg font-semibold">
+                      {t(`news.tracks.${activeTrackId}`)}
+                    </h2>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {selectedTrack.state === "unavailable" ? (
+                    <span className="inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                      {t("news.unavailable")}
+                    </span>
+                  ) : stale || selectedTrack.stale ? (
+                    <span className="inline-flex items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                      {t("news.stale")}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                      {t("news.fresh")}
+                    </span>
+                  )}
+                  {selectedTrack.partial && (
+                    <span className="inline-flex items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                      {t("news.partial")}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <section
+                aria-labelledby="news-ai-heading"
+                className="mt-5 rounded-lg border bg-muted/30 px-4 py-4 sm:px-5"
+              >
                 <div className="flex items-center gap-2">
-                  <Newspaper className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
-                  <h2 className="truncate text-lg font-semibold">
-                    {t(`news.tracks.${activeTrackId}`)}
+                  <div
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"
+                    aria-hidden="true"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <h2 id="news-ai-heading" className="text-sm font-semibold">
+                    {t("news.ai")}
                   </h2>
                 </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {selectedTrack.state === "unavailable" ? (
-                  <span className="inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                    {t("news.unavailable")}
-                  </span>
-                ) : stale || selectedTrack.stale ? (
-                  <span className="inline-flex items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
-                    {t("news.stale")}
-                  </span>
+                {selectedTrack.ai.available &&
+                selectedTrack.ai.highlights.length > 0 ? (
+                  <ul
+                    aria-label={t("news.ai")}
+                    className="mt-3 grid min-w-0 gap-x-6 gap-y-2 text-sm leading-6 lg:grid-cols-2"
+                  >
+                    {selectedTrack.ai.highlights
+                      .slice(0, 5)
+                      .map((highlight, index) => (
+                        <li
+                          key={`${index}-${highlight}`}
+                          className="flex min-w-0 items-start gap-2"
+                        >
+                          <span
+                            className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+                            aria-hidden="true"
+                          />
+                          <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+                            {highlight}
+                          </span>
+                        </li>
+                      ))}
+                  </ul>
                 ) : (
-                  <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                    {t("news.fresh")}
-                  </span>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {t("news.aiUnavailable")}
+                  </p>
                 )}
-                {selectedTrack.partial && (
-                  <span className="inline-flex items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
-                    {t("news.partial")}
-                  </span>
-                )}
-              </div>
-            </div>
+              </section>
 
-            <section
-              aria-labelledby="news-ai-heading"
-              className="mt-5 rounded-lg border bg-muted/30 px-4 py-4 sm:px-5"
-            >
-              <div className="flex items-center gap-2">
-                <div
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"
-                  aria-hidden="true"
+              {selectedTrack.items.length > 0 ? (
+                <section
+                  aria-label={t("news.articleList")}
+                  className="min-w-0 pt-6"
                 >
-                  <Sparkles className="h-4 w-4" />
-                </div>
-                <h2 id="news-ai-heading" className="text-sm font-semibold">
-                  {t("news.ai")}
-                </h2>
-              </div>
-              {selectedTrack.ai.available && selectedTrack.ai.highlights.length > 0 ? (
-                <ul
-                  aria-label={t("news.ai")}
-                  className="mt-3 grid min-w-0 gap-x-6 gap-y-2 text-sm leading-6 lg:grid-cols-2"
-                >
-                  {selectedTrack.ai.highlights.slice(0, 5).map((highlight, index) => (
-                    <li key={`${index}-${highlight}`} className="flex min-w-0 items-start gap-2">
-                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-                      <span className="min-w-0 break-words [overflow-wrap:anywhere]">{highlight}</span>
-                    </li>
+                  {selectedTrack.items.map((item) => (
+                    <ArticleRow key={item.id} article={item} />
                   ))}
-                </ul>
+                </section>
               ) : (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {t("news.aiUnavailable")}
+                <p className="py-12 text-center text-sm text-muted-foreground">
+                  {t("news.emptyTrack")}
                 </p>
               )}
-            </section>
-
-            {selectedTrack.items.length > 0 ? (
-              <section aria-label={t("news.articleList")} className="min-w-0 pt-6">
-                {selectedTrack.items.map((item) => (
-                  <ArticleRow key={item.id} article={item} />
-                ))}
-              </section>
-            ) : (
-              <p className="py-12 text-center text-sm text-muted-foreground">
-                {t("news.emptyTrack")}
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-1 items-center justify-center py-16 text-sm text-muted-foreground">
-            {t("news.emptySnapshot")}
-          </div>
-        )}
+            </div>
+          ) : (
+            <div className="flex flex-1 items-center justify-center py-16 text-sm text-muted-foreground">
+              {t("news.emptySnapshot")}
+            </div>
+          )}
         </div>
       </section>
     </div>
