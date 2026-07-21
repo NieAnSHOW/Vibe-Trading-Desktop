@@ -173,6 +173,15 @@ describe("News workspace", () => {
     expect(within(selector).getAllByRole("option")).toHaveLength(12);
   });
 
+  it("shows a structural reading skeleton while the first snapshot loads", () => {
+    mocks.state = pageState({ snapshot: null, isLoading: true });
+
+    render(<News />);
+
+    expect(screen.getByTestId("news-loading-skeleton")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveClass("sr-only");
+  });
+
   it("exposes a roving tab set linked to the selected track panel", async () => {
     const user = userEvent.setup();
     render(<News />);
