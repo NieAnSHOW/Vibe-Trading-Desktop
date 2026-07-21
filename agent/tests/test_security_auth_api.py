@@ -3,21 +3,41 @@
 from __future__ import annotations
 
 import ipaddress
+import inspect
 from types import SimpleNamespace
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
 
 import api_server
+from src.api import security
+from src.news.models import RefreshAcceptedResponse, RefreshStatus
+
+
+_TEST_CLIENT_SUPPORTS_CLIENT = "client" in inspect.signature(TestClient).parameters
+
+if not _TEST_CLIENT_SUPPORTS_CLIENT:
+
+    @api_server.app.middleware("http")
+    async def _compat_test_client_scope(request, call_next):
+        host = request.headers.get("x-test-client-host")
+        if host:
+            request.scope["client"] = (host, 50000)
+        return await call_next(request)
 
 
 def _remote_client() -> TestClient:
     """Return a TestClient that simulates a non-loopback caller."""
+    if not _TEST_CLIENT_SUPPORTS_CLIENT:
+        return TestClient(api_server.app, headers={"X-Test-Client-Host": "203.0.113.10"})
     return TestClient(api_server.app, client=("203.0.113.10", 50000))
 
 
 def _local_client() -> TestClient:
     """Return a TestClient that simulates a loopback caller."""
+    if not _TEST_CLIENT_SUPPORTS_CLIENT:
+        return TestClient(api_server.app, headers={"X-Test-Client-Host": "127.0.0.1"})
     return TestClient(api_server.app, client=("127.0.0.1", 50000))
 
 
@@ -150,6 +170,230 @@ def test_loopback_bypasses_auth_even_when_api_key_configured(
     assert remote_bearer.status_code == 200
 
 
+def test_remote_news_api_requires_existing_auth_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("API_AUTH_KEY", "secret")
+    monkeypatch.setattr(api_server, "_API_KEY", "secret")
+
+    response = _remote_client().get("/news-api/snapshot")
+
+    assert response.status_code == 401
+
+
+def test_cross_site_news_refresh_is_rejected_before_coordinator_work(monkeypatch: pytest.MonkeyPatch) -> None:
+    start_calls: list[bool] = []
+    real_start = api_server.news_coordinator.start
+
+    async def start_spy():
+        start_calls.append(True)
+        return await real_start()
+
+    monkeypatch.setattr(api_server.news_coordinator, "start", start_spy)
+
+    response = _local_client().post(
+        "/news-api/refresh",
+        headers={"Origin": "https://attacker.example", "Content-Type": "application/json"},
+        json={},
+    )
+
+    assert response.status_code == 403
+    assert response.headers["content-type"].startswith("application/json")
+    assert start_calls == []
+
+
+def _accepted_refresh_response() -> RefreshAcceptedResponse:
+    task_id = UUID("00000000-0000-4000-8000-000000000001")
+    return RefreshAcceptedResponse(
+        task_id=task_id,
+        reused=False,
+        status=RefreshStatus(state="fetching", task_id=task_id, total_endpoints=106),
+    )
+
+
+def test_vite_origin_can_refresh_across_ports(monkeypatch: pytest.MonkeyPatch) -> None:
+    start_calls: list[bool] = []
+
+    async def start_spy() -> RefreshAcceptedResponse:
+        start_calls.append(True)
+        return _accepted_refresh_response()
+
+    monkeypatch.setattr(api_server.news_coordinator, "start", start_spy)
+
+    response = _local_client().post(
+        "/news-api/refresh",
+        headers={"Host": "127.0.0.1:8899", "Origin": "HTTP://LOCALHOST:5899"},
+    )
+
+    assert response.status_code == 202
+    assert start_calls == [True]
+
+
+def test_unconfigured_loopback_origin_cannot_start_news_refresh(monkeypatch: pytest.MonkeyPatch) -> None:
+    start_calls: list[bool] = []
+
+    async def start_spy() -> RefreshAcceptedResponse:
+        start_calls.append(True)
+        return _accepted_refresh_response()
+
+    monkeypatch.setattr(api_server.news_coordinator, "start", start_spy)
+
+    response = _local_client().post(
+        "/news-api/refresh",
+        headers={"Host": "127.0.0.1:8899", "Origin": "http://127.0.0.1:45678"},
+    )
+
+    assert response.status_code == 403
+    assert start_calls == []
+
+
+def test_unconfigured_loopback_origin_cannot_write_watchlist_before_persistence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """All unsafe routes reject an untrusted Origin before write handlers run."""
+    from src.api import watchlist_routes
+
+    writes: list[str] = []
+
+    class ConnectionSpy:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+        def execute(self, statement: str, params: tuple[str, str]):
+            writes.append(statement)
+
+        def commit(self) -> None:
+            return None
+
+    monkeypatch.setattr(watchlist_routes, "_get_connection", ConnectionSpy)
+
+    response = _local_client().post(
+        "/watchlist/stocks",
+        headers={"Host": "127.0.0.1:8899", "Origin": "http://127.0.0.1:45678"},
+        json={"code": "000001"},
+    )
+
+    assert response.status_code == 403
+    assert writes == []
+
+
+@pytest.mark.parametrize(
+    ("origin", "expected_origin"),
+    [
+        ("http://localhost:5899", "configured Vite origin"),
+        ("http://127.0.0.1:8899", "same origin"),
+        (None, "non-browser request"),
+    ],
+)
+def test_watchlist_write_allows_trusted_or_absent_origin(
+    monkeypatch: pytest.MonkeyPatch,
+    origin: str | None,
+    expected_origin: str,
+) -> None:
+    """Global Origin middleware preserves configured, same-origin, and CLI writes."""
+    from src.api import watchlist_routes
+
+    writes: list[str] = []
+
+    class ConnectionSpy:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+        def execute(self, statement: str, params: tuple[str, str]):
+            writes.append(statement)
+
+        def commit(self) -> None:
+            return None
+
+    monkeypatch.setattr(watchlist_routes, "_get_connection", ConnectionSpy)
+    headers = {"Host": "127.0.0.1:8899"}
+    if origin is not None:
+        headers["Origin"] = origin
+
+    response = _local_client().post("/watchlist/stocks", headers=headers, json={"code": "000001"})
+
+    assert response.status_code == 200, expected_origin
+    assert len(writes) == 1
+
+
+def test_custom_cors_origins_do_not_merge_loopback_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    start_calls: list[bool] = []
+
+    async def start_spy() -> RefreshAcceptedResponse:
+        start_calls.append(True)
+        return _accepted_refresh_response()
+
+    monkeypatch.setattr(security, "_CORS_ORIGINS", ["http://localhost:5899"])
+    monkeypatch.setattr(api_server.news_coordinator, "start", start_spy)
+
+    response = _local_client().post(
+        "/news-api/refresh",
+        headers={"Host": "127.0.0.1:8899", "Origin": "http://127.0.0.1:5899"},
+    )
+
+    assert response.status_code == 403
+    assert start_calls == []
+
+
+def test_same_origin_request_can_start_news_refresh(monkeypatch: pytest.MonkeyPatch) -> None:
+    start_calls: list[bool] = []
+
+    async def start_spy() -> RefreshAcceptedResponse:
+        start_calls.append(True)
+        return _accepted_refresh_response()
+
+    monkeypatch.setattr(api_server.news_coordinator, "start", start_spy)
+
+    response = _local_client().post(
+        "/news-api/refresh",
+        headers={"Host": "127.0.0.1:8899", "Origin": "http://127.0.0.1:8899"},
+    )
+
+    assert response.status_code == 202
+    assert start_calls == [True]
+
+
+def test_non_browser_request_without_origin_can_start_news_refresh(monkeypatch: pytest.MonkeyPatch) -> None:
+    start_calls: list[bool] = []
+
+    async def start_spy() -> RefreshAcceptedResponse:
+        start_calls.append(True)
+        return _accepted_refresh_response()
+
+    monkeypatch.setattr(api_server.news_coordinator, "start", start_spy)
+
+    response = _local_client().post("/news-api/refresh", headers={"Host": "127.0.0.1:8899"})
+
+    assert response.status_code == 202
+    assert start_calls == [True]
+
+
+def test_remote_trusted_origin_still_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    start_calls: list[bool] = []
+
+    async def start_spy() -> RefreshAcceptedResponse:
+        start_calls.append(True)
+        return _accepted_refresh_response()
+
+    monkeypatch.setenv("API_AUTH_KEY", "secret")
+    monkeypatch.setattr(api_server, "_API_KEY", "secret")
+    monkeypatch.setattr(api_server.news_coordinator, "start", start_spy)
+
+    response = _remote_client().post(
+        "/news-api/refresh",
+        headers={"Host": "127.0.0.1:8899", "Origin": "http://localhost:5899"},
+    )
+
+    assert response.status_code == 401
+    assert start_calls == []
+
+
 def _llm_settings_payload(base_url: str = "https://api.openai.com/v1") -> dict[str, object]:
     return {
         "provider": "openai",
@@ -233,6 +477,23 @@ def test_local_dev_can_write_llm_settings_when_api_key_unset(
 
     assert response.status_code == 200
     assert "OPENAI_BASE_URL=https://api.openai.com/v1" in env_path.read_text(encoding="utf-8")
+
+
+def test_unconfigured_loopback_origin_cannot_write_llm_settings(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    env_path = tmp_path / ".env"
+    monkeypatch.setattr(api_server, "ENV_PATH", env_path)
+
+    response = _local_client().put(
+        "/settings/llm",
+        headers={"Host": "127.0.0.1:8899", "Origin": "http://127.0.0.1:45678"},
+        json=_llm_settings_payload("https://attacker.example/openai-compatible/v1"),
+    )
+
+    assert response.status_code == 403
+    assert not env_path.exists()
 
 
 def test_loopback_rejects_rebound_host_before_auth_bypass(
@@ -467,6 +728,13 @@ def test_default_cors_origins_are_loopback_only() -> None:
     )
 
 
+def test_default_cors_origins_include_vite_loopback_hosts() -> None:
+    origins = api_server._parse_cors_origins(None)
+
+    assert "http://localhost:5899" in origins
+    assert "http://127.0.0.1:5899" in origins
+
+
 def test_cors_origins_reject_credentialed_wildcard() -> None:
     with pytest.raises(RuntimeError, match="CORS_ORIGINS"):
         api_server._parse_cors_origins("https://app.example.com,*")
@@ -521,7 +789,11 @@ def test_loopback_shutdown_accepts_valid_bearer(
 
     response = _local_client().post(
         "/system/shutdown",
-        headers={"Authorization": "Bearer secret", "Origin": "http://127.0.0.1:8899"},
+        headers={
+            "Authorization": "Bearer secret",
+            "Host": "127.0.0.1:8899",
+            "Origin": "http://127.0.0.1:8899",
+        },
     )
 
     assert response.status_code == 200
