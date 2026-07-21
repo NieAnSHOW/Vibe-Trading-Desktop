@@ -184,4 +184,3 @@ TBD - created by archiving change investment-news-hub. Update Purpose after arch
 #### Scenario: 使用首版页面
 - **WHEN** 用户访问投资资讯模块
 - **THEN** 页面只提供最新快照浏览、赛道切换、当前赛道要点、原文跳转、手动刷新及状态反馈，不展示范围外功能入口
-
