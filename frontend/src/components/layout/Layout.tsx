@@ -385,13 +385,6 @@ export function Layout() {
             isActive={isActive("/correlation")}
           />
           <NavLink
-            to="/runtime"
-            icon={Activity}
-            label={t("layout.runtime")}
-            collapsed={collapsed}
-            isActive={isActive("/runtime")}
-          />
-          <NavLink
             to="/settings"
             icon={Settings}
             label={t("layout.settings")}

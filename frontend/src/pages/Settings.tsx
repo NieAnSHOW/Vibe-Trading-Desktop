@@ -10,7 +10,6 @@ import {
   KeyRound,
   Loader2,
   MessageSquareMore,
-  Package,
   Play,
   QrCode,
   RefreshCw,
@@ -31,8 +30,8 @@ import {
   type LLMSettings,
 } from "@/lib/api";
 import { getApiAuthKey, setApiAuthKey } from "@/lib/apiAuth";
-import { OptionalDepsManager } from "@/components/settings/OptionalDepsManager";
 import { QVerisSettings } from "@/components/settings/QVerisSettings"; // QVERIS-INTEGRATION
+import { RuntimeStatus } from "@/components/settings/RuntimeStatus";
 
 interface LLMFormState {
   provider: string;
@@ -111,8 +110,6 @@ export function Settings() {
   );
   const [usageDataOn, setUsageDataOn] = useState(getConsent());
   // const [flushing, setFlushing] = useState(false);
-  const [optionalDeps, setOptionalDeps] = useState<any>(null);
-  const [installingPkg, setInstallingPkg] = useState<string | null>(null);
   const [vipModels, setVipModels] = useState<string[]>(() => readVipModels());
   const [vipModelsLoading, setVipModelsLoading] = useState(false);
 
@@ -160,9 +157,8 @@ export function Settings() {
       api.getLLMSettings(),
       api.getDataSourceSettings(),
       api.getChannelStatus(),
-      api.listOptionalDeps(),
     ])
-      .then(([llmResult, dataSourceResult, channelResult, depsResult]) => {
+      .then(([llmResult, dataSourceResult, channelResult]) => {
         if (!alive) return;
 
         // ponytail: allSettled — 单接口失败不拖垮整页 (upstream 容错语义)。
@@ -213,10 +209,6 @@ export function Settings() {
           setChannelStatus(null);
         }
 
-        if (depsResult.status === "fulfilled") {
-          setOptionalDeps(depsResult.value);
-        }
-        // optional-deps 失败不报错: 桌面可选依赖面板静默降级即可, 不阻塞设置页。
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -229,67 +221,14 @@ export function Settings() {
   const refreshChannelStatus = async () => {
     setChannelRefreshing(true);
     try {
-      const [channelData, depsData] = await Promise.all([
-        api.getChannelStatus(),
-        api.listOptionalDeps(),
-      ]);
+      const channelData = await api.getChannelStatus();
       setChannelStatus(channelData);
-      setOptionalDeps(depsData);
     } catch (error) {
       toast.error(
         `${t("settings.channels.refreshFailed")}: ${error instanceof Error ? error.message : t("settings.unknownError")}`,
       );
     } finally {
       setChannelRefreshing(false);
-    }
-  };
-
-  const matchedPkg = (channelName: string, deps: any): string | undefined => {
-    if (!deps?.brokers) return undefined;
-    // ponytail: match channel name to optional-deps broker id (financial SDKs),
-    // not IM channels — wired for future overlap.
-    const entry = deps.brokers.find(
-      (b: any) =>
-        b.id?.toLowerCase() === channelName.toLowerCase() ||
-        b.package?.toLowerCase().includes(channelName.toLowerCase()),
-    );
-    return entry?.package;
-  };
-
-  const installChannelDep = async (pkg: string) => {
-    setInstallingPkg(pkg);
-    try {
-      const { job_id } = await api.installOptionalDep(pkg);
-      const streamUrl = await api.optionalDepStatusUrl(job_id);
-      await new Promise<void>((resolve, reject) => {
-        const es = new EventSource(streamUrl);
-        es.addEventListener("done", () => {
-          es.close();
-          resolve();
-        });
-        es.addEventListener("failed", (ev) => {
-          es.close();
-          let message = t("settings.channels.depInstallFailed");
-          try {
-            message = JSON.parse((ev as MessageEvent).data).error || message;
-          } catch {
-            /* default */
-          }
-          reject(new Error(message));
-        });
-        es.onerror = () => {
-          es.close();
-          reject(new Error(t("settings.channels.depInstallFailed")));
-        };
-      });
-      toast.success(t("settings.channels.depInstalled"));
-      await refreshChannelStatus();
-    } catch (error) {
-      toast.error(
-        `${t("settings.channels.depInstallFailed")}: ${error instanceof Error ? error.message : t("settings.unknownError")}`,
-      );
-    } finally {
-      setInstallingPkg(null);
     }
   };
 
@@ -1033,25 +972,6 @@ export function Settings() {
                           item.error ||
                           t("settings.channels.noRecovery")}
                       </span>
-                      {item.available === false &&
-                        matchedPkg(item.name, optionalDeps) && (
-                          <button
-                            type="button"
-                            disabled={installingPkg !== null}
-                            onClick={() =>
-                              installChannelDep(
-                                matchedPkg(item.name, optionalDeps)!,
-                              )
-                            }
-                            className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {installingPkg ===
-                            matchedPkg(item.name, optionalDeps) ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : null}
-                            {t("settings.channels.installDep")}
-                          </button>
-                        )}
                       {name === "weixin" && item.enabled && (
                         <button
                           type="button"
@@ -1209,19 +1129,7 @@ export function Settings() {
         </div>
       </form>
 
-      {/* Desktop: optional broker SDK management */}
-      <section className="mt-6 rounded-xl border bg-card p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <Package className="h-5 w-5" />
-          <h2 className="text-lg font-semibold">
-            {i18n.t("settings.brokerSupportTitle")}
-          </h2>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          {i18n.t("settings.brokerSupportDesc")}
-        </p>
-        <OptionalDepsManager />
-      </section>
+      <RuntimeStatus />
 
       {/* WeChat QR login modal */}
       {weixinQr && (

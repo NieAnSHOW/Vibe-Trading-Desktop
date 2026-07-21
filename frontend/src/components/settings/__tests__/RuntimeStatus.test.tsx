@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { Runtime } from "../Runtime";
+import i18n from "@/i18n";
+import { RuntimeStatus } from "../RuntimeStatus";
 import type { LiveStatus } from "@/lib/api";
 
 const apiMock = vi.hoisted(() => ({
@@ -74,15 +75,16 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-describe("Runtime page", () => {
-  beforeEach(() => {
+describe("RuntimeStatus", () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     apiMock.getLiveStatus.mockReset();
   });
 
   it("renders broker auth, runner, mandate, and risk state from live status", async () => {
     apiMock.getLiveStatus.mockResolvedValue(makeStatus());
 
-    render(<Runtime />);
+    render(<RuntimeStatus />);
 
     expect(await screen.findByText("Live / Paper Runtime Status")).toBeInTheDocument();
     expect(screen.getByText("Clear")).toBeInTheDocument();
@@ -100,7 +102,7 @@ describe("Runtime page", () => {
   it("fails closed when live status is unavailable", async () => {
     apiMock.getLiveStatus.mockRejectedValue(new Error("backend offline"));
 
-    render(<Runtime />);
+    render(<RuntimeStatus />);
 
     expect(await screen.findByText("Runtime status unavailable")).toBeInTheDocument();
     expect(screen.getByText("backend offline")).toBeInTheDocument();
@@ -110,7 +112,7 @@ describe("Runtime page", () => {
   it("refreshes by reading live status again", async () => {
     apiMock.getLiveStatus.mockResolvedValue(makeStatus());
 
-    render(<Runtime />);
+    render(<RuntimeStatus />);
     await screen.findByText("paper");
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
@@ -125,7 +127,7 @@ describe("Runtime page", () => {
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise);
 
-    render(<Runtime />);
+    render(<RuntimeStatus />);
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
 
     await act(async () => {
@@ -147,7 +149,7 @@ describe("Runtime page", () => {
     const pending = deferred<LiveStatus>();
     apiMock.getLiveStatus.mockReturnValue(pending.promise);
 
-    const { unmount } = render(<Runtime />);
+    const { unmount } = render(<RuntimeStatus />);
     const signal = apiMock.getLiveStatus.mock.calls[0][0] as AbortSignal;
 
     expect(signal).toBeInstanceOf(AbortSignal);
@@ -173,7 +175,7 @@ describe("Runtime page", () => {
       ],
     }));
 
-    render(<Runtime />);
+    render(<RuntimeStatus />);
 
     expect(await screen.findByText("45s")).toBeInTheDocument();
   });

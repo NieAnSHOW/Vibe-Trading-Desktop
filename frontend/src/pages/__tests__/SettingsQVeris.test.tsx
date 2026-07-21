@@ -11,10 +11,6 @@ const apiMock = vi.hoisted(() => ({
   stopChannels: vi.fn(),
   updateLLMSettings: vi.fn(),
   updateDataSourceSettings: vi.fn(),
-  // ponytail: fork Settings 也调 optional-deps API (桌面端 broker SDK 安装面板);
-  // upstream 的 QVeris 测试不知道它, 补空 mock 避免渲染时报 not a function。
-  listOptionalDeps: vi.fn(() => Promise.resolve({ brokers: [] })),
-  getOptionalDepsMirror: vi.fn(() => Promise.resolve({})),
 }));
 
 vi.mock("@/lib/api", async () => {

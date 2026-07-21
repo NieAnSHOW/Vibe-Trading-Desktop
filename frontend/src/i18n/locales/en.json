@@ -413,8 +413,6 @@
     "tushareTokenHint": "Used for China A-share, futures, fund, and macro data. If unset, the project falls back to AKShare where available.",
     "pairingCommand": "Pairing command",
     "runPairing": "Run pairing",
-    "brokerSupportTitle": "Broker Support (Optional)",
-    "brokerSupportDesc": "Install broker SDKs on demand. Installed to a local writable directory without affecting core dependencies.",
     "cancel": "Cancel",
     "weixin": {
       "qrFailed": "Failed to get WeChat QR code: {{message}}",

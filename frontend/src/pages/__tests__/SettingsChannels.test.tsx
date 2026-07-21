@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import i18n from "@/i18n";
 import { Settings } from "../Settings";
@@ -10,6 +10,7 @@ const apiMock = vi.hoisted(() => ({
   getLLMSettings: vi.fn(),
   getDataSourceSettings: vi.fn(),
   getChannelStatus: vi.fn(),
+  getLiveStatus: vi.fn(),
   startChannels: vi.fn(),
   stopChannels: vi.fn(),
   runChannelPairingCommand: vi.fn(),
@@ -18,12 +19,6 @@ const apiMock = vi.hoisted(() => ({
   updateDataSourceSettings: vi.fn(),
   startWeixinLogin: vi.fn(),
   weixinLoginStatus: vi.fn(),
-  // ponytail: fork-only OptionalDepsManager (desktop optional-deps UI) calls
-  // these; upstream's mock doesn't include them.
-  listOptionalDeps: vi.fn(() => Promise.resolve({ brokers: [] })),
-  getOptionalDepsMirror: vi.fn(() => Promise.resolve({})),
-  installOptionalDep: vi.fn(),
-  optionalDepStatusUrl: vi.fn((jobId: string) => `http://localhost:8899/optional-deps/status/${jobId}`),
 }));
 
 vi.mock("@/lib/api", async () => {
@@ -138,16 +133,45 @@ function channelStatus(overrides = {}) {
   };
 }
 
+function liveStatus() {
+  return {
+    global_halted: false,
+    brokers: [
+      {
+        auth: {
+          broker: "paper",
+          oauth_token_present: true,
+          is_live_broker: true,
+        },
+        runner: {
+          broker: "paper",
+          alive: true,
+          last_tick: null,
+          last_tick_age_seconds: 5,
+        },
+        mandate: {
+          account_ref: "acct-1",
+          expires_at: "2999-01-01T00:00:00Z",
+          expired: false,
+          limits: { max_order_notional_usd: 750 },
+        },
+        halted: false,
+      },
+    ],
+  };
+}
+
 describe("Settings IM channels panel", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     // ponytail: fork tests mutate the global i18n language; this suite asserts
     // English copy, so reset to "en" for isolation in the full-suite run.
-    i18n.changeLanguage("en");
+    await i18n.changeLanguage("en");
     window.localStorage.clear();
     apiMock.getLLMSettings.mockResolvedValue(llmSettings());
     apiMock.getDataSourceSettings.mockResolvedValue(dataSourceSettings());
     apiMock.getChannelStatus.mockResolvedValue(channelStatus());
+    apiMock.getLiveStatus.mockResolvedValue(liveStatus());
     apiMock.startChannels.mockResolvedValue(channelStatus({ running: true }));
     apiMock.stopChannels.mockResolvedValue(channelStatus());
     apiMock.runChannelPairingCommand.mockResolvedValue({ channel: "weixin", reply: "approved" });
@@ -164,9 +188,27 @@ describe("Settings IM channels panel", () => {
     expect(screen.getByText("WeChat")).toBeInTheDocument();
     expect(screen.queryByText("telegram")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    const channelPanel = screen.getByRole("heading", { name: "IM Channels" }).closest("section");
+    expect(channelPanel).not.toBeNull();
+    fireEvent.click(within(channelPanel!).getByRole("button", { name: "Refresh" }));
 
     await waitFor(() => expect(apiMock.getChannelStatus).toHaveBeenCalledTimes(2));
+  });
+
+  it("shows live broker runtime status as part of settings", async () => {
+    render(<MemoryRouter><Settings /></MemoryRouter>);
+
+    expect(await screen.findByText("Live / Paper Runtime Status")).toBeInTheDocument();
+    expect(await screen.findByText("paper")).toBeInTheDocument();
+    expect(screen.getByText("runtime active")).toBeInTheDocument();
+    expect(apiMock.getLiveStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not show the planned broker support section", async () => {
+    render(<MemoryRouter><Settings /></MemoryRouter>);
+
+    await screen.findByText("Data Source Settings");
+    expect(screen.queryByText("Broker Support (Optional)")).not.toBeInTheDocument();
   });
 
   it("retrieves VIP models into a selectable list without displaying the base URL", async () => {
@@ -248,7 +290,7 @@ describe("Settings IM channels panel", () => {
     expect(screen.getByRole("combobox", { name: /Model/ })).toHaveValue("gpt-5");
   });
 
-  it("hides generation controls and saves the fixed generation defaults from Connection", async () => {
+  it("hides generation controls and preserves backend generation settings", async () => {
     window.localStorage.setItem("vt_provider_picked", "1");
     apiMock.getLLMSettings.mockResolvedValue(vipLlmSettings());
     apiMock.updateLLMSettings.mockResolvedValue(vipLlmSettings());
@@ -269,9 +311,9 @@ describe("Settings IM channels panel", () => {
     await waitFor(() => expect(apiMock.updateLLMSettings).toHaveBeenCalledOnce());
     expect(apiMock.updateLLMSettings).toHaveBeenCalledWith(
       expect.objectContaining({
-        temperature: 0.7,
-        timeout_seconds: 200,
-        reasoning_effort: "high",
+        temperature: 0.1,
+        timeout_seconds: 120,
+        reasoning_effort: "",
       }),
     );
   });
@@ -406,7 +448,9 @@ describe("Settings IM channels panel", () => {
     expect(await screen.findByText("LLM Settings")).toBeInTheDocument();
     expect(screen.getByText("Data Source Settings")).toBeInTheDocument();
     expect(screen.getByText("IM Channels")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Refresh" })).toBeInTheDocument();
+    const channelPanel = screen.getByRole("heading", { name: "IM Channels" }).closest("section");
+    expect(channelPanel).not.toBeNull();
+    expect(within(channelPanel!).getByRole("button", { name: "Refresh" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start channels" })).toBeDisabled();
   });
 });

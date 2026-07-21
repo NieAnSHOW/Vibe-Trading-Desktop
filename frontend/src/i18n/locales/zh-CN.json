@@ -408,8 +408,6 @@
     "tushareTokenHint": "用于 A 股、期货、基金和宏观数据。若未设置，项目会在可用时回退到 AKShare。",
     "pairingCommand": "配对命令",
     "runPairing": "运行配对",
-    "brokerSupportTitle": "券商支持（可选依赖）",
-    "brokerSupportDesc": "按需安装券商 SDK。安装到本地可写目录，不影响核心依赖。",
     "cancel": "取消",
     "weixin": {
       "qrFailed": "获取微信二维码失败: {{message}}",

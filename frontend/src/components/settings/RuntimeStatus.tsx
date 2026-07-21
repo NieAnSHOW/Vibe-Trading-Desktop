@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 const RUNTIME_POLL_INTERVAL_MS = 15_000;
 const RUNTIME_CLOCK_INTERVAL_MS = 1_000;
 
-export function Runtime() {
+export function RuntimeStatus() {
   const { t } = useTranslation();
   const [status, setStatus] = useState<LiveStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,16 +88,16 @@ export function Runtime() {
   const summary = useMemo(() => summarizeRuntime(status), [status]);
 
   return (
-    <div className="min-h-screen p-6 lg:p-8">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <section className="flex flex-col gap-4 border-b pb-6 lg:flex-row lg:items-end lg:justify-between">
+    <section className="rounded-lg border bg-card p-5 shadow-sm">
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-3">
             <div className="inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground">
               <Activity className="h-3.5 w-3.5" />
               {t("runtime.monitorBadge")}
             </div>
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">{t("runtime.title")}</h1>
+              <h2 className="text-lg font-semibold">{t("runtime.title")}</h2>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
                 {t("runtime.subtitlePre")} <span className="font-mono">/live/status</span>
                 {t("runtime.subtitlePost")}
@@ -113,7 +113,7 @@ export function Runtime() {
             {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             {t("runtime.refresh")}
           </button>
-        </section>
+        </div>
 
         {loading ? (
           <div className="grid gap-3 md:grid-cols-4">
@@ -174,7 +174,7 @@ export function Runtime() {
           </>
         ) : null}
       </div>
-    </div>
+    </section>
   );
 }
 
