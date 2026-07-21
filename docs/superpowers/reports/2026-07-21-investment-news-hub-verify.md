@@ -22,3 +22,7 @@ verify_mode: full
 ## 残余风险
 
 完整前端 Vitest 仍有仓库既有的 P3 基线失败；不属于本 change，且未阻断本次目标测试、构建或独立审查。
+
+## 已接受偏差
+
+用户于 2026-07-21 明确接受 verify 守卫的全仓 Python 基线失败：`agent/tests/test_serve_open_flag.py` 在收集阶段导入当前 `agent/api_server.py` 中不存在的 `_should_open_browser`。该测试和缺失符号均不在本 change 的文件范围；合并结果上的前端生产构建及新闻 catalog/network/LLM 目标测试（51 passed）均通过。影响范围仅限全仓基线门禁，后续应由独立维护任务修复该过期测试或恢复对应兼容接口。
