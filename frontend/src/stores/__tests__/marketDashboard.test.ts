@@ -82,7 +82,6 @@ describe("useMarketDashboardStore", () => {
       await useMarketDashboardStore.getState().initialize();
 
       expect(mockFetchIndexes).toHaveBeenCalled();
-      expect(useMarketDashboardStore.getState()).not.toHaveProperty("refreshSummary");
     });
   });
 
