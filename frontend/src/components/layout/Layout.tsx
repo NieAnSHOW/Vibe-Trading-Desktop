@@ -311,19 +311,11 @@ export function Layout() {
           )}
 
           <NavLink
-            to="/"
-            icon={BarChart3}
-            label={t("layout.home")}
-            collapsed={collapsed}
-            isActive={isActive("/")}
-          />
-
-          <NavLink
             to="/dashboard"
             icon={LayoutDashboard}
             label={t("layout.dashboard")}
             collapsed={collapsed}
-            isActive={isActive("/dashboard")}
+            isActive={pathname === "/" || isActive("/dashboard")}
           />
           <NavLink
             to="/market-pulse"
@@ -345,6 +337,13 @@ export function Layout() {
             label={t("layout.watchlist")}
             collapsed={collapsed}
             isActive={isActive("/watchlist")}
+          />
+          <NavLink
+            to="/news"
+            icon={Newspaper}
+            label={t("layout.news")}
+            collapsed={collapsed}
+            isActive={isActive("/news")}
           />
           <NavLink
             to="/agent"
@@ -376,13 +375,6 @@ export function Layout() {
             label={t("layout.correlation")}
             collapsed={collapsed}
             isActive={isActive("/correlation")}
-          />
-          <NavLink
-            to="/runtime"
-            icon={Activity}
-            label={t("layout.runtime")}
-            collapsed={collapsed}
-            isActive={isActive("/runtime")}
           />
           <NavLink
             to="/settings"

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import asyncio
+import os
 import stat
+from pathlib import Path
 
 import httpx
 import pytest
@@ -22,8 +23,46 @@ def test_env_updates_are_atomic_and_owner_only(tmp_path: Path) -> None:
     helpers._write_env_values(env_path, {"OPENAI_API_KEY": "private-key"})
 
     assert "OPENAI_API_KEY=private-key" in env_path.read_text(encoding="utf-8")
-    assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
+    if os.name != "nt":
+        assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
     assert not list(tmp_path.glob(".env.*.tmp"))
+
+
+def test_env_updates_succeed_without_descriptor_chmod(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env_path = tmp_path / ".env"
+    monkeypatch.delattr(helpers.os, "fchmod", raising=False)
+
+    helpers._write_env_text_atomically(env_path, "LANGCHAIN_PROVIDER=openai\n")
+
+    assert env_path.read_text(encoding="utf-8") == "LANGCHAIN_PROVIDER=openai\n"
+    assert not list(tmp_path.glob(".env.*.tmp"))
+
+
+def test_env_write_retries_windows_sharing_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class SharingViolation(OSError):
+        winerror = 32
+
+    env_path = tmp_path / ".env"
+    replace = helpers.os.replace
+    attempts = 0
+
+    def replace_after_one_sharing_violation(source: str, target: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise SharingViolation("file is temporarily open")
+        replace(source, target)
+
+    monkeypatch.setattr(helpers.os, "replace", replace_after_one_sharing_violation)
+
+    helpers._write_env_text_atomically(env_path, "LANGCHAIN_PROVIDER=openai\n")
+
+    assert attempts == 2
+    assert env_path.read_text(encoding="utf-8") == "LANGCHAIN_PROVIDER=openai\n"
 
 
 def test_settings_env_path_prefers_user_env_for_desktop_runtime(tmp_path: Path) -> None:
@@ -350,7 +389,8 @@ def test_update_llm_settings_persists_project_env(
     assert "OPENROUTER_API_KEY=or-secret-value" in env_text
     assert "LANGCHAIN_REASONING_EFFORT=max" in env_text
     assert "sk-or-v1-your-key-here" not in env_text
-    assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
+    if os.name != "nt":
+        assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
 
 
 def test_get_data_source_settings_treats_placeholder_as_unconfigured(

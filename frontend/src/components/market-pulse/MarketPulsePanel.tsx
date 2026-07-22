@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
+  Check,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
   Search,
+  Star,
   X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useMarketDashboardStore } from "@/stores/marketDashboard";
+import { useWatchlistStore } from "@/stores/watchlist";
 import {
   categorizeMarketPulse,
   countMarketPulseCategories,
@@ -18,6 +22,7 @@ import {
   pulseItemKey,
   type MarketPulseCategory,
 } from "./marketPulse";
+import { getMarketPulseExplanation } from "./marketPulseExplanation";
 
 const POLL_INTERVAL = 15_000;
 const PAGE_SIZES = [200, 500, 1000] as const;
@@ -54,12 +59,17 @@ export function MarketPulsePanel() {
   const pulseAsOf = useMarketDashboardStore((state) => state.pulseAsOf);
   const pulseStale = useMarketDashboardStore((state) => state.pulseStale);
   const refreshPulse = useMarketDashboardStore((state) => state.refreshPulse);
+  const watchlistStocks = useWatchlistStore((state) => state.stocks);
+  const refreshWatchlist = useWatchlistStore((state) => state.refresh);
+  const addWatchlistStock = useWatchlistStore((state) => state.add);
   const [category, setCategory] = useState<MarketPulseCategory>("all");
   const [query, setQuery] = useState("");
   const [hideStale, setHideStale] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZES)[number]>(200);
+  const [addedCodes, setAddedCodes] = useState<Set<string>>(() => new Set());
+  const [addingCodes, setAddingCodes] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     const refreshWhenVisible = () => {
@@ -77,6 +87,10 @@ export function MarketPulsePanel() {
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [refreshPulse]);
+
+  useEffect(() => {
+    void refreshWatchlist();
+  }, [refreshWatchlist]);
 
   const counts = useMemo(() => countMarketPulseCategories(pulse), [pulse]);
   const keyedEvents = useMemo(
@@ -109,6 +123,14 @@ export function MarketPulsePanel() {
     () => filteredEvents.find((event) => event.key === selectedKey) ?? null,
     [filteredEvents, selectedKey],
   );
+  const watchedCodes = useMemo(
+    () => new Set([...watchlistStocks.map((stock) => stock.code), ...addedCodes]),
+    [addedCodes, watchlistStocks],
+  );
+  const selectedExplanation = useMemo(
+    () => (selectedEvent ? getMarketPulseExplanation(selectedEvent.item) : null),
+    [selectedEvent],
+  );
 
   useEffect(() => {
     if (pageResult.page !== page) {
@@ -131,6 +153,28 @@ export function MarketPulsePanel() {
     setQuery("");
     setHideStale(false);
     resetPage();
+  };
+  const addToWatchlist = async (code: string) => {
+    if (watchedCodes.has(code) || addingCodes.has(code)) return;
+
+    setAddingCodes((current) => new Set(current).add(code));
+    try {
+      const result = await addWatchlistStock(code);
+      setAddedCodes((current) => new Set(current).add(code));
+      if (result.exists) {
+        toast.info(t("watchlist.alreadyAdded", "{{code}} 已在自选股中", { code }));
+      } else {
+        toast.success(t("watchlist.added", "已添加 {{code}}", { code }));
+      }
+    } catch {
+      toast.error(t("watchlist.addError", "添加失败，请稍后重试"));
+    } finally {
+      setAddingCodes((current) => {
+        const next = new Set(current);
+        next.delete(code);
+        return next;
+      });
+    }
   };
 
   return (
@@ -373,42 +417,52 @@ export function MarketPulsePanel() {
               <ul className="divide-y">
                 {pageEvents.map(({ item, key }) => (
                   <li key={key}>
-                    <button
-                      type="button"
-                      aria-pressed={selectedKey === key}
-                      onClick={() => setSelectedKey(key)}
+                    <div
                       className={cn(
-                        "w-full px-1 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                        "flex items-center gap-1",
                         selectedKey === key && "bg-muted",
                       )}
                     >
-                      <span className="flex items-center justify-between gap-2">
-                        <span className="min-w-0 truncate text-sm font-medium">
-                          {item.name}{" "}
-                          <span className="font-mono text-xs text-muted-foreground">
-                            {item.code}
+                      <button
+                        type="button"
+                        aria-pressed={selectedKey === key}
+                        onClick={() => setSelectedKey(key)}
+                        className="min-w-0 flex-1 px-1 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="min-w-0 truncate text-sm font-medium">
+                            {item.name}{" "}
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {item.code}
+                            </span>
                           </span>
+                          <time className="shrink-0 font-mono text-xs text-muted-foreground">
+                            {item.time}
+                          </time>
                         </span>
-                        <time className="shrink-0 font-mono text-xs text-muted-foreground">
-                          {item.time}
-                        </time>
-                      </span>
-                      <span className="mt-1 flex items-center gap-2">
-                        <span
-                          className={cn(
-                            "rounded px-1.5 py-0.5 text-[10px] font-medium",
-                            eventBadgeTone(item.changeType),
+                        <span className="mt-1 flex items-center gap-2">
+                          <span
+                            className={cn(
+                              "rounded px-1.5 py-0.5 text-[10px] font-medium",
+                              eventBadgeTone(item.changeType),
+                            )}
+                          >
+                            {item.changeType}
+                          </span>
+                          {item.stale && (
+                            <span className="text-[10px] text-warning">
+                              {t("marketPulse.staleTag", "过期")}
+                            </span>
                           )}
-                        >
-                          {item.changeType}
                         </span>
-                        {item.stale && (
-                          <span className="text-[10px] text-warning">
-                            {t("marketPulse.staleTag", "过期")}
-                          </span>
-                        )}
-                      </span>
-                    </button>
+                      </button>
+                      <WatchlistAction
+                        code={item.code}
+                        watched={watchedCodes.has(item.code)}
+                        adding={addingCodes.has(item.code)}
+                        onAdd={addToWatchlist}
+                      />
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -495,14 +549,23 @@ export function MarketPulsePanel() {
                     {selectedEvent.item.code}
                   </p>
                 </div>
-                <span
-                  className={cn(
-                    "shrink-0 rounded px-2 py-1 text-xs font-medium",
-                    eventBadgeTone(selectedEvent.item.changeType),
-                  )}
-                >
-                  {selectedEvent.item.changeType}
-                </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span
+                    className={cn(
+                      "rounded px-2 py-1 text-xs font-medium",
+                      eventBadgeTone(selectedEvent.item.changeType),
+                    )}
+                  >
+                    {selectedEvent.item.changeType}
+                  </span>
+                  <WatchlistAction
+                    code={selectedEvent.item.code}
+                    watched={watchedCodes.has(selectedEvent.item.code)}
+                    adding={addingCodes.has(selectedEvent.item.code)}
+                    onAdd={addToWatchlist}
+                    showLabel
+                  />
+                </div>
               </div>
 
               <dl className="divide-y text-sm">
@@ -531,19 +594,24 @@ export function MarketPulsePanel() {
                 />
               </dl>
 
-              <div className="pt-4">
-                <h3 className="text-sm font-semibold">
-                  {t("marketPulse.descriptionLabel", "异动说明")}
-                </h3>
-                <p
-                  className={cn(
-                    "mt-2 text-sm leading-6",
-                    eventTone(selectedEvent.item.changeType),
-                  )}
-                >
-                  {selectedEvent.item.info ||
-                    t("marketPulse.noInfo", "暂无补充说明")}
-                </p>
+              <div className="space-y-4 pt-4">
+                <ExplanationSection
+                  heading={t("marketPulse.explanation.signal", "信号含义")}
+                  value={selectedExplanation?.signal ?? ""}
+                />
+                <ExplanationSection
+                  heading={t("marketPulse.explanation.interpretation", "盘面解读")}
+                  value={selectedExplanation?.interpretation ?? ""}
+                />
+                <ExplanationSection
+                  heading={t("marketPulse.explanation.risk", "关注风险")}
+                  value={selectedExplanation?.risk ?? ""}
+                />
+                <ExplanationSection
+                  heading={t("marketPulse.explanation.rawInfo", "原始异动说明")}
+                  value={selectedEvent.item.info || t("marketPulse.noInfo", "暂无补充说明")}
+                  tone={eventTone(selectedEvent.item.changeType)}
+                />
               </div>
             </>
           ) : (
@@ -600,5 +668,68 @@ function DetailRow({ label, value }: { label: string; value: string }) {
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="text-right font-medium">{value}</dd>
     </div>
+  );
+}
+
+function WatchlistAction({
+  code,
+  watched,
+  adding,
+  onAdd,
+  showLabel = false,
+}: {
+  code: string;
+  watched: boolean;
+  adding: boolean;
+  onAdd: (code: string) => Promise<void>;
+  showLabel?: boolean;
+}) {
+  const { t } = useTranslation();
+  const disabled = watched || adding;
+  const label = watched
+    ? t("marketPulse.watchlist.added", "已自选 {{code}}", { code })
+    : t("marketPulse.watchlist.add", "加入自选 {{code}}", { code });
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={() => void onAdd(code)}
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-md p-1.5 text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50",
+        watched && "text-primary",
+        showLabel && "border px-2 text-xs font-medium",
+      )}
+    >
+      {watched ? <Check className="h-4 w-4" aria-hidden="true" /> : <Star className="h-4 w-4" aria-hidden="true" />}
+      {showLabel && (
+        <span>
+          {watched
+            ? t("marketPulse.watchlist.addedShort", "已自选")
+            : adding
+              ? t("marketPulse.watchlist.adding", "添加中")
+              : t("marketPulse.watchlist.addShort", "加入自选")}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function ExplanationSection({
+  heading,
+  value,
+  tone,
+}: {
+  heading: string;
+  value: string;
+  tone?: string;
+}) {
+  return (
+    <section>
+      <h3 className="text-sm font-semibold">{heading}</h3>
+      <p className={cn("mt-2 text-sm leading-6", tone)}>{value}</p>
+    </section>
   );
 }

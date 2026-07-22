@@ -29,9 +29,11 @@ from src.api._compat import host_attr as _host_attr
 _DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
     "http://localhost:3000",
     "http://localhost:5173",
+    "http://localhost:5899",
     "http://localhost:8000",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
+    "http://127.0.0.1:5899",
     "http://127.0.0.1:8000",
 )
 
@@ -56,6 +58,14 @@ _SSE_TICKETS: dict[str, float] = {}
 _SSE_TICKET_EXPIRIES: Deque[tuple[float, str]] = deque()
 _SSE_TICKETS_LOCK = threading.Lock()
 _QUERY_SECRET_RE = re.compile(r"([?&](?:api_key|ticket|token|access_token)=)[^&#\s\"]*", re.IGNORECASE)
+
+
+def _redact_access_log_query(value: str) -> str:
+    """Remove illegal news API queries and known credential query values."""
+    path, separator, _ = value.partition("?")
+    if separator and (path == "/news-api" or path.startswith("/news-api/")):
+        return path
+    return _QUERY_SECRET_RE.sub(r"\1[redacted]", value)
 
 
 # ============================================================================
@@ -154,12 +164,12 @@ class _UvicornQuerySecretRedactionFilter(logging.Filter):
         args = record.args
         if isinstance(args, tuple):
             record.args = tuple(
-                _QUERY_SECRET_RE.sub(r"\1[redacted]", value) if isinstance(value, str) else value
+                _redact_access_log_query(value) if isinstance(value, str) else value
                 for value in args
             )
         elif isinstance(args, dict):
             record.args = {
-                key: _QUERY_SECRET_RE.sub(r"\1[redacted]", value) if isinstance(value, str) else value
+                key: _redact_access_log_query(value) if isinstance(value, str) else value
                 for key, value in args.items()
             }
         return True
@@ -229,55 +239,94 @@ def _consume_sse_ticket(ticket: str) -> bool:
         return expires_at is not None and expires_at > time.monotonic()
 
 
-def _is_loopback_origin(origin: str) -> bool:
-    """Return whether a browser Origin header names a loopback web UI."""
+def _normalize_origin(origin: str) -> str | None:
+    """Return a canonical HTTP(S) origin, or ``None`` for invalid values."""
     try:
         parsed = urllib.parse.urlsplit(origin)
     except ValueError:
-        return False
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        return False
+        return None
+    if (
+        parsed.scheme.lower() not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+    ):
+        return None
+
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+
+    scheme = parsed.scheme.lower()
     host = parsed.hostname.rstrip(".").lower()
+    if ":" in host:
+        host = f"[{host}]"
+    default_port = 443 if scheme == "https" else 80
+    port_suffix = "" if port is None or port == default_port else f":{port}"
+    return f"{scheme}://{host}{port_suffix}"
+
+
+def _is_loopback_origin(origin: str) -> bool:
+    """Return whether a browser Origin header names a loopback web UI."""
+    normalized = _normalize_origin(origin)
+    if normalized is None:
+        return False
+    host = urllib.parse.urlsplit(normalized).hostname
     if host == "localhost":
         return True
     try:
-        return ipaddress.ip_address(host).is_loopback
+        return ipaddress.ip_address(host or "").is_loopback
     except ValueError:
         return False
 
 
 def _origin_matches_request_host(origin: str, request: Request) -> bool:
     """Return whether *origin* is the same site serving this request."""
-    try:
-        parsed = urllib.parse.urlsplit(origin)
-    except ValueError:
-        return False
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        return False
+    normalized_origin = _normalize_origin(origin)
+    request_origin = _normalize_origin(f"{request.url.scheme}://{request.headers.get('host', '')}")
+    return normalized_origin is not None and hmac.compare_digest(normalized_origin, request_origin or "")
 
-    origin_host = parsed.hostname.rstrip(".").lower()
-    origin_port = parsed.port
-    request_host = _host_without_port(request.headers.get("host", ""))
-    if origin_host != request_host:
-        return False
 
-    if origin_port is None:
-        origin_port = 443 if parsed.scheme == "https" else 80
-    request_port = request.url.port
-    if request_port is None:
-        request_port = 443 if request.url.scheme == "https" else 80
-    return origin_port == request_port
+def _is_configured_cors_origin(origin: str) -> bool:
+    """Return whether *origin* exactly matches a configured browser origin."""
+    normalized_origin = _normalize_origin(origin)
+    if normalized_origin is None:
+        return False
+    return any(
+        hmac.compare_digest(normalized_origin, configured)
+        for configured_origin in _CORS_ORIGINS
+        if (configured := _normalize_origin(configured_origin)) is not None
+    )
 
 
 def _reject_cross_site_browser_request(request: Request) -> None:
-    """Reject unsafe browser requests from untrusted cross-site origins."""
+    """Reject unsafe browser requests unless Origin is same-origin or configured."""
     sec_fetch_site = request.headers.get("sec-fetch-site", "").lower()
     if sec_fetch_site == "cross-site":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cross-site request denied")
 
     origin = request.headers.get("origin")
-    if origin and not (_is_loopback_origin(origin) or _origin_matches_request_host(origin, request)):
+    if origin and not (_origin_matches_request_host(origin, request) or _is_configured_cors_origin(origin)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cross-site request denied")
+
+
+def _reject_untrusted_browser_write(request: Request) -> None:
+    """Apply the Origin guard to every unsafe request authentication path."""
+    if request.method.upper() not in _SAFE_BROWSER_METHODS:
+        _reject_cross_site_browser_request(request)
+
+
+async def _reject_untrusted_browser_write_middleware(request: Request, call_next):
+    """Enforce the unsafe-request Origin guard before every route handler."""
+    try:
+        _reject_untrusted_browser_write(request)
+    except HTTPException as exc:
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
+    return await call_next(request)
 
 
 def _require_shutdown_authorization(
@@ -308,8 +357,7 @@ def _validate_api_auth(
     allow_query: bool = False,
 ) -> None:
     """Validate configured auth, preserving loopback-only dev mode."""
-    if request.method.upper() not in _SAFE_BROWSER_METHODS:
-        _reject_cross_site_browser_request(request)
+    _reject_untrusted_browser_write(request)
 
     if _is_local_client(request):
         return
@@ -425,6 +473,7 @@ async def require_local_or_auth(
     cred: Optional[HTTPAuthorizationCredentials] = Security(_security),
 ) -> None:
     """Protect settings access when dev-mode auth is disabled."""
+    _reject_untrusted_browser_write(request)
     if _configured_api_key():
         await require_auth(request, cred)
         return
@@ -440,6 +489,7 @@ async def require_settings_write_auth(
     cred: Optional[HTTPAuthorizationCredentials] = Security(_security),
 ) -> None:
     """Require explicit authorization before changing credential-routing settings."""
+    _reject_untrusted_browser_write(request)
     api_key = _configured_api_key()
     if api_key:
         token = _auth_credential_from_header_or_query(cred, None, allow_query=False)

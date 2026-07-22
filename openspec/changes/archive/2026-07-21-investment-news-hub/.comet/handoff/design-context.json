@@ -1,0 +1,14 @@
+{
+  "change": "investment-news-hub",
+  "phase": "design",
+  "mode": "compact",
+  "canonical_spec": "openspec",
+  "generated_by": "comet-handoff.sh",
+  "context_hash": "61aa03e1c87def6297486c1440203c5c2febf2a8fe69a802760f33bd8d31ded9",
+  "files": [
+    { "path": "openspec/changes/investment-news-hub/proposal.md", "sha256": "b944ed958a3f4edccca7b712e38ecb18e81dbecfb7531c54b66518e5bbe7dcea" },
+    { "path": "openspec/changes/investment-news-hub/design.md", "sha256": "dc1009ca62b4c34b8ee28e64d0ce661c7d5e257002492bfcb19eed3d61edb55b" },
+    { "path": "openspec/changes/investment-news-hub/tasks.md", "sha256": "611157e2ccef9b845fa7affd31912304f4066571d8860cc03c9c65c96c6c8a67" },
+    { "path": "openspec/changes/investment-news-hub/specs/investment-news-hub/spec.md", "sha256": "8ef60f45fe46264dc24e11602fb4a2c8024b9a1f03a5bf0a09ab5de482aebb25" }
+  ]
+}

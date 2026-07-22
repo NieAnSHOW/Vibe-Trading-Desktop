@@ -13,9 +13,32 @@ const storeState = vi.hoisted(() => ({
   refreshPulse: vi.fn<() => Promise<void>>(),
 }));
 
+const watchlistState = vi.hoisted(() => ({
+  stocks: [] as Array<{
+    code: string;
+    name?: string | null;
+    market: string;
+    added_at: string;
+  }>,
+  refresh: vi.fn<() => Promise<void>>(),
+  add: vi.fn<(code: string) => Promise<{ added: boolean; exists: boolean }>>(),
+}));
+
+const toast = vi.hoisted(() => ({
+  success: vi.fn(),
+  info: vi.fn(),
+  error: vi.fn(),
+}));
+
 vi.mock("@/stores/marketDashboard", () => ({
   useMarketDashboardStore: <T,>(selector: (state: typeof storeState) => T) => selector(storeState),
 }));
+
+vi.mock("@/stores/watchlist", () => ({
+  useWatchlistStore: <T,>(selector: (state: typeof watchlistState) => T) => selector(watchlistState),
+}));
+
+vi.mock("sonner", () => ({ toast }));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -82,6 +105,11 @@ describe("MarketPulsePanel", () => {
       pulseAsOf: null,
       pulseStale: false,
       refreshPulse: vi.fn().mockResolvedValue(undefined),
+    });
+    Object.assign(watchlistState, {
+      stocks: [],
+      refresh: vi.fn().mockResolvedValue(undefined),
+      add: vi.fn().mockResolvedValue({ added: true, exists: false }),
     });
     Object.defineProperty(document, "visibilityState", {
       configurable: true,
@@ -242,5 +270,60 @@ describe("MarketPulsePanel", () => {
       expect(screen.getByRole("button", { name: /平安银行 000001/i })).toBeInTheDocument();
     });
     expect(screen.getByRole("status")).toHaveTextContent("正在更新市场异动");
+  });
+
+  it("adds a market pulse stock to the watchlist and updates list and detail actions", async () => {
+    const user = userEvent.setup();
+    renderPanel({ pulse: [limitUpItem] });
+
+    const actions = await screen.findAllByRole("button", { name: "加入自选 600519" });
+    expect(actions).toHaveLength(2);
+    await user.click(actions[0]);
+
+    await waitFor(() => expect(watchlistState.add).toHaveBeenCalledWith("600519"));
+    expect(toast.success).toHaveBeenCalledWith("已添加 600519");
+    expect(screen.getAllByRole("button", { name: "已自选 600519" })).toHaveLength(2);
+    screen.getAllByRole("button", { name: "已自选 600519" }).forEach((action) => {
+      expect(action).toBeDisabled();
+    });
+  });
+
+  it("disables market pulse watchlist actions for a stock already in the watchlist", async () => {
+    watchlistState.stocks = [{
+      code: "600519",
+      name: "贵州茅台",
+      market: "a_stock",
+      added_at: "2026-07-21T10:00:00Z",
+    }];
+    renderPanel({ pulse: [limitUpItem] });
+
+    const actions = await screen.findAllByRole("button", { name: "已自选 600519" });
+    expect(actions).toHaveLength(2);
+    actions.forEach((action) => expect(action).toBeDisabled());
+    expect(watchlistState.add).not.toHaveBeenCalled();
+  });
+
+  it("shows an error and re-enables market pulse watchlist actions when adding fails", async () => {
+    const user = userEvent.setup();
+    watchlistState.add.mockRejectedValueOnce(new Error("network unavailable"));
+    renderPanel({ pulse: [limitUpItem] });
+
+    const [listAction] = await screen.findAllByRole("button", { name: "加入自选 600519" });
+    await user.click(listAction);
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("添加失败，请稍后重试"));
+    screen.getAllByRole("button", { name: "加入自选 600519" }).forEach((action) => {
+      expect(action).toBeEnabled();
+    });
+  });
+
+  it("shows a structured explanation and raw information for the selected event", async () => {
+    renderPanel({ pulse: [limitUpItem] });
+
+    expect(await screen.findByRole("heading", { name: "信号含义" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "盘面解读" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "关注风险" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "原始异动说明" })).toBeInTheDocument();
+    expect(screen.getByText(limitUpItem.info)).toBeInTheDocument();
   });
 });

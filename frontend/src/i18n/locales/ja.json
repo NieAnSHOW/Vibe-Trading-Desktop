@@ -3,7 +3,8 @@
     "version": "v0.1.10"
   },
   "layout": {
-    "section": { "workspace": "Workspace", "tools": "Tools" }, "home": "ホーム",
+    "news": "投資ニュース",
+    "section": { "workspace": "Workspace", "tools": "Tools" },
     "agent": "エージェント",
     "runtime": "ランタイム",
     "reports": "レポート",
@@ -107,7 +108,12 @@
     "return": "リターン",
     "sharpe": "Sharpe",
     "fullReport": "完全なレポート",
-    "compare": "比較"
+    "compare": "比較",
+    "overview": "レポートの概要",
+    "filters": "フィルター",
+    "results": "レポート結果",
+    "success": "成功",
+    "clearFilters": "フィルターをクリア"
   },
   "connection": {
     "reconnecting": "接続が切断されました。再接続中です({{attempt}} 回目)…",
@@ -736,19 +742,7 @@
     "pineScript": "Pine Script",
     "shadowReport": "シャドウレポート"
   },
-  "section": { "workspace": "Workspace", "tools": "Tools" }, "home": {
-    "title": "AI 駆動のクォント戦略リサーチ",
-    "subtitle": "自然言語で取引戦略を記述してください。エージェントがコードを生成し、バックテストを実行し、最適化をリアルタイムで行います。",
-    "startResearch": "リサーチを開始",
-    "featureAgent": "AI エージェント",
-    "featureAgentDesc": "ReAct 推論による自然言語の戦略生成",
-    "featureBacktest": "内蔵バックテスト",
-    "featureBacktestDesc": "A株、米国/HK、暗号資産をカバーする 7 つのデータソース",
-    "featureStreaming": "リアルタイムストリーミング",
-    "featureStreamingDesc": "エージェントの思考、ツール呼び出し、反復を観察",
-    "featureReplay": "戦略リプレイ",
-    "featureReplayDesc": "トレードジャーナル分析 + シャドウアカウント — ルールを抽出しバックテスト、損益差分を要因分解"
-  },
+  "section": { "workspace": "Workspace", "tools": "Tools" },
   "errorBoundary": {
     "somethingWrong": "問題が発生しました"
   },
@@ -774,5 +768,40 @@
     "historyUnavailable": "日足データがありません",
     "historyUnavailableHint": "別の指数を選択して再試行してください",
     "selectPrompt": "指数を選択してください"
+  },
+  "news": {
+    "title": "投資ニュース",
+    "fresh": "最新",
+    "stale": "データが古い可能性があります",
+    "unavailable": "ニュースを利用できません",
+    "partial": "一部の情報源を利用できません",
+    "ai": "AI ハイライト",
+    "aiUnavailable": "AI ハイライトを利用できません",
+    "error": "ニュースの読み込み中に問題が発生しました",
+    "refresh": "すべてのニュースを更新",
+    "trackList": "ニュース分野",
+    "selectTrack": "ニュース分野を選択",
+    "refreshProgress": "更新中：情報源 {{processedEndpoints}} / {{totalEndpoints}}、分野 {{processedTracks}} / {{totalTracks}}",
+    "loading": "ニュースを読み込んでいます…",
+    "emptySnapshot": "ニュースのスナップショットがありません",
+    "noSummary": "概要はありません",
+    "unknownTime": "時刻不明",
+    "viewOriginal": "元の記事を見る",
+    "articleList": "ニュース記事",
+    "emptyTrack": "この分野のニュースはありません",
+    "tracks": {
+      "ai": "人工知能",
+      "semi": "半導体",
+      "robot": "ロボティクス",
+      "auto": "スマートモビリティ",
+      "energy": "クリーンエネルギー",
+      "bio": "バイオテクノロジー",
+      "space": "宇宙",
+      "security": "サイバーセキュリティ",
+      "tech": "テクノロジー",
+      "consumer": "消費",
+      "macro": "マクロ",
+      "science": "科学"
+    }
   }
 }

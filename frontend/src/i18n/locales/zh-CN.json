@@ -3,11 +3,11 @@
     "version": "v0.1.10"
   },
   "layout": {
+    "news": "投资资讯",
     "section": {
       "workspace": "工作区",
       "tools": "工具"
     },
-    "home": "首页",
     "agent": "智能体",
     "runtime": "运行时",
     "reports": "报告",
@@ -170,7 +170,12 @@
     "return": "收益率",
     "sharpe": "夏普",
     "fullReport": "完整报告",
-    "compare": "对比"
+    "compare": "对比",
+    "overview": "报告概览",
+    "filters": "筛选",
+    "results": "报告结果",
+    "success": "成功",
+    "clearFilters": "清除筛选"
   },
   "connection": {
     "reconnecting": "连接已断开，正在重连（第 {{attempt}} 次）…",
@@ -407,8 +412,6 @@
     "tushareTokenHint": "用于 A 股、期货、基金和宏观数据。若未设置，项目会在可用时回退到 AKShare。",
     "pairingCommand": "配对命令",
     "runPairing": "运行配对",
-    "brokerSupportTitle": "券商支持（可选依赖）",
-    "brokerSupportDesc": "按需安装券商 SDK。安装到本地可写目录，不影响核心依赖。",
     "cancel": "取消",
     "weixin": {
       "qrFailed": "获取微信二维码失败: {{message}}",
@@ -837,19 +840,6 @@
     "shadowReport": "影子报告",
     "shadowReportPdf": "导出 PDF"
   },
-  "home": {
-    "title": "AI 驱动的量化策略研究",
-    "subtitle": "用自然语言描述交易策略。智能体自动生成代码、运行回测并优化 —— 全部实时完成。",
-    "startResearch": "开始研究",
-    "featureAgent": "AI 智能体",
-    "featureAgentDesc": "基于 ReAct 推理的自然语言策略生成",
-    "featureBacktest": "内置回测引擎",
-    "featureBacktestDesc": "7 大数据源，覆盖 A股、港美股与加密货币",
-    "featureStreaming": "实时流式输出",
-    "featureStreamingDesc": "观看智能体思考、调用工具和迭代的全过程",
-    "featureReplay": "策略回放",
-    "featureReplayDesc": "交易日志分析器 + 影子账户 —— 提取你的规则、回测验证、归因盈亏差异"
-  },
   "errorBoundary": {
     "somethingWrong": "出了点问题"
   },
@@ -984,8 +974,6 @@
   "dashboard": {
     "title": "市场概览",
     "marketPulse": "市场异动",
-    "aiSummary": "AI 摘要",
-    "refreshSummary": "刷新 AI 摘要",
     "watchlistQuotes": "自选股",
     "stockDetail": "个股详情",
     "selectStockHint": "选择一只股票查看 K 线图",
@@ -1047,11 +1035,7 @@
       "limit": "涨停",
       "quality": "封板"
     },
-    "summaryUnavailable": "摘要暂不可用",
     "staleData": "数据可能不是最新，请手动刷新",
-    "drivers": "驱动因素",
-    "risks": "风险提示",
-    "focus": "关注方向",
     "col": {
       "code": "代码",
       "name": "名称",
@@ -1119,6 +1103,41 @@
       "changeAmt": "涨跌额",
       "changePct": "涨跌幅",
       "actions": "操作"
+    }
+  },
+  "news": {
+    "title": "投资资讯",
+    "fresh": "最新",
+    "stale": "数据可能已过期",
+    "unavailable": "资讯暂不可用",
+    "partial": "部分来源暂不可用",
+    "ai": "AI 要点",
+    "aiUnavailable": "AI 要点暂不可用",
+    "error": "加载资讯时出现问题",
+    "refresh": "刷新全部资讯",
+    "trackList": "资讯赛道",
+    "selectTrack": "选择资讯赛道",
+    "refreshProgress": "正在刷新：{{processedEndpoints}} / {{totalEndpoints}} 个来源，{{processedTracks}} / {{totalTracks}} 个赛道",
+    "loading": "正在加载资讯…",
+    "emptySnapshot": "暂无资讯快照",
+    "noSummary": "暂无摘要",
+    "unknownTime": "时间未知",
+    "viewOriginal": "查看原文",
+    "articleList": "资讯列表",
+    "emptyTrack": "当前赛道暂无资讯",
+    "tracks": {
+      "ai": "人工智能",
+      "semi": "半导体",
+      "robot": "机器人",
+      "auto": "智能汽车",
+      "energy": "新能源",
+      "bio": "生物科技",
+      "space": "商业航天",
+      "security": "网络安全",
+      "tech": "科技",
+      "consumer": "消费",
+      "macro": "宏观经济",
+      "science": "科学"
     }
   }
 }

@@ -12,7 +12,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::auth::{
-    self, AuthError, AuthState, Captcha, LoginRaw, UserInfo, UserSession,
+    self, AuthError, AuthState, Captcha, LoginRaw, UserInfo,
 };
 use crate::runtime_dir::Layout;
 
@@ -189,13 +189,12 @@ pub struct AuthStatusView {
     pub expire_at: Option<i64>,
 }
 
-/// console_start_service 的错误（LoginExpired 让前端跳登录页）。
+/// console_start_service 的错误。
 #[derive(Debug, serde::Serialize)]
 #[serde(tag = "variant")]
 pub enum ServiceStartError {
     EnvNotReady,
     AlreadyRunning,
-    LoginExpired,
     SpawnFailed { message: String },
     HealthTimeout,
     ProcessExited { code: Option<i32> },
@@ -207,7 +206,6 @@ impl std::fmt::Display for ServiceStartError {
         match self {
             Self::EnvNotReady => write!(f, "环境未就绪，请先完成依赖安装"),
             Self::AlreadyRunning => write!(f, "服务已在运行"),
-            Self::LoginExpired => write!(f, "登录已过期，请重新登录"),
             Self::SpawnFailed { message } => write!(f, "启动失败: {message}"),
             Self::HealthTimeout => write!(f, "后端 120 秒内未就绪"),
             Self::ProcessExited { code } => write!(f, "后端提前退出（退出码 {code:?}）"),
@@ -284,7 +282,7 @@ pub async fn console_bootstrap(
     Ok(())
 }
 
-/// 启动服务：先校验登录态（过期则尝试 refresh，失败返 LoginExpired），
+/// 启动服务：先尝试静默刷新登录态（未登录/过期不阻塞，用户可自行配 .env），
 /// 再 spawn serve + 健康门控。
 #[tauri::command]
 pub async fn console_start_service(
@@ -339,14 +337,6 @@ pub async fn console_start_service(
         }
         crate::sidecar::Ready::ProcessExited(c) => Err(ServiceStartError::ProcessExited { code: c }),
         crate::sidecar::Ready::Timeout => Err(ServiceStartError::HealthTimeout),
-    }
-}
-
-fn into_view(sess: UserSession) -> LoginResultView {
-    LoginResultView {
-        user_info: sess.user_info.expect("登录后必有 userInfo"),
-        has_password: true, // 占位；真实 hasPassword 见下方命令
-        expire_at: sess.expire_at,
     }
 }
 

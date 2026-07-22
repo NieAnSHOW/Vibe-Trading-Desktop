@@ -17,14 +17,15 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
 }));
 
-function renderLayout() {
+function renderLayout(initialEntry = "/") {
   i18n.changeLanguage("zh-CN");
   return render(
-    <MemoryRouter initialEntries={["/"]}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<div>Dashboard route content</div>} />
           <Route path="/agent" element={<div>Agent route content</div>} />
+          <Route path="/news" element={<div>News route content</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -35,7 +36,11 @@ describe("Layout sidebar", () => {
   it("renders the sidebar with nav links and route outlet", () => {
     renderLayout();
 
-    expect(screen.getByRole("link", { name: /首页/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /首页/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /市场看板/i })).toHaveClass(
+      "bg-primary/10",
+      "text-primary",
+    );
     expect(screen.getByRole("link", { name: /指数/i })).toHaveAttribute("href", "/indices");
     expect(screen.getByText("Dashboard route content")).toBeInTheDocument();
   });
@@ -60,6 +65,15 @@ describe("Layout sidebar", () => {
           Node.DOCUMENT_POSITION_FOLLOWING,
       ),
     ).toBe(true);
+  });
+
+  it("renders the investment news workspace link with active state", () => {
+    renderLayout("/news");
+
+    const news = screen.getByRole("link", { name: "投资资讯" });
+    expect(news).toHaveAttribute("href", "/news");
+    expect(news).toHaveClass("bg-primary/10", "text-primary");
+    expect(screen.getByText("News route content")).toBeInTheDocument();
   });
 
   it("keeps the main area constrained", () => {

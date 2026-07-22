@@ -481,7 +481,7 @@ onUnmounted(() => {
     </ConfirmDialog>
     <!-- 广告位 bottom:横条 -->
     <AdSlot :ad="adBottom" variant="bottom" />
-    <div id="err">{{ errorMsg }}</div>
+    <div id="err">{{ errorMsg  }}</div>
 
     <LogViewer ref="logViewer" @open-logs="onOpenLogs" @clear-logs="onClearLogs" />
 

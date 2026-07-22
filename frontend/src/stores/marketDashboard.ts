@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { PriceBar, MarketSummaryResponse, MarketSnapshotRequest } from "@/lib/api";
-import { fetchWatchlistStocks, api } from "@/lib/api";
+import type { PriceBar } from "@/lib/api";
+import { fetchWatchlistStocks } from "@/lib/api";
 import {
   fetchDashboardIndexes,
   fetchMarketPulse,
@@ -18,20 +18,17 @@ export interface MarketDashboardState {
   quotes: Record<string, DashboardQuote>;
   selectedCode: string | null;
   selectedBars: PriceBar[];
-  summary: MarketSummaryResponse | null;
   marketSnapshot: DashboardMarketSnapshot | null;
 
   indexesLoading: boolean;
   pulseLoading: boolean;
   quotesLoading: boolean;
-  summaryLoading: boolean;
   barsLoading: boolean;
   marketSnapshotLoading: boolean;
 
   indexesError: string | null;
   pulseError: string | null;
   quotesError: string | null;
-  summaryError: string | null;
   barsError: string | null;
   marketSnapshotError: string | null;
 
@@ -41,7 +38,6 @@ export interface MarketDashboardState {
   initialize: () => Promise<void>;
   refreshMarketData: () => Promise<void>;
   refreshPulse: () => Promise<void>;
-  refreshSummary: (force?: boolean) => Promise<void>;
   setSelectedCode: (code: string) => Promise<void>;
   startPolling: () => void;
   stopPolling: () => void;
@@ -57,20 +53,17 @@ export const useMarketDashboardStore = create<MarketDashboardState>((set, get) =
   quotes: {},
   selectedCode: null,
   selectedBars: [],
-  summary: null,
   marketSnapshot: null,
 
   indexesLoading: false,
   pulseLoading: false,
   quotesLoading: false,
-  summaryLoading: false,
   barsLoading: false,
   marketSnapshotLoading: false,
 
   indexesError: null,
   pulseError: null,
   quotesError: null,
-  summaryError: null,
   barsError: null,
   marketSnapshotError: null,
 
@@ -79,7 +72,6 @@ export const useMarketDashboardStore = create<MarketDashboardState>((set, get) =
 
   initialize: async () => {
     await get().refreshMarketData();
-    await get().refreshSummary(false);
   },
 
   refreshPulse: async () => {
@@ -158,41 +150,6 @@ export const useMarketDashboardStore = create<MarketDashboardState>((set, get) =
       quotesLoading: false,
       marketSnapshotLoading: false,
     });
-  },
-
-  refreshSummary: async (force = false) => {
-    set({ summaryLoading: true });
-
-    const state = get();
-    const snapshot: MarketSnapshotRequest = {
-      market: "a_share",
-      market_as_of: new Date().toISOString(),
-      force_refresh: force,
-      indices: state.indexes.map((i) => ({
-        code: i.code,
-        name: i.name,
-        price: i.price ?? 0,
-        change_pct: i.changePct ?? 0,
-      })),
-      sectors: [],
-      watchlist: Object.values(state.quotes).map((q) => ({
-        code: q.code,
-        name: q.name,
-        change_pct: q.changePct,
-      })),
-    };
-
-    try {
-      const response = await api.createMarketSummary(snapshot);
-      set({
-        summary: response,
-        summaryError: response.available ? null : (response.error_code ?? "unavailable"),
-      });
-    } catch (e) {
-      set({ summaryError: (e as Error)?.message ?? "summary failed" });
-    }
-
-    set({ summaryLoading: false });
   },
 
   setSelectedCode: async (code: string) => {

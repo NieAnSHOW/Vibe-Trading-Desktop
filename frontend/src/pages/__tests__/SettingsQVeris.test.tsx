@@ -7,14 +7,11 @@ const apiMock = vi.hoisted(() => ({
   getLLMSettings: vi.fn(),
   getDataSourceSettings: vi.fn(),
   getChannelStatus: vi.fn(),
+  getLiveStatus: vi.fn(),
   startChannels: vi.fn(),
   stopChannels: vi.fn(),
   updateLLMSettings: vi.fn(),
   updateDataSourceSettings: vi.fn(),
-  // ponytail: fork Settings 也调 optional-deps API (桌面端 broker SDK 安装面板);
-  // upstream 的 QVeris 测试不知道它, 补空 mock 避免渲染时报 not a function。
-  listOptionalDeps: vi.fn(() => Promise.resolve({ brokers: [] })),
-  getOptionalDepsMirror: vi.fn(() => Promise.resolve({})),
 }));
 
 vi.mock("@/lib/api", async () => {
@@ -151,6 +148,7 @@ describe("Settings QVeris card", () => {
     apiMock.getLLMSettings.mockResolvedValue(llmSettings());
     apiMock.getDataSourceSettings.mockResolvedValue(dataSourceSettings());
     apiMock.getChannelStatus.mockResolvedValue(channelStatus());
+    apiMock.getLiveStatus.mockResolvedValue({ global_halted: false, brokers: [] });
     apiMock.startChannels.mockResolvedValue(channelStatus());
     apiMock.stopChannels.mockResolvedValue(channelStatus());
   });
@@ -165,6 +163,7 @@ describe("Settings QVeris card", () => {
 
     render(<Settings />);
 
+    expect(await screen.findByRole("heading", { name: "LLM Settings" })).toBeInTheDocument();
     expect(await screen.findByText("QVeris Tool Marketplace")).toBeInTheDocument();
     expect(await screen.findByDisplayValue("https://qveris.ai/api/v1")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("sk-...8TI")).toBeInTheDocument();

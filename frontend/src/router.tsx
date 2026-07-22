@@ -1,9 +1,8 @@
 import { Suspense, lazy, type ComponentType } from "react";
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 
 
-const Home = lazy(() => import("@/pages/Home").then((m) => ({ default: m.Home })));
 const Agent = lazy(() => import("@/pages/Agent").then((m) => ({ default: m.Agent })));
 const RunDetail = lazy(() =>
   import("@/pages/RunDetail").then((m) => ({ default: m.RunDetail })),
@@ -13,9 +12,6 @@ const Compare = lazy(() =>
 );
 const Settings = lazy(() =>
   import("@/pages/Settings").then((m) => ({ default: m.Settings })),
-);
-const Runtime = lazy(() =>
-  import("@/pages/Runtime").then((m) => ({ default: m.Runtime })),
 );
 const Reports = lazy(() =>
   import("@/pages/Reports").then((m) => ({ default: m.Reports })),
@@ -31,6 +27,7 @@ const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const MarketPulse = lazy(() => import("@/pages/MarketPulse"));
 const Indices = lazy(() => import("@/pages/Indices"));
 const Watchlist = lazy(() => import("@/pages/Watchlist"));
+const News = lazy(() => import("@/pages/News"));
 
 
 
@@ -54,9 +51,9 @@ export const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      { path: "/", element: wrap(Home) },
+      { path: "/", element: wrap(Dashboard) },
       { path: "/agent", element: wrap(Agent) },
-      { path: "/runtime", element: wrap(Runtime) },
+      { path: "/runtime", element: <Navigate to="/settings" replace /> },
       { path: "/reports", element: wrap(Reports) },
       { path: "/settings", element: wrap(Settings) },
       { path: "/runs/:runId", element: wrap(RunDetail) },
@@ -70,6 +67,7 @@ export const router = createBrowserRouter([
       { path: "/market-pulse", element: wrap(MarketPulse) },
       { path: "/indices", element: wrap(Indices) },
       { path: "/watchlist", element: wrap(Watchlist) },
+      { path: "/news", element: wrap(News) },
     ],
   },
 ]);

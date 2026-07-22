@@ -213,9 +213,9 @@ function BrowseView() {
   const visible = filtered.slice(0, visibleCount);
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8">
-      {/* Hero */}
-      <div className="space-y-2">
+    <div className="w-full p-4 md:p-6 space-y-4" data-testid="alpha-zoo-workspace">
+      {/* Workspace header */}
+      <div className="space-y-1 border-b pb-3">
         <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wide">
           <Layers className="h-3.5 w-3.5" aria-hidden="true" /> {i18n.t("alphaZoo.title")}
         </div>
@@ -230,7 +230,7 @@ function BrowseView() {
       </div>
 
       {/* Zoo cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {ZOO_CARDS.map((z) => {
           const active = zooFilter === z.id;
           return (
@@ -239,7 +239,7 @@ function BrowseView() {
               type="button"
               onClick={() => setZooFilter(active ? "" : z.id)}
               className={cn(
-                "text-left border rounded-xl p-4 space-y-2 transition bg-gradient-to-br",
+                "text-left border rounded-lg p-3 space-y-2 transition bg-gradient-to-br",
                 z.accent,
                 "hover:border-primary/50",
                 active && "border-primary ring-1 ring-primary/30",
@@ -260,9 +260,13 @@ function BrowseView() {
         })}
       </div>
 
-      {/* Filter bar */}
-      <div className="flex flex-col md:flex-row md:items-end gap-3 border rounded-xl p-4 bg-card">
-        <div className="flex-1 min-w-0">
+      <div className="min-w-0 space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[minmax(15rem,0.32fr)_minmax(0,1fr)] lg:gap-4 lg:min-h-[calc(100vh-19rem)]">
+        {/* Filters */}
+        <aside
+          data-testid="alpha-zoo-filters"
+          className="border rounded-lg p-3 bg-card space-y-3 lg:self-start lg:sticky lg:top-4"
+        >
+          <div className="min-w-0">
           <label htmlFor="alpha-search" className="text-xs text-muted-foreground block mb-1">
             {i18n.t("alphaZoo.search")}
           </label>
@@ -283,7 +287,7 @@ function BrowseView() {
             />
           </div>
         </div>
-        <div className="md:w-40">
+          <div>
           <label htmlFor="alpha-zoo-filter" className="text-xs text-muted-foreground block mb-1">{i18n.t("alphaZoo.zoo")}</label>
           <select
             id="alpha-zoo-filter"
@@ -299,7 +303,7 @@ function BrowseView() {
             ))}
           </select>
         </div>
-        <div className="md:w-40">
+          <div>
           <label htmlFor="alpha-theme-filter" className="text-xs text-muted-foreground block mb-1">
             {i18n.t("alphaZoo.theme")}
           </label>
@@ -317,7 +321,7 @@ function BrowseView() {
             ))}
           </select>
         </div>
-        <div className="md:w-44">
+          <div>
           <label htmlFor="alpha-universe-filter" className="text-xs text-muted-foreground block mb-1">
             {i18n.t("alphaZoo.universe")}
           </label>
@@ -335,26 +339,28 @@ function BrowseView() {
             ))}
           </select>
         </div>
-        <Link
-          to={compareHref}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted hover:text-foreground transition"
-          title={i18n.t("alphaZoo.compareTooltip")}
-        >
-          <ArrowLeftRight className="h-3.5 w-3.5" aria-hidden="true" /> {i18n.t("alphaZoo.compare")}
-          {selected.size >= 2 ? ` (${selected.size})` : ""}
-        </Link>
-        <Link
-          to="/alpha-zoo/bench"
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
-        >
-          <Play className="h-3.5 w-3.5" aria-hidden="true" /> {i18n.t("alphaZoo.runBenchmark")}
-        </Link>
-      </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2 pt-1">
+            <Link
+              to={compareHref}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted hover:text-foreground transition"
+              title={i18n.t("alphaZoo.compareTooltip")}
+            >
+              <ArrowLeftRight className="h-3.5 w-3.5" aria-hidden="true" /> {i18n.t("alphaZoo.compare")}
+              {selected.size >= 2 ? ` (${selected.size})` : ""}
+            </Link>
+            <Link
+              to="/alpha-zoo/bench"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
+            >
+              <Play className="h-3.5 w-3.5" aria-hidden="true" /> {i18n.t("alphaZoo.runBenchmark")}
+            </Link>
+          </div>
+        </aside>
 
-      {/* Table */}
-      {/* TODO(v0.2): switch to react-window if alpha count exceeds 5000 */}
-      <div className="border rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Catalogue */}
+        {/* TODO(v0.2): switch to react-window if alpha count exceeds 5000 */}
+        <section data-testid="alpha-zoo-catalogue" className="min-w-0 border rounded-lg bg-card overflow-hidden lg:overflow-auto">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm" aria-label={i18n.t("alphaZoo.alphaCatalogue")}>
             <caption className="sr-only">{i18n.t("alphaZoo.alphaCatalogue")}</caption>
             <thead>
@@ -454,6 +460,7 @@ function BrowseView() {
             </button>
           </div>
         )}
+        </section>
       </div>
     </div>
   );
@@ -495,7 +502,7 @@ function DetailView({ alphaId }: DetailProps) {
 
   if (loading) {
     return (
-      <div className="p-8 flex items-center justify-center text-muted-foreground">
+      <div className="w-full p-4 md:p-6 flex items-center justify-center text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" /> {i18n.t("alphaZoo.loadingAlpha", { id: alphaId })}
       </div>
     );
@@ -503,11 +510,11 @@ function DetailView({ alphaId }: DetailProps) {
 
   if (error || !detail) {
     return (
-      <div className="p-8 max-w-3xl mx-auto space-y-4">
+      <div className="w-full p-4 md:p-6 max-w-4xl mx-auto space-y-4">
         <Link to="/alpha-zoo" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> {i18n.t("alphaZoo.backToAlphaZoo")}
         </Link>
-        <div className="border rounded-xl p-6 bg-card">
+        <div className="border rounded-lg p-5 bg-card">
           <h2 className="font-semibold text-sm mb-1 flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-warning" aria-hidden="true" /> {i18n.t("alphaZoo.couldNotLoad")}
           </h2>
@@ -530,7 +537,7 @@ function DetailView({ alphaId }: DetailProps) {
     : `/alpha-zoo/bench?zoo=${encodeURIComponent(a.zoo)}&period=2020-2025`;
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
+    <div className="w-full p-4 md:p-6 max-w-5xl mx-auto space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <Link
           to="/alpha-zoo"
@@ -565,7 +572,7 @@ function DetailView({ alphaId }: DetailProps) {
       {/* Formula */}
       <section className="space-y-2">
         <h2 className="text-sm font-medium text-muted-foreground">{i18n.t("alphaZoo.formula")}</h2>
-        <pre className="border rounded-xl bg-muted/30 p-4 overflow-x-auto text-xs leading-relaxed">
+        <pre className="border rounded-lg bg-muted/30 p-4 overflow-x-auto text-xs leading-relaxed">
           <code>{formulaLatex || i18n.t("alphaZoo.noFormula")}</code>
         </pre>
       </section>
@@ -573,7 +580,7 @@ function DetailView({ alphaId }: DetailProps) {
       {/* Metadata */}
       <section className="space-y-2">
         <h2 className="text-sm font-medium text-muted-foreground">{i18n.t("alphaZoo.metadata")}</h2>
-        <div className="border rounded-xl overflow-hidden">
+        <div className="border rounded-lg overflow-hidden bg-card">
           <table className="w-full text-sm">
             <tbody>
               <MetaRow
@@ -610,7 +617,7 @@ function DetailView({ alphaId }: DetailProps) {
       {/* Source code */}
       <section className="space-y-2">
         <h2 className="text-sm font-medium text-muted-foreground">{i18n.t("alphaZoo.sourceCode")}</h2>
-        <details className="border rounded-xl bg-card group">
+        <details className="border rounded-lg bg-card group">
           <summary className="cursor-pointer px-4 py-3 text-sm font-medium hover:bg-muted/40 select-none">
             {i18n.t("alphaZoo.viewSource", { lines: (detail.source_code || "").split("\n").length })}
           </summary>
@@ -774,7 +781,7 @@ function BenchView() {
   const busy = status === "submitting" || status === "streaming";
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
+    <div className="w-full p-4 md:p-6 max-w-6xl mx-auto space-y-4">
       <Link
         to="/alpha-zoo"
         className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
@@ -797,7 +804,7 @@ function BenchView() {
       {/* Form */}
       <form
         onSubmit={startBench}
-        className="border rounded-xl p-4 bg-card grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end"
+        className="border rounded-lg p-4 bg-card grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end"
       >
         <div>
           <label htmlFor="bench-zoo" className="text-xs text-muted-foreground block mb-1">{i18n.t("alphaZoo.zoo")}</label>
@@ -1243,7 +1250,7 @@ function CompareView() {
   const busy = status === "submitting" || status === "streaming";
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
+    <div className="w-full p-4 md:p-6 max-w-6xl mx-auto space-y-4">
       <Link
         to="/alpha-zoo"
         className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
@@ -1263,7 +1270,7 @@ function CompareView() {
         </p>
       </div>
 
-      <form onSubmit={startCompare} className="border rounded-xl p-4 bg-card space-y-3">
+      <form onSubmit={startCompare} className="border rounded-lg p-4 bg-card space-y-3">
         <div>
           <label htmlFor="compare-ids" className="text-xs text-muted-foreground block mb-1">
             {i18n.t("alphaZoo.alphaIds")}{ids.length > 0 ? ` (${ids.length} ${i18n.t("alphaZoo.selected")})` : ""}

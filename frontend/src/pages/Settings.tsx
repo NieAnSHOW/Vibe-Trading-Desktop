@@ -10,7 +10,6 @@ import {
   KeyRound,
   Loader2,
   MessageSquareMore,
-  Package,
   Play,
   QrCode,
   RefreshCw,
@@ -31,8 +30,8 @@ import {
   type LLMSettings,
 } from "@/lib/api";
 import { getApiAuthKey, setApiAuthKey } from "@/lib/apiAuth";
-import { OptionalDepsManager } from "@/components/settings/OptionalDepsManager";
 import { QVerisSettings } from "@/components/settings/QVerisSettings"; // QVERIS-INTEGRATION
+import { RuntimeStatus } from "@/components/settings/RuntimeStatus";
 
 interface LLMFormState {
   provider: string;
@@ -48,33 +47,40 @@ const fieldClass =
   "w-full rounded-md border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60";
 const labelClass = "text-sm font-medium";
 const hintClass = "text-xs text-muted-foreground";
-const DEFAULT_LLM_GENERATION = {
-  temperature: 0.7,
-  timeout_seconds: 200,
-  reasoning_effort: "high",
-} as const;
 
+// ponytail: 直接映射后端 GET /settings/llm 的 .env 真实值,不再用前端默认值覆盖。
+// 否则换浏览器/清缓存/origin 端口变化时,用户已配置的 temperature 等会被重写成默认值。
 function toForm(settings: LLMSettings): LLMFormState {
   return {
     provider: settings.provider,
     model_name: settings.model_name,
     base_url: settings.base_url,
-    ...DEFAULT_LLM_GENERATION,
+    temperature: settings.temperature,
+    timeout_seconds: settings.timeout_seconds,
     max_retries: settings.max_retries,
+    reasoning_effort: settings.reasoning_effort,
   };
 }
 
-// VIP Server 现为后端一等公民 provider(agent/src/providers/llm_providers.json +
-// capabilities.py::_PROVIDERS)。前端只保留默认值/判定常量,与后端 json 对齐。
+// VIP Server 为后端一等公民 provider(agent/src/providers/llm_providers.json)。
+// 前端仅用此常量判定"当前是否 VIP provider"以切换 UI(VIP 走模型下拉,其他走自由输入)。
 const VIP_PROVIDER_NAME = "vip_server";
-const VIP_DEFAULTS = {
-  model: "deepseek-v4-flash",
-  base_url: "https://new.ailjf.cc/v1",
-} as const;
 
-// ponytail: "用户是否主动切换过 provider"的本地标记。
-// 未标记 = 全新安装/未选过其他供应商 → 默认 VIP;一旦在下拉里切换过就置 "1",之后尊重 .env 当前值。
-const PROVIDER_PICKED_KEY = "vt_provider_picked";
+// ponytail: VIP 已获取模型列表的本地缓存,跨页面/重挂载保留,避免每次重进设置页都要重新点"获取"。
+const VIP_MODELS_KEY = "vt_vip_models";
+
+function readVipModels(): string[] {
+  try {
+    const raw = localStorage.getItem(VIP_MODELS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((m): m is string => typeof m === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
 
 export function Settings() {
   const { t } = useTranslation();
@@ -104,9 +110,7 @@ export function Settings() {
   );
   const [usageDataOn, setUsageDataOn] = useState(getConsent());
   // const [flushing, setFlushing] = useState(false);
-  const [optionalDeps, setOptionalDeps] = useState<any>(null);
-  const [installingPkg, setInstallingPkg] = useState<string | null>(null);
-  const [vipModels, setVipModels] = useState<string[]>([]);
+  const [vipModels, setVipModels] = useState<string[]>(() => readVipModels());
   const [vipModelsLoading, setVipModelsLoading] = useState(false);
 
   // WeChat QR login state
@@ -153,28 +157,16 @@ export function Settings() {
       api.getLLMSettings(),
       api.getDataSourceSettings(),
       api.getChannelStatus(),
-      api.listOptionalDeps(),
     ])
-      .then(([llmResult, dataSourceResult, channelResult, depsResult]) => {
+      .then(([llmResult, dataSourceResult, channelResult]) => {
         if (!alive) return;
 
         // ponytail: allSettled — 单接口失败不拖垮整页 (upstream 容错语义)。
-        // LLM 分支保留 fork 的 VIP 默认值逻辑 (未主动选过 provider 时默认 VIP)。
+        // LLM 直接信任后端返回的 .env 真实值,不再用本地标记/硬编码默认值覆盖。
         if (llmResult.status === "fulfilled") {
           const llmData = llmResult.value;
           setSettings(llmData);
-          const picked = localStorage.getItem(PROVIDER_PICKED_KEY) === "1";
-          const formInit = toForm(llmData);
-          setForm(
-            picked
-              ? formInit
-              : {
-                  ...formInit,
-                  provider: VIP_PROVIDER_NAME,
-                  model_name: VIP_DEFAULTS.model,
-                  base_url: VIP_DEFAULTS.base_url,
-                },
-          );
+          setForm(toForm(llmData));
         } else {
           const message =
             llmResult.reason instanceof Error
@@ -217,10 +209,6 @@ export function Settings() {
           setChannelStatus(null);
         }
 
-        if (depsResult.status === "fulfilled") {
-          setOptionalDeps(depsResult.value);
-        }
-        // optional-deps 失败不报错: 桌面可选依赖面板静默降级即可, 不阻塞设置页。
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -233,67 +221,14 @@ export function Settings() {
   const refreshChannelStatus = async () => {
     setChannelRefreshing(true);
     try {
-      const [channelData, depsData] = await Promise.all([
-        api.getChannelStatus(),
-        api.listOptionalDeps(),
-      ]);
+      const channelData = await api.getChannelStatus();
       setChannelStatus(channelData);
-      setOptionalDeps(depsData);
     } catch (error) {
       toast.error(
         `${t("settings.channels.refreshFailed")}: ${error instanceof Error ? error.message : t("settings.unknownError")}`,
       );
     } finally {
       setChannelRefreshing(false);
-    }
-  };
-
-  const matchedPkg = (channelName: string, deps: any): string | undefined => {
-    if (!deps?.brokers) return undefined;
-    // ponytail: match channel name to optional-deps broker id (financial SDKs),
-    // not IM channels — wired for future overlap.
-    const entry = deps.brokers.find(
-      (b: any) =>
-        b.id?.toLowerCase() === channelName.toLowerCase() ||
-        b.package?.toLowerCase().includes(channelName.toLowerCase()),
-    );
-    return entry?.package;
-  };
-
-  const installChannelDep = async (pkg: string) => {
-    setInstallingPkg(pkg);
-    try {
-      const { job_id } = await api.installOptionalDep(pkg);
-      const streamUrl = await api.optionalDepStatusUrl(job_id);
-      await new Promise<void>((resolve, reject) => {
-        const es = new EventSource(streamUrl);
-        es.addEventListener("done", () => {
-          es.close();
-          resolve();
-        });
-        es.addEventListener("failed", (ev) => {
-          es.close();
-          let message = t("settings.channels.depInstallFailed");
-          try {
-            message = JSON.parse((ev as MessageEvent).data).error || message;
-          } catch {
-            /* default */
-          }
-          reject(new Error(message));
-        });
-        es.onerror = () => {
-          es.close();
-          reject(new Error(t("settings.channels.depInstallFailed")));
-        };
-      });
-      toast.success(t("settings.channels.depInstalled"));
-      await refreshChannelStatus();
-    } catch (error) {
-      toast.error(
-        `${t("settings.channels.depInstallFailed")}: ${error instanceof Error ? error.message : t("settings.unknownError")}`,
-      );
-    } finally {
-      setInstallingPkg(null);
     }
   };
 
@@ -413,7 +348,6 @@ export function Settings() {
   const onProviderChange = (name: string) => {
     const provider = providers.find((item) => item.name === name);
     if (!provider || !form) return;
-    localStorage.setItem(PROVIDER_PICKED_KEY, "1");
     setForm({
       ...form,
       provider: provider.name,
@@ -434,6 +368,11 @@ export function Settings() {
         ...(submittedBaseUrl ? { base_url: submittedBaseUrl } : {}),
       });
       setVipModels(models);
+      try {
+        localStorage.setItem(VIP_MODELS_KEY, JSON.stringify(models));
+      } catch {
+        // ponytail: 配额满/隐私模式 — 静默降级,列表仅本会话有效。
+      }
       if (models[0] && form) {
         setForm({ ...form, model_name: models[0] });
       }
@@ -464,7 +403,6 @@ export function Settings() {
     try {
       const updated = await api.updateLLMSettings({
         ...form,
-        ...DEFAULT_LLM_GENERATION,
         api_key: apiKey.trim() || undefined,
         clear_api_key: clearApiKey,
       });
@@ -553,7 +491,10 @@ export function Settings() {
 
   if (loading || !form || !settings || !dataSettings) {
     return (
-      <div className="mx-auto max-w-5xl space-y-6 p-6">
+      <div
+        data-testid="settings-workspace"
+        className="flex h-full w-full flex-col gap-3 p-3 lg:gap-3 lg:p-5"
+      >
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">
             {i18n.t("settings.title")}
@@ -600,6 +541,7 @@ export function Settings() {
               {i18n.t("settings.loading")}
             </>
           )}
+
         </div>
       </div>
     );
@@ -643,7 +585,10 @@ export function Settings() {
   const hideLlm = !!settings.desktop_login_provisioned;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6">
+    <div
+      data-testid="settings-workspace"
+      className="flex h-full w-full flex-col gap-3 p-3 lg:gap-3 lg:p-5"
+    >
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">
           {i18n.t("settings.title")}
@@ -654,16 +599,17 @@ export function Settings() {
       </div>
 
       {/* {localApiAccessSection} */}
-      {/* LLM Settings */}
-      {hideLlm ? (
-        <div className="rounded-lg border bg-card p-5 shadow-sm flex items-center gap-3 text-sm text-muted-foreground">
-          <Server className="h-4 w-4 text-primary shrink-0" />
-          <span>{i18n.t("settings.hideLlmNotice")}</span>
-        </div>
-      ) : (
-        <>
-          <form onSubmit={submit} className="grid gap-6">
-            <section className="rounded-lg border bg-card p-5 shadow-sm">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)]">
+        <div className="grid content-start gap-3">
+          {/* LLM Settings */}
+          {hideLlm ? (
+            <div className="flex items-center gap-3 rounded-lg border bg-card p-4 text-sm text-muted-foreground shadow-sm">
+              <Server className="h-4 w-4 shrink-0 text-primary" />
+              <span>{i18n.t("settings.hideLlmNotice")}</span>
+            </div>
+          ) : (
+            <form onSubmit={submit} className="grid gap-3">
+              <section className="rounded-lg border bg-card p-4 shadow-sm">
               <div className="mb-5 flex items-center gap-2">
                 <Server className="h-4 w-4 text-primary" />
                 <h2 className="text-base font-semibold">
@@ -841,51 +787,156 @@ export function Settings() {
                   {saving ? i18n.t("settings.saving") : i18n.t("settings.save")}
                 </button>
               </div>
-            </section>
-          </form>
-        </>
-      )}
-      {/* QVERIS-INTEGRATION */}
-      <QVerisSettings />
-
-      {/* Usage data consent */}
-      <div className="rounded-lg border bg-card p-5 shadow-sm">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-base font-semibold">
-            {i18n.t("settings.usageData.title")}
-          </h2>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={usageDataOn}
-            onClick={() => toggleUsageData(!usageDataOn)}
-            className={`relative h-6 w-11 rounded-full transition ${usageDataOn ? "bg-primary" : "bg-muted"}`}
-          >
-            <span
-              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${usageDataOn ? "left-[22px]" : "left-0.5"}`}
-            />
-          </button>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          {i18n.t("settings.usageData.description")}
-        </p>
-        {/* <button
-          type="button"
-          onClick={handleTestUpload}
-          disabled={flushing}
-          className="mt-3 inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {flushing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Upload className="h-3.5 w-3.5" />
+              </section>
+            </form>
           )}
-          测试上传埋点数据
-        </button> */}
+
+          <form
+            onSubmit={submitDataSources}
+            className="rounded-lg border bg-card p-4 shadow-sm"
+          >
+            <div className="mb-5 space-y-1">
+              <div className="flex items-center gap-2">
+                <Database className="h-4 w-4 text-primary" />
+                <h2 className="text-base font-semibold">
+                  {i18n.t("settings.dataSourceSettings")}
+                </h2>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {i18n.t("settings.dataSourceSettingsDesc")}
+              </p>
+            </div>
+
+            <div className="grid gap-5">
+              <label className="grid gap-2">
+                <span className={labelClass}>
+                  {i18n.t("settings.tushareToken")}
+                </span>
+                <div className="relative">
+                  <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="password"
+                    value={tushareToken}
+                    onChange={(event) => setTushareToken(event.target.value)}
+                    className={`${fieldClass} pl-9`}
+                    placeholder={tushareStatus}
+                    autoComplete="current-password"
+                    disabled={clearTushareToken}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className={hintClass}>
+                    {i18n.t("settings.tushareTokenHint")}
+                  </span>
+                  <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={clearTushareToken}
+                      onChange={(event) => {
+                        setClearTushareToken(event.target.checked);
+                        if (event.target.checked) setTushareToken("");
+                      }}
+                      className="h-3.5 w-3.5 accent-primary"
+                    />
+                    {i18n.t("settings.clearTushareToken")}
+                  </label>
+                </div>
+              </label>
+
+              <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  {i18n.t("settings.saved")}: {" "}
+                </span>
+                <span className="break-all font-mono">
+                  {dataSettings.env_path}
+                </span>
+              </div>
+
+              <button
+                type="submit"
+                disabled={dataSaving}
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {dataSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {dataSaving
+                  ? i18n.t("settings.saving")
+                  : i18n.t("settings.saveDataSourceSettings")}
+              </button>
+
+              <div className="rounded-md border bg-muted/20 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium">
+                    {i18n.t("settings.baostock")}
+                  </span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs ${dataSettings.baostock_supported ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}
+                  >
+                    {dataSettings.baostock_supported
+                      ? i18n.t("settings.loaderAvailable")
+                      : i18n.t("settings.noProjectLoader")}
+                  </span>
+                </div>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p>{dataSettings.baostock_message}</p>
+                  <p>
+                    {dataSettings.baostock_installed
+                      ? i18n.t("settings.pythonPackageInstalled")
+                      : i18n.t("settings.pythonPackageNotInstalled")}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <aside className="grid content-start gap-3 [&>section>form]:grid-cols-1">
+          {/* QVERIS-INTEGRATION */}
+          <QVerisSettings />
+
+          {/* Usage data consent */}
+          <div className="rounded-lg border bg-card p-4 shadow-sm">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-base font-semibold">
+                {i18n.t("settings.usageData.title")}
+              </h2>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={usageDataOn}
+                onClick={() => toggleUsageData(!usageDataOn)}
+                className={`relative h-6 w-11 rounded-full transition ${usageDataOn ? "bg-primary" : "bg-muted"}`}
+              >
+                <span
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${usageDataOn ? "left-[22px]" : "left-0.5"}`}
+                />
+              </button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {i18n.t("settings.usageData.description")}
+            </p>
+            {/* <button
+              type="button"
+              onClick={handleTestUpload}
+              disabled={flushing}
+              className="mt-3 inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {flushing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Upload className="h-3.5 w-3.5" />
+              )}
+              测试上传埋点数据
+            </button> */}
+          </div>
+        </aside>
       </div>
 
       {/* IM channels */}
-      <section className="rounded-lg border bg-card p-5 shadow-sm">
+      <section className="rounded-lg border bg-card p-4 shadow-sm">
         <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -1034,25 +1085,6 @@ export function Settings() {
                           item.error ||
                           t("settings.channels.noRecovery")}
                       </span>
-                      {item.available === false &&
-                        matchedPkg(item.name, optionalDeps) && (
-                          <button
-                            type="button"
-                            disabled={installingPkg !== null}
-                            onClick={() =>
-                              installChannelDep(
-                                matchedPkg(item.name, optionalDeps)!,
-                              )
-                            }
-                            className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {installingPkg ===
-                            matchedPkg(item.name, optionalDeps) ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : null}
-                            {t("settings.channels.installDep")}
-                          </button>
-                        )}
                       {name === "weixin" && item.enabled && (
                         <button
                           type="button"
@@ -1107,122 +1139,7 @@ export function Settings() {
         </form>
       </section>
 
-      <form
-        onSubmit={submitDataSources}
-        className="rounded-lg border bg-card p-5 shadow-sm"
-      >
-        <div className="mb-5 space-y-1">
-          <div className="flex items-center gap-2">
-            <Database className="h-4 w-4 text-primary" />
-            <h2 className="text-base font-semibold">
-              {i18n.t("settings.dataSourceSettings")}
-            </h2>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {i18n.t("settings.dataSourceSettingsDesc")}
-          </p>
-        </div>
-
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
-          <div className="grid gap-4">
-            <label className="grid gap-2">
-              <span className={labelClass}>
-                {i18n.t("settings.tushareToken")}
-              </span>
-              <div className="relative">
-                <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <input
-                  type="password"
-                  value={tushareToken}
-                  onChange={(event) => setTushareToken(event.target.value)}
-                  className={`${fieldClass} pl-9`}
-                  placeholder={tushareStatus}
-                  autoComplete="current-password"
-                  disabled={clearTushareToken}
-                />
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className={hintClass}>
-                  {i18n.t("settings.tushareTokenHint")}
-                </span>
-                <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={clearTushareToken}
-                    onChange={(event) => {
-                      setClearTushareToken(event.target.checked);
-                      if (event.target.checked) setTushareToken("");
-                    }}
-                    className="h-3.5 w-3.5 accent-primary"
-                  />
-                  {i18n.t("settings.clearTushareToken")}
-                </label>
-              </div>
-            </label>
-
-            <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">
-                {i18n.t("settings.saved")}:{" "}
-              </span>
-              <span className="break-all font-mono">
-                {dataSettings.env_path}
-              </span>
-            </div>
-
-            <button
-              type="submit"
-              disabled={dataSaving}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {dataSaving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              {dataSaving
-                ? i18n.t("settings.saving")
-                : i18n.t("settings.saveDataSourceSettings")}
-            </button>
-          </div>
-
-          <div className="rounded-md border bg-muted/20 p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <span className="text-sm font-medium">
-                {i18n.t("settings.baostock")}
-              </span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs ${dataSettings.baostock_supported ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}
-              >
-                {dataSettings.baostock_supported
-                  ? i18n.t("settings.loaderAvailable")
-                  : i18n.t("settings.noProjectLoader")}
-              </span>
-            </div>
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <p>{dataSettings.baostock_message}</p>
-              <p>
-                {dataSettings.baostock_installed
-                  ? i18n.t("settings.pythonPackageInstalled")
-                  : i18n.t("settings.pythonPackageNotInstalled")}
-              </p>
-            </div>
-          </div>
-        </div>
-      </form>
-
-      {/* Desktop: optional broker SDK management */}
-      <section className="mt-6 rounded-xl border bg-card p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <Package className="h-5 w-5" />
-          <h2 className="text-lg font-semibold">
-            {i18n.t("settings.brokerSupportTitle")}
-          </h2>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          {i18n.t("settings.brokerSupportDesc")}
-        </p>
-        <OptionalDepsManager />
-      </section>
+      <RuntimeStatus />
 
       {/* WeChat QR login modal */}
       {weixinQr && (

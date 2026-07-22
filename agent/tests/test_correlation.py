@@ -1,9 +1,13 @@
 """Tests for backtest/correlation.py"""
 
+import asyncio
+import threading
+
 import numpy as np
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 import api_server
 from src.api import system_routes
@@ -12,6 +16,19 @@ from backtest.correlation import (
     _rolling_correlation_matrix,
     infer_market,
 )
+
+
+def _correlation_request(client_host: str) -> Request:
+    return Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/correlation",
+            "headers": [],
+            "query_string": b"",
+            "client": (client_host, 50000),
+        }
+    )
 
 
 def test_correlation_requires_auth_for_remote_clients(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -37,6 +54,49 @@ def test_correlation_rate_limits_each_client(monkeypatch: pytest.MonkeyPatch) ->
 
     assert first.status_code == 400
     assert limited.status_code == 429
+
+
+def test_correlation_rate_limit_prunes_expired_clients(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = system_routes._CORRELATION_RATE_WINDOW_SECONDS + 1
+    system_routes._correlation_request_times.clear()
+    system_routes._correlation_request_times["expired-client"].append(0.0)
+    monkeypatch.setattr(system_routes.time, "monotonic", lambda: now)
+
+    system_routes._enforce_correlation_rate_limit(_correlation_request("active-client"))
+
+    assert "expired-client" not in system_routes._correlation_request_times
+
+
+def test_correlation_calculation_runs_in_a_worker_thread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from backtest import correlation
+
+    request_thread = threading.get_ident()
+    calculation_threads: list[int] = []
+
+    def compute_correlation_matrix(**_kwargs: object) -> dict[str, object]:
+        calculation_threads.append(threading.get_ident())
+        return {"labels": ["A", "B"], "matrix": [[1.0, 0.0], [0.0, 1.0]]}
+
+    endpoint = next(route.endpoint for route in api_server.app.routes if route.path == "/correlation")
+    system_routes._correlation_request_times.clear()
+    monkeypatch.setattr(correlation, "compute_correlation_matrix", compute_correlation_matrix)
+
+    result = asyncio.run(
+        endpoint(
+            request=_correlation_request("127.0.0.1"),
+            codes="A,B",
+            days=90,
+            method="pearson",
+        )
+    )
+
+    assert result["labels"] == ["A", "B"]
+    assert len(calculation_threads) == 1
+    assert calculation_threads[0] != request_thread
 
 
 class TestInferMarket:
