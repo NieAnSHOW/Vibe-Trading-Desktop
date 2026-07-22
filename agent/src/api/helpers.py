@@ -105,7 +105,7 @@ def _write_env_text_atomically(path: Path, content: str) -> None:
     except Exception:
         try:
             os.unlink(temporary_name)
-        except FileNotFoundError:
+        except OSError:
             pass
         raise
 

@@ -65,7 +65,12 @@ def _enforce_correlation_rate_limit(request: Request) -> None:
 def _terminate_current_process() -> None:
     """Stop the current API process after the response has been sent."""
     time.sleep(0.25)
-    os.kill(os.getpid(), signal.SIGTERM)
+    sig = getattr(signal, "SIGTERM", None)
+    if sig is not None:
+        os.kill(os.getpid(), sig)
+    else:
+        # Windows: SIGTERM is not available; force-exit instead.
+        os._exit(0)
 
 
 # ---------------------------------------------------------------------------
