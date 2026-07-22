@@ -60,6 +60,11 @@ _SIG_CELL_STRIP_PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
 )
 
 
+def _is_pairing_command(text: str) -> bool:
+    normalized = text.strip().lower()
+    return normalized == "/pairing" or normalized.startswith("/pairing ")
+
+
 def _utf16_len(s: str) -> int:
     """UTF-16 code-unit length, matching Signal BodyRange semantics."""
     return len(s.encode("utf-16-le")) // 2
@@ -840,15 +845,27 @@ class SignalChannel(BaseChannel):
                 )
                 return False, chat_id
 
-            self._add_to_group_buffer(
-                group_id=chat_id,
-                sender_name=sender_name or sender_number,
-                sender_number=sender_number,
-                message_text=message_text,
-                timestamp=timestamp,
-            )
+            is_pairing_command = _is_pairing_command(message_text)
+            if is_pairing_command and not self._is_sender_individually_allowed(sender_id):
+                self.logger.info(
+                    "Ignoring group pairing command from unauthorized sender {} in {}",
+                    sender_id,
+                    chat_id,
+                )
+                return False, chat_id
+
+            if not is_pairing_command:
+                self._add_to_group_buffer(
+                    group_id=chat_id,
+                    sender_name=sender_name or sender_number,
+                    sender_number=sender_number,
+                    message_text=message_text,
+                    timestamp=timestamp,
+                )
 
             is_command = bool(message_text and message_text.strip().startswith("/"))
+            if is_pairing_command:
+                return True, chat_id
             if not is_command and not self._should_respond_in_group(message_text, mentions):
                 self.logger.info(
                     "Ignoring group message (require_mention: {})",
@@ -889,14 +906,15 @@ class SignalChannel(BaseChannel):
         """
         content_parts: list[str] = []
         media_paths: list[str] = []
+        is_pairing_command = is_group_message and _is_pairing_command(message_text)
 
-        if is_group_message:
+        if is_group_message and not is_pairing_command:
             buffer_context = self._get_group_buffer_context(chat_id)
             if buffer_context:
                 content_parts.append(f"[Recent group messages for context:]\n{buffer_context}\n---")
 
         if message_text:
-            if is_group_message:
+            if is_group_message and not is_pairing_command:
                 message_text = self._strip_bot_mention(message_text, mentions)
                 display_name = sender_name or sender_number
                 message_text = f"[{display_name}]: {message_text}"
@@ -930,6 +948,14 @@ class SignalChannel(BaseChannel):
 
         content = "\n".join(content_parts) if content_parts else "[empty message]"
         return content, media_paths
+
+    def _is_sender_individually_allowed(self, sender_id: str) -> bool:
+        """Check sender authorization without inheriting group allowlist entries."""
+        return (
+            "*" in self.config.dm.allow_from
+            or self._sender_matches_allowlist(sender_id, self.config.dm.allow_from)
+            or self._sender_approved_via_pairing(sender_id)
+        )
 
     def _add_to_group_buffer(
         self,

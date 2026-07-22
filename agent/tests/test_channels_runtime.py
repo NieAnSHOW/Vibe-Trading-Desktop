@@ -12,6 +12,7 @@ import pytest
 from src.channels.bus.events import InboundMessage, OutboundMessage
 from src.channels.bus.queue import MessageBus
 from src.channels.manager import ChannelManager
+from src.channels.pairing import PAIRING_COMMAND_META_KEY
 from src.channels.registry import discover_channel_names, inspect_channels
 from src.config.schema import ChannelsConfig
 from src.channelsui.cli_apps_api import normalize_cli_app_mentions
@@ -135,6 +136,26 @@ def test_registry_ignores_global_channel_settings() -> None:
     assert "reply_timeout_s" not in statuses
     assert "send_max_retries" not in statuses
     assert "model_dump" not in statuses
+
+
+def test_channel_runtime_resolves_global_and_per_channel_operators() -> None:
+    from src.channels.runtime import ChannelRuntime
+
+    config = ChannelsConfig.model_validate(
+        {
+            "operators": ["global-owner"],
+            "telegram": {"enabled": True, "operators": ["telegram-owner"]},
+            "signal": {"enabled": True, "operators": ["signal-owner"]},
+        }
+    )
+
+    operators, channel_operators = ChannelRuntime.operators_from_config(config)
+
+    assert operators == {"global-owner"}
+    assert channel_operators == {
+        "telegram": {"telegram-owner"},
+        "signal": {"signal-owner"},
+    }
 
 
 def test_channel_manager_status_includes_every_configured_adapter() -> None:
@@ -463,11 +484,16 @@ def test_channel_runtime_rebuilds_session_when_mapped_id_is_stale(tmp_path: Path
     asyncio.run(scenario())
 
 
-def test_channel_runtime_handles_pairing_commands_without_agent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_channel_runtime_rejects_pairing_without_configured_operators(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     async def scenario() -> None:
+        from src.channels import pairing
+        import src.channels.pairing.store as pairing_store
         from src.channels.runtime import ChannelRuntime
 
-        monkeypatch.setenv("VIBE_TRADING_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setattr(pairing_store, "_store_path", lambda: tmp_path / "pairing.json")
+        code = pairing.generate_code("telegram", "pending-user")
         bus = MessageBus()
         service = FakeSessionService()
         runtime = ChannelRuntime(
@@ -483,9 +509,9 @@ def test_channel_runtime_handles_pairing_commands_without_agent(tmp_path: Path, 
             await bus.publish_inbound(
                 InboundMessage(
                     channel="telegram",
-                    sender_id="owner",
+                    sender_id="unconfigured-owner",
                     chat_id="chat-1",
-                    content="/PAIRING LIST",
+                    content=f"/pairing approve {code}",
                 )
             )
             outbound = await asyncio.wait_for(bus.consume_outbound(), timeout=1)
@@ -495,10 +521,569 @@ def test_channel_runtime_handles_pairing_commands_without_agent(tmp_path: Path, 
         assert service.sent == []
         assert outbound.channel == "telegram"
         assert outbound.chat_id == "chat-1"
-        assert "No pending pairing requests" in outbound.content
-        assert outbound.metadata["_pairing_command"] is True
+        assert "Not authorized" in outbound.content
+        assert code not in outbound.content
+        assert "pending-user" not in outbound.content
+        assert outbound.metadata == {PAIRING_COMMAND_META_KEY: True, "unauthorized": True}
+        assert [item["code"] for item in pairing.list_pending()] == [code]
+        assert pairing.get_approved("telegram") == []
 
     asyncio.run(scenario())
+
+
+def test_channel_runtime_global_operator_can_list_and_approve_cross_channel(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def scenario() -> None:
+        from src.channels import pairing
+        import src.channels.pairing.store as pairing_store
+        from src.channels.runtime import ChannelRuntime
+
+        monkeypatch.setattr(pairing_store, "_store_path", lambda: tmp_path / "pairing.json")
+        code = pairing.generate_code("signal", "signal-pending-user")
+        bus = MessageBus()
+        service = FakeSessionService()
+        runtime = ChannelRuntime(
+            bus=bus,
+            session_service=service,
+            manager=None,
+            operators=["global-owner"],
+            session_map_path=tmp_path / "channel_sessions.json",
+            reply_timeout_s=1,
+            poll_interval_s=0.01,
+        )
+        await runtime.start(start_manager=False)
+        try:
+            await bus.publish_inbound(
+                InboundMessage(
+                    channel="telegram",
+                    sender_id="global-owner",
+                    chat_id="chat-1",
+                    content="/pairing list",
+                )
+            )
+            listed = await asyncio.wait_for(bus.consume_outbound(), timeout=1)
+
+            await bus.publish_inbound(
+                InboundMessage(
+                    channel="telegram",
+                    sender_id="global-owner",
+                    chat_id="chat-1",
+                    content=f"/pairing approve {code}",
+                )
+            )
+            approved = await asyncio.wait_for(bus.consume_outbound(), timeout=1)
+        finally:
+            await runtime.stop()
+
+        assert service.sent == []
+        assert code in listed.content
+        assert "signal-pending-user" in listed.content
+        assert "Approved pairing code" in approved.content
+        assert pairing.list_pending() == []
+        assert pairing.get_approved("signal") == ["signal-pending-user"]
+
+    asyncio.run(scenario())
+
+
+def test_channel_runtime_channel_operator_cannot_access_cross_channel_pairing_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def scenario() -> None:
+        from src.channels import pairing
+        import src.channels.pairing.store as pairing_store
+        from src.channels.runtime import ChannelRuntime
+
+        monkeypatch.setattr(pairing_store, "_store_path", lambda: tmp_path / "pairing.json")
+        pending_code = pairing.generate_code("signal", "signal-pending-user")
+        approved_code = pairing.generate_code("signal", "signal-approved-user")
+        assert pairing.approve_code(approved_code) == ("signal", "signal-approved-user")
+
+        bus = MessageBus()
+        service = FakeSessionService()
+        runtime = ChannelRuntime(
+            bus=bus,
+            session_service=service,
+            manager=None,
+            channel_operators={"telegram": ["telegram-owner"]},
+            session_map_path=tmp_path / "channel_sessions.json",
+            reply_timeout_s=1,
+            poll_interval_s=0.01,
+        )
+        commands = [
+            "/pairing list",
+            f"/pairing approve {pending_code}",
+            f"/pairing deny {pending_code}",
+            "/pairing revoke signal signal-approved-user",
+        ]
+        replies: list[OutboundMessage] = []
+        await runtime.start(start_manager=False)
+        try:
+            for command in commands:
+                await bus.publish_inbound(
+                    InboundMessage(
+                        channel="telegram",
+                        sender_id="telegram-owner",
+                        chat_id="chat-1",
+                        content=command,
+                    )
+                )
+                replies.append(await asyncio.wait_for(bus.consume_outbound(), timeout=1))
+        finally:
+            await runtime.stop()
+
+        assert service.sent == []
+        for reply in replies:
+            assert reply.metadata == {PAIRING_COMMAND_META_KEY: True}
+            assert pending_code not in reply.content
+            assert "signal-pending-user" not in reply.content
+            assert "signal-approved-user" not in reply.content
+        assert [item["code"] for item in pairing.list_pending()] == [pending_code]
+        assert pairing.get_approved("signal") == ["signal-approved-user"]
+
+    asyncio.run(scenario())
+
+
+def test_channel_runtime_non_operator_gets_generic_pairing_denial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def scenario() -> None:
+        from src.channels import pairing
+        import src.channels.pairing.store as pairing_store
+        from src.channels.runtime import ChannelRuntime
+
+        monkeypatch.setattr(pairing_store, "_store_path", lambda: tmp_path / "pairing.json")
+        code = pairing.generate_code("signal", "secret-signal-user")
+        bus = MessageBus()
+        service = FakeSessionService()
+        runtime = ChannelRuntime(
+            bus=bus,
+            session_service=service,
+            manager=None,
+            operators=["configured-owner"],
+            session_map_path=tmp_path / "channel_sessions.json",
+            reply_timeout_s=1,
+            poll_interval_s=0.01,
+        )
+        await runtime.start(start_manager=False)
+        try:
+            await bus.publish_inbound(
+                InboundMessage(
+                    channel="telegram",
+                    sender_id="not-an-owner",
+                    chat_id="chat-1",
+                    content=f"/pairing approve {code}",
+                )
+            )
+            outbound = await asyncio.wait_for(bus.consume_outbound(), timeout=1)
+        finally:
+            await runtime.stop()
+
+        assert service.sent == []
+        assert outbound.content == "Not authorized to manage pairing requests."
+        assert code not in outbound.content
+        assert "secret-signal-user" not in outbound.content
+        assert outbound.metadata == {PAIRING_COMMAND_META_KEY: True, "unauthorized": True}
+        assert [item["code"] for item in pairing.list_pending()] == [code]
+        assert pairing.get_approved("signal") == []
+
+    asyncio.run(scenario())
+
+
+def test_channel_runtime_websocket_pipe_id_cannot_impersonate_global_operator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def scenario() -> None:
+        from src.channels import pairing
+        import src.channels.pairing.store as pairing_store
+        from src.channels.runtime import ChannelRuntime
+
+        monkeypatch.setattr(pairing_store, "_store_path", lambda: tmp_path / "pairing.json")
+        code = pairing.generate_code("signal", "secret-signal-user")
+        bus = MessageBus()
+        service = FakeSessionService()
+        runtime = ChannelRuntime(
+            bus=bus,
+            session_service=service,
+            manager=None,
+            operators=["global-owner"],
+            session_map_path=tmp_path / "channel_sessions.json",
+            reply_timeout_s=1,
+            poll_interval_s=0.01,
+        )
+        await runtime.start(start_manager=False)
+        try:
+            await bus.publish_inbound(
+                InboundMessage(
+                    channel="websocket",
+                    sender_id="attacker|global-owner",
+                    chat_id="attacker-chat",
+                    content=f"/pairing approve {code}",
+                )
+            )
+            outbound = await asyncio.wait_for(bus.consume_outbound(), timeout=1)
+        finally:
+            await runtime.stop()
+
+        assert service.sent == []
+        assert outbound.content == "Not authorized to manage pairing requests."
+        assert code not in outbound.content
+        assert "secret-signal-user" not in outbound.content
+        assert outbound.metadata == {PAIRING_COMMAND_META_KEY: True, "unauthorized": True}
+        assert [item["code"] for item in pairing.list_pending()] == [code]
+        assert pairing.get_approved("signal") == []
+
+    asyncio.run(scenario())
+
+
+def test_channel_runtime_websocket_exact_id_cannot_impersonate_global_operator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def scenario() -> None:
+        from src.channels import pairing
+        import src.channels.pairing.store as pairing_store
+        from src.channels.runtime import ChannelRuntime
+
+        monkeypatch.setattr(pairing_store, "_store_path", lambda: tmp_path / "pairing.json")
+        code = pairing.generate_code("signal", "secret-signal-user")
+        bus = MessageBus()
+        service = FakeSessionService()
+        runtime = ChannelRuntime(
+            bus=bus,
+            session_service=service,
+            manager=None,
+            operators=["global-owner"],
+            session_map_path=tmp_path / "channel_sessions.json",
+            reply_timeout_s=1,
+            poll_interval_s=0.01,
+        )
+        await runtime.start(start_manager=False)
+        try:
+            await bus.publish_inbound(
+                InboundMessage(
+                    channel="websocket",
+                    sender_id="global-owner",
+                    chat_id="attacker-chat",
+                    content=f"/pairing approve {code}",
+                )
+            )
+            outbound = await asyncio.wait_for(bus.consume_outbound(), timeout=1)
+        finally:
+            await runtime.stop()
+
+        assert service.sent == []
+        assert outbound.content == "Not authorized to manage pairing requests."
+        assert code not in outbound.content
+        assert "secret-signal-user" not in outbound.content
+        assert outbound.metadata == {PAIRING_COMMAND_META_KEY: True, "unauthorized": True}
+        assert [item["code"] for item in pairing.list_pending()] == [code]
+        assert pairing.get_approved("signal") == []
+
+    asyncio.run(scenario())
+
+
+def test_channel_runtime_websocket_channel_operator_is_not_authorized(tmp_path: Path) -> None:
+    from src.channels.runtime import ChannelRuntime
+
+    runtime = ChannelRuntime(
+        bus=MessageBus(),
+        session_service=FakeSessionService(),
+        manager=None,
+        channel_operators={"websocket": ["websocket-owner"]},
+        session_map_path=tmp_path / "channel_sessions.json",
+    )
+
+    assert runtime._resolve_operator("websocket", "websocket-owner") == (False, False)
+
+
+@pytest.mark.parametrize("malformed_operators", ["telegram-owner", 123])
+def test_channel_runtime_malformed_channel_operators_fail_closed(
+    tmp_path: Path, malformed_operators: object
+) -> None:
+    from src.channels.runtime import ChannelRuntime
+
+    global_operators, channel_operators = ChannelRuntime.operators_from_config(
+        {"telegram": {"operators": malformed_operators}}
+    )
+    runtime = ChannelRuntime(
+        bus=MessageBus(),
+        session_service=FakeSessionService(),
+        manager=None,
+        operators=global_operators,
+        channel_operators={"telegram": malformed_operators},  # type: ignore[dict-item]
+        session_map_path=tmp_path / "channel_sessions.json",
+    )
+
+    assert channel_operators == {}
+    assert runtime._resolve_operator("telegram", "telegram-owner") == (False, False)
+    assert runtime._resolve_operator("telegram", "t") == (False, False)
+
+
+def test_signal_group_pairing_requires_individually_authorized_sender(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.channels.signal import SignalChannel
+    import src.channels.pairing.store as pairing_store
+
+    monkeypatch.setattr(pairing_store, "_store_path", lambda: tmp_path / "pairing.json")
+    channel = SignalChannel(
+        {
+            "enabled": True,
+            "phone_number": "+15550000000",
+            "dm": {"enabled": True, "policy": "allowlist", "allow_from": []},
+            "group": {
+                "enabled": True,
+                "policy": "allowlist",
+                "allow_from": ["allowed-group"],
+                "require_mention": True,
+            },
+        },
+        MessageBus(),
+    )
+
+    allowed, chat_id = channel._check_inbound_policy(
+        sender_id="unlisted-member",
+        sender_number="+15551112222",
+        group_id="allowed-group",
+        is_group_message=True,
+        message_text="/pairing list",
+        mentions=[],
+        sender_name="Member",
+        timestamp=123,
+    )
+
+    assert allowed is False
+    assert chat_id == "allowed-group"
+
+
+def test_signal_group_pairing_allows_individually_allowlisted_sender_without_mention(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.channels.signal import SignalChannel
+    import src.channels.pairing.store as pairing_store
+
+    monkeypatch.setattr(pairing_store, "_store_path", lambda: tmp_path / "pairing.json")
+    channel = SignalChannel(
+        {
+            "enabled": True,
+            "phone_number": "+15550000000",
+            "dm": {
+                "enabled": True,
+                "policy": "allowlist",
+                "allow_from": ["+15551112222"],
+            },
+            "group": {
+                "enabled": True,
+                "policy": "allowlist",
+                "allow_from": ["allowed-group"],
+                "require_mention": True,
+            },
+        },
+        MessageBus(),
+    )
+
+    pairing_allowed, chat_id = channel._check_inbound_policy(
+        sender_id="+15551112222",
+        sender_number="+15551112222",
+        group_id="allowed-group",
+        is_group_message=True,
+        message_text="/pairing list",
+        mentions=[],
+        sender_name="Owner",
+        timestamp=123,
+    )
+    new_allowed, _ = channel._check_inbound_policy(
+        sender_id="unlisted-member",
+        sender_number="+15553334444",
+        group_id="allowed-group",
+        is_group_message=True,
+        message_text="/new",
+        mentions=[],
+        sender_name="Member",
+        timestamp=124,
+    )
+    reset_allowed, _ = channel._check_inbound_policy(
+        sender_id="unlisted-member",
+        sender_number="+15553334444",
+        group_id="allowed-group",
+        is_group_message=True,
+        message_text="/reset",
+        mentions=[],
+        sender_name="Member",
+        timestamp=125,
+    )
+
+    assert pairing_allowed is True
+    assert chat_id == "allowed-group"
+    assert new_allowed is True
+    assert reset_allowed is True
+
+
+def test_signal_group_pairing_publishes_unwrapped_runtime_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def scenario() -> None:
+        from src.channels.signal import SignalChannel
+        import src.channels.pairing.store as pairing_store
+
+        monkeypatch.setattr(pairing_store, "_store_path", lambda: tmp_path / "pairing.json")
+        bus = MessageBus()
+        channel = SignalChannel(
+            {
+                "enabled": True,
+                "phone_number": "+15550000000",
+                "dm": {
+                    "enabled": True,
+                    "policy": "allowlist",
+                    "allow_from": ["+15551112222"],
+                },
+                "group": {
+                    "enabled": True,
+                    "policy": "allowlist",
+                    "allow_from": ["allowed-group"],
+                    "require_mention": True,
+                },
+            },
+            bus,
+        )
+
+        async def skip_typing(_chat_id: str) -> None:
+            return None
+
+        monkeypatch.setattr(channel, "_start_typing", skip_typing)
+        await channel._handle_data_message(
+            sender_id="+15551112222|sender-uuid",
+            sender_number="+15551112222",
+            data_message={
+                "message": "/pairing list",
+                "groupV2": {"id": "allowed-group"},
+                "mentions": [],
+                "timestamp": 123,
+            },
+            sender_name="Owner",
+        )
+
+        inbound = await asyncio.wait_for(bus.consume_inbound(), timeout=1)
+        assert inbound.content == "/pairing list"
+        assert inbound.sender_id == "+15551112222|sender-uuid"
+
+    asyncio.run(scenario())
+
+
+def test_signal_group_pairing_is_not_added_to_conversation_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def scenario() -> None:
+        from src.channels.signal import SignalChannel
+        import src.channels.pairing.store as pairing_store
+
+        monkeypatch.setattr(pairing_store, "_store_path", lambda: tmp_path / "pairing.json")
+        bus = MessageBus()
+        channel = SignalChannel(
+            {
+                "enabled": True,
+                "phone_number": "+15550000000",
+                "dm": {
+                    "enabled": True,
+                    "policy": "allowlist",
+                    "allow_from": ["+15551112222"],
+                },
+                "group": {
+                    "enabled": True,
+                    "policy": "allowlist",
+                    "allow_from": ["allowed-group"],
+                    "require_mention": False,
+                },
+            },
+            bus,
+        )
+
+        async def skip_typing(_chat_id: str) -> None:
+            return None
+
+        monkeypatch.setattr(channel, "_start_typing", skip_typing)
+        await channel._handle_data_message(
+            sender_id="+15551112222|sender-uuid",
+            sender_number="+15551112222",
+            data_message={
+                "message": "/pairing approve SECRET-CODE",
+                "groupV2": {"id": "allowed-group"},
+                "mentions": [],
+                "timestamp": 123,
+            },
+            sender_name="Owner",
+        )
+        pairing_message = await asyncio.wait_for(bus.consume_inbound(), timeout=1)
+
+        await channel._handle_data_message(
+            sender_id="+15551112222|sender-uuid",
+            sender_number="+15551112222",
+            data_message={
+                "message": "ordinary follow-up",
+                "groupV2": {"id": "allowed-group"},
+                "mentions": [],
+                "timestamp": 124,
+            },
+            sender_name="Owner",
+        )
+        ordinary_message = await asyncio.wait_for(bus.consume_inbound(), timeout=1)
+
+        assert pairing_message.content == "/pairing approve SECRET-CODE"
+        assert "ordinary follow-up" in ordinary_message.content
+        assert "/pairing" not in ordinary_message.content
+        assert "SECRET-CODE" not in ordinary_message.content
+
+    asyncio.run(scenario())
+
+
+def test_channel_runtime_matches_operator_against_signal_composite_sender_id(tmp_path: Path) -> None:
+    from src.channels.runtime import ChannelRuntime
+
+    runtime = ChannelRuntime(
+        bus=MessageBus(),
+        session_service=FakeSessionService(),
+        manager=None,
+        operators=["+15551112222"],
+        session_map_path=tmp_path / "channel_sessions.json",
+    )
+
+    assert runtime._resolve_operator("signal", "+15551112222|sender-uuid") == (True, True)
+
+
+def test_signal_group_allowlist_wildcard_does_not_authorize_pairing_sender(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.channels.signal import SignalChannel
+    import src.channels.pairing.store as pairing_store
+
+    monkeypatch.setattr(pairing_store, "_store_path", lambda: tmp_path / "pairing.json")
+    channel = SignalChannel(
+        {
+            "enabled": True,
+            "phone_number": "+15550000000",
+            "dm": {"enabled": True, "policy": "allowlist", "allow_from": []},
+            "group": {
+                "enabled": True,
+                "policy": "open",
+                "allow_from": ["*"],
+                "require_mention": True,
+            },
+        },
+        MessageBus(),
+    )
+
+    allowed, _ = channel._check_inbound_policy(
+        sender_id="unlisted-member",
+        sender_number="+15553334444",
+        group_id="any-group",
+        is_group_message=True,
+        message_text="/pairing list",
+        mentions=[],
+        sender_name="Member",
+        timestamp=123,
+    )
+
+    assert allowed is False
 
 
 def test_channel_runtime_new_command_resets_session_and_creates_fresh_one(tmp_path: Path) -> None:

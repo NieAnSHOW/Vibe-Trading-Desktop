@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import time
+from collections.abc import Iterable, Mapping
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +20,13 @@ from src.config.paths import get_data_dir
 from src.session.models import Message, Session
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_operator_ids(values: object) -> set[str]:
+    """Normalize a configured operator collection, rejecting malformed containers."""
+    if isinstance(values, (str, bytes, Mapping)) or not isinstance(values, Iterable):
+        return set()
+    return {str(operator) for operator in values}
 
 
 @dataclass
@@ -41,6 +49,8 @@ class ChannelRuntime:
         session_map_path: Path | None = None,
         reply_timeout_s: float = 600.0,
         poll_interval_s: float = 0.25,
+        operators: Iterable[str] | None = None,
+        channel_operators: Mapping[str, Iterable[str]] | None = None,
     ) -> None:
         self.bus = bus
         self.session_service = session_service
@@ -49,6 +59,12 @@ class ChannelRuntime:
             reply_timeout_s=reply_timeout_s,
             poll_interval_s=poll_interval_s,
         )
+        self._operators = _normalize_operator_ids(operators)
+        self._channel_operators: dict[str, set[str]] = {}
+        for channel, channel_members in (channel_operators or {}).items():
+            normalized_members = _normalize_operator_ids(channel_members)
+            if normalized_members:
+                self._channel_operators[str(channel)] = normalized_members
         self.session_map_path = session_map_path or (get_data_dir() / "channels" / "sessions.json")
         self._session_map: dict[str, str] = {}
         self._consumer_task: asyncio.Task[None] | None = None
@@ -108,7 +124,28 @@ class ChannelRuntime:
     async def _handle_inbound(self, msg: InboundMessage) -> None:
         try:
             if self._is_pairing_command(msg.content):
-                reply = handle_pairing_command(msg.channel, self._pairing_subcommand_text(msg.content))
+                is_operator, is_global_operator = self._resolve_operator(msg.channel, msg.sender_id)
+                if not is_operator:
+                    logger.warning(
+                        "Rejected /pairing from non-operator %s on %s",
+                        msg.sender_id,
+                        msg.channel,
+                    )
+                    await self.bus.publish_outbound(
+                        OutboundMessage(
+                            channel=msg.channel,
+                            chat_id=msg.chat_id,
+                            content="Not authorized to manage pairing requests.",
+                            metadata={PAIRING_COMMAND_META_KEY: True, "unauthorized": True},
+                        )
+                    )
+                    return
+                reply = handle_pairing_command(
+                    msg.channel,
+                    self._pairing_subcommand_text(msg.content),
+                    requesting_channel=msg.channel,
+                    is_global_operator=is_global_operator,
+                )
                 await self.bus.publish_outbound(
                     OutboundMessage(
                         channel=msg.channel,
@@ -249,6 +286,38 @@ class ChannelRuntime:
         if removed is not None:
             self._save_session_map()
         return removed
+
+    def _resolve_operator(self, channel: str, sender_id: str) -> tuple[bool, bool]:
+        """Return whether a sender is an operator and whether its scope is global."""
+        if str(channel) == "websocket":
+            return False, False
+        normalized_sender = str(sender_id)
+        sender_ids = {normalized_sender}
+        if str(channel) == "signal":
+            sender_ids.update(part for part in normalized_sender.split("|") if part)
+        is_global = not sender_ids.isdisjoint(self._operators)
+        is_channel_operator = not sender_ids.isdisjoint(
+            self._channel_operators.get(str(channel), set())
+        )
+        return is_global or is_channel_operator, is_global
+
+    @staticmethod
+    def operators_from_config(config: Any) -> tuple[set[str], dict[str, set[str]]]:
+        """Extract normalized global and per-channel operator IDs from config."""
+        if config is None:
+            return set(), {}
+        if not isinstance(config, Mapping):
+            config = config.model_dump(mode="json", by_alias=False)
+
+        global_operators = _normalize_operator_ids(config.get("operators"))
+        channel_operators: dict[str, set[str]] = {}
+        for channel, section in config.items():
+            if not isinstance(section, Mapping):
+                continue
+            normalized_members = _normalize_operator_ids(section.get("operators"))
+            if normalized_members:
+                channel_operators[str(channel)] = normalized_members
+        return global_operators, channel_operators
 
     @staticmethod
     def _is_pairing_command(content: str) -> bool:

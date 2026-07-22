@@ -103,19 +103,22 @@ def generate_code(
         return code
 
 
-def approve_code(code: str) -> tuple[str, str] | None:
+def approve_code(code: str, *, restrict_channel: str | None = None) -> tuple[str, str] | None:
     """Approve a pending pairing code.
 
     Returns ``(channel, sender_id)`` on success, or ``None`` if the code
-    does not exist or has expired.
+    does not exist, has expired, or belongs to a different restricted channel.
     """
     with _LOCK:
         data = _load()
         _gc_pending(data)
         pending: dict[str, Any] = data.get("pending", {})
-        info = pending.pop(code, None)
+        info = pending.get(code)
         if info is None:
             return None
+        if restrict_channel is not None and info.get("channel") != restrict_channel:
+            return None
+        del pending[code]
         channel = info["channel"]
         sender_id = str(info["sender_id"])
         data.setdefault("approved", {}).setdefault(channel, set()).add(sender_id)
@@ -124,7 +127,7 @@ def approve_code(code: str) -> tuple[str, str] | None:
         return channel, sender_id
 
 
-def deny_code(code: str) -> bool:
+def deny_code(code: str, *, restrict_channel: str | None = None) -> bool:
     """Reject and discard a pending pairing code.
 
     Returns ``True`` if the code existed and was removed.
@@ -133,12 +136,15 @@ def deny_code(code: str) -> bool:
         data = _load()
         _gc_pending(data)
         pending: dict[str, Any] = data.get("pending", {})
-        if code in pending:
-            del pending[code]
-            _save(data)
-            logger.info("Denied pairing code %s", code)
-            return True
-        return False
+        info = pending.get(code)
+        if info is None:
+            return False
+        if restrict_channel is not None and info.get("channel") != restrict_channel:
+            return False
+        del pending[code]
+        _save(data)
+        logger.info("Denied pairing code %s", code)
+        return True
 
 
 def is_approved(channel: str, sender_id: str) -> bool:
@@ -149,14 +155,15 @@ def is_approved(channel: str, sender_id: str) -> bool:
         return str(sender_id) in approved.get(channel, set())
 
 
-def list_pending() -> list[dict[str, Any]]:
-    """Return all non-expired pending pairing requests."""
+def list_pending(restrict_channel: str | None = None) -> list[dict[str, Any]]:
+    """Return non-expired pairing requests, optionally limited to one channel."""
     with _LOCK:
         data = _load()
         _gc_pending(data)
         return [
             {"code": code, **info}
             for code, info in data.get("pending", {}).items()
+            if restrict_channel is None or info.get("channel") == restrict_channel
         ]
 
 
@@ -203,18 +210,25 @@ def format_expiry(expires_at: float) -> str:
     return f"{remaining}s" if remaining > 0 else "expired"
 
 
-def handle_pairing_command(channel: str, subcommand_text: str) -> str:
+def handle_pairing_command(
+    channel: str,
+    subcommand_text: str,
+    *,
+    requesting_channel: str | None = None,
+    is_global_operator: bool = True,
+) -> str:
     """Execute a pairing subcommand and return the reply text.
 
-    This is a pure function (no side effects other than store mutations)
-    so it can be used from both the CLI and the agent CommandRouter.
+    The unrestricted defaults preserve authenticated CLI and REST administration.
+    IM callers pass their originating channel and operator scope.
     """
     parts = subcommand_text.split()
     sub = parts[0].lower() if parts else "list"
     arg = parts[1] if len(parts) > 1 else None
+    restrict_channel = None if is_global_operator else requesting_channel
 
     if sub in ("list",):
-        pending = list_pending()
+        pending = list_pending(restrict_channel=restrict_channel)
         if not pending:
             return "No pending pairing requests."
         lines = ["Pending pairing requests:"]
@@ -228,8 +242,10 @@ def handle_pairing_command(channel: str, subcommand_text: str) -> str:
     elif sub == "approve":
         if arg is None:
             return "Usage: `/pairing approve <code>`"
-        result = approve_code(arg)
+        result = approve_code(arg, restrict_channel=restrict_channel)
         if result is None:
+            if restrict_channel is not None:
+                return "Pairing request not found or expired."
             return f"Invalid or expired pairing code: `{arg}`"
         ch, sid = result
         return f"Approved pairing code `{arg}` — {sid} can now access {ch}"
@@ -237,8 +253,10 @@ def handle_pairing_command(channel: str, subcommand_text: str) -> str:
     elif sub == "deny":
         if arg is None:
             return "Usage: `/pairing deny <code>`"
-        if deny_code(arg):
+        if deny_code(arg, restrict_channel=restrict_channel):
             return f"Denied pairing code `{arg}`"
+        if restrict_channel is not None:
+            return "Pairing request not found or expired."
         return f"Pairing code `{arg}` not found or already expired"
 
     elif sub == "revoke":
@@ -249,6 +267,8 @@ def handle_pairing_command(channel: str, subcommand_text: str) -> str:
                 else f"{arg} was not in the approved list for {channel}"
             )
         if len(parts) == 3:
+            if restrict_channel is not None and arg != restrict_channel:
+                return "Not authorized to manage pairing requests outside this channel."
             return (
                 f"Revoked {parts[2]} from {arg}"
                 if revoke(arg, parts[2])

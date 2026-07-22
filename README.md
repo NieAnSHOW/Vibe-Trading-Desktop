@@ -180,6 +180,7 @@ Vibe-Trading-Desktop/
 - **回环绑定** —— 桌面应用后端仅监听 `127.0.0.1`，外部网络不可达
 - **密钥本地化** —— API 密钥存储在 `~/.vibe-trading/.env`，不与应用打包、不上传任何服务器
 - **进程隔离** —— 应用退出时终止所有 Python sidecar 子进程，无残留
+- **IM 配对管理默认拒绝** —— 需要在聊天中使用 `/pairing` 的现有部署，升级前必须配置全局 `channels.operators`（可跨渠道管理）或各渠道下的 `operators`（仅管理本渠道）。未配置 operator 时，只有 IM 内的 `/pairing` 会被拒绝；经过认证的 CLI 与 REST 配对管理仍可使用。WebSocket 的 `client_id` 由客户端选择，不是经过认证的 operator 身份，因此该传输不接受 `/pairing` 管理命令；请改用经过认证的 CLI 或 REST 管理配对
 - **实盘交易高危面** —— 订单闸门、mandate 强制、kill switch、审计账本等安全关键路径，详见 [`AGENT_CONTRIBUTOR_GUIDE.md`](AGENT_CONTRIBUTOR_GUIDE.md)
 
 ---

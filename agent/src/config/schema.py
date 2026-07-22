@@ -440,6 +440,7 @@ class ChannelsConfig(ConfigBase):
     send_tool_hints: bool = False
     send_max_retries: int = Field(default=2, ge=1, le=10)
     reply_timeout_s: float = Field(default=600.0, ge=1.0, le=86400.0)
+    operators: list[str] = Field(default_factory=list)
 
 
 class AgentConfig(ConfigBase):
