@@ -414,3 +414,52 @@ def test_daily_bars_returns_tencent_history(client, monkeypatch):
     body = resp.json()
     assert body["source"] == "tencent"
     assert body["data"][0]["close"] == 3967.13
+
+
+def test_intraday_bars_returns_normalized_history(client, monkeypatch):
+    from src.api import dashboard_routes as routes
+
+    seen = []
+
+    def fake_fetch(symbol):
+        seen.append(symbol)
+        return [
+            {
+                "time": "2026-07-23T09:31:00",
+                "open": 10.0,
+                "high": 10.2,
+                "low": 9.9,
+                "close": 10.1,
+                "volume": 1200.0,
+            }
+        ]
+
+    monkeypatch.setattr(routes, "_fetch_intraday_bars", fake_fetch, raising=False)
+
+    response = client.get("/dashboard/intraday-bars?symbol=600519")
+
+    assert response.status_code == 200
+    assert seen == ["600519"]
+    assert response.json()["source"] == "akshare"
+    assert response.json()["data"][0]["close"] == 10.1
+
+
+def test_intraday_bars_rejects_invalid_symbol(client):
+    response = client.get("/dashboard/intraday-bars?symbol=invalid")
+
+    assert response.status_code == 400
+    assert "6-digit A-share code" in response.json()["detail"]
+
+
+def test_intraday_bars_reports_provider_failure(client, monkeypatch):
+    from src.api import dashboard_routes as routes
+
+    def fake_fetch(_symbol):
+        raise RuntimeError("offline")
+
+    monkeypatch.setattr(routes, "_fetch_intraday_bars", fake_fetch, raising=False)
+
+    response = client.get("/dashboard/intraday-bars?symbol=600519")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "intraday bars unavailable"

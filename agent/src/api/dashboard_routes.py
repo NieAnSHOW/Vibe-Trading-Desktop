@@ -16,6 +16,7 @@ import re
 import time as _time
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal, Optional, Union
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -272,6 +273,7 @@ _THS_HOT_LIST_URL = (
     "https://dq.10jqka.com.cn/fuyao/hot_list_data/out/hot_list/v1/plate"
 )
 _A_SHARE_SYMBOL = re.compile(r"^(?:(sh|sz))?(\d{6})(?:\.(SH|SZ))?$", re.IGNORECASE)
+_CHINA_TZ = ZoneInfo("Asia/Shanghai")
 
 
 def _optional_float(value) -> float | None:
@@ -359,6 +361,62 @@ def _fetch_daily_bars(symbol: str) -> list[dict]:
         for index, row in frame.iterrows()
     ]
 
+
+def _is_dashboard_index_symbol(symbol: str, code: str) -> bool:
+    """Indices use exchange-prefixed symbols; watchlist stocks use bare codes."""
+    return code in _SUPPORTED_INDEX_CODES and symbol.strip().lower().startswith(("sh", "sz"))
+
+
+def _fetch_intraday_bars(symbol: str) -> list[dict]:
+    """Load and normalize current-day one-minute A-share or index bars."""
+    import akshare as ak
+    import pandas as pd
+
+    code = _qualify_a_share_symbol(symbol).split(".")[0]
+    now = datetime.now(_CHINA_TZ)
+    today = now.date()
+    start = f"{today.isoformat()} 00:00:00"
+    end = now.strftime("%Y-%m-%d %H:%M:%S")
+    if _is_dashboard_index_symbol(symbol, code):
+        frame = ak.index_zh_a_hist_min_em(
+            symbol=code,
+            period="1",
+            start_date=start,
+            end_date=end,
+        )
+    else:
+        frame = ak.stock_zh_a_hist_min_em(
+            symbol=code,
+            period="1",
+            start_date=start,
+            end_date=end,
+        )
+    if frame is None or frame.empty:
+        return []
+
+    columns = ["时间", "开盘", "最高", "最低", "收盘", "成交量"]
+    missing = [column for column in columns if column not in frame.columns]
+    if missing:
+        raise ValueError(f"intraday data missing columns: {', '.join(missing)}")
+
+    normalized = frame.loc[:, columns].copy()
+    normalized["时间"] = pd.to_datetime(normalized["时间"], errors="coerce")
+    for column in columns[1:]:
+        normalized[column] = pd.to_numeric(normalized[column], errors="coerce")
+    normalized = normalized.dropna().loc[normalized["时间"].dt.date == today]
+
+    return [
+        {
+            "time": row["时间"].isoformat(),
+            "open": float(row["开盘"]),
+            "high": float(row["最高"]),
+            "low": float(row["最低"]),
+            "close": float(row["收盘"]),
+            "volume": float(row["成交量"]),
+        }
+        for _, row in normalized.iterrows()
+    ]
+
 # ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
@@ -403,6 +461,22 @@ async def get_daily_bars(symbol: str):
     return DailyBarsResponse(
         data=rows,
         as_of=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@router.get("/intraday-bars", response_model=DailyBarsResponse)
+async def get_intraday_bars(symbol: str):
+    try:
+        rows = await asyncio.to_thread(_fetch_intraday_bars, symbol)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.warning("dashboard intraday bars failed for %s: %s", symbol, exc)
+        raise HTTPException(status_code=503, detail="intraday bars unavailable") from exc
+    return DailyBarsResponse(
+        data=rows,
+        as_of=datetime.now(timezone.utc).isoformat(),
+        source="akshare",
     )
 
 
