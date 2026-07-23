@@ -394,6 +394,27 @@ def _fetch_intraday_bars(symbol: str) -> list[dict]:
             "volume": "成交量",
         }
     else:
+        sina_columns = {
+            "time": "day",
+            "open": "open",
+            "high": "high",
+            "low": "low",
+            "close": "close",
+            "volume": "volume",
+        }
+
+        def fetch_sina_fallback(reason: str):
+            logger.info(
+                "dashboard intraday EastMoney source %s for %s; using Sina fallback",
+                reason,
+                symbol,
+            )
+            return ak.stock_zh_a_minute(
+                symbol=f"{exchange.lower()}{code}",
+                period="1",
+                adjust="",
+            )
+
         try:
             frame = ak.stock_zh_a_hist_min_em(
                 symbol=code,
@@ -410,24 +431,12 @@ def _fetch_intraday_bars(symbol: str) -> list[dict]:
                 "volume": "成交量",
             }
         except Exception as exc:
-            logger.info(
-                "dashboard intraday EastMoney source failed for %s; using Sina fallback: %s",
-                symbol,
-                exc,
-            )
-            frame = ak.stock_zh_a_minute(
-                symbol=f"{exchange.lower()}{code}",
-                period="1",
-                adjust="",
-            )
-            columns = {
-                "time": "day",
-                "open": "open",
-                "high": "high",
-                "low": "low",
-                "close": "close",
-                "volume": "volume",
-            }
+            frame = fetch_sina_fallback(f"failed ({exc})")
+            columns = sina_columns
+        else:
+            if frame is None or frame.empty:
+                frame = fetch_sina_fallback("returned no data")
+                columns = sina_columns
     if frame is None or frame.empty:
         return []
 
