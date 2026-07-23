@@ -28,9 +28,11 @@ def item(track_id: str = "ai") -> FeedItem:
         track_id=track_id,
         title="A valid title",
         summary="A short, normalized summary.",
-        source=FeedSource(id="source-1", name="Source", url="https://example.com/feed"),
+        source=FeedSource(id="source-1", name="Source"),
         published_at=NOW,
         url="https://example.com/article",
+        article_access="direct",
+        first_seen_at=NOW,
     )
 
 
@@ -54,16 +56,32 @@ def track(track_id: str, state: str = "fresh") -> TrackSnapshot:
         partial=False,
         items=[item(track_id)],
         ai=TrackAi(available=True, generated_at=NOW, highlights=["One useful point", "Another useful point", "Third useful point"]),
-        source_stats=SourceStats(endpoint_success_count=1, endpoint_failure_count=0, assignment_success_count=1, assignment_failure_count=0),
+        source_stats=SourceStats(
+            endpoint_total=1,
+            endpoint_success_count=1,
+            endpoint_failure_count=0,
+            assignment_total=1,
+            assignment_success_count=1,
+            assignment_failure_count=0,
+        ),
+        source_outcomes=[],
     )
 
 
 def snapshot() -> NewsSnapshot:
     return NewsSnapshot(
-        schema_version=1,
+        schema_version=2,
+        scope="a_share",
         generated_at=NOW,
         upstream_commit="d98aa603228f4839fb48859812c63a58ca10cead",
-        source_stats=SourceStats(endpoint_success_count=1, endpoint_failure_count=0, assignment_success_count=1, assignment_failure_count=0),
+        source_stats=SourceStats(
+            endpoint_total=1,
+            endpoint_success_count=1,
+            endpoint_failure_count=0,
+            assignment_total=1,
+            assignment_success_count=1,
+            assignment_failure_count=0,
+        ),
         errors=[],
         tracks=[track(track_id) for track_id in CANONICAL_TRACK_IDS],
     )
@@ -140,6 +158,7 @@ def test_partial_marks_only_fresh_tracks_with_failed_sources() -> None:
     fresh_data = track("ai").model_dump()
     fresh_data["partial"] = True
     fresh_data["source_stats"]["assignment_failure_count"] = 1
+    fresh_data["source_stats"]["assignment_total"] = 2
     fresh = TrackSnapshot.model_validate(fresh_data)
     assert fresh.partial is True
 
@@ -155,20 +174,64 @@ def test_partial_marks_only_fresh_tracks_with_failed_sources() -> None:
 
 
 def test_source_stats_expose_endpoint_and_assignment_counts_with_bounds() -> None:
-    stats = SourceStats(endpoint_success_count=1, endpoint_failure_count=1, assignment_success_count=2, assignment_failure_count=1)
+    stats = SourceStats(
+        endpoint_total=2,
+        endpoint_success_count=1,
+        endpoint_failure_count=1,
+        assignment_total=3,
+        assignment_success_count=2,
+        assignment_failure_count=1,
+    )
     assert stats.assignment_failure_count == 1
     assert SourceStats.empty().model_dump() == {
+        "endpoint_total": 0,
         "endpoint_success_count": 0,
         "endpoint_failure_count": 0,
+        "assignment_total": 0,
         "assignment_success_count": 0,
         "assignment_failure_count": 0,
     }
 
     with pytest.raises(ValidationError):
-        SourceStats(endpoint_success_count=107, endpoint_failure_count=0, assignment_success_count=0, assignment_failure_count=0)
+        SourceStats(endpoint_total=1, endpoint_success_count=2, endpoint_failure_count=0, assignment_total=0, assignment_success_count=0, assignment_failure_count=0)
 
     with pytest.raises(ValidationError):
-        SourceStats(endpoint_success_count=0, endpoint_failure_count=0, assignment_success_count=100, assignment_failure_count=9)
+        SourceStats(endpoint_total=0, endpoint_success_count=0, endpoint_failure_count=0, assignment_total=1, assignment_success_count=1, assignment_failure_count=1)
+
+
+def test_v2_snapshot_requires_scope_and_item_access_policy() -> None:
+    valid = snapshot()
+    assert valid.schema_version == 2
+    assert valid.scope == "a_share"
+    assert valid.tracks[0].items[0].article_access == "direct"
+
+    missing_scope = valid.model_dump()
+    missing_scope.pop("scope")
+    with pytest.raises(ValidationError):
+        NewsSnapshot.model_validate(missing_scope)
+
+    missing_access = valid.model_dump()
+    missing_access["tracks"][0]["items"][0].pop("article_access")
+    with pytest.raises(ValidationError):
+        NewsSnapshot.model_validate(missing_access)
+
+
+def test_source_outcomes_are_limited_to_the_scope_track_assignments() -> None:
+    valid = snapshot().model_dump()
+    valid["tracks"][0]["source_outcomes"] = [
+        {
+            "source_id": "309c6eb602af7e07",
+            "source_name": "量子位",
+            "state": "success",
+            "reason": None,
+            "last_success_at": NOW,
+        }
+    ]
+    assert NewsSnapshot.model_validate(valid).tracks[0].source_outcomes[0].source_id == "309c6eb602af7e07"
+
+    valid["tracks"][0]["source_outcomes"][0]["source_id"] = "e1890189cf0cd8bf"
+    with pytest.raises(ValidationError, match="source outcomes"):
+        NewsSnapshot.model_validate(valid)
 
 
 def test_snapshot_requires_canonical_track_ids_in_canonical_order() -> None:
@@ -190,6 +253,11 @@ def test_datetime_values_must_be_utc_aware() -> None:
     offset["published_at"] = datetime.fromisoformat("2026-07-20T16:30:00+08:00")
     with pytest.raises(ValidationError):
         FeedItem.model_validate(offset)
+
+    first_seen = item().model_dump()
+    first_seen["first_seen_at"] = datetime(2026, 7, 20, 8, 30)
+    with pytest.raises(ValidationError):
+        FeedItem.model_validate(first_seen)
 
 
 def test_item_lengths_and_unknown_fields_are_rejected() -> None:
@@ -214,24 +282,17 @@ def test_item_lengths_and_unknown_fields_are_rejected() -> None:
         "https://example.com/feed?continue=sk-secret-value",
     ],
 )
-def test_feed_urls_reject_embedded_credentials_and_secret_parameters(url: str) -> None:
-    with pytest.raises(ValidationError):
-        FeedSource(id="source-1", name="Source", url=url)
-
+def test_article_urls_reject_embedded_credentials_and_secret_parameters(url: str) -> None:
     data = item().model_dump()
     data["url"] = url
     with pytest.raises(ValidationError):
         FeedItem.model_validate(data)
 
 
-def test_feed_urls_allow_public_http_urls() -> None:
-    assert FeedSource(id="source-1", name="Source", url="https://example.com/feed?topic=markets").url.startswith("https://")
-    assert FeedSource(
-        id="source-1", name="Source", url="https://example.com/feed?id=550e8400-e29b-41d4-a716-446655440000"
-    ).url.startswith("https://")
-    assert FeedSource(
-        id="source-1", name="Source", url="https://example.com/feed?post_id=article-20260720-12345678901234567890"
-    ).url.startswith("https://")
+def test_feed_source_excludes_feed_url_and_article_urls_allow_public_http_urls() -> None:
+    assert FeedSource(id="source-1", name="Source").model_dump() == {"id": "source-1", "name": "Source"}
+    with pytest.raises(ValidationError):
+        FeedSource(id="source-1", name="Source", url="https://example.com/feed")
     data = item().model_dump()
     data["url"] = "http://example.com/article#section-2"
     assert FeedItem.model_validate(data).url.startswith("http://")
@@ -254,9 +315,11 @@ def test_feed_urls_allow_public_http_urls() -> None:
         "https://example.com/feed#section=latest;sig=opaque-signature",
     ],
 )
-def test_feed_urls_reject_signature_and_opaque_credential_values(url: str) -> None:
+def test_article_urls_reject_signature_and_opaque_credential_values(url: str) -> None:
     with pytest.raises(ValidationError):
-        FeedSource(id="source-1", name="Source", url=url)
+        data = item().model_dump()
+        data["url"] = url
+        FeedItem.model_validate(data)
 
 
 @pytest.mark.parametrize(
@@ -306,7 +369,7 @@ def test_public_error_accepts_refresh_stable_codes(code: str, message: str) -> N
 
 
 def test_refresh_status_accepts_cancelled_terminal_state() -> None:
-    status = RefreshStatus(state="cancelled", started_at=NOW, completed_at=NOW)
+    status = RefreshStatus(state="cancelled", scope="a_share", started_at=NOW, completed_at=NOW)
 
     assert status.state == "cancelled"
 
@@ -318,7 +381,7 @@ def test_track_ai_rejects_empty_or_oversized_highlights(highlight: str) -> None:
 
 
 def test_snapshot_response_and_refresh_acceptance_expose_only_public_state() -> None:
-    status = RefreshStatus(state="idle")
+    status = RefreshStatus(state="idle", scope="a_share")
     response = SnapshotResponse(available=True, stale=False, snapshot=snapshot(), refresh=status, error=None)
     accepted = RefreshAcceptedResponse(task_id=uuid4(), reused=False, status=status)
 

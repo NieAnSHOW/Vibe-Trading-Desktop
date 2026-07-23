@@ -1,4 +1,4 @@
-"""Atomic persistence for the single validated investment-news snapshot."""
+"""Atomic persistence for validated, scope-isolated investment-news snapshots."""
 
 from __future__ import annotations
 
@@ -13,7 +13,8 @@ from typing import Any
 from pydantic import ValidationError
 
 from src.config.paths import get_data_dir
-from src.news.models import NewsSnapshot
+from src.news.catalog import NewsScope, load_catalog
+from src.news.models import NewsSnapshot, _validate_public_http_url
 
 
 logger = logging.getLogger(__name__)
@@ -30,28 +31,61 @@ class SnapshotStorageError(RuntimeError):
 
 
 class AtomicSnapshotStore:
-    """Read and atomically replace the latest validated news snapshot."""
+    """Read and atomically replace one scope's validated news snapshot."""
 
-    def __init__(self, path: Path | None = None, *, max_bytes: int = MAX_SNAPSHOT_BYTES) -> None:
-        self.path = path if path is not None else get_data_dir() / "news" / "latest.json"
+    def __init__(
+        self, scope: NewsScope = "a_share", data_dir: Path | None = None, *, max_bytes: int = MAX_SNAPSHOT_BYTES
+    ) -> None:
+        if scope not in {"a_share", "global_industry"}:
+            raise ValueError("snapshot scope is invalid")
+        self.scope = scope
+        self.data_dir = data_dir if data_dir is not None else get_data_dir()
+        self.path = self.data_dir / "news" / f"{scope}.json"
+        self._legacy_path = self.data_dir / "news" / "latest.json"
         self.max_bytes = max_bytes
 
     def read(self) -> NewsSnapshot | None:
         """Return the current validated snapshot or a stable classification error."""
         try:
-            path_stat = self.path.lstat()
+            data = self._read_data(self.path)
         except FileNotFoundError as exc:
-            raise SnapshotStorageError("snapshot_unavailable", "news snapshot is unavailable") from exc
-        except OSError as exc:
+            if self.scope != "a_share":
+                raise SnapshotStorageError("snapshot_unavailable", "news snapshot is unavailable") from exc
+            try:
+                data = self._read_data(self._legacy_path)
+            except FileNotFoundError as legacy_exc:
+                raise SnapshotStorageError("snapshot_unavailable", "news snapshot is unavailable") from legacy_exc
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError) as legacy_exc:
+                logger.warning("news snapshot read rejected: %s", type(legacy_exc).__name__)
+                raise SnapshotStorageError("snapshot_corrupt", "news snapshot is corrupt") from legacy_exc
+            try:
+                return _upgrade_v1_snapshot(data)
+            except (ValidationError, ValueError, TypeError) as legacy_exc:
+                logger.warning("news legacy snapshot read rejected: %s", type(legacy_exc).__name__)
+                raise SnapshotStorageError("snapshot_corrupt", "news snapshot is corrupt") from legacy_exc
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError) as exc:
             logger.warning("news snapshot read rejected: %s", type(exc).__name__)
             raise SnapshotStorageError("snapshot_corrupt", "news snapshot is corrupt") from exc
-        if not stat.S_ISREG(path_stat.st_mode):
-            raise SnapshotStorageError("snapshot_corrupt", "news snapshot is corrupt")
 
+        try:
+            if not isinstance(data, dict) or data.get("schema_version") != 2:
+                raise ValueError("snapshot schema is invalid")
+            snapshot = NewsSnapshot.model_validate(data)
+            if snapshot.scope != self.scope:
+                raise ValueError("snapshot scope does not match store")
+            return snapshot
+        except (ValidationError, ValueError, TypeError) as exc:
+            logger.warning("news snapshot read rejected: %s", type(exc).__name__)
+            raise SnapshotStorageError("snapshot_corrupt", "news snapshot is corrupt") from exc
+
+    def _read_data(self, path: Path) -> Any:
+        path_stat = path.lstat()
+        if not stat.S_ISREG(path_stat.st_mode):
+            raise ValueError("snapshot is not a regular file")
         fd: int | None = None
         try:
             flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-            fd = os.open(self.path, flags)
+            fd = os.open(path, flags)
             opened_stat = os.fstat(fd)
             if not stat.S_ISREG(opened_stat.st_mode) or opened_stat.st_size > self.max_bytes:
                 raise ValueError("snapshot exceeds maximum size")
@@ -63,10 +97,7 @@ class AtomicSnapshotStore:
             data = json.loads(raw)
             if _contains_disallowed_keys(data):
                 raise ValueError("snapshot has disallowed key")
-            return NewsSnapshot.model_validate(data)
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValidationError, ValueError, TypeError) as exc:
-            logger.warning("news snapshot read rejected: %s", type(exc).__name__)
-            raise SnapshotStorageError("snapshot_corrupt", "news snapshot is corrupt") from exc
+            return data
         finally:
             if fd is not None:
                 os.close(fd)
@@ -75,6 +106,8 @@ class AtomicSnapshotStore:
         """Durably replace the snapshot without risking an existing good file."""
         tmp_name: str | None = None
         try:
+            if snapshot.schema_version != 2 or snapshot.scope != self.scope:
+                raise ValueError("snapshot scope does not match store")
             self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             os.chmod(self.path.parent, 0o700)
             payload = _serialize(snapshot, self.max_bytes)
@@ -154,3 +187,60 @@ def _fd_is_open(fd: int) -> bool:
     except OSError:
         return False
     return True
+
+
+def _upgrade_v1_snapshot(data: Any) -> NewsSnapshot:
+    """Convert the read-only legacy A-share fallback into the v2 public shape."""
+    if not isinstance(data, dict) or data.get("schema_version") != 1:
+        raise ValueError("legacy snapshot schema is invalid")
+
+    upgraded = dict(data)
+    upgraded["schema_version"] = 2
+    upgraded["scope"] = "a_share"
+    catalog = load_catalog("a_share")
+    assignments_by_track: dict[str, list[Any]] = {}
+    for assignment in catalog.assignments:
+        assignments_by_track.setdefault(assignment.track_id, []).append(assignment)
+
+    upgraded["source_stats"] = _migrated_stats(catalog.assignments)
+    tracks = upgraded.get("tracks")
+    if not isinstance(tracks, list):
+        raise ValueError("legacy snapshot tracks are invalid")
+    generated_at = upgraded.get("generated_at")
+    for track in tracks:
+        if not isinstance(track, dict) or not isinstance(track.get("track_id"), str):
+            raise ValueError("legacy snapshot track is invalid")
+        track_id = track["track_id"]
+        track["source_stats"] = _migrated_stats(assignments_by_track.get(track_id, []))
+        track["source_outcomes"] = []
+        # The legacy feed URL was never an article URL. Validate it before it is
+        # removed so a credential-bearing v1 file cannot become silently valid.
+        items = track.get("items")
+        if not isinstance(items, list):
+            raise ValueError("legacy snapshot items are invalid")
+        for item in items:
+            if not isinstance(item, dict) or not isinstance(item.get("source"), dict):
+                raise ValueError("legacy snapshot item is invalid")
+            source = dict(item["source"])
+            feed_url = source.pop("url", None)
+            if not isinstance(feed_url, str):
+                raise ValueError("legacy snapshot feed URL is invalid")
+            _validate_public_http_url(feed_url)
+            item["source"] = source
+            item["article_access"] = "summary_only"
+            item["first_seen_at"] = item.get("published_at") or track.get("generated_at") or generated_at
+        if track.get("state") == "fresh":
+            track["partial"] = False
+    return NewsSnapshot.model_validate(upgraded)
+
+
+def _migrated_stats(assignments: Any) -> dict[str, int]:
+    sources = tuple(assignments)
+    return {
+        "endpoint_total": len({source.url for source in sources}),
+        "endpoint_success_count": 0,
+        "endpoint_failure_count": 0,
+        "assignment_total": len(sources),
+        "assignment_success_count": 0,
+        "assignment_failure_count": 0,
+    }

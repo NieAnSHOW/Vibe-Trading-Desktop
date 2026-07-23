@@ -25,8 +25,6 @@ CANONICAL_TRACK_IDS = (
     "macro",
     "science",
 )
-MAX_ENDPOINTS = 106
-MAX_ASSIGNMENTS = 108
 _SENSITIVE_PARAMETER_NAMES = frozenset(
     {
         "access_token",
@@ -101,12 +99,6 @@ def _validate_public_http_url(value: str) -> str:
 class FeedSource(_StrictModel):
     id: str = Field(min_length=1, max_length=128)
     name: str = Field(min_length=1, max_length=200)
-    url: str = Field(min_length=1, max_length=2048)
-
-    @field_validator("url")
-    @classmethod
-    def url_is_public(cls, value: str) -> str:
-        return _validate_public_http_url(value)
 
 
 class FeedItem(_StrictModel):
@@ -120,10 +112,12 @@ class FeedItem(_StrictModel):
     source: FeedSource
     published_at: datetime | None = None
     url: str = Field(min_length=1, max_length=2048)
+    article_access: Literal["direct", "summary_only"]
+    first_seen_at: datetime
 
-    @field_validator("published_at")
+    @field_validator("published_at", "first_seen_at")
     @classmethod
-    def published_at_is_utc(cls, value: datetime | None) -> datetime | None:
+    def timestamps_are_utc(cls, value: datetime | None) -> datetime | None:
         return _validate_utc(value) if value is not None else value
 
     @field_validator("url")
@@ -165,22 +159,56 @@ class TrackAi(_StrictModel):
 
 
 class SourceStats(_StrictModel):
-    endpoint_success_count: int = Field(ge=0, le=MAX_ENDPOINTS)
-    endpoint_failure_count: int = Field(ge=0, le=MAX_ENDPOINTS)
-    assignment_success_count: int = Field(ge=0, le=MAX_ASSIGNMENTS)
-    assignment_failure_count: int = Field(ge=0, le=MAX_ASSIGNMENTS)
+    endpoint_total: int = Field(ge=0)
+    endpoint_success_count: int = Field(ge=0)
+    endpoint_failure_count: int = Field(ge=0)
+    assignment_total: int = Field(ge=0)
+    assignment_success_count: int = Field(ge=0)
+    assignment_failure_count: int = Field(ge=0)
 
     @classmethod
     def empty(cls) -> "SourceStats":
-        return cls(endpoint_success_count=0, endpoint_failure_count=0, assignment_success_count=0, assignment_failure_count=0)
+        return cls(
+            endpoint_total=0,
+            endpoint_success_count=0,
+            endpoint_failure_count=0,
+            assignment_total=0,
+            assignment_success_count=0,
+            assignment_failure_count=0,
+        )
 
     @model_validator(mode="after")
     def validate_totals(self) -> "SourceStats":
-        if self.endpoint_success_count + self.endpoint_failure_count > MAX_ENDPOINTS:
+        if self.endpoint_success_count + self.endpoint_failure_count > self.endpoint_total:
             raise ValueError("endpoint counts exceed the endpoint catalog")
-        if self.assignment_success_count + self.assignment_failure_count > MAX_ASSIGNMENTS:
+        if self.assignment_success_count + self.assignment_failure_count > self.assignment_total:
             raise ValueError("assignment counts exceed the assignment catalog")
         return self
+
+
+class SourceOutcome(_StrictModel):
+    source_id: str = Field(min_length=1, max_length=128)
+    source_name: str = Field(min_length=1, max_length=200)
+    state: Literal["success", "failed", "skipped_circuit_open", "disabled"]
+    reason: Literal["http_status", "network_error", "timeout", "rate_limited", "circuit_open", "disabled"] | None
+    last_success_at: datetime | None
+
+    @field_validator("last_success_at")
+    @classmethod
+    def last_success_at_is_utc(cls, value: datetime | None) -> datetime | None:
+        return _validate_utc(value) if value is not None else value
+
+    @model_validator(mode="after")
+    def validate_state_reason(self) -> "SourceOutcome":
+        if self.state == "success" and self.reason is None:
+            return self
+        if self.state == "failed" and self.reason in {"http_status", "network_error", "timeout", "rate_limited"}:
+            return self
+        if self.state == "skipped_circuit_open" and self.reason == "circuit_open":
+            return self
+        if self.state == "disabled" and self.reason == "disabled":
+            return self
+        raise ValueError("source outcome state does not match its reason")
 
 
 class TrackSnapshot(_StrictModel):
@@ -194,6 +222,7 @@ class TrackSnapshot(_StrictModel):
     items: list[FeedItem] = Field(default_factory=list, max_length=100)
     ai: TrackAi
     source_stats: SourceStats
+    source_outcomes: list[SourceOutcome] = Field(default_factory=list, max_length=200)
 
     @field_validator("generated_at")
     @classmethod
@@ -222,7 +251,8 @@ class TrackSnapshot(_StrictModel):
 
 
 class NewsSnapshot(_StrictModel):
-    schema_version: Literal[1]
+    schema_version: Literal[2]
+    scope: Literal["a_share", "global_industry"]
     generated_at: datetime
     upstream_commit: str = Field(min_length=1, max_length=128)
     source_stats: SourceStats
@@ -238,11 +268,24 @@ class NewsSnapshot(_StrictModel):
     def validate_tracks(self) -> "NewsSnapshot":
         if tuple(track.track_id for track in self.tracks) != CANONICAL_TRACK_IDS:
             raise ValueError("tracks must be the canonical IDs in canonical order")
+        if not any(track.source_outcomes for track in self.tracks):
+            return self
+        from .catalog import load_catalog
+
+        assignments = {(source.track_id, source.id): source for source in load_catalog(self.scope).assignments}
+        for track in self.tracks:
+            outcome_ids: set[str] = set()
+            for outcome in track.source_outcomes:
+                source = assignments.get((track.track_id, outcome.source_id))
+                if source is None or source.name != outcome.source_name or outcome.source_id in outcome_ids:
+                    raise ValueError("source outcomes must match configured track assignments")
+                outcome_ids.add(outcome.source_id)
         return self
 
 
 class RefreshStatus(_StrictModel):
     state: Literal["idle", "fetching", "normalizing", "enriching", "committing", "succeeded", "failed", "cancelled"]
+    scope: Literal["a_share", "global_industry"]
     task_id: UUID | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
