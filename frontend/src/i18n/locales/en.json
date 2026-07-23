@@ -1087,6 +1087,11 @@
     "historyError": "Daily history is unavailable",
     "historyUnavailable": "No daily history available",
     "historyUnavailableHint": "Select another index and try again",
+    "intradayHistory": "Intraday trend",
+    "intradayLoading": "Loading intraday data",
+    "intradayError": "Intraday data is unavailable",
+    "intradayUnavailable": "No intraday data available",
+    "intradayUnavailableHint": "No data may be available during the current trading session",
     "selectPrompt": "Select an index"
   },
   "watchlist": {
@@ -1109,6 +1114,11 @@
     "delete": "Delete",
     "kline": "10jqka K-Line",
     "stale": "Delayed quote",
+    "intradayHistory": "Intraday trend",
+    "intradayLoading": "Loading intraday data",
+    "intradayError": "Intraday data is unavailable",
+    "intradayUnavailable": "No intraday data available",
+    "intradayUnavailableHint": "No data may be available during the current trading session",
     "select": "Select",
     "selectAll": "Select all",
     "sendToAgent": "Analyze with AI",

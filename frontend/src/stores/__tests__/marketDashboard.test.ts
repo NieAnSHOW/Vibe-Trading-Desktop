@@ -5,6 +5,7 @@ vi.mock("@/lib/stockSdk", () => ({
   fetchMarketPulse: vi.fn(),
   fetchDashboardQuotes: vi.fn(),
   fetchDashboardDailyBars: vi.fn(),
+  fetchDashboardIntradayBars: vi.fn(),
   fetchDashboardMarketSnapshot: vi.fn(),
 }));
 
@@ -21,6 +22,7 @@ import {
   fetchMarketPulse,
   fetchDashboardQuotes,
   fetchDashboardDailyBars,
+  fetchDashboardIntradayBars,
   fetchDashboardMarketSnapshot,
 } from "@/lib/stockSdk";
 import { fetchWatchlistStocks } from "@/lib/api";
@@ -30,6 +32,7 @@ const mockFetchIndexes = vi.mocked(fetchDashboardIndexes);
 const mockFetchPulse = vi.mocked(fetchMarketPulse);
 const mockFetchQuotes = vi.mocked(fetchDashboardQuotes);
 const mockFetchDailyBars = vi.mocked(fetchDashboardDailyBars);
+const mockFetchIntradayBars = vi.mocked(fetchDashboardIntradayBars);
 const mockFetchMarketSnapshot = vi.mocked(fetchDashboardMarketSnapshot);
 const mockFetchWatchlist = vi.mocked(fetchWatchlistStocks);
 
@@ -52,16 +55,20 @@ const defaultState = {
   quotes: {} as Record<string, unknown>,
   selectedCode: null as string | null,
   selectedBars: [],
+  selectedIntradayBars: [],
   marketSnapshot: null,
   indexesLoading: false,
   pulseLoading: false,
   quotesLoading: false,
   barsLoading: false,
+  intradayLoading: false,
   marketSnapshotLoading: false,
   indexesError: null as string | null,
   pulseError: null as string | null,
   quotesError: null as string | null,
   barsError: null as string | null,
+  intradayError: null as string | null,
+  intradayStale: false,
   marketSnapshotError: null as string | null,
   pollingTimerId: null as ReturnType<typeof setInterval> | null,
   visibilityHandler: null as (() => void) | null,
@@ -72,6 +79,11 @@ beforeEach(() => {
   useMarketDashboardStore.setState({ ...defaultState });
   mockFetchIndexes.mockResolvedValue({ data: [], asOf: "2026-07-13T10:00:00Z", stale: false });
   mockFetchPulse.mockResolvedValue({ data: [], asOf: "2026-07-13T10:00:00Z", stale: false });
+  mockFetchIntradayBars.mockResolvedValue({
+    data: [],
+    asOf: "2026-07-13T10:00:00Z",
+    stale: false,
+  });
   mockFetchWatchlist.mockResolvedValue({ stocks: [] });
   mockFetchMarketSnapshot.mockResolvedValue({ data: MARKET_SNAPSHOT, asOf: MARKET_SNAPSHOT.asOf, stale: false });
 });
@@ -95,16 +107,20 @@ describe("useMarketDashboardStore", () => {
       expect(s.quotes).toEqual({});
       expect(s.selectedCode).toBeNull();
       expect(s.selectedBars).toEqual([]);
+      expect(s.selectedIntradayBars).toEqual([]);
       expect(s.marketSnapshot).toBeNull();
       expect(s.indexesLoading).toBe(false);
       expect(s.pulseLoading).toBe(false);
       expect(s.quotesLoading).toBe(false);
       expect(s.barsLoading).toBe(false);
+      expect(s.intradayLoading).toBe(false);
       expect(s.marketSnapshotLoading).toBe(false);
       expect(s.indexesError).toBeNull();
       expect(s.pulseError).toBeNull();
       expect(s.quotesError).toBeNull();
       expect(s.barsError).toBeNull();
+      expect(s.intradayError).toBeNull();
+      expect(s.intradayStale).toBe(false);
       expect(s.marketSnapshotError).toBeNull();
     });
   });
@@ -265,6 +281,44 @@ describe("useMarketDashboardStore", () => {
   });
 
   describe("setSelectedCode", () => {
+    it("loads daily and intraday data independently for the selected stock", async () => {
+      const dailyBar = {
+        time: "2026-07-13",
+        open: 100,
+        high: 105,
+        low: 99,
+        close: 102,
+        volume: 10_000,
+      };
+      const intradayBar = {
+        time: "2026-07-13T09:31:00",
+        open: 100,
+        high: 101,
+        low: 99,
+        close: 100.5,
+        volume: 1_000,
+      };
+      mockFetchDailyBars.mockResolvedValue({
+        data: [dailyBar],
+        asOf: "2026-07-13T10:00:00Z",
+        stale: false,
+      });
+      mockFetchIntradayBars.mockResolvedValue({
+        data: [intradayBar],
+        asOf: "2026-07-13T10:00:00Z",
+        stale: false,
+      });
+
+      await useMarketDashboardStore.getState().setSelectedCode("600519");
+
+      expect(mockFetchDailyBars).toHaveBeenCalledWith("600519");
+      expect(mockFetchIntradayBars).toHaveBeenCalledWith("600519");
+      expect(useMarketDashboardStore.getState().selectedBars).toEqual([dailyBar]);
+      expect(useMarketDashboardStore.getState().selectedIntradayBars).toEqual([
+        intradayBar,
+      ]);
+    });
+
     it("triggers K-line load for selected symbol only", async () => {
       mockFetchDailyBars.mockResolvedValue({
         data: [{ time: "2026-07-13", open: 100, high: 105, low: 99, close: 102, volume: 10000 }],

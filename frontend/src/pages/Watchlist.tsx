@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useWatchlistStore } from "@/stores/watchlist";
 import { useMarketDashboardStore } from "@/stores/marketDashboard";
 import { CandlestickChart as CandlestickChartView } from "@/components/charts/CandlestickChart";
+import { IntradayChart } from "@/components/charts/IntradayChart";
 import type { PriceBar, QuoteData } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -200,6 +201,10 @@ function StockDetailSection({
   bars,
   loading,
   error,
+  intradayBars,
+  intradayLoading,
+  intradayError,
+  intradayStale,
   onAnalyze,
 }: {
   code: string | null;
@@ -207,6 +212,10 @@ function StockDetailSection({
   bars: PriceBar[];
   loading: boolean;
   error: string | null;
+  intradayBars: PriceBar[];
+  intradayLoading: boolean;
+  intradayError: string | null;
+  intradayStale: boolean;
   onAnalyze: (code: string, name: string) => void;
 }) {
   const { t } = useTranslation();
@@ -264,6 +273,49 @@ function StockDetailSection({
       {bars.length > 0 && (
         <CandlestickChartView data={bars} height={440} defaultRange="3M" />
       )}
+
+      <div className="border-t pt-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold">
+            {t("watchlist.intradayHistory", "分时走势")}
+          </h3>
+          {intradayStale && (
+            <span role="status" className="text-xs text-muted-foreground">
+              {t("watchlist.stale", "行情延迟")}
+            </span>
+          )}
+        </div>
+        {intradayLoading && (
+          <p className="min-h-32 text-center text-xs text-muted-foreground">
+            {t("watchlist.intradayLoading", "分时数据加载中")}
+          </p>
+        )}
+        {!intradayLoading && intradayError && (
+          <div
+            role="alert"
+            className="flex min-h-32 items-center justify-center gap-1.5 rounded-md bg-destructive/10 p-3 text-xs text-destructive"
+          >
+            <AlertCircle className="h-3.5 w-3.5" />
+            {t("watchlist.intradayError", "分时数据加载失败")}
+          </div>
+        )}
+        {!intradayLoading && !intradayError && intradayBars.length === 0 && (
+          <div className="flex min-h-32 flex-col items-center justify-center rounded-md bg-muted p-3 text-center">
+            <p className="text-xs font-medium">
+              {t("watchlist.intradayUnavailable", "暂无分时数据")}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t(
+                "watchlist.intradayUnavailableHint",
+                "当前交易时段可能暂无可用数据",
+              )}
+            </p>
+          </div>
+        )}
+        {intradayBars.length > 0 && (
+          <IntradayChart data={intradayBars} height={300} />
+        )}
+      </div>
     </div>
   );
 }
@@ -295,6 +347,12 @@ export default function WatchlistPage() {
   const selectedBars = useMarketDashboardStore((s) => s.selectedBars);
   const barsLoading = useMarketDashboardStore((s) => s.barsLoading);
   const barsError = useMarketDashboardStore((s) => s.barsError);
+  const selectedIntradayBars = useMarketDashboardStore(
+    (s) => s.selectedIntradayBars,
+  );
+  const intradayLoading = useMarketDashboardStore((s) => s.intradayLoading);
+  const intradayError = useMarketDashboardStore((s) => s.intradayError);
+  const intradayStale = useMarketDashboardStore((s) => s.intradayStale);
   const setSelectedCode = useMarketDashboardStore((s) => s.setSelectedCode);
   const activeSelectedCode =
     selectedCode && stocks.some((stock) => stock.code === selectedCode)
@@ -649,6 +707,10 @@ export default function WatchlistPage() {
               bars={selectedBars}
               loading={barsLoading}
               error={barsError}
+              intradayBars={selectedIntradayBars}
+              intradayLoading={intradayLoading}
+              intradayError={intradayError}
+              intradayStale={intradayStale}
               onAnalyze={handleAnalyze}
             />
           </section>

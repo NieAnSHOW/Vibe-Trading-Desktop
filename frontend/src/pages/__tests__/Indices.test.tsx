@@ -6,17 +6,25 @@ import i18n from "@/i18n";
 import Indices from "@/pages/Indices";
 import {
   fetchDashboardDailyBars,
+  fetchDashboardIntradayBars,
   fetchDashboardIndexes,
 } from "@/lib/stockSdk";
 
 vi.mock("@/lib/stockSdk", () => ({
   fetchDashboardIndexes: vi.fn(),
   fetchDashboardDailyBars: vi.fn(),
+  fetchDashboardIntradayBars: vi.fn(),
 }));
 
 vi.mock("@/components/charts/CandlestickChart", () => ({
   CandlestickChart: ({ data }: { data: unknown[] }) => (
     <div data-testid="candlestick-chart" data-count={data.length} />
+  ),
+}));
+
+vi.mock("@/components/charts/IntradayChart", () => ({
+  IntradayChart: ({ data }: { data: unknown[] }) => (
+    <div data-testid="intraday-chart" data-count={data.length} />
   ),
 }));
 
@@ -56,6 +64,7 @@ const bars = [
 
 const mockFetchIndexes = vi.mocked(fetchDashboardIndexes);
 const mockFetchDailyBars = vi.mocked(fetchDashboardDailyBars);
+const mockFetchIntradayBars = vi.mocked(fetchDashboardIntradayBars);
 
 function SearchParamsProbe() {
   const { search } = useLocation();
@@ -85,6 +94,20 @@ describe("Indices page", () => {
       asOf: "2026-07-14T09:30:00Z",
       stale: false,
     });
+    mockFetchIntradayBars.mockResolvedValue({
+      data: [
+        {
+          time: "2026-07-14T09:31:00",
+          open: 3180,
+          close: 3190,
+          high: 3195,
+          low: 3175,
+          volume: 10_000,
+        },
+      ],
+      asOf: "2026-07-14T09:31:00Z",
+      stale: false,
+    });
   });
 
   it("uses the full available page width", () => {
@@ -106,6 +129,18 @@ describe("Indices page", () => {
       "true",
     );
     expect(screen.getByTestId("candlestick-chart")).toHaveAttribute("data-count", "1");
+  });
+
+  it("renders a current-day intraday chart below the selected index K-line", async () => {
+    renderIndices();
+
+    await waitFor(() => {
+      expect(mockFetchIntradayBars).toHaveBeenCalledWith("sh000001");
+    });
+    expect(await screen.findByTestId("intraday-chart")).toHaveAttribute(
+      "data-count",
+      "1",
+    );
   });
 
   it("uses the symbol search parameter as the selected index", async () => {

@@ -6,6 +6,7 @@ import {
   fetchMarketPulse,
   fetchDashboardQuotes,
   fetchDashboardDailyBars,
+  fetchDashboardIntradayBars,
   fetchDashboardMarketSnapshot,
 } from "@/lib/stockSdk";
 import type { DashboardIndex, MarketPulseItem, DashboardQuote, DashboardMarketSnapshot } from "@/lib/stockSdk";
@@ -18,18 +19,22 @@ export interface MarketDashboardState {
   quotes: Record<string, DashboardQuote>;
   selectedCode: string | null;
   selectedBars: PriceBar[];
+  selectedIntradayBars: PriceBar[];
   marketSnapshot: DashboardMarketSnapshot | null;
 
   indexesLoading: boolean;
   pulseLoading: boolean;
   quotesLoading: boolean;
   barsLoading: boolean;
+  intradayLoading: boolean;
   marketSnapshotLoading: boolean;
 
   indexesError: string | null;
   pulseError: string | null;
   quotesError: string | null;
   barsError: string | null;
+  intradayError: string | null;
+  intradayStale: boolean;
   marketSnapshotError: string | null;
 
   pollingTimerId: ReturnType<typeof setInterval> | null;
@@ -53,18 +58,22 @@ export const useMarketDashboardStore = create<MarketDashboardState>((set, get) =
   quotes: {},
   selectedCode: null,
   selectedBars: [],
+  selectedIntradayBars: [],
   marketSnapshot: null,
 
   indexesLoading: false,
   pulseLoading: false,
   quotesLoading: false,
   barsLoading: false,
+  intradayLoading: false,
   marketSnapshotLoading: false,
 
   indexesError: null,
   pulseError: null,
   quotesError: null,
   barsError: null,
+  intradayError: null,
+  intradayStale: false,
   marketSnapshotError: null,
 
   pollingTimerId: null,
@@ -153,16 +162,55 @@ export const useMarketDashboardStore = create<MarketDashboardState>((set, get) =
   },
 
   setSelectedCode: async (code: string) => {
-    set({ selectedCode: code, barsLoading: true, barsError: null });
+    set({
+      selectedCode: code,
+      selectedBars: [],
+      selectedIntradayBars: [],
+      barsLoading: true,
+      intradayLoading: true,
+      barsError: null,
+      intradayError: null,
+      intradayStale: false,
+    });
 
-    try {
-      const result = await fetchDashboardDailyBars(code);
-      set({ selectedBars: result.data, barsError: result.error ?? null });
-    } catch (e) {
-      set({ barsError: (e as Error)?.message ?? "bars failed" });
-    }
+    const loadDaily = async () => {
+      try {
+        const result = await fetchDashboardDailyBars(code);
+        if (get().selectedCode === code) {
+          set({ selectedBars: result.data, barsError: result.error ?? null });
+        }
+      } catch (error) {
+        if (get().selectedCode === code) {
+          set({ barsError: (error as Error)?.message ?? "bars failed" });
+        }
+      } finally {
+        if (get().selectedCode === code) set({ barsLoading: false });
+      }
+    };
 
-    set({ barsLoading: false });
+    const loadIntraday = async () => {
+      try {
+        const result = await fetchDashboardIntradayBars(code);
+        if (get().selectedCode === code) {
+          set({
+            selectedIntradayBars: result.data,
+            intradayError: result.error ?? null,
+            intradayStale: result.stale,
+          });
+        }
+      } catch (error) {
+        if (get().selectedCode === code) {
+          set({
+            intradayError: (error as Error)?.message ?? "intraday bars failed",
+            intradayStale: true,
+          });
+        }
+      } finally {
+        if (get().selectedCode === code) set({ intradayLoading: false });
+      }
+    };
+
+    await Promise.all([loadDaily(), loadIntraday()]);
   },
 
   startPolling: () => {

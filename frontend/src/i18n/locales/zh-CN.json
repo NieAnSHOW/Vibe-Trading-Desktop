@@ -1087,6 +1087,11 @@
     "historyError": "日线数据加载失败",
     "historyUnavailable": "暂无日线数据",
     "historyUnavailableHint": "请选择其他指数后重试",
+    "intradayHistory": "分时走势",
+    "intradayLoading": "分时数据加载中",
+    "intradayError": "分时数据加载失败",
+    "intradayUnavailable": "暂无分时数据",
+    "intradayUnavailableHint": "当前交易时段可能暂无可用数据",
     "selectPrompt": "请选择一个指数"
   },
   "watchlist": {
@@ -1109,6 +1114,11 @@
     "delete": "删除",
     "kline": "同花顺 K 线",
     "stale": "行情延迟",
+    "intradayHistory": "分时走势",
+    "intradayLoading": "分时数据加载中",
+    "intradayError": "分时数据加载失败",
+    "intradayUnavailable": "暂无分时数据",
+    "intradayUnavailableHint": "当前交易时段可能暂无可用数据",
     "select": "选择",
     "selectAll": "全选",
     "sendToAgent": "AI 分析",

@@ -10,9 +10,11 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { CandlestickChart } from "@/components/charts/CandlestickChart";
+import { IntradayChart } from "@/components/charts/IntradayChart";
 import {
   fetchDashboardDailyBars,
   fetchDashboardIndexes,
+  fetchDashboardIntradayBars,
   type DashboardIndex,
 } from "@/lib/stockSdk";
 import type { PriceBar } from "@/lib/api";
@@ -51,6 +53,10 @@ export default function Indices() {
   const [barsLoading, setBarsLoading] = useState(false);
   const [barsError, setBarsError] = useState<string | null>(null);
   const [barsStale, setBarsStale] = useState(false);
+  const [intradayBars, setIntradayBars] = useState<PriceBar[]>([]);
+  const [intradayLoading, setIntradayLoading] = useState(false);
+  const [intradayError, setIntradayError] = useState<string | null>(null);
+  const [intradayStale, setIntradayStale] = useState(false);
 
   const requestedCode = searchParams.get("symbol");
   const selectedIndex = useMemo(
@@ -138,6 +144,10 @@ export default function Indices() {
       setBarsError(null);
       setBarsStale(false);
       setBarsLoading(false);
+      setIntradayBars([]);
+      setIntradayError(null);
+      setIntradayStale(false);
+      setIntradayLoading(false);
       return;
     }
 
@@ -146,8 +156,12 @@ export default function Indices() {
     setBarsLoading(true);
     setBarsError(null);
     setBarsStale(false);
+    setIntradayBars([]);
+    setIntradayLoading(true);
+    setIntradayError(null);
+    setIntradayStale(false);
 
-    fetchDashboardDailyBars(selectedSymbol)
+    void fetchDashboardDailyBars(selectedSymbol)
       .then((result) => {
         if (!active) return;
         setBars(result.data);
@@ -162,6 +176,23 @@ export default function Indices() {
       })
       .finally(() => {
         if (active) setBarsLoading(false);
+      });
+
+    void fetchDashboardIntradayBars(selectedSymbol)
+      .then((result) => {
+        if (!active) return;
+        setIntradayBars(result.data);
+        setIntradayStale(result.stale);
+        setIntradayError(result.error ?? null);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setIntradayBars([]);
+        setIntradayStale(true);
+        setIntradayError(errorMessage(error));
+      })
+      .finally(() => {
+        if (active) setIntradayLoading(false);
       });
 
     return () => {
@@ -517,6 +548,60 @@ export default function Indices() {
                 {bars.length > 0 && (
                   <CandlestickChart data={bars} height={460} />
                 )}
+
+                <div className="mt-5 border-t pt-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold">
+                      {t("indices.intradayHistory", "分时走势")}
+                    </h3>
+                    {intradayStale && (
+                      <span
+                        role="status"
+                        className="text-xs text-muted-foreground"
+                      >
+                        {t("indices.stale", "行情数据可能已过期")}
+                      </span>
+                    )}
+                  </div>
+
+                  {intradayLoading && (
+                    <div className="flex min-h-48 items-center justify-center gap-2 text-sm text-muted-foreground">
+                      <Loader2
+                        className="h-4 w-4 animate-spin"
+                        aria-hidden="true"
+                      />
+                      {t("indices.intradayLoading", "分时数据加载中")}
+                    </div>
+                  )}
+
+                  {!intradayLoading && intradayError && (
+                    <div
+                      role="alert"
+                      className="flex min-h-48 flex-col items-center justify-center gap-2 rounded-md bg-destructive/10 p-4 text-center text-sm text-destructive"
+                    >
+                      <AlertCircle className="h-5 w-5" aria-hidden="true" />
+                      <p>{t("indices.intradayError", "分时数据加载失败")}</p>
+                    </div>
+                  )}
+
+                  {!intradayLoading && !intradayError && intradayBars.length === 0 && (
+                    <div className="flex min-h-48 flex-col items-center justify-center gap-1 rounded-md bg-muted p-4 text-center">
+                      <p className="text-sm font-medium">
+                        {t("indices.intradayUnavailable", "暂无分时数据")}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {t(
+                          "indices.intradayUnavailableHint",
+                          "当前交易时段可能暂无可用数据",
+                        )}
+                      </p>
+                    </div>
+                  )}
+
+                  {intradayBars.length > 0 && (
+                    <IntradayChart data={intradayBars} height={300} />
+                  )}
+                </div>
               </div>
             </>
           ) : (

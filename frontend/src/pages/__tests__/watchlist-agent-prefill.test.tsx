@@ -27,6 +27,12 @@ vi.mock("@/components/charts/CandlestickChart", () => ({
   ),
 }));
 
+vi.mock("@/components/charts/IntradayChart", () => ({
+  IntradayChart: ({ data }: { data: unknown[] }) => (
+    <div data-testid="intraday-chart" data-count={data.length} />
+  ),
+}));
+
 // Minimal Agent stub that reads prefill
 function AgentStub() {
   const [searchParams] = (function() {
@@ -48,6 +54,10 @@ function renderWatchlistWithAgent(
     selectedBars: [],
     barsLoading: false,
     barsError: null,
+    selectedIntradayBars: [],
+    intradayLoading: false,
+    intradayError: null,
+    intradayStale: false,
     setSelectedCode: vi.fn(),
     ...marketState,
   } as never));
@@ -115,6 +125,16 @@ describe("Watchlist → Agent prefill integration", () => {
 
     expect(setSelectedCode).toHaveBeenCalledWith("000001");
     expect(screen.getByTestId("candlestick-chart")).toHaveAttribute("data-count", "1");
+  });
+
+  it("renders the selected stock intraday chart below its K-line", () => {
+    renderWatchlistWithAgent({}, {
+      selectedCode: "000001",
+      selectedBars: [{ time: "2026-07-10", open: 10, high: 11, low: 9, close: 10.5, volume: 1000 }],
+      selectedIntradayBars: [{ time: "2026-07-10T09:31:00", open: 10, high: 10.6, low: 9.9, close: 10.4, volume: 500 }],
+    });
+
+    expect(screen.getByTestId("intraday-chart")).toHaveAttribute("data-count", "1");
   });
 
   it("uses a full-width responsive workspace with watchlist left and K-line right", () => {
