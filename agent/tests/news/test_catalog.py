@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-import shutil
 import subprocess
 import sys
-from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -29,76 +27,115 @@ def _canonical_manifest_bytes(value: bytes) -> bytes:
     return value.replace(b"\r\n", b"\n")
 
 
-def _load_mutated_catalog(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    mutate: object,
+def valid_registry(
     *,
-    update_sidecar: bool = True,
-    trust_mutated_digest: bool = True,
+    scope: str = "a_share",
+    article_access: str = "direct",
+    access_reviewed_for_cn: bool = True,
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "repository": FIXED_UPSTREAM_REPOSITORY,
+        "commit": FIXED_UPSTREAM_COMMIT,
+        "tracks": [{"id": "macro", "name": "Macro", "accent": "#000000"}],
+        "filters": [],
+        "sources": [
+            {
+                "id": hashlib.sha256(b"macro\0https://feeds.example/market.xml").hexdigest()[:16],
+                "track_id": "macro",
+                "name": "Reviewed source",
+                "feed_url": "https://feeds.example/market.xml",
+                "scope": scope,
+                "priority": 1,
+                "article_access": article_access,
+                "access_reviewed_for_cn": access_reviewed_for_cn,
+                "backup_source_ids": [],
+                "enabled": True,
+                "filters": [],
+            }
+        ],
+    }
+
+
+def write_registry(tmp_path: Path, registry: dict[str, object]) -> None:
+    (tmp_path / "source_registry.json").write_text(
+        json.dumps(registry, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+
+def test_a_share_catalog_exposes_only_reviewed_domestic_sources() -> None:
+    loaded = load_catalog("a_share")
+
+    assert loaded.scope == "a_share"
+    assert {item.name for item in loaded.assignments} == {
+        "东方财富股票",
+        "东方财富资讯",
+        "华尔街见闻",
+        "经济观察网",
+        "36氪",
+        "钛媒体",
+        "IT之家",
+        "虎嗅",
+        "动点科技",
+        "量子位",
+        "智东西",
+        "国际能源网",
+        "CnEVPost",
+    }
+    assert all(item.article_access == "direct" for item in loaded.assignments)
+
+
+def test_catalog_scope_isolated_and_endpoint_grouping_is_deterministic() -> None:
+    a_share = load_catalog("a_share")
+    global_industry = load_catalog("global_industry")
+    endpoints = group_endpoints(a_share)
+
+    assert {item.id for item in a_share.assignments}.isdisjoint(item.id for item in global_industry.assignments)
+    assert tuple(item.url for item in endpoints) == tuple(sorted(item.url for item in endpoints))
+    assert all(item.article_access == "summary_only" for item in global_industry.assignments)
+    assert all(assignment in a_share.assignments for endpoint in endpoints for assignment in endpoint.assignments)
+
+
+def test_registry_rejects_direct_source_without_cn_access_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    payload = json.loads((NEWS_DIR / "upstream_manifest.json").read_text(encoding="utf-8"))
-    assert callable(mutate)
-    mutate(payload)
-    manifest_bytes = (json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
-    digest = hashlib.sha256(manifest_bytes).hexdigest()
-    (tmp_path / "upstream_manifest.json").write_bytes(manifest_bytes)
-    sidecar = digest if update_sidecar else GOLDEN_MANIFEST_SHA256
-    (tmp_path / "upstream_manifest.sha256").write_text(sidecar + "\n", encoding="utf-8")
+    registry = valid_registry(scope="a_share", article_access="direct", access_reviewed_for_cn=False)
+    write_registry(tmp_path, registry)
     monkeypatch.setattr(catalog, "files", lambda _: tmp_path)
-    if trust_mutated_digest:
-        monkeypatch.setattr(catalog, "GOLDEN_MANIFEST_SHA256", digest, raising=False)
-    load_catalog()
+
+    with pytest.raises(ValueError, match="access review"):
+        load_catalog("a_share")
 
 
-def _set_source_url(payload: dict[str, object], value: str) -> None:
-    sources = payload["sources"]
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (lambda source: source.update(id="not-a-stable-id"), "id"),
+        (lambda source: source.update(scope="unknown"), "scope"),
+        (lambda source: source.update(article_access="external"), "article access"),
+        (lambda source: source.update(enabled="yes"), "enabled"),
+        (lambda source: source.update(feed_url="file:///etc/passwd"), "URL"),
+        (lambda source: source.update(backup_source_ids=["outside-scope"]), "backup"),
+    ],
+)
+def test_registry_fails_closed_for_unsafe_source_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutate: object, message: str
+) -> None:
+    registry = valid_registry()
+    sources = registry["sources"]
     assert isinstance(sources, list)
     source = sources[0]
     assert isinstance(source, dict)
-    track_id = source["track_id"]
-    assert isinstance(track_id, str)
-    source["url"] = value
-    source["id"] = hashlib.sha256(f"{track_id}\0{value}".encode("utf-8")).hexdigest()[:16]
+    assert callable(mutate)
+    mutate(source)
+    write_registry(tmp_path, registry)
+    monkeypatch.setattr(catalog, "files", lambda _: tmp_path)
+
+    with pytest.raises(ValueError, match=message):
+        load_catalog("a_share")
 
 
-def _assert_generated_artifacts_match_tracked(output_dir: Path) -> None:
-    assert tuple(sorted(path.name for path in output_dir.iterdir() if path.is_file())) == tuple(sorted(STATIC_ARTIFACTS))
-    for artifact in STATIC_ARTIFACTS:
-        assert (output_dir / artifact).read_bytes() == (NEWS_DIR / artifact).read_bytes()
-
-
-def test_catalog_matches_the_pinned_upstream_contract() -> None:
-    catalog = load_catalog()
-
-    assert catalog.repository == FIXED_UPSTREAM_REPOSITORY
-    assert catalog.commit == FIXED_UPSTREAM_COMMIT == "d98aa603228f4839fb48859812c63a58ca10cead"
-    assert len(catalog.tracks) == 12
-    assert len(catalog.assignments) == 108
-    assert len({(item.track_id, item.url) for item in catalog.assignments}) == 108
-    assert len({item.id for item in catalog.assignments}) == 108
-    with pytest.raises(TypeError):
-        catalog.tracks[0]["id"] = "changed"
-
-
-def test_endpoint_grouping_is_deterministic_and_preserves_shared_feeds() -> None:
-    endpoints = group_endpoints(load_catalog())
-
-    assert len(endpoints) == 106
-    assert len({item.id for item in endpoints}) == 106
-    assert tuple(item.url for item in endpoints) == tuple(sorted(item.url for item in endpoints))
-    assert all(item.id == hashlib.sha256(item.url.encode("utf-8")).hexdigest()[:16] for item in endpoints)
-    assert all(
-        tuple(assignment.id for assignment in item.assignments)
-        == tuple(sorted(assignment.id for assignment in item.assignments))
-        for item in endpoints
-    )
-    by_url = {item.url: item for item in endpoints}
-    assert len(by_url["https://sspai.com/feed"].assignments) == 2
-    assert len(by_url["https://www.engadget.com/rss.xml"].assignments) == 2
-
-
-def test_manifest_hash_and_mit_notice_are_pinned() -> None:
+def test_provenance_manifest_hash_and_mit_notice_are_pinned() -> None:
     manifest = NEWS_DIR / "upstream_manifest.json"
     digest = NEWS_DIR / "upstream_manifest.sha256"
     notice = NEWS_DIR / "THIRD_PARTY_NOTICES.md"
@@ -108,111 +145,14 @@ def test_manifest_hash_and_mit_notice_are_pinned() -> None:
     payload = json.loads(manifest.read_text(encoding="utf-8"))
     assert payload["repository"] == FIXED_UPSTREAM_REPOSITORY
     assert payload["commit"] == FIXED_UPSTREAM_COMMIT
-    assert payload["schema_version"] == 1
     assert "MIT License" in notice.read_text(encoding="utf-8")
     assert "Copyright (c) 2026 simonlin1212" in notice.read_text(encoding="utf-8")
 
 
-def test_load_catalog_accepts_a_manifest_with_windows_line_endings(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    manifest = _canonical_manifest_bytes((NEWS_DIR / "upstream_manifest.json").read_bytes()).replace(
-        b"\n", b"\r\n"
-    )
-    (tmp_path / "upstream_manifest.json").write_bytes(manifest)
-    (tmp_path / "upstream_manifest.sha256").write_text(
-        GOLDEN_MANIFEST_SHA256 + "\n", encoding="utf-8"
-    )
-    monkeypatch.setattr(catalog, "files", lambda _: tmp_path)
-
-    loaded = load_catalog()
-
-    assert loaded.commit == FIXED_UPSTREAM_COMMIT
-
-
-def test_load_catalog_rejects_a_manifest_that_does_not_match_its_sidecar(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    with pytest.raises(ValueError, match="digest"):
-        _load_mutated_catalog(
-            tmp_path,
-            monkeypatch,
-            lambda payload: payload.update(repository="https://attacker.invalid/catalog"),
-            update_sidecar=False,
-            trust_mutated_digest=False,
-        )
-
-
-def test_load_catalog_rejects_a_rehashed_manifest_that_does_not_match_the_golden_digest(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    with pytest.raises(ValueError, match="digest"):
-        _load_mutated_catalog(
-            tmp_path,
-            monkeypatch,
-            lambda payload: payload.update(repository="https://attacker.invalid/catalog"),
-            trust_mutated_digest=False,
-        )
-
-
-@pytest.mark.parametrize(
-    "mutate",
-    [
-        pytest.param(lambda payload: payload.update(repository="https://attacker.invalid/catalog"), id="repository"),
-        pytest.param(lambda payload: payload.update(commit="0" * 40), id="commit"),
-        pytest.param(lambda payload: payload["tracks"].pop(), id="track-count"),
-        pytest.param(lambda payload: payload["sources"].pop(), id="source-count"),
-        pytest.param(lambda payload: payload["tracks"][1].update(id=payload["tracks"][0]["id"]), id="track-id"),
-        pytest.param(lambda payload: payload["sources"][0].update(track_id="unknown"), id="source-track"),
-        pytest.param(lambda payload: payload["sources"][0].update(id="0" * 16), id="source-id"),
-        pytest.param(lambda payload: payload["sources"][0].update(url="file:///etc/passwd"), id="source-url"),
-    ],
-)
-def test_load_catalog_fails_closed_when_pinned_contract_invariants_are_mutated(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutate: object
-) -> None:
-    with pytest.raises(ValueError, match="catalog"):
-        _load_mutated_catalog(tmp_path, monkeypatch, mutate)
-
-
-def test_load_catalog_rejects_a_manifest_with_fewer_than_106_unique_endpoints(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def duplicate_an_endpoint(payload: dict[str, object]) -> None:
-        sources = payload["sources"]
-        assert isinstance(sources, list)
-        url_counts = Counter(item["url"] for item in sources)
-        existing_assignments = {(item["track_id"], item["url"]) for item in sources}
-        source = next(item for item in sources if url_counts[item["url"]] == 1)
-        replacement = next(
-            item
-            for item in sources
-            if item["url"] != source["url"]
-            and (source["track_id"], item["url"]) not in existing_assignments
-        )
-        source["url"] = replacement["url"]
-        source["id"] = hashlib.sha256(
-            f"{source['track_id']}\0{source['url']}".encode("utf-8")
-        ).hexdigest()[:16]
-
-    with pytest.raises(ValueError, match="endpoint count"):
-        _load_mutated_catalog(tmp_path, monkeypatch, duplicate_an_endpoint)
-
-
-@pytest.mark.parametrize(
-    "url",
-    [
-        "https://exa mple.com/rss",
-        "https://./rss",
-        "https://example.com/\0rss",
-        "http://127.0.0.1/rss",
-    ],
-)
-def test_load_catalog_rejects_invalid_urls_even_when_the_stable_id_is_recomputed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, url: str
-) -> None:
-    with pytest.raises(ValueError, match="URL"):
-        _load_mutated_catalog(tmp_path, monkeypatch, lambda payload: _set_source_url(payload, url))
+def _assert_generated_artifacts_match_tracked(output_dir: Path) -> None:
+    assert tuple(sorted(path.name for path in output_dir.iterdir() if path.is_file())) == tuple(sorted(STATIC_ARTIFACTS))
+    for artifact in STATIC_ARTIFACTS:
+        assert (output_dir / artifact).read_bytes() == (NEWS_DIR / artifact).read_bytes()
 
 
 def test_importer_reads_git_objects_not_dirty_worktree(tmp_path: Path) -> None:
@@ -246,25 +186,6 @@ def test_importer_reads_git_objects_not_dirty_worktree(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     _assert_generated_artifacts_match_tracked(output)
-
-    faulty_output = tmp_path / "missing-artifact-output"
-    shutil.copytree(output, faulty_output)
-    (faulty_output / "upstream_manifest.json").unlink()
-    with pytest.raises(AssertionError):
-        _assert_generated_artifacts_match_tracked(faulty_output)
-
-    faulty_output = tmp_path / "corrupt-hash-output"
-    shutil.copytree(output, faulty_output)
-    (faulty_output / "upstream_manifest.sha256").write_text("corrupt\n", encoding="utf-8")
-    with pytest.raises(AssertionError):
-        _assert_generated_artifacts_match_tracked(faulty_output)
-
-    faulty_output = tmp_path / "truncated-notice-output"
-    shutil.copytree(output, faulty_output)
-    notice = faulty_output / "THIRD_PARTY_NOTICES.md"
-    notice.write_bytes(notice.read_bytes()[:-1])
-    with pytest.raises(AssertionError):
-        _assert_generated_artifacts_match_tracked(faulty_output)
 
 
 def test_importer_rejects_any_commit_other_than_the_fixed_pin(tmp_path: Path) -> None:

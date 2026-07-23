@@ -14,7 +14,10 @@ include agent/.env.example
 
 # Alpha Zoo factor metadata and per-zoo LICENSE / NOTICE files
 recursive-include agent/src/factors *.yaml *.md
-recursive-include agent/src/news *.json *.sha256 *.md
+include agent/src/news/source_registry.json
+include agent/src/news/upstream_manifest.json
+include agent/src/news/upstream_manifest.sha256
+include agent/src/news/THIRD_PARTY_NOTICES.md
 
 # Tests shipped so dev installs can run `pytest` against the package.
 # Files prefixed with `_` are local debug scripts kept untracked — keep
