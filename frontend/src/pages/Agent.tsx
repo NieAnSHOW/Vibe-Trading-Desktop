@@ -222,6 +222,8 @@ export function Agent() {
   const sseSessionRef = useRef<string | null>(null);
   const prevSseStatusRef = useRef<string>("disconnected");
   const genRef = useRef(0);
+  const activeAttemptRef = useRef<string | null>(null);
+  const attemptGenerationRef = useRef(0);
   const pendingGoalSessionRef = useRef<string | null>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const lastEventRef = useRef(0);
@@ -358,10 +360,18 @@ export function Agent() {
     }
   }, []);
 
-  const loadSessionMessages = useCallback(async (sid: string, gen: number) => {
+  const loadSessionMessages = useCallback(async (
+    sid: string,
+    gen: number,
+    expectedAttemptGeneration?: number,
+  ) => {
+    const isStale = () => (
+      genRef.current !== gen ||
+      (expectedAttemptGeneration !== undefined && attemptGenerationRef.current !== expectedAttemptGeneration)
+    );
     try {
       const msgs = await api.getSessionMessages(sid);
-      if (genRef.current !== gen) return;
+      if (isStale()) return;
       const agentMsgs: AgentMessage[] = [];
       for (const m of msgs) {
         const meta = m.metadata as Record<string, unknown> | undefined;
@@ -375,22 +385,28 @@ export function Agent() {
           if (m.content && m.content !== "Strategy execution completed.") {
             agentMsgs.push({ id: m.message_id + "_ans", type: "answer", content: m.content, timestamp: ts });
           }
+          // Fetch once for the run card.
+          let runData: Awaited<ReturnType<typeof api.getRun>> | undefined;
+          try {
+            runData = await api.getRun(runId);
+          } catch {
+            // Preserve the previous run-card fallback when the detail request fails.
+          }
           if (metrics && Object.keys(metrics).length > 0) {
             agentMsgs.push({ id: m.message_id, type: "run_complete", content: "", runId, metrics, timestamp: ts + 1 });
           } else {
-            // Fetch run data to check report-worthiness; show fallback card if fetch fails
+            // Show a card for report-worthy runs, with the existing fetch-failure fallback.
             let fetchedMetrics: Record<string, number> | undefined;
             let fetchedCurve: Array<{ time: string; equity: number }> | undefined;
             let showCard = false;
-            try {
-              const runData = await api.getRun(runId);
+            if (runData) {
               if (isReportWorthyRun(runData)) {
                 fetchedMetrics = runData.metrics;
                 fetchedCurve = runData.equity_curve?.map((e) => ({ time: e.time, equity: Number(e.equity) }));
                 showCard = true;
               }
               // succeeded but not report-worthy (plain chat turn) → skip card
-            } catch {
+            } else {
               // fetch failed (auth/404/network) → can't tell, show link as fallback
               showCard = true;
             }
@@ -410,7 +426,7 @@ export function Agent() {
           agentMsgs.push({ id: m.message_id, type: "answer", content: m.content, timestamp: ts });
         }
       }
-      if (genRef.current !== gen) return;
+      if (isStale()) return;
       act().loadHistory(agentMsgs);
       act().setSessionLoading(false);
       act().cacheSession(sid, agentMsgs);
@@ -420,36 +436,64 @@ export function Agent() {
     }
   }, [forceScrollToBottom]);
 
-  const refreshSessionMessages = useCallback(async (sid: string) => {
+  const refreshSessionMessages = useCallback(async (sid: string, expectedAttemptGeneration?: number) => {
     const gen = genRef.current + 1;
     genRef.current = gen;
-    await loadSessionMessages(sid, gen);
+    return loadSessionMessages(sid, gen, expectedAttemptGeneration);
   }, [loadSessionMessages]);
+
+  const activateAttempt = useCallback((sid: string, attemptId: string): boolean => {
+    if (!attemptId || act().sessionId !== sid) return false;
+    if (activeAttemptRef.current !== attemptId) {
+      activeAttemptRef.current = attemptId;
+      attemptGenerationRef.current += 1;
+    }
+    return true;
+  }, []);
+
+  const isCurrentAttempt = useCallback((
+    sid: string,
+    attemptId: string,
+    sessionGeneration: number,
+    attemptGeneration: number,
+  ): boolean => (
+    act().sessionId === sid &&
+    genRef.current === sessionGeneration &&
+    activeAttemptRef.current === attemptId &&
+    attemptGenerationRef.current === attemptGeneration
+  ), []);
 
   const syncCompletedAttempt = useCallback(async (sid: string, attemptId?: string) => {
     if (!attemptId) return false;
+    const sessionGeneration = genRef.current;
+    const attemptGeneration = attemptGenerationRef.current;
+    if (!isCurrentAttempt(sid, attemptId, sessionGeneration, attemptGeneration)) return false;
     for (let i = 0; i < 3; i += 1) {
       try {
         const storedMessages = await api.getSessionMessages(sid);
-        const completed = storedMessages.some(
+        if (!isCurrentAttempt(sid, attemptId, sessionGeneration, attemptGeneration)) return false;
+        const completedMessage = storedMessages.find(
           (message) => message.role === "assistant" && message.linked_attempt_id === attemptId,
         );
-        if (completed) {
-          if (act().sessionId !== sid) return true;
+        if (completedMessage) {
           setReasoningActive(false);
           act().clearStreaming();
-          act().setStatus("idle");
           useAgentStore.setState({ toolCalls: [] });
-          await refreshSessionMessages(sid);
+          await refreshSessionMessages(sid, attemptGeneration);
+          const refreshedSessionGeneration = genRef.current;
+          if (!isCurrentAttempt(sid, attemptId, refreshedSessionGeneration, attemptGeneration)) return true;
+          activeAttemptRef.current = null;
+          act().setStatus("idle");
           return true;
         }
       } catch {
         return false;
       }
       await new Promise<void>((resolve) => window.setTimeout(resolve, 800));
+      if (!isCurrentAttempt(sid, attemptId, sessionGeneration, attemptGeneration)) return false;
     }
     return false;
-  }, [refreshSessionMessages]);
+  }, [isCurrentAttempt, refreshSessionMessages]);
 
   const setupSSE = useCallback((sid: string) => {
     if (sseSessionRef.current === sid) return;
@@ -551,7 +595,14 @@ export function Agent() {
 
       compact: () => { touch(); },
 
-      "attempt.created": () => {
+      llm_usage: (_data) => {
+        // The protocol remains subscribed for backward compatibility; Agent chat deliberately ignores usage.
+        touch();
+      },
+
+      "attempt.created": (d) => {
+        const attemptId = typeof d.attempt_id === "string" ? d.attempt_id : "";
+        if (!activateAttempt(sid, attemptId)) return;
         touch();
         // Backend has created a new attempt — ensure streaming state is active
         // even if we connected mid-stream (SSE replay / page reload).
@@ -566,6 +617,11 @@ export function Agent() {
       },
 
       "attempt.completed": async (d) => {
+        const attemptId = typeof d.attempt_id === "string" ? d.attempt_id : "";
+        const sessionGeneration = genRef.current;
+        const attemptGeneration = attemptGenerationRef.current;
+        if (!isCurrentAttempt(sid, attemptId, sessionGeneration, attemptGeneration)) return;
+        activeAttemptRef.current = null;
         touch();
         setReasoningActive(false);
         const s = act();
@@ -601,8 +657,9 @@ export function Agent() {
           let runMetrics: Record<string, number> | undefined;
           let runCurve: Array<{ time: string; equity: number }> | undefined;
           let showCard = false;
+          let runData: Awaited<ReturnType<typeof api.getRun>> | undefined;
           try {
-            const runData = await api.getRun(runId);
+            runData = await api.getRun(runId);
             if (isReportWorthyRun(runData)) {
               runMetrics = runData.metrics;
               runCurve = runData.equity_curve?.map(e => ({ time: e.time, equity: Number(e.equity) }));
@@ -611,6 +668,12 @@ export function Agent() {
           } catch {
             showCard = true; // fetch failed → show link as fallback
           }
+          if (
+            act().sessionId !== sid ||
+            genRef.current !== sessionGeneration ||
+            activeAttemptRef.current !== null ||
+            attemptGenerationRef.current !== attemptGeneration
+          ) return;
           if (showCard || shadowId) {
             if (showCard && runMetrics) {
               try { track("feature_use", {}, { name: "backtest_run" }); } catch {}
@@ -630,10 +693,15 @@ export function Agent() {
         // Reset
         s.setStatus("idle");
         useAgentStore.setState({ toolCalls: [] });
+        activeAttemptRef.current = null;
         scrollToBottom();
       },
 
       "attempt.failed": (d) => {
+        const attemptId = typeof d.attempt_id === "string" ? d.attempt_id : "";
+        const sessionGeneration = genRef.current;
+        const attemptGeneration = attemptGenerationRef.current;
+        if (!isCurrentAttempt(sid, attemptId, sessionGeneration, attemptGeneration)) return;
         touch();
         setReasoningActive(false);
         act().clearStreaming();
@@ -642,6 +710,7 @@ export function Agent() {
         // Clear stale toolCalls so the next turn's running indicator doesn't
         // briefly show the previous turn's progress before fresh events land.
         useAgentStore.setState({ toolCalls: [] });
+        activeAttemptRef.current = null;
         scrollToBottom();
       },
 
@@ -746,7 +815,7 @@ export function Agent() {
       heartbeat: () => {},
       reconnect: (d) => { act().setSseStatus("reconnecting", Number(d.attempt ?? 0)); },
     });
-  }, [connect, disconnect, loadGoalSnapshot, scrollToBottom]);
+  }, [activateAttempt, connect, disconnect, isCurrentAttempt, loadGoalSnapshot, scrollToBottom]);
 
   useEffect(() => {
     const { sessionId: curSid, messages: curMsgs, cacheSession, reset, getCachedSession, switchSession } = act();
@@ -754,6 +823,8 @@ export function Agent() {
     if (urlSessionId && urlSessionId !== curSid) {
       const gen = genRef.current + 1;
       genRef.current = gen;
+      activeAttemptRef.current = null;
+      attemptGenerationRef.current += 1;
       doDisconnect();
       // Live-channel timeline items are per-session; clear on switch.
       setLiveItems([]);
@@ -788,6 +859,8 @@ export function Agent() {
       setupSSE(urlSessionId);
     } else if (!urlSessionId && curSid) {
       genRef.current += 1;
+      activeAttemptRef.current = null;
+      attemptGenerationRef.current += 1;
       doDisconnect();
       setLiveItems([]);
       setCommittedMandates({});
@@ -890,6 +963,7 @@ export function Agent() {
         forceScrollToBottom();
         setupSSE(sid);
         const sent = await api.sendMessage(sid, kickoff);
+        if (!activateAttempt(sid, sent.attempt_id)) return;
         void syncCompletedAttempt(sid, sent.attempt_id);
         try { track("feature_use", {}, { name: "chat_send" }); } catch {}
       } catch (error) {
@@ -927,6 +1001,7 @@ export function Agent() {
       }
       setupSSE(sid);
       const sent = await api.sendMessage(sid, finalPrompt);
+      if (!activateAttempt(sid, sent.attempt_id)) return;
       void syncCompletedAttempt(sid, sent.attempt_id);
       try { track("feature_use", {}, { name: "chat_send" }); } catch {}
     } catch (error) {
@@ -1040,6 +1115,7 @@ export function Agent() {
     try {
       setupSSE(sessionId);
       const sent = await api.sendMessage(sessionId, prompt);
+      if (!activateAttempt(sessionId, sent.attempt_id)) return;
       void syncCompletedAttempt(sessionId, sent.attempt_id);
     } catch (error) {
       act().setStatus("error");
@@ -1047,7 +1123,7 @@ export function Agent() {
       toast.error(message);
       act().addMessage({ id: "", type: "error", content: message, timestamp: Date.now() });
     }
-  }, [forceScrollToBottom, goalSnapshot, sessionId, setupSSE, status, syncCompletedAttempt]);
+  }, [activateAttempt, forceScrollToBottom, goalSnapshot, sessionId, setupSSE, status, syncCompletedAttempt]);
 
   const handleRetry = useCallback((errorMsg: AgentMessage) => {
     if (status === "streaming") return;

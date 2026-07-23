@@ -232,21 +232,85 @@ def test_api_run_response_can_filter_chart_symbol(tmp_path: Path) -> None:
 def test_api_run_response_includes_llm_usage(tmp_path: Path) -> None:
     import api_server
 
-    run_dir = tmp_path / "run_001"
-    run_dir.mkdir()
-    (run_dir / "state.json").write_text('{"status": "success"}\n', encoding="utf-8")
-    llm_usage = {
-        "provider": "deepseek",
-        "model": "deepseek-v3.2",
-        "totals": {"input_tokens": 100, "output_tokens": 25, "total_tokens": 125, "calls": 1},
-        "per_iteration": [{"iter": 1, "input_tokens": 100, "output_tokens": 25, "total_tokens": 125}],
-        "updated_at": "2026-06-14T00:00:00Z",
+    sensitive_sentinels = {
+        "api_key": "sentinel-api-key",
+        "login_token": "sentinel-login-token",
+        "prompt": "sentinel-prompt",
+        "response": "sentinel-response",
     }
-    (run_dir / "llm_usage.json").write_text(json.dumps(llm_usage), encoding="utf-8")
+    enhanced_dir = tmp_path / "run_enhanced"
+    enhanced_dir.mkdir()
+    (enhanced_dir / "state.json").write_text('{"status": "success"}\n', encoding="utf-8")
+    (enhanced_dir / "req.json").write_text(
+        json.dumps({"context": sensitive_sentinels}),
+        encoding="utf-8",
+    )
+    enhanced = {
+        "provider": "vip_server",
+        "model": "hosted-model",
+        "metering_eligible": True,
+        "prompt": sensitive_sentinels["prompt"],
+        "totals": {
+            "input_tokens": 100,
+            "output_tokens": 25,
+            "total_tokens": 125,
+            "calls": 1,
+            "cache_read_tokens": 12,
+            "api_key": sensitive_sentinels["api_key"],
+        },
+        "per_iteration": [
+            {
+                "iter": 1,
+                "input_tokens": 100,
+                "output_tokens": 25,
+                "total_tokens": 125,
+                "cache_read_tokens": 12,
+                "response": sensitive_sentinels["response"],
+            }
+        ],
+    }
+    (enhanced_dir / "llm_usage.json").write_text(json.dumps(enhanced), encoding="utf-8")
 
-    response = api_server._build_response_from_run_dir(run_dir, elapsed=0.0)
+    legacy_dir = tmp_path / "run_legacy"
+    legacy_dir.mkdir()
+    (legacy_dir / "state.json").write_text('{"status": "success"}\n', encoding="utf-8")
+    legacy = {
+        "provider": "openai",
+        "model": "legacy-model",
+        "totals": {"input_tokens": 10, "output_tokens": 2, "total_tokens": 12, "calls": 1},
+        "per_iteration": [{"iter": 1, "input_tokens": 10, "output_tokens": 2, "total_tokens": 12}],
+    }
+    (legacy_dir / "llm_usage.json").write_text(json.dumps(legacy), encoding="utf-8")
 
-    assert response.llm_usage == llm_usage
+    response = api_server._build_response_from_run_dir(enhanced_dir, elapsed=0.0)
+    legacy_response = api_server._build_response_from_run_dir(legacy_dir, elapsed=0.0)
+    response_payload = response.model_dump(mode="json")
+    legacy_payload = legacy_response.model_dump(mode="json")
+
+    expected_enhanced = {
+        "provider": "vip_server",
+        "model": "hosted-model",
+        "metering_eligible": True,
+        "totals": {
+            "input_tokens": 100,
+            "output_tokens": 25,
+            "total_tokens": 125,
+            "calls": 1,
+            "cache_read_tokens": 12,
+        },
+        "per_iteration": [
+            {
+                "iter": 1,
+                "input_tokens": 100,
+                "output_tokens": 25,
+                "total_tokens": 125,
+                "cache_read_tokens": 12,
+            }
+        ],
+    }
+    assert response_payload["llm_usage"] == expected_enhanced
+    assert legacy_payload["llm_usage"] == legacy
+    assert json.dumps(response_payload["llm_usage"]).find("sentinel-") == -1
 
 
 def test_runner_artifact_spec_surfaces_run_card_paths() -> None:
