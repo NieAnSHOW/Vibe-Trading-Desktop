@@ -6,11 +6,26 @@ from pathlib import Path
 
 import pytest
 
+from src.news.catalog import load_catalog
 from src.news.models import CANONICAL_TRACK_IDS, FeedItem, FeedSource, NewsSnapshot, SourceStats, TrackAi, TrackSnapshot
 from src.news.storage import AtomicSnapshotStore, SnapshotStorageError
 
 
 NOW = datetime(2026, 7, 20, 8, 30, tzinfo=timezone.utc)
+A_SHARE_ASSIGNMENTS = load_catalog("a_share").assignments
+
+
+def source_stats(track_id: str | None = None) -> SourceStats:
+    assignments = [item for item in A_SHARE_ASSIGNMENTS if track_id is None or item.track_id == track_id]
+    successful = int(bool(assignments))
+    return SourceStats(
+        endpoint_total=len({item.url for item in assignments}),
+        endpoint_success_count=successful,
+        endpoint_failure_count=0,
+        assignment_total=len(assignments),
+        assignment_success_count=successful,
+        assignment_failure_count=0,
+    )
 
 
 def make_snapshot(title: str = "A valid title") -> NewsSnapshot:
@@ -36,14 +51,7 @@ def make_snapshot(title: str = "A valid title") -> NewsSnapshot:
                 partial=False,
                 items=[entry],
                 ai=TrackAi(available=True, generated_at=NOW, highlights=["One", "Two", "Three"]),
-                source_stats=SourceStats(
-                    endpoint_total=1,
-                    endpoint_success_count=1,
-                    endpoint_failure_count=0,
-                    assignment_total=1,
-                    assignment_success_count=1,
-                    assignment_failure_count=0,
-                ),
+                source_stats=source_stats(track_id),
                 source_outcomes=[],
             )
         )
@@ -52,14 +60,7 @@ def make_snapshot(title: str = "A valid title") -> NewsSnapshot:
         scope="a_share",
         generated_at=NOW,
         upstream_commit="d98aa603228f4839fb48859812c63a58ca10cead",
-        source_stats=SourceStats(
-            endpoint_total=1,
-            endpoint_success_count=1,
-            endpoint_failure_count=0,
-            assignment_total=1,
-            assignment_success_count=1,
-            assignment_failure_count=0,
-        ),
+        source_stats=source_stats(),
         errors=[],
         tracks=tracks,
     )
@@ -275,6 +276,19 @@ def test_global_store_never_reads_a_share_v1_legacy_file(tmp_path: Path) -> None
         store(tmp_path, "global_industry").read()
 
     assert exc.value.code == "snapshot_unavailable"
+
+
+def test_legacy_registry_lookup_errors_are_classified_as_corrupt(monkeypatch, tmp_path: Path) -> None:
+    write_v1_snapshot(tmp_path / "news" / "latest.json")
+
+    def unavailable_registry(scope: str):
+        raise OSError(f"registry unavailable for {scope}")
+
+    monkeypatch.setattr("src.news.storage.load_catalog", unavailable_registry)
+    with pytest.raises(SnapshotStorageError) as exc:
+        store(tmp_path).read()
+
+    assert exc.value.code == "snapshot_corrupt"
 
 
 def test_write_rejects_snapshot_for_another_scope(tmp_path: Path) -> None:

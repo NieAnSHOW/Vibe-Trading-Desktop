@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from functools import lru_cache
 import re
 from typing import Annotated, Literal
 from urllib.parse import unquote_plus, urlsplit
@@ -268,19 +269,36 @@ class NewsSnapshot(_StrictModel):
     def validate_tracks(self) -> "NewsSnapshot":
         if tuple(track.track_id for track in self.tracks) != CANONICAL_TRACK_IDS:
             raise ValueError("tracks must be the canonical IDs in canonical order")
-        if not any(track.source_outcomes for track in self.tracks):
-            return self
-        from .catalog import load_catalog
+        assignments = _scope_assignments(self.scope)
+        assignments_by_track: dict[str, list[object]] = {track_id: [] for track_id in CANONICAL_TRACK_IDS}
+        for source in assignments:
+            assignments_by_track[source.track_id].append(source)
+        if not _stats_match_assignments(self.source_stats, assignments):
+            raise ValueError("snapshot source stats totals must match the scoped registry")
 
-        assignments = {(source.track_id, source.id): source for source in load_catalog(self.scope).assignments}
         for track in self.tracks:
+            configured_assignments = assignments_by_track[track.track_id]
+            if not _stats_match_assignments(track.source_stats, configured_assignments):
+                raise ValueError("track source stats totals must match the scoped registry")
             outcome_ids: set[str] = set()
             for outcome in track.source_outcomes:
-                source = assignments.get((track.track_id, outcome.source_id))
+                source = next((item for item in configured_assignments if item.id == outcome.source_id), None)
                 if source is None or source.name != outcome.source_name or outcome.source_id in outcome_ids:
                     raise ValueError("source outcomes must match configured track assignments")
                 outcome_ids.add(outcome.source_id)
         return self
+
+
+def _stats_match_assignments(stats: SourceStats, assignments: object) -> bool:
+    sources = tuple(assignments)
+    return stats.endpoint_total == len({source.url for source in sources}) and stats.assignment_total == len(sources)
+
+
+@lru_cache(maxsize=2)
+def _scope_assignments(scope: Literal["a_share", "global_industry"]) -> tuple[object, ...]:
+    from .catalog import load_catalog
+
+    return tuple(load_catalog(scope).assignments)
 
 
 class RefreshStatus(_StrictModel):

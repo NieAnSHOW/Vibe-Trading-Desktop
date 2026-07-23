@@ -60,7 +60,7 @@ class AtomicSnapshotStore:
                 raise SnapshotStorageError("snapshot_corrupt", "news snapshot is corrupt") from legacy_exc
             try:
                 return _upgrade_v1_snapshot(data)
-            except (ValidationError, ValueError, TypeError) as legacy_exc:
+            except (OSError, ValidationError, ValueError, TypeError) as legacy_exc:
                 logger.warning("news legacy snapshot read rejected: %s", type(legacy_exc).__name__)
                 raise SnapshotStorageError("snapshot_corrupt", "news snapshot is corrupt") from legacy_exc
         except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError) as exc:
@@ -74,7 +74,7 @@ class AtomicSnapshotStore:
             if snapshot.scope != self.scope:
                 raise ValueError("snapshot scope does not match store")
             return snapshot
-        except (ValidationError, ValueError, TypeError) as exc:
+        except (OSError, ValidationError, ValueError, TypeError) as exc:
             logger.warning("news snapshot read rejected: %s", type(exc).__name__)
             raise SnapshotStorageError("snapshot_corrupt", "news snapshot is corrupt") from exc
 

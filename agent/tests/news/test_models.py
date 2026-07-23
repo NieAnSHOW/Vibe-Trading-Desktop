@@ -4,6 +4,7 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
+from src.news.catalog import load_catalog
 from src.news.models import (
     CANONICAL_TRACK_IDS,
     FeedItem,
@@ -20,6 +21,20 @@ from src.news.models import (
 
 
 NOW = datetime(2026, 7, 20, 8, 30, tzinfo=timezone.utc)
+A_SHARE_ASSIGNMENTS = load_catalog("a_share").assignments
+
+
+def source_stats(track_id: str | None = None) -> SourceStats:
+    assignments = [item for item in A_SHARE_ASSIGNMENTS if track_id is None or item.track_id == track_id]
+    successful = int(bool(assignments))
+    return SourceStats(
+        endpoint_total=len({item.url for item in assignments}),
+        endpoint_success_count=successful,
+        endpoint_failure_count=0,
+        assignment_total=len(assignments),
+        assignment_success_count=successful,
+        assignment_failure_count=0,
+    )
 
 
 def item(track_id: str = "ai") -> FeedItem:
@@ -56,14 +71,7 @@ def track(track_id: str, state: str = "fresh") -> TrackSnapshot:
         partial=False,
         items=[item(track_id)],
         ai=TrackAi(available=True, generated_at=NOW, highlights=["One useful point", "Another useful point", "Third useful point"]),
-        source_stats=SourceStats(
-            endpoint_total=1,
-            endpoint_success_count=1,
-            endpoint_failure_count=0,
-            assignment_total=1,
-            assignment_success_count=1,
-            assignment_failure_count=0,
-        ),
+        source_stats=source_stats(track_id),
         source_outcomes=[],
     )
 
@@ -74,14 +82,7 @@ def snapshot() -> NewsSnapshot:
         scope="a_share",
         generated_at=NOW,
         upstream_commit="d98aa603228f4839fb48859812c63a58ca10cead",
-        source_stats=SourceStats(
-            endpoint_total=1,
-            endpoint_success_count=1,
-            endpoint_failure_count=0,
-            assignment_total=1,
-            assignment_success_count=1,
-            assignment_failure_count=0,
-        ),
+        source_stats=source_stats(),
         errors=[],
         tracks=[track(track_id) for track_id in CANONICAL_TRACK_IDS],
     )
@@ -231,6 +232,22 @@ def test_source_outcomes_are_limited_to_the_scope_track_assignments() -> None:
 
     valid["tracks"][0]["source_outcomes"][0]["source_id"] = "e1890189cf0cd8bf"
     with pytest.raises(ValidationError, match="source outcomes"):
+        NewsSnapshot.model_validate(valid)
+
+
+def test_snapshot_source_totals_must_match_its_scoped_registry() -> None:
+    valid = snapshot().model_dump()
+    valid["source_stats"]["endpoint_total"] = 2
+    valid["source_stats"]["assignment_total"] = 2
+
+    with pytest.raises(ValidationError, match="source stats totals"):
+        NewsSnapshot.model_validate(valid)
+
+    valid = snapshot().model_dump()
+    valid["tracks"][0]["source_stats"]["endpoint_total"] = 1
+    valid["tracks"][0]["source_stats"]["assignment_total"] = 1
+
+    with pytest.raises(ValidationError, match="source stats totals"):
         NewsSnapshot.model_validate(valid)
 
 
