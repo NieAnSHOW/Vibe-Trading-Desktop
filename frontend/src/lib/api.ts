@@ -617,6 +617,10 @@ export const api = {
     request<DashboardDailyBarsResponse>(
       `/dashboard/daily-bars?symbol=${encodeURIComponent(symbol)}`,
     ),
+  getDashboardIntradayBars: (symbol: string) =>
+    request<DashboardDailyBarsResponse>(
+      `/dashboard/intraday-bars?symbol=${encodeURIComponent(symbol)}`,
+    ),
   getNewsSnapshot: async (signal?: AbortSignal) =>
     parseNewsSnapshotResponse(await request<unknown>("/news-api/snapshot", { signal })),
   startNewsRefresh: async (signal?: AbortSignal) =>

@@ -613,3 +613,18 @@ export async function fetchDashboardDailyBars(
     return staleResult([], error);
   }
 }
+
+export async function fetchDashboardIntradayBars(
+  code: string,
+): Promise<DashboardDataResult<PriceBar[]>> {
+  try {
+    const response = await api.getDashboardIntradayBars(code);
+    return {
+      data: response.data,
+      asOf: response.as_of,
+      stale: response.stale,
+    };
+  } catch (error) {
+    return staleResult([], error);
+  }
+}

@@ -12,6 +12,7 @@ const {
   mockZtPool,
   mockGetDashboardBoardHeat,
   mockGetDashboardDailyBars,
+  mockGetDashboardIntradayBars,
 } = vi.hoisted(() => ({
   mockCnSimple: vi.fn(),
   mockCn: vi.fn(),
@@ -23,6 +24,7 @@ const {
   mockZtPool: vi.fn(),
   mockGetDashboardBoardHeat: vi.fn(),
   mockGetDashboardDailyBars: vi.fn(),
+  mockGetDashboardIntradayBars: vi.fn(),
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -33,6 +35,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       ...original.api,
       getDashboardBoardHeat: mockGetDashboardBoardHeat,
       getDashboardDailyBars: mockGetDashboardDailyBars,
+      getDashboardIntradayBars: mockGetDashboardIntradayBars,
     },
   };
 });
@@ -55,6 +58,7 @@ import {
   fetchMarketPulse,
   fetchDashboardQuotes,
   fetchDashboardDailyBars,
+  fetchDashboardIntradayBars,
 } from "../stockSdk";
 
 beforeEach(() => {
@@ -228,6 +232,49 @@ describe("fetchDashboardDailyBars", () => {
     expect(result.stale).toBe(true);
     expect(result.error).toBe("network error");
     expect(result.data).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchDashboardIntradayBars
+// ---------------------------------------------------------------------------
+describe("fetchDashboardIntradayBars", () => {
+  it("loads intraday bars through the local dashboard API", async () => {
+    mockGetDashboardIntradayBars.mockResolvedValueOnce({
+      data: [
+        {
+          time: "2026-07-14T09:31:00",
+          open: 10,
+          high: 11,
+          low: 9,
+          close: 10.5,
+          volume: 1000,
+        },
+      ],
+      as_of: "2026-07-14T10:00:00Z",
+      source: "akshare",
+      stale: false,
+    });
+
+    const result = await fetchDashboardIntradayBars("600519");
+
+    expect(mockGetDashboardIntradayBars).toHaveBeenCalledWith("600519");
+    expect(result.data[0]).toMatchObject({
+      time: "2026-07-14T09:31:00",
+      close: 10.5,
+    });
+  });
+
+  it("returns stale empty data when the intraday API fails", async () => {
+    mockGetDashboardIntradayBars.mockRejectedValueOnce(
+      new Error("network error"),
+    );
+
+    await expect(fetchDashboardIntradayBars("600519")).resolves.toMatchObject({
+      data: [],
+      stale: true,
+      error: "network error",
+    });
   });
 });
 
