@@ -463,3 +463,56 @@ def test_intraday_bars_reports_provider_failure(client, monkeypatch):
 
     assert response.status_code == 503
     assert response.json()["detail"] == "intraday bars unavailable"
+
+
+def test_intraday_bars_falls_back_to_sina_when_eastmoney_fails(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    import pandas as pd
+
+    from src.api import dashboard_routes as routes
+
+    today = datetime.now(routes._CHINA_TZ).strftime("%Y-%m-%d")
+    seen = []
+
+    def failing_eastmoney(**_kwargs):
+        raise ConnectionError("eastmoney disconnected")
+
+    def sina_minute(**kwargs):
+        seen.append(kwargs)
+        return pd.DataFrame(
+            [
+                {
+                    "day": f"{today} 09:31:00",
+                    "open": "78.1",
+                    "high": "78.4",
+                    "low": "78.0",
+                    "close": "78.2",
+                    "volume": "1200",
+                }
+            ]
+        )
+
+    monkeypatch.setitem(
+        sys.modules,
+        "akshare",
+        SimpleNamespace(
+            stock_zh_a_hist_min_em=failing_eastmoney,
+            stock_zh_a_minute=sina_minute,
+        ),
+    )
+
+    rows = routes._fetch_intraday_bars("688059")
+
+    assert rows == [
+        {
+            "time": f"{today}T09:31:00",
+            "open": 78.1,
+            "high": 78.4,
+            "low": 78.0,
+            "close": 78.2,
+            "volume": 1200.0,
+        }
+    ]
+    assert seen == [{"symbol": "sh688059", "period": "1", "adjust": ""}]

@@ -372,7 +372,8 @@ def _fetch_intraday_bars(symbol: str) -> list[dict]:
     import akshare as ak
     import pandas as pd
 
-    code = _qualify_a_share_symbol(symbol).split(".")[0]
+    qualified = _qualify_a_share_symbol(symbol)
+    code, exchange = qualified.split(".")
     now = datetime.now(_CHINA_TZ)
     today = now.date()
     start = f"{today.isoformat()} 00:00:00"
@@ -384,35 +385,72 @@ def _fetch_intraday_bars(symbol: str) -> list[dict]:
             start_date=start,
             end_date=end,
         )
+        columns = {
+            "time": "时间",
+            "open": "开盘",
+            "high": "最高",
+            "low": "最低",
+            "close": "收盘",
+            "volume": "成交量",
+        }
     else:
-        frame = ak.stock_zh_a_hist_min_em(
-            symbol=code,
-            period="1",
-            start_date=start,
-            end_date=end,
-        )
+        try:
+            frame = ak.stock_zh_a_hist_min_em(
+                symbol=code,
+                period="1",
+                start_date=start,
+                end_date=end,
+            )
+            columns = {
+                "time": "时间",
+                "open": "开盘",
+                "high": "最高",
+                "low": "最低",
+                "close": "收盘",
+                "volume": "成交量",
+            }
+        except Exception as exc:
+            logger.info(
+                "dashboard intraday EastMoney source failed for %s; using Sina fallback: %s",
+                symbol,
+                exc,
+            )
+            frame = ak.stock_zh_a_minute(
+                symbol=f"{exchange.lower()}{code}",
+                period="1",
+                adjust="",
+            )
+            columns = {
+                "time": "day",
+                "open": "open",
+                "high": "high",
+                "low": "low",
+                "close": "close",
+                "volume": "volume",
+            }
     if frame is None or frame.empty:
         return []
 
-    columns = ["时间", "开盘", "最高", "最低", "收盘", "成交量"]
-    missing = [column for column in columns if column not in frame.columns]
+    missing = [column for column in columns.values() if column not in frame.columns]
     if missing:
         raise ValueError(f"intraday data missing columns: {', '.join(missing)}")
 
-    normalized = frame.loc[:, columns].copy()
-    normalized["时间"] = pd.to_datetime(normalized["时间"], errors="coerce")
-    for column in columns[1:]:
+    normalized = frame.loc[:, list(columns.values())].rename(
+        columns={source: target for target, source in columns.items()}
+    )
+    normalized["time"] = pd.to_datetime(normalized["time"], errors="coerce")
+    for column in ("open", "high", "low", "close", "volume"):
         normalized[column] = pd.to_numeric(normalized[column], errors="coerce")
-    normalized = normalized.dropna().loc[normalized["时间"].dt.date == today]
+    normalized = normalized.dropna().loc[normalized["time"].dt.date == today]
 
     return [
         {
-            "time": row["时间"].isoformat(),
-            "open": float(row["开盘"]),
-            "high": float(row["最高"]),
-            "low": float(row["最低"]),
-            "close": float(row["收盘"]),
-            "volume": float(row["成交量"]),
+            "time": row["time"].isoformat(),
+            "open": float(row["open"]),
+            "high": float(row["high"]),
+            "low": float(row["low"]),
+            "close": float(row["close"]),
+            "volume": float(row["volume"]),
         }
         for _, row in normalized.iterrows()
     ]
