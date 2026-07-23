@@ -219,9 +219,16 @@ def _is_public_hostname(hostname: str) -> bool:
             ascii_hostname = hostname.encode("idna").decode("ascii")
         except UnicodeError:
             return False
-        if len(ascii_hostname) > 253 or ascii_hostname.startswith(".") or ascii_hostname.endswith("."):
+        normalized_hostname = ascii_hostname.lower()
+        if (
+            len(normalized_hostname) > 253
+            or normalized_hostname.startswith(".")
+            or normalized_hostname.endswith(".")
+            or "." not in normalized_hostname
+            or normalized_hostname.endswith((".localhost", ".local", ".localdomain", ".home.arpa", ".internal"))
+        ):
             return False
-        labels = ascii_hostname.split(".")
+        labels = normalized_hostname.split(".")
         return all(
             0 < len(label) <= 63
             and label[0] != "-"

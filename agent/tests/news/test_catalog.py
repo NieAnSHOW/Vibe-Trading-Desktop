@@ -115,6 +115,13 @@ def test_registry_rejects_direct_source_without_cn_access_review(
         (lambda source: source.update(article_access="external"), "article access"),
         (lambda source: source.update(enabled="yes"), "enabled"),
         (lambda source: source.update(feed_url="file:///etc/passwd"), "URL"),
+        (
+            lambda source: source.update(
+                feed_url="http://localhost/rss",
+                id=hashlib.sha256(b"macro\0http://localhost/rss").hexdigest()[:16],
+            ),
+            "URL",
+        ),
         (lambda source: source.update(backup_source_ids=["outside-scope"]), "backup"),
     ],
 )
