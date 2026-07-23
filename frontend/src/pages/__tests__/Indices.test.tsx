@@ -143,6 +143,20 @@ describe("Indices page", () => {
     );
   });
 
+  it("fills the index detail panel with equal daily and intraday chart regions", async () => {
+    renderIndices();
+
+    expect(await screen.findByTestId("indices-chart-stack")).toHaveClass(
+      "lg:flex-1",
+    );
+    expect(screen.getByTestId("indices-daily-chart-region")).toHaveClass(
+      "lg:flex-1",
+    );
+    expect(screen.getByTestId("indices-intraday-chart-region")).toHaveClass(
+      "lg:flex-1",
+    );
+  });
+
   it("uses the symbol search parameter as the selected index", async () => {
     renderIndices("/indices?symbol=399001");
 

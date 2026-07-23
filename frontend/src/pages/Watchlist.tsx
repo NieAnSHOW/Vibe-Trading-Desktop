@@ -235,7 +235,7 @@ function StockDetailSection({
   }
 
   return (
-    <div className="flex h-full flex-col space-y-3">
+    <div className="flex h-full flex-col space-y-3 lg:min-h-0 lg:flex-1">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">
           {name || code}{" "}
@@ -254,6 +254,14 @@ function StockDetailSection({
         </button>
       </div>
 
+      <div
+        data-testid="watchlist-chart-stack"
+        className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-4"
+      >
+      <div
+        data-testid="watchlist-daily-chart-region"
+        className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col"
+      >
       {loading && (
         <p className="text-xs text-muted-foreground">
           {t("dashboard.loading")}
@@ -271,10 +279,14 @@ function StockDetailSection({
         </p>
       )}
       {bars.length > 0 && (
-        <CandlestickChartView data={bars} height={440} defaultRange="3M" />
+        <CandlestickChartView data={bars} height={440} fill defaultRange="3M" />
       )}
+      </div>
 
-      <div className="border-t pt-4">
+      <div
+        data-testid="watchlist-intraday-chart-region"
+        className="border-t pt-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col"
+      >
         <div className="mb-3 flex items-center justify-between gap-3">
           <h3 className="text-sm font-semibold">
             {t("watchlist.intradayHistory", "分时走势")}
@@ -313,8 +325,9 @@ function StockDetailSection({
           </div>
         )}
         {intradayBars.length > 0 && (
-          <IntradayChart data={intradayBars} height={300} />
+          <IntradayChart data={intradayBars} height={300} fill />
         )}
+      </div>
       </div>
     </div>
   );
@@ -695,7 +708,7 @@ export default function WatchlistPage() {
 
           <section
             data-testid="watchlist-chart-panel"
-            className="min-h-0 min-w-0 rounded-lg border bg-card p-4"
+            className="min-h-0 min-w-0 rounded-lg border bg-card p-4 lg:flex lg:flex-col"
           >
             <StockDetailSection
               code={activeSelectedCode}

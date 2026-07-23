@@ -436,10 +436,10 @@ export default function Indices() {
 
         <section
           aria-labelledby="index-detail-title"
-          className="min-h-0 rounded-lg border bg-card p-4 lg:overflow-auto"
+          className="min-h-0 rounded-lg border bg-card p-4 lg:flex lg:flex-col lg:overflow-hidden"
         >
           {selectedIndex ? (
-            <>
+            <div className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
               <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -496,7 +496,14 @@ export default function Indices() {
                 </div>
               </div>
 
-              <div className="mt-4">
+              <div
+                data-testid="indices-chart-stack"
+                className="mt-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-4"
+              >
+                <div
+                  data-testid="indices-daily-chart-region"
+                  className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col"
+                >
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold">
                     {t("indices.dailyHistory", "日线走势")}
@@ -546,10 +553,14 @@ export default function Indices() {
                 )}
 
                 {bars.length > 0 && (
-                  <CandlestickChart data={bars} height={460} />
+                  <CandlestickChart data={bars} height={460} fill />
                 )}
+                </div>
 
-                <div className="mt-5 border-t pt-4">
+                <div
+                  data-testid="indices-intraday-chart-region"
+                  className="mt-5 border-t pt-4 lg:mt-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col"
+                >
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <h3 className="text-sm font-semibold">
                       {t("indices.intradayHistory", "分时走势")}
@@ -599,11 +610,11 @@ export default function Indices() {
                   )}
 
                   {intradayBars.length > 0 && (
-                    <IntradayChart data={intradayBars} height={300} />
+                    <IntradayChart data={intradayBars} height={300} fill />
                   )}
                 </div>
               </div>
-            </>
+            </div>
           ) : (
             <div className="flex min-h-60 items-center justify-center text-sm text-muted-foreground">
               {t("indices.selectPrompt", "请选择一个指数")}

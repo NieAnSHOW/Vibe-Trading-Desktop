@@ -137,6 +137,18 @@ describe("Watchlist → Agent prefill integration", () => {
     expect(screen.getByTestId("intraday-chart")).toHaveAttribute("data-count", "1");
   });
 
+  it("fills the selected stock detail panel with equal chart regions", () => {
+    renderWatchlistWithAgent({}, {
+      selectedCode: "000001",
+      selectedBars: [{ time: "2026-07-10", open: 10, high: 11, low: 9, close: 10.5, volume: 1000 }],
+      selectedIntradayBars: [{ time: "2026-07-10T09:31:00", open: 10, high: 10.6, low: 9.9, close: 10.4, volume: 500 }],
+    });
+
+    expect(screen.getByTestId("watchlist-chart-stack")).toHaveClass("lg:flex-1");
+    expect(screen.getByTestId("watchlist-daily-chart-region")).toHaveClass("lg:flex-1");
+    expect(screen.getByTestId("watchlist-intraday-chart-region")).toHaveClass("lg:flex-1");
+  });
+
   it("uses a full-width responsive workspace with watchlist left and K-line right", () => {
     const { container } = renderWatchlistWithAgent({}, {
       selectedCode: "000001",

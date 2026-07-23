@@ -52,6 +52,7 @@ interface Props {
   markers?: TradeMarker[];
   indicators?: Record<string, IndicatorPoint[]>;
   height?: number;
+  fill?: boolean;
   defaultRange?: CandlestickRange;
 }
 
@@ -60,6 +61,7 @@ export function CandlestickChart({
   markers,
   indicators,
   height = 500,
+  fill = false,
   defaultRange = "3M",
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -507,7 +509,7 @@ export function CandlestickChart({
   }
 
   return (
-    <div>
+    <div className={cn(fill && "flex h-full min-h-0 flex-col")}>
       <div className="flex items-center gap-2 mb-1 flex-wrap">
         {/* Time range */}
         <div className="flex gap-0.5">
@@ -598,7 +600,11 @@ export function CandlestickChart({
           ))}
         </div>
       </div>
-      <div ref={containerRef} style={{ height }} />
+      <div
+        ref={containerRef}
+        className={cn(fill && "min-h-0 flex-1")}
+        style={fill ? undefined : { height }}
+      />
     </div>
   );
 }

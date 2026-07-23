@@ -4,10 +4,12 @@ import { getChartTheme } from "@/lib/chart-theme";
 import { abbreviateNum } from "@/lib/formatters";
 import { echarts } from "@/lib/echarts";
 import { useDarkMode } from "@/hooks/useDarkMode";
+import { cn } from "@/lib/utils";
 
 interface IntradayChartProps {
   data: PriceBar[];
   height?: number;
+  fill?: boolean;
 }
 
 function timeLabel(value: string): string {
@@ -18,6 +20,7 @@ function timeLabel(value: string): string {
 export function IntradayChart({
   data,
   height = 300,
+  fill = false,
 }: IntradayChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof echarts.init> | null>(null);
@@ -125,7 +128,8 @@ export function IntradayChart({
       ref={containerRef}
       data-testid="intraday-chart"
       aria-label="Intraday chart"
-      style={{ height }}
+      className={cn(fill && "h-full min-h-0")}
+      style={fill ? undefined : { height }}
     />
   );
 }
