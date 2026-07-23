@@ -553,6 +553,21 @@ async def test_exhausted_429_retries_return_rate_limited() -> None:
 
 
 @_async_test
+async def test_deadline_after_huge_retry_after_opens_endpoint_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(network, "TOTAL_FETCH_TIMEOUT_SECONDS", 0.001)
+    resolver = FakeResolver({"feed.example": ["93.184.216.34"]})
+    transport = SequenceTransport([httpx.Response(429, headers={"Retry-After": "999999999"}) for _ in range(4)])
+    client = PublicFeedClient(resolver, transport=transport)
+
+    for _ in range(3):
+        assert (await client.fetch(endpoint())).error_code == "timeout"
+    assert len(transport.requests) == 3
+
+    assert (await client.fetch(endpoint())).error_code == "circuit_open"
+    assert len(transport.requests) == 3
+
+
+@_async_test
 async def test_open_endpoint_circuit_skips_transport_until_cooldown() -> None:
     clock = Clock()
     transport = TimeoutTransport()
@@ -587,6 +602,37 @@ async def test_fetches_limit_concurrency_per_logical_host() -> None:
         await asyncio.wait_for(transport.entered["feed.example"].wait(), timeout=0.1)
         await asyncio.wait_for(transport.entered["other.example"].wait(), timeout=0.1)
         assert transport.peak_active["feed.example"] == per_host_limit
+        assert transport.peak_active["other.example"] == 1
+    finally:
+        transport.release.set()
+        results = await asyncio.gather(*same_host_tasks, other_host_task)
+
+    assert all(result.ok for result in results)
+
+
+@_async_test
+async def test_host_queue_does_not_consume_global_concurrency() -> None:
+    resolver = FakeResolver({"feed.example": ["93.184.216.34"], "other.example": ["93.184.216.34"]})
+    transport = HostTrackingTransport()
+    client = PublicFeedClient(resolver, transport=transport)
+    same_host_tasks = [
+        asyncio.create_task(client.fetch(endpoint(f"https://feed.example/{index}")))
+        for index in range(network.MAX_CONCURRENT_REQUESTS)
+    ]
+
+    for _ in range(10):
+        limiters = client._host_semaphores.get(asyncio.get_running_loop())
+        limiter = limiters.get("feed.example") if limiters is not None else None
+        if limiter is not None and limiter.reservations == network.MAX_CONCURRENT_REQUESTS:
+            break
+        await asyncio.sleep(0)
+    else:
+        pytest.fail("same-host requests did not queue")
+
+    other_host_task = asyncio.create_task(client.fetch(endpoint("https://other.example/rss")))
+    try:
+        await asyncio.wait_for(transport.entered["other.example"].wait(), timeout=0.1)
+        assert transport.peak_active["feed.example"] == network.MAX_CONCURRENT_REQUESTS_PER_HOST
         assert transport.peak_active["other.example"] == 1
     finally:
         transport.release.set()

@@ -91,8 +91,7 @@ class PublicFeedClient:
                 if self._circuit.is_open(endpoint.url, self._now()):
                     return self._failure(endpoint, "circuit_open")
                 for attempt in range(MAX_ATTEMPTS):
-                    async with self._semaphore():
-                        result, retry_after, retryable = await self._fetch_once(endpoint)
+                    result, retry_after, retryable = await self._fetch_once(endpoint)
                     if result.ok:
                         self._circuit.record_success(endpoint.url)
                         return result
@@ -101,6 +100,7 @@ class PublicFeedClient:
                         return result
                     await self._sleep(self._retry_delay(attempt, retry_after))
         except TimeoutError:
+            self._circuit.record_failure(endpoint.url, self._now())
             return self._failure(endpoint, "timeout")
 
     async def _fetch_once(self, endpoint: FeedEndpoint) -> tuple[EndpointFetchResult, float | None, bool]:
@@ -140,33 +140,34 @@ class PublicFeedClient:
                     except (UnicodeError, ValueError, httpx.InvalidURL):
                         return self._failure(endpoint, "invalid_url"), None, False
                     async with self._host_limit(target.hostname):
-                        response = await client.send(request, stream=True)
-                        try:
-                            if response.is_redirect:
-                                if redirects >= MAX_REDIRECTS:
-                                    return self._failure(endpoint, "too_many_redirects"), None, False
-                                location = response.headers.get("location")
-                                if not location:
-                                    return self._failure(endpoint, "invalid_redirect"), None, False
-                                current_url = urljoin(current_url, location)
-                                redirects += 1
-                                continue
-                            if response.status_code < 200 or response.status_code >= 300:
-                                retry_after = self._retry_after(response) if response.status_code == 429 else None
-                                code = "rate_limited" if response.status_code == 429 else "http_status"
-                                return (
-                                    self._failure(endpoint, code),
-                                    retry_after,
-                                    response.status_code in RETRYABLE_STATUS_CODES,
-                                )
-                            if self._content_length_too_large(response):
-                                return self._failure(endpoint, "response_too_large"), None, False
-                            body, error_code = await self._read_body(response)
-                            if error_code is not None:
-                                return self._failure(endpoint, error_code), None, False
-                            return EndpointFetchResult(endpoint=endpoint, body=body, error_code=None, final_url=current_url), None, False
-                        finally:
-                            await response.aclose()
+                        async with self._semaphore():
+                            response = await client.send(request, stream=True)
+                            try:
+                                if response.is_redirect:
+                                    if redirects >= MAX_REDIRECTS:
+                                        return self._failure(endpoint, "too_many_redirects"), None, False
+                                    location = response.headers.get("location")
+                                    if not location:
+                                        return self._failure(endpoint, "invalid_redirect"), None, False
+                                    current_url = urljoin(current_url, location)
+                                    redirects += 1
+                                    continue
+                                if response.status_code < 200 or response.status_code >= 300:
+                                    retry_after = self._retry_after(response) if response.status_code == 429 else None
+                                    code = "rate_limited" if response.status_code == 429 else "http_status"
+                                    return (
+                                        self._failure(endpoint, code),
+                                        retry_after,
+                                        response.status_code in RETRYABLE_STATUS_CODES,
+                                    )
+                                if self._content_length_too_large(response):
+                                    return self._failure(endpoint, "response_too_large"), None, False
+                                body, error_code = await self._read_body(response)
+                                if error_code is not None:
+                                    return self._failure(endpoint, error_code), None, False
+                                return EndpointFetchResult(endpoint=endpoint, body=body, error_code=None, final_url=current_url), None, False
+                            finally:
+                                await response.aclose()
         except httpx.TimeoutException:
             return self._failure(endpoint, "timeout"), None, True
         except httpx.RequestError:
