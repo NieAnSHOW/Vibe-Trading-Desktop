@@ -3,10 +3,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from types import MappingProxyType
 
-from src.news.catalog import NewsCatalog, SourceAssignment
+from src.news.catalog import NewsCatalog, SourceAssignment, load_catalog
 from src.news.feeds import RawFeedItem
 from src.news.models import CANONICAL_TRACK_IDS, FeedItem, FeedSource, NewsSnapshot, SourceStats, TrackAi, TrackSnapshot
-from src.news.pipeline import AssignmentItems, build_track_candidates
+from src.news.pipeline import UNDATED_RETENTION, AssignmentItems, build_track_candidates
 
 
 NOW = datetime(2026, 7, 20, 12, tzinfo=timezone.utc)
@@ -29,8 +29,21 @@ def catalog() -> NewsCatalog:
     )
 
 
-def assignment(identifier: str, track_id: str, url: str) -> SourceAssignment:
-    return SourceAssignment(id=identifier, track_id=track_id, name=f"Source {identifier}", url=url, filters=())
+def assignment(
+    identifier: str,
+    track_id: str,
+    url: str,
+    *,
+    article_access: str = "direct",
+) -> SourceAssignment:
+    return SourceAssignment(
+        id=identifier,
+        track_id=track_id,
+        name=f"Source {identifier}",
+        url=url,
+        filters=(),
+        article_access=article_access,
+    )
 
 
 def raw(
@@ -65,9 +78,11 @@ def make_track(track_id: str, *, state: str, generated_at: datetime | None, titl
         id=f"old-{track_id}",
         track_id=track_id,
         title=title,
-        source=FeedSource(id="old-source", name="Old Source", url="https://old.example/feed"),
+        source=FeedSource(id="old-source", name="Old Source"),
         published_at=OLD_TIME,
         url=f"https://old.example/{track_id}",
+        article_access="direct",
+        first_seen_at=OLD_TIME,
     )
     return TrackSnapshot(
         track_id=track_id,
@@ -81,14 +96,70 @@ def make_track(track_id: str, *, state: str, generated_at: datetime | None, titl
     )
 
 
+def item(
+    *,
+    title: str,
+    published_at: datetime | None = OLD_TIME,
+    first_seen_at: datetime = OLD_TIME,
+) -> FeedItem:
+    return FeedItem(
+        id=f"item-{title}",
+        track_id="ai",
+        title=title,
+        source=FeedSource(id="old-source", name="Old Source"),
+        published_at=published_at,
+        url=f"https://old.example/{title}",
+        article_access="direct",
+        first_seen_at=first_seen_at,
+    )
+
+
+def snapshot_with(track_id: str, entry: FeedItem) -> NewsSnapshot:
+    return make_snapshot_with_tracks(
+        [
+            TrackSnapshot(
+                track_id=track_id,
+                state="fresh",
+                generated_at=OLD_TIME,
+                stale=False,
+                partial=False,
+                items=[entry],
+                ai=TrackAi(),
+                source_stats=SourceStats.empty(),
+            )
+        ]
+    )
+
+
+def configured_stats(track_id: str | None = None) -> SourceStats:
+    assignments = tuple(
+        assignment for assignment in load_catalog("a_share").assignments if track_id is None or assignment.track_id == track_id
+    )
+    return SourceStats(
+        endpoint_total=len({assignment.url for assignment in assignments}),
+        endpoint_success_count=0,
+        endpoint_failure_count=0,
+        assignment_total=len(assignments),
+        assignment_success_count=0,
+        assignment_failure_count=0,
+    )
+
+
 def make_snapshot_with_tracks(overrides: list[TrackSnapshot]) -> NewsSnapshot:
     by_id = {track.track_id: track for track in overrides}
+    tracks = [
+        by_id.get(track_id, make_track(track_id, state="unavailable", generated_at=None)).model_copy(
+            update={"source_stats": configured_stats(track_id)}
+        )
+        for track_id in CANONICAL_TRACK_IDS
+    ]
     return NewsSnapshot(
-        schema_version=1,
+        schema_version=2,
+        scope="a_share",
         generated_at=OLD_TIME,
         upstream_commit="a" * 40,
-        source_stats=SourceStats.empty(),
-        tracks=[by_id.get(track_id, make_track(track_id, state="unavailable", generated_at=None)) for track_id in CANONICAL_TRACK_IDS],
+        source_stats=configured_stats(),
+        tracks=tracks,
     )
 
 
@@ -131,6 +202,27 @@ def test_pipeline_filters_old_items_and_keeps_undated_items_after_dated_items() 
 
     ai = result.tracks[0]
     assert [item.title for item in ai.items] == ["new", "undated"]
+
+
+def test_new_item_inherits_summary_only_access_policy() -> None:
+    source = assignment("global-ai", "ai", "https://feed.example/global", article_access="summary_only")
+
+    result = build_track_candidates(
+        catalog(),
+        [AssignmentItems(source, (raw(source, "headline"),))],
+        None,
+        NOW,
+    )
+
+    assert result.tracks[0].items[0].article_access == "summary_only"
+
+
+def test_retained_undated_item_expires_from_first_seen_time() -> None:
+    old = item(title="old", published_at=None, first_seen_at=NOW - UNDATED_RETENTION - timedelta(seconds=1))
+
+    result = build_track_candidates(catalog(), [], snapshot_with("ai", old), NOW)
+
+    assert result.tracks[0].items == []
 
 
 def test_pipeline_caps_each_endpoint_at_six_items() -> None:

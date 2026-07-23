@@ -18,6 +18,7 @@ from .models import CANONICAL_TRACK_IDS, FeedItem, FeedSource, NewsSnapshot, Sou
 MAX_ENDPOINT_ITEMS = 6
 MAX_TRACK_ITEMS = 100
 WINDOW = timedelta(days=7)
+UNDATED_RETENTION = timedelta(days=7)
 
 
 @dataclass(frozen=True)
@@ -71,7 +72,11 @@ def build_track_candidates(
             updated_track_ids.add(track_id)
             tracks.append(_fresh_track(track_id, current_items, prior, now, stats_by_track[track_id]))
         elif prior is not None and prior.items:
-            tracks.append(_stale_track(prior))
+            retained_items = _sort_and_cap_items(_retained_items(prior, now))
+            if retained_items:
+                tracks.append(_stale_track(prior, retained_items))
+            else:
+                tracks.append(_unavailable_track(track_id, stats_by_track[track_id]))
         else:
             tracks.append(_unavailable_track(track_id, stats_by_track[track_id]))
 
@@ -99,9 +104,11 @@ def _normalize_item(
             track_id=source.track_id,
             title=title,
             summary=summary,
-            source=FeedSource(id=source.id, name=_normalize_text(source.name), url=_canonicalize_url(source.url)),
+            source=FeedSource(id=source.id, name=_normalize_text(source.name)),
             published_at=published_at,
             url=article_url,
+            article_access=source.article_access,
+            first_seen_at=now,
         )
     except ValueError:
         return None
@@ -128,8 +135,10 @@ def _source_stats_by_track(current: Sequence[AssignmentItems]) -> dict[str, Sour
             assignment_successes[track_id] += 1
     return {
         track_id: SourceStats(
+            endpoint_total=len(endpoints[track_id]),
             endpoint_success_count=len(endpoints[track_id] - failed_endpoints[track_id]),
             endpoint_failure_count=len(failed_endpoints[track_id]),
+            assignment_total=assignment_successes[track_id] + assignment_failures[track_id],
             assignment_success_count=assignment_successes[track_id],
             assignment_failure_count=assignment_failures[track_id],
         )
@@ -166,11 +175,12 @@ def _fresh_track(
     now: datetime,
     source_stats: SourceStats,
 ) -> TrackSnapshot:
-    by_id = {item.id: item for item in current_items}
-    if prior is not None:
-        for item in prior.items:
-            by_id.setdefault(item.id, item)
-    merged = sorted((_Candidate(item, "") for item in by_id.values()), key=_sort_key)[:MAX_TRACK_ITEMS]
+    retained_by_id = {item.id: item for item in _retained_items(prior, now)} if prior is not None else {}
+    by_id = dict(retained_by_id)
+    for item in current_items:
+        prior_item = retained_by_id.get(item.id)
+        by_id[item.id] = item.model_copy(update={"first_seen_at": prior_item.first_seen_at}) if prior_item else item
+    merged = _sort_and_cap_items(by_id.values())
     has_failures = source_stats.endpoint_failure_count > 0 or source_stats.assignment_failure_count > 0
     return TrackSnapshot(
         track_id=track_id,
@@ -178,20 +188,20 @@ def _fresh_track(
         generated_at=now,
         stale=False,
         partial=has_failures,
-        items=[candidate.item for candidate in merged],
+        items=merged,
         ai=TrackAi(),
         source_stats=source_stats,
     )
 
 
-def _stale_track(prior: TrackSnapshot) -> TrackSnapshot:
+def _stale_track(prior: TrackSnapshot, items: Sequence[FeedItem]) -> TrackSnapshot:
     return TrackSnapshot(
         track_id=prior.track_id,
         state="stale",
         generated_at=prior.generated_at,
         stale=True,
         partial=False,
-        items=prior.items,
+        items=list(items),
         ai=prior.ai,
         source_stats=prior.source_stats,
     )
@@ -208,6 +218,20 @@ def _unavailable_track(track_id: str, source_stats: SourceStats) -> TrackSnapsho
         ai=TrackAi(),
         source_stats=source_stats,
     )
+
+
+def _retained_items(prior: TrackSnapshot, now: datetime) -> list[FeedItem]:
+    return [item for item in prior.items if _within_retention(item, now)]
+
+
+def _within_retention(item: FeedItem, now: datetime) -> bool:
+    if item.published_at is not None:
+        return now - item.published_at <= WINDOW
+    return now - item.first_seen_at <= UNDATED_RETENTION
+
+
+def _sort_and_cap_items(items: Sequence[FeedItem]) -> list[FeedItem]:
+    return [candidate.item for candidate in sorted((_Candidate(item, "") for item in items), key=_sort_key)[:MAX_TRACK_ITEMS]]
 
 
 def _sort_key(candidate: _Candidate) -> tuple[int, float, int, str, str]:
