@@ -326,7 +326,7 @@ export function MarketPulsePanel() {
 
           <div
             data-testid="market-pulse-event-scroll-region"
-            className="min-h-0 flex-1 overflow-y-auto p-3"
+            className="min-h-0 flex-1 overflow-y-auto"
           >
             {pulseLoading && pulse.length === 0 && (
               <div
@@ -414,12 +414,12 @@ export function MarketPulsePanel() {
             )}
 
             {pageEvents.length > 0 && (
-              <ul className="divide-y">
+              <ul>
                 {pageEvents.map(({ item, key }) => (
                   <li key={key}>
                     <div
                       className={cn(
-                        "flex items-center gap-1",
+                        "flex items-center gap-1 px-2",
                         selectedKey === key && "bg-muted",
                       )}
                     >

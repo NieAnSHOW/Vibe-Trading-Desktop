@@ -144,6 +144,62 @@ describe("Usage", () => {
     expect(getLLMUsage).toHaveBeenCalledTimes(1);
   });
 
+  it("renders an Indices-style summary and session workspace", async () => {
+    const { container } = renderUsage();
+
+    await screen.findByText("1,000");
+
+    expect(container.querySelector("[data-usage-summary]")).toHaveClass(
+      "grid",
+      "sm:grid-cols-4",
+    );
+    expect(container.querySelector("[data-usage-workspace]")).toHaveClass(
+      "lg:grid-cols-[minmax(15rem,0.36fr)_minmax(0,1fr)]",
+    );
+    expect(container.querySelector("[data-usage-navigator]")).toHaveClass(
+      "rounded-lg",
+      "bg-card",
+    );
+    expect(container.querySelector("[data-usage-detail]")).toHaveClass(
+      "rounded-lg",
+      "bg-card",
+    );
+    expect(screen.getByRole("link", { name: "run-a" })).toBeInTheDocument();
+  });
+
+  it("switches the detail surface when a session is selected", async () => {
+    const response = structuredClone(usageResponse);
+    response.sessions.items[1].runs = [{
+      run_id: "run-b",
+      occurred_at: "2026-07-22T02:00:00Z",
+      provider: "anthropic",
+      model: "claude",
+      metering_eligible: true,
+      prompt: "second-prompt-sentinel",
+      response: "second-response-sentinel",
+      totals: { input_tokens: 300, output_tokens: 100, total_tokens: 400, calls: 1 },
+    }];
+    getLLMUsage.mockResolvedValueOnce(response);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    renderUsage();
+
+    expect(await screen.findByRole("link", { name: "run-a" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "会话 B" }));
+
+    expect(await screen.findByRole("link", { name: "run-b" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "run-a" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "会话 B" })).toHaveClass(
+      "!border-primary/30",
+      "bg-primary/10",
+    );
+    expect(screen.getByRole("button", { name: "会话 A" })).toHaveClass(
+      "border-transparent",
+    );
+    expect(screen.queryByText("second-prompt-sentinel")).not.toBeInTheDocument();
+    expect(screen.queryByText("second-response-sentinel")).not.toBeInTheDocument();
+  });
+
   it.each([
     ["近 7 天", "2026-07-16T04:00:00.000Z", "2026-07-23T04:00:00.000Z"],
     ["近 30 天", "2026-06-23T04:00:00.000Z", "2026-07-23T04:00:00.000Z"],
