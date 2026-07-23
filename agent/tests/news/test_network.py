@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import ssl
+from collections import defaultdict
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from functools import wraps
@@ -81,6 +82,55 @@ class TimeoutTransport(httpx.AsyncBaseTransport):
         raise httpx.ReadTimeout("private diagnostic", request=request)
 
 
+class SequenceTransport(httpx.AsyncBaseTransport):
+    def __init__(self, responses: list[httpx.Response]) -> None:
+        self._responses = responses
+        self.requests: list[httpx.Request] = []
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        response = self._responses.pop(0)
+        return httpx.Response(
+            response.status_code,
+            headers=response.headers,
+            stream=response.stream,
+            request=request,
+        )
+
+
+class HostTrackingTransport(httpx.AsyncBaseTransport):
+    def __init__(self) -> None:
+        self.active: dict[str, int] = defaultdict(int)
+        self.peak_active: dict[str, int] = defaultdict(int)
+        self.entered: dict[str, asyncio.Event] = defaultdict(asyncio.Event)
+        self.release = asyncio.Event()
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        host = request.headers["host"]
+        self.active[host] += 1
+        self.peak_active[host] = max(self.peak_active[host], self.active[host])
+        self.entered[host].set()
+        try:
+            await self.release.wait()
+            return httpx.Response(200, stream=_ByteStream([b"ok"]), request=request)
+        finally:
+            self.active[host] -= 1
+
+
+class BlockingRetrySleep:
+    def __init__(self, expected_calls: int) -> None:
+        self.expected_calls = expected_calls
+        self.calls = 0
+        self.entered = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def __call__(self, _delay: float) -> None:
+        self.calls += 1
+        if self.calls == self.expected_calls:
+            self.entered.set()
+        await self.release.wait()
+
+
 class BlockingTransport(httpx.AsyncBaseTransport):
     def __init__(self, expected_requests: int) -> None:
         self.expected_requests = expected_requests
@@ -124,6 +174,25 @@ class HangingResolver:
 
 def endpoint(url: str = "https://feed.example/rss") -> FeedEndpoint:
     return FeedEndpoint(id="endpoint", url=url, assignments=())
+
+
+def rss_response() -> httpx.Response:
+    return httpx.Response(200, stream=_ByteStream([b"<rss />"]))
+
+
+async def record(delays: list[float], delay: float) -> None:
+    delays.append(delay)
+
+
+@dataclass
+class Clock:
+    value: float = 0.0
+
+    def now(self) -> float:
+        return self.value
+
+    def advance(self, seconds: float) -> None:
+        self.value += seconds
 
 
 def _async_test(function: Callable[..., Any]) -> Callable[..., Any]:
@@ -433,6 +502,145 @@ async def test_fetch_maps_timeouts_without_exposing_diagnostic_text() -> None:
 
 
 @_async_test
+async def test_retry_after_is_honored_then_successful() -> None:
+    delays: list[float] = []
+    transport = SequenceTransport([httpx.Response(429, headers={"Retry-After": "3"}), rss_response()])
+    resolver = FakeResolver({"feed.example": ["93.184.216.34"]})
+
+    result = await PublicFeedClient(
+        resolver,
+        transport=transport,
+        sleep=lambda delay: record(delays, delay),
+    ).fetch(endpoint())
+
+    assert result.ok is True
+    assert delays == [3.0]
+    assert len(transport.requests) == 2
+
+
+@_async_test
+async def test_fetch_does_not_retry_non_retryable_http_status() -> None:
+    delays: list[float] = []
+    transport = SequenceTransport([httpx.Response(404)])
+    resolver = FakeResolver({"feed.example": ["93.184.216.34"]})
+
+    result = await PublicFeedClient(
+        resolver,
+        transport=transport,
+        sleep=lambda delay: record(delays, delay),
+    ).fetch(endpoint())
+
+    assert result.error_code == "http_status"
+    assert delays == []
+    assert len(transport.requests) == 1
+
+
+@_async_test
+async def test_exhausted_429_retries_return_rate_limited() -> None:
+    delays: list[float] = []
+    transport = SequenceTransport([httpx.Response(429), httpx.Response(429), httpx.Response(429)])
+    resolver = FakeResolver({"feed.example": ["93.184.216.34"]})
+
+    result = await PublicFeedClient(
+        resolver,
+        transport=transport,
+        sleep=lambda delay: record(delays, delay),
+    ).fetch(endpoint())
+
+    assert result.error_code == "rate_limited"
+    assert delays == [1.0, 2.0]
+    assert len(transport.requests) == 3
+
+
+@_async_test
+async def test_open_endpoint_circuit_skips_transport_until_cooldown() -> None:
+    clock = Clock()
+    transport = TimeoutTransport()
+    resolver = FakeResolver({"feed.example": ["93.184.216.34"]})
+    client = PublicFeedClient(resolver, transport=transport, sleep=lambda _delay: record([], 0), now=clock.now)
+
+    for _ in range(3):
+        assert (await client.fetch(endpoint())).error_code == "timeout"
+    assert len(transport.requests) == 9
+
+    assert (await client.fetch(endpoint())).error_code == "circuit_open"
+    assert len(transport.requests) == 9
+
+    clock.advance(network.CIRCUIT_COOLDOWN_SECONDS)
+    assert (await client.fetch(endpoint())).error_code == "timeout"
+    assert len(transport.requests) == 12
+
+
+@_async_test
+async def test_fetches_limit_concurrency_per_logical_host() -> None:
+    per_host_limit = 4
+    resolver = FakeResolver({"feed.example": ["93.184.216.34"], "other.example": ["93.184.216.34"]})
+    transport = HostTrackingTransport()
+    client = PublicFeedClient(resolver, transport=transport)
+    same_host_tasks = [
+        asyncio.create_task(client.fetch(endpoint(f"https://feed.example/{index}")))
+        for index in range(per_host_limit + 1)
+    ]
+    other_host_task = asyncio.create_task(client.fetch(endpoint("https://other.example/rss")))
+
+    try:
+        await asyncio.wait_for(transport.entered["feed.example"].wait(), timeout=0.1)
+        await asyncio.wait_for(transport.entered["other.example"].wait(), timeout=0.1)
+        assert transport.peak_active["feed.example"] == per_host_limit
+        assert transport.peak_active["other.example"] == 1
+    finally:
+        transport.release.set()
+        results = await asyncio.gather(*same_host_tasks, other_host_task)
+
+    assert all(result.ok for result in results)
+
+
+@_async_test
+async def test_retry_wait_does_not_consume_global_concurrency() -> None:
+    retry_sleep = BlockingRetrySleep(expected_calls=network.MAX_CONCURRENT_REQUESTS)
+    resolver = FakeResolver({f"feed-{index}.example": ["93.184.216.34"] for index in range(17)})
+    slow_tasks = [
+        asyncio.create_task(
+            PublicFeedClient(
+                resolver,
+                transport=SequenceTransport([httpx.Response(429), rss_response()]),
+                sleep=retry_sleep,
+            ).fetch(endpoint(f"https://feed-{index}.example/rss"))
+        )
+        for index in range(network.MAX_CONCURRENT_REQUESTS)
+    ]
+    await asyncio.wait_for(retry_sleep.entered.wait(), timeout=0.1)
+    fast_transport = FakeTransport({"https://93.184.216.34/rss": rss_response()})
+    fast_task = asyncio.create_task(
+        PublicFeedClient(resolver, transport=fast_transport).fetch(endpoint("https://feed-16.example/rss"))
+    )
+
+    try:
+        await asyncio.wait_for(asyncio.shield(fast_task), timeout=0.1)
+    finally:
+        retry_sleep.release.set()
+        results = await asyncio.gather(*slow_tasks, fast_task)
+
+    assert all(result.ok for result in results)
+
+
+@_async_test
+async def test_host_limiter_cache_evicts_idle_hostnames(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(network, "MAX_HOST_SEMAPHORE_CACHE_SIZE", 4, raising=False)
+    resolver = FakeResolver({f"feed-{index}.example": ["93.184.216.34"] for index in range(5)})
+    transport = FakeTransport(
+        {f"https://93.184.216.34/{index}": rss_response() for index in range(5)}
+    )
+    client = PublicFeedClient(resolver, transport=transport)
+
+    for index in range(5):
+        assert (await client.fetch(endpoint(f"https://feed-{index}.example/{index}"))).ok
+
+    host_semaphores = client._host_semaphores[asyncio.get_running_loop()]
+    assert len(host_semaphores) <= 4
+
+
+@_async_test
 async def test_fetch_maps_unexpected_resolver_failures_to_a_stable_code() -> None:
     result = await PublicFeedClient(BrokenResolver(), transport=FakeTransport()).fetch(endpoint())
 
@@ -489,15 +697,17 @@ async def test_fetch_applies_total_deadline_across_redirect_request_stages(
 async def test_fetch_applies_total_deadline_while_waiting_for_global_concurrency(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    resolver = FakeResolver({"feed.example": ["93.184.216.34"]})
+    resolver = FakeResolver({f"feed-{index}.example": ["93.184.216.34"] for index in range(17)})
     transport = BlockingTransport(expected_requests=16)
     client = PublicFeedClient(resolver, transport=transport)
-    holders = [asyncio.create_task(client.fetch(endpoint(f"https://feed.example/{index}"))) for index in range(16)]
+    holders = [
+        asyncio.create_task(client.fetch(endpoint(f"https://feed-{index}.example/{index}"))) for index in range(16)
+    ]
     await asyncio.wait_for(transport.entered.wait(), timeout=0.1)
     monkeypatch.setattr(network, "TOTAL_FETCH_TIMEOUT_SECONDS", 0.01)
 
     try:
-        result = await asyncio.wait_for(client.fetch(endpoint("https://feed.example/queued")), timeout=0.1)
+        result = await asyncio.wait_for(client.fetch(endpoint("https://feed-16.example/queued")), timeout=0.1)
     finally:
         transport.release.set()
         await asyncio.gather(*holders)
@@ -509,14 +719,16 @@ async def test_fetch_applies_total_deadline_while_waiting_for_global_concurrency
 
 @_async_test
 async def test_fetches_share_a_global_concurrency_limit_of_sixteen() -> None:
-    resolver = FakeResolver({"feed.example": ["93.184.216.34"]})
+    resolver = FakeResolver({f"feed-{index}.example": ["93.184.216.34"] for index in range(20)})
     responses = {
         f"https://93.184.216.34/{index}": httpx.Response(200, stream=_ByteStream([b"ok"])) for index in range(20)
     }
     transport = FakeTransport(responses, delay=0.01)
     client = PublicFeedClient(resolver, transport=transport)
 
-    results = await asyncio.gather(*(client.fetch(endpoint(f"https://feed.example/{index}")) for index in range(20)))
+    results = await asyncio.gather(
+        *(client.fetch(endpoint(f"https://feed-{index}.example/{index}")) for index in range(20))
+    )
 
     assert all(result.body == b"ok" for result in results)
     assert transport.peak_active == 16
