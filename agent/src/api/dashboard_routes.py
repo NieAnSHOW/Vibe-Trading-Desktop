@@ -434,8 +434,10 @@ def _fetch_intraday_bars(symbol: str) -> list[dict]:
             frame = fetch_sina_fallback(f"failed ({exc})")
             columns = sina_columns
         else:
-            if frame is None or frame.empty:
-                frame = fetch_sina_fallback("returned no data")
+            if frame is None or frame.empty or any(
+                column not in frame.columns for column in columns.values()
+            ):
+                frame = fetch_sina_fallback("returned no usable data")
                 columns = sina_columns
     if frame is None or frame.empty:
         return []

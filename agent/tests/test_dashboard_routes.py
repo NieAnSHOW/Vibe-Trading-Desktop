@@ -557,3 +557,44 @@ def test_intraday_bars_falls_back_to_sina_when_eastmoney_is_empty(monkeypatch):
 
     assert rows[0]["close"] == 10.1
     assert seen == [{"symbol": "sz000001", "period": "1", "adjust": ""}]
+
+
+def test_intraday_bars_falls_back_to_sina_when_eastmoney_schema_is_invalid(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    import pandas as pd
+
+    from src.api import dashboard_routes as routes
+
+    today = datetime.now(routes._CHINA_TZ).strftime("%Y-%m-%d")
+    seen = []
+
+    def sina_minute(**kwargs):
+        seen.append(kwargs)
+        return pd.DataFrame(
+            [
+                {
+                    "day": f"{today} 09:31:00",
+                    "open": "10.0",
+                    "high": "10.2",
+                    "low": "9.9",
+                    "close": "10.1",
+                    "volume": "1200",
+                }
+            ]
+        )
+
+    monkeypatch.setitem(
+        sys.modules,
+        "akshare",
+        SimpleNamespace(
+            stock_zh_a_hist_min_em=lambda **_kwargs: pd.DataFrame({"error": ["unavailable"]}),
+            stock_zh_a_minute=sina_minute,
+        ),
+    )
+
+    rows = routes._fetch_intraday_bars("688059")
+
+    assert rows[0]["close"] == 10.1
+    assert seen == [{"symbol": "sh688059", "period": "1", "adjust": ""}]
