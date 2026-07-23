@@ -144,7 +144,11 @@ describe("Watchlist → Agent prefill integration", () => {
       selectedIntradayBars: [{ time: "2026-07-10T09:31:00", open: 10, high: 10.6, low: 9.9, close: 10.4, volume: 500 }],
     });
 
-    expect(screen.getByTestId("watchlist-chart-stack")).toHaveClass("lg:flex-1");
+    expect(screen.getByTestId("watchlist-chart-stack")).toHaveClass(
+      "lg:flex-1",
+      "space-y-3",
+      "lg:space-y-0",
+    );
     expect(screen.getByTestId("watchlist-daily-chart-region")).toHaveClass("lg:flex-1");
     expect(screen.getByTestId("watchlist-intraday-chart-region")).toHaveClass("lg:flex-1");
   });
