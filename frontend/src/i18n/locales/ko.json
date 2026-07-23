@@ -818,6 +818,13 @@
     "aiUnavailable": "AI 핵심 요약을 사용할 수 없습니다",
     "error": "뉴스를 불러오는 중 문제가 발생했습니다",
     "refresh": "모든 뉴스 새로고침",
+    "scope": "뉴스 범위",
+    "summaryOnly": "요약만 제공",
+    "sourceHealth": "사용할 수 없는 소스",
+    "scopes": {
+      "a_share": "중국 A주 뉴스",
+      "global_industry": "글로벌 산업 요약"
+    },
     "trackList": "뉴스 분야",
     "selectTrack": "뉴스 분야 선택",
     "refreshProgress": "새로고침 중: 소스 {{processedEndpoints}} / {{totalEndpoints}}, 분야 {{processedTracks}} / {{totalTracks}}",

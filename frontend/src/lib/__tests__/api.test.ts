@@ -5,6 +5,7 @@ const TRACK_IDS = ["ai", "semi", "robot", "auto", "energy", "bio", "space", "sec
 
 const runningStatus = {
   state: "fetching",
+  scope: "a_share",
   task_id: "00000000-0000-4000-8000-000000000001",
   started_at: "2026-07-20T10:00:00Z",
   completed_at: null,
@@ -18,19 +19,33 @@ const runningStatus = {
 };
 
 function validNewsSnapshot() {
+  return validScopedNewsSnapshot();
+}
+
+function validScopedNewsSnapshot() {
+  const sourceStats = {
+    endpoint_total: TRACK_IDS.length,
+    endpoint_success_count: TRACK_IDS.length,
+    endpoint_failure_count: 0,
+    assignment_total: TRACK_IDS.length,
+    assignment_success_count: TRACK_IDS.length,
+    assignment_failure_count: 0,
+  };
+  const status = {
+    ...runningStatus,
+    scope: "a_share",
+    total_endpoints: TRACK_IDS.length,
+  };
+
   return {
     available: true,
     stale: false,
     snapshot: {
-      schema_version: 1,
+      schema_version: 2,
+      scope: "a_share",
       generated_at: "2026-07-20T10:00:00Z",
       upstream_commit: "d98aa603228f4839fb48859812c63a58ca10cead",
-      source_stats: {
-        endpoint_success_count: 1,
-        endpoint_failure_count: 0,
-        assignment_success_count: 1,
-        assignment_failure_count: 0,
-      },
+      source_stats: sourceStats,
       errors: [],
       tracks: TRACK_IDS.map((track_id) => ({
         track_id,
@@ -44,9 +59,11 @@ function validNewsSnapshot() {
           title: `${track_id} headline`,
           title_zh: null,
           summary: null,
-          source: { id: "source", name: "News source", url: "https://example.com/feed" },
+          source: { id: "source", name: "News source" },
           published_at: "2026-07-20T09:00:00Z",
           url: "https://example.com/article",
+          article_access: "direct",
+          first_seen_at: "2026-07-20T09:00:00Z",
         }],
         ai: {
           available: true,
@@ -54,15 +71,17 @@ function validNewsSnapshot() {
           highlights: ["One", "Two", "Three"],
           error: null,
         },
-        source_stats: {
-          endpoint_success_count: 1,
-          endpoint_failure_count: 0,
-          assignment_success_count: 1,
-          assignment_failure_count: 0,
-        },
+        source_stats: { ...sourceStats, endpoint_total: 1, endpoint_success_count: 1, assignment_total: 1, assignment_success_count: 1 },
+        source_outcomes: [{
+          source_id: "source",
+          source_name: "News source",
+          state: "success",
+          reason: null,
+          last_success_at: "2026-07-20T10:00:00Z",
+        }],
       })),
     },
-    refresh: { ...runningStatus },
+    refresh: status,
     error: null,
   };
 }
@@ -161,9 +180,9 @@ describe("api request helper", () => {
     const signal = new AbortController().signal;
     const { api } = await loadApiModule();
 
-    await api.startNewsRefresh(signal);
+    await api.startNewsRefresh("a_share", signal);
 
-    expect(fetchMock).toHaveBeenCalledWith("/news-api/refresh", expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith("/news-api/refresh?scope=a_share", expect.objectContaining({
       method: "POST",
       signal,
       headers: expect.objectContaining({ Authorization: "Bearer news-api-key" }),
@@ -176,6 +195,34 @@ describe("api request helper", () => {
     expect(parseNewsSnapshotResponse(validNewsSnapshot())).toMatchObject({
       available: true,
       snapshot: { tracks: expect.arrayContaining([expect.objectContaining({ track_id: "ai" })]) },
+    });
+  });
+
+  it("parses a scoped v2 news snapshot with article access policy", async () => {
+    const { parseNewsSnapshotResponse } = await loadApiModule();
+
+    expect(parseNewsSnapshotResponse(validScopedNewsSnapshot())).toMatchObject({
+      snapshot: {
+        schema_version: 2,
+        scope: "a_share",
+        tracks: expect.arrayContaining([expect.objectContaining({
+          items: [expect.objectContaining({ article_access: "direct" })],
+        })]),
+      },
+      refresh: { scope: "a_share" },
+    });
+  });
+
+  it("rejects a snapshot returned for a different requested scope", async () => {
+    const payload = validScopedNewsSnapshot();
+    payload.snapshot.scope = "global_industry";
+    payload.refresh.scope = "global_industry";
+    mockFetchJson(payload);
+    const { api } = await loadApiModule();
+
+    await expect(api.getNewsSnapshot("a_share")).rejects.toMatchObject({
+      name: "ApiError",
+      status: 200,
     });
   });
 
@@ -201,7 +248,7 @@ describe("api request helper", () => {
     mockFetchJson(payload);
     const { api } = await loadApiModule();
 
-    await expect(api.getNewsSnapshot()).rejects.toMatchObject({ name: "ApiError", status: 200 });
+    await expect(api.getNewsSnapshot("a_share")).rejects.toMatchObject({ name: "ApiError", status: 200 });
   });
 
   it("rejects article URLs outside HTTP(S)", async () => {

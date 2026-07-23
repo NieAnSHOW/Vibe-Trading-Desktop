@@ -1179,6 +1179,13 @@
     "aiUnavailable": "AI 要点暂不可用",
     "error": "加载资讯时出现问题",
     "refresh": "刷新全部资讯",
+    "scope": "资讯范围",
+    "summaryOnly": "仅摘要",
+    "sourceHealth": "暂不可用的来源",
+    "scopes": {
+      "a_share": "A 股资讯",
+      "global_industry": "全球行业摘要"
+    },
     "trackList": "资讯赛道",
     "selectTrack": "选择资讯赛道",
     "refreshProgress": "正在刷新：{{processedEndpoints}} / {{totalEndpoints}} 个来源，{{processedTracks}} / {{totalTracks}} 个赛道",

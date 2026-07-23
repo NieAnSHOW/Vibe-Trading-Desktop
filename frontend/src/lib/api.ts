@@ -66,8 +66,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 const NEWS_TRACK_IDS = ["ai", "semi", "robot", "auto", "energy", "bio", "space", "security", "tech", "consumer", "macro", "science"] as const;
+const NEWS_SCOPES = ["a_share", "global_industry"] as const;
 const NEWS_TRACK_STATES = ["fresh", "stale", "unavailable"] as const;
 const NEWS_REFRESH_PHASES = ["idle", "fetching", "normalizing", "enriching", "committing", "succeeded", "failed", "cancelled"] as const;
+const NEWS_ARTICLE_ACCESS = ["direct", "summary_only"] as const;
+const NEWS_SOURCE_OUTCOME_STATES = ["success", "failed", "skipped_circuit_open", "disabled"] as const;
+const NEWS_SOURCE_OUTCOME_REASONS = ["http_status", "network_error", "timeout", "rate_limited", "circuit_open", "disabled"] as const;
 const NEWS_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NEWS_SENSITIVE_PARAMETER_NAMES = new Set([
   "access_token", "api_key", "apikey", "authorization", "credential", "credentials", "key", "password", "secret", "sig", "signature", "token",
@@ -84,8 +88,12 @@ const NEWS_PUBLIC_ERRORS: Record<string, string> = {
 };
 
 export type NewsTrackId = (typeof NEWS_TRACK_IDS)[number];
+export type NewsScope = (typeof NEWS_SCOPES)[number];
 export type NewsTrackState = (typeof NEWS_TRACK_STATES)[number];
 export type NewsRefreshPhase = (typeof NEWS_REFRESH_PHASES)[number];
+export type NewsArticleAccess = (typeof NEWS_ARTICLE_ACCESS)[number];
+export type NewsSourceOutcomeState = (typeof NEWS_SOURCE_OUTCOME_STATES)[number];
+export type NewsSourceOutcomeReason = (typeof NEWS_SOURCE_OUTCOME_REASONS)[number];
 
 export interface NewsPublicError {
   code: keyof typeof NEWS_PUBLIC_ERRORS;
@@ -93,8 +101,10 @@ export interface NewsPublicError {
 }
 
 export interface NewsSourceStats {
+  endpoint_total: number;
   endpoint_success_count: number;
   endpoint_failure_count: number;
+  assignment_total: number;
   assignment_success_count: number;
   assignment_failure_count: number;
 }
@@ -102,7 +112,6 @@ export interface NewsSourceStats {
 export interface NewsArticleSource {
   id: string;
   name: string;
-  url: string;
 }
 
 export interface NewsArticle {
@@ -114,6 +123,16 @@ export interface NewsArticle {
   source: NewsArticleSource;
   published_at: string | null;
   url: string;
+  article_access: NewsArticleAccess;
+  first_seen_at: string;
+}
+
+export interface NewsSourceOutcome {
+  source_id: string;
+  source_name: string;
+  state: NewsSourceOutcomeState;
+  reason: NewsSourceOutcomeReason | null;
+  last_success_at: string | null;
 }
 
 export interface NewsTrackAi {
@@ -132,10 +151,12 @@ export interface NewsTrack {
   items: NewsArticle[];
   ai: NewsTrackAi;
   source_stats: NewsSourceStats;
+  source_outcomes: NewsSourceOutcome[];
 }
 
 export interface NewsSnapshot {
-  schema_version: 1;
+  schema_version: 2;
+  scope: NewsScope;
   generated_at: string;
   upstream_commit: string;
   source_stats: NewsSourceStats;
@@ -145,6 +166,7 @@ export interface NewsSnapshot {
 
 export interface NewsRefreshStatus {
   state: NewsRefreshPhase;
+  scope: NewsScope;
   task_id: string | null;
   started_at: string | null;
   completed_at: string | null;
@@ -298,30 +320,54 @@ function parseNewsPublicError(value: unknown, nullable = false): NewsPublicError
 }
 
 function parseNewsSourceStats(value: unknown): NewsSourceStats {
-  const record = newsRecord(value, ["endpoint_success_count", "endpoint_failure_count", "assignment_success_count", "assignment_failure_count"]);
-  const endpoint_success_count = newsInteger(record.endpoint_success_count, 106);
-  const endpoint_failure_count = newsInteger(record.endpoint_failure_count, 106);
-  const assignment_success_count = newsInteger(record.assignment_success_count, 108);
-  const assignment_failure_count = newsInteger(record.assignment_failure_count, 108);
-  if (endpoint_success_count + endpoint_failure_count > 106 || assignment_success_count + assignment_failure_count > 108) invalidNewsResponse();
-  return { endpoint_success_count, endpoint_failure_count, assignment_success_count, assignment_failure_count };
+  const record = newsRecord(value, ["endpoint_total", "endpoint_success_count", "endpoint_failure_count", "assignment_total", "assignment_success_count", "assignment_failure_count"]);
+  const endpoint_total = newsInteger(record.endpoint_total, 200);
+  const endpoint_success_count = newsInteger(record.endpoint_success_count, endpoint_total);
+  const endpoint_failure_count = newsInteger(record.endpoint_failure_count, endpoint_total);
+  const assignment_total = newsInteger(record.assignment_total, 200);
+  const assignment_success_count = newsInteger(record.assignment_success_count, assignment_total);
+  const assignment_failure_count = newsInteger(record.assignment_failure_count, assignment_total);
+  if (endpoint_success_count + endpoint_failure_count > endpoint_total || assignment_success_count + assignment_failure_count > assignment_total) invalidNewsResponse();
+  return { endpoint_total, endpoint_success_count, endpoint_failure_count, assignment_total, assignment_success_count, assignment_failure_count };
 }
 
 function parseNewsArticle(value: unknown, trackId: NewsTrackId): NewsArticle {
-  const record = newsRecord(value, ["id", "track_id", "title", "title_zh", "summary", "source", "published_at", "url"]);
+  const record = newsRecord(value, ["id", "track_id", "title", "title_zh", "summary", "source", "published_at", "url", "article_access", "first_seen_at"]);
   if (record.track_id !== trackId) invalidNewsResponse();
-  const source = newsRecord(record.source, ["id", "name", "url"]);
+  const source = newsRecord(record.source, ["id", "name"]);
   const title_zh = record.title_zh === null ? null : newsString(record.title_zh, 1, 300);
   const summary = record.summary === null ? null : newsString(record.summary, 0, 1000);
+  if (!NEWS_ARTICLE_ACCESS.includes(record.article_access as NewsArticleAccess)) invalidNewsResponse();
   return {
     id: newsString(record.id, 1, 128),
     track_id: trackId,
     title: newsString(record.title, 1, 300),
     title_zh,
     summary,
-    source: { id: newsString(source.id, 1, 128), name: newsString(source.name, 1, 200), url: newsHttpUrl(source.url) },
+    source: { id: newsString(source.id, 1, 128), name: newsString(source.name, 1, 200) },
     published_at: newsUtcDate(record.published_at, true),
     url: newsHttpUrl(record.url),
+    article_access: record.article_access as NewsArticleAccess,
+    first_seen_at: newsUtcDate(record.first_seen_at) as string,
+  };
+}
+
+function parseNewsSourceOutcome(value: unknown): NewsSourceOutcome {
+  const record = newsRecord(value, ["source_id", "source_name", "state", "reason", "last_success_at"]);
+  if (!NEWS_SOURCE_OUTCOME_STATES.includes(record.state as NewsSourceOutcomeState)) invalidNewsResponse();
+  const state = record.state as NewsSourceOutcomeState;
+  const reason = record.reason === null ? null : record.reason as NewsSourceOutcomeReason;
+  if ((reason !== null && !NEWS_SOURCE_OUTCOME_REASONS.includes(reason)) ||
+    (state === "success" && reason !== null) ||
+    (state === "failed" && !["http_status", "network_error", "timeout", "rate_limited"].includes(reason ?? "")) ||
+    (state === "skipped_circuit_open" && reason !== "circuit_open") ||
+    (state === "disabled" && reason !== "disabled")) invalidNewsResponse();
+  return {
+    source_id: newsString(record.source_id, 1, 128),
+    source_name: newsString(record.source_name, 1, 200),
+    state,
+    reason,
+    last_success_at: newsUtcDate(record.last_success_at, true),
   };
 }
 
@@ -338,7 +384,7 @@ function parseNewsTrackAi(value: unknown): NewsTrackAi {
 }
 
 function parseNewsTrack(value: unknown, expectedTrackId: NewsTrackId): NewsTrack {
-  const record = newsRecord(value, ["track_id", "state", "generated_at", "stale", "partial", "items", "ai", "source_stats"]);
+  const record = newsRecord(value, ["track_id", "state", "generated_at", "stale", "partial", "items", "ai", "source_stats", "source_outcomes"]);
   if (record.track_id !== expectedTrackId || !NEWS_TRACK_STATES.includes(record.state as NewsTrackState)) invalidNewsResponse();
   const state = record.state as NewsTrackState;
   const generated_at = newsUtcDate(record.generated_at, true);
@@ -347,22 +393,24 @@ function parseNewsTrack(value: unknown, expectedTrackId: NewsTrackId): NewsTrack
   const source_stats = parseNewsSourceStats(record.source_stats);
   const items = newsArray(record.items, 0, 100).map((item) => parseNewsArticle(item, expectedTrackId));
   const ai = parseNewsTrackAi(record.ai);
+  const source_outcomes = newsArray(record.source_outcomes, 0, 200).map(parseNewsSourceOutcome);
   const hasSourceFailure = source_stats.endpoint_failure_count > 0 || source_stats.assignment_failure_count > 0;
   if (
     (state === "fresh" && (generated_at === null || stale || partial !== hasSourceFailure)) ||
     (state === "stale" && (generated_at === null || !stale || partial)) ||
     (state === "unavailable" && (generated_at !== null || stale || partial || items.length > 0 || ai.available))
   ) invalidNewsResponse();
-  return { track_id: expectedTrackId, state, generated_at, stale, partial, items, ai, source_stats };
+  return { track_id: expectedTrackId, state, generated_at, stale, partial, items, ai, source_stats, source_outcomes };
 }
 
 function parseNewsRefreshStatus(value: unknown): NewsRefreshStatus {
-  const record = newsRecord(value, ["state", "task_id", "started_at", "completed_at", "processed_endpoints", "successful_endpoints", "failed_endpoints", "processed_tracks", "total_endpoints", "total_tracks", "error"]);
-  if (!NEWS_REFRESH_PHASES.includes(record.state as NewsRefreshPhase)) invalidNewsResponse();
+  const record = newsRecord(value, ["state", "scope", "task_id", "started_at", "completed_at", "processed_endpoints", "successful_endpoints", "failed_endpoints", "processed_tracks", "total_endpoints", "total_tracks", "error"]);
+  if (!NEWS_REFRESH_PHASES.includes(record.state as NewsRefreshPhase) || !NEWS_SCOPES.includes(record.scope as NewsScope)) invalidNewsResponse();
   const task_id = record.task_id === null ? null : newsString(record.task_id, 36, 36);
   if (task_id !== null && !NEWS_UUID_PATTERN.test(task_id)) invalidNewsResponse();
   return {
     state: record.state as NewsRefreshPhase,
+    scope: record.scope as NewsScope,
     task_id,
     started_at: newsUtcDate(record.started_at, true),
     completed_at: newsUtcDate(record.completed_at, true),
@@ -377,12 +425,13 @@ function parseNewsRefreshStatus(value: unknown): NewsRefreshStatus {
 }
 
 function parseNewsSnapshot(value: unknown): NewsSnapshot {
-  const record = newsRecord(value, ["schema_version", "generated_at", "upstream_commit", "source_stats", "errors", "tracks"]);
-  if (record.schema_version !== 1) invalidNewsResponse();
+  const record = newsRecord(value, ["schema_version", "scope", "generated_at", "upstream_commit", "source_stats", "errors", "tracks"]);
+  if (record.schema_version !== 2 || !NEWS_SCOPES.includes(record.scope as NewsScope)) invalidNewsResponse();
   const tracks = newsArray(record.tracks, NEWS_TRACK_IDS.length, NEWS_TRACK_IDS.length)
     .map((track, index) => parseNewsTrack(track, NEWS_TRACK_IDS[index]));
   return {
-    schema_version: 1,
+    schema_version: 2,
+    scope: record.scope as NewsScope,
     generated_at: newsUtcDate(record.generated_at) as string,
     upstream_commit: newsString(record.upstream_commit, 1, 128),
     source_stats: parseNewsSourceStats(record.source_stats),
@@ -396,8 +445,10 @@ export function parseNewsSnapshotResponse(value: unknown): NewsSnapshotResponse 
   const available = newsBoolean(record.available);
   const stale = newsBoolean(record.stale);
   const snapshot = record.snapshot === null ? null : parseNewsSnapshot(record.snapshot);
+  const refresh = parseNewsRefreshStatus(record.refresh);
   if (available !== (snapshot !== null) || (!available && stale)) invalidNewsResponse();
-  return { available, stale, snapshot, refresh: parseNewsRefreshStatus(record.refresh), error: parseNewsPublicError(record.error, true) };
+  if (snapshot !== null && snapshot.scope !== refresh.scope) invalidNewsResponse();
+  return { available, stale, snapshot, refresh, error: parseNewsPublicError(record.error, true) };
 }
 
 function parseNewsRefreshAccepted(value: unknown): NewsRefreshAccepted {
@@ -405,6 +456,24 @@ function parseNewsRefreshAccepted(value: unknown): NewsRefreshAccepted {
   const task_id = newsString(record.task_id, 36, 36);
   if (!NEWS_UUID_PATTERN.test(task_id)) invalidNewsResponse();
   return { task_id, reused: newsBoolean(record.reused), status: parseNewsRefreshStatus(record.status) };
+}
+
+function parseScopedNewsSnapshotResponse(value: unknown, scope: NewsScope): NewsSnapshotResponse {
+  const response = parseNewsSnapshotResponse(value);
+  if (response.refresh.scope !== scope || response.snapshot?.scope !== scope) invalidNewsResponse();
+  return response;
+}
+
+function parseScopedNewsRefreshAccepted(value: unknown, scope: NewsScope): NewsRefreshAccepted {
+  const response = parseNewsRefreshAccepted(value);
+  if (response.status.scope !== scope) invalidNewsResponse();
+  return response;
+}
+
+function parseScopedNewsRefreshStatus(value: unknown, scope: NewsScope): NewsRefreshStatus {
+  const response = parseNewsRefreshStatus(value);
+  if (response.scope !== scope) invalidNewsResponse();
+  return response;
 }
 
 export interface UploadResult {
@@ -621,12 +690,12 @@ export const api = {
     request<DashboardDailyBarsResponse>(
       `/dashboard/intraday-bars?symbol=${encodeURIComponent(symbol)}`,
     ),
-  getNewsSnapshot: async (signal?: AbortSignal) =>
-    parseNewsSnapshotResponse(await request<unknown>("/news-api/snapshot", { signal })),
-  startNewsRefresh: async (signal?: AbortSignal) =>
-    parseNewsRefreshAccepted(await request<unknown>("/news-api/refresh", { method: "POST", signal })),
-  getNewsRefreshStatus: async (signal?: AbortSignal) =>
-    parseNewsRefreshStatus(await request<unknown>("/news-api/refresh/status", { signal })),
+  getNewsSnapshot: async (scope: NewsScope, signal?: AbortSignal) =>
+    parseScopedNewsSnapshotResponse(await request<unknown>(`/news-api/snapshot?scope=${scope}`, { signal }), scope),
+  startNewsRefresh: async (scope: NewsScope, signal?: AbortSignal) =>
+    parseScopedNewsRefreshAccepted(await request<unknown>(`/news-api/refresh?scope=${scope}`, { method: "POST", signal }), scope),
+  getNewsRefreshStatus: async (scope: NewsScope, signal?: AbortSignal) =>
+    parseScopedNewsRefreshStatus(await request<unknown>(`/news-api/refresh/status?scope=${scope}`, { signal }), scope),
 };
 
 // --- Swarm types ---

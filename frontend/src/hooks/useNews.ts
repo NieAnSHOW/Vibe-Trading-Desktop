@@ -3,6 +3,7 @@ import {
   api,
   type NewsPublicError,
   type NewsRefreshStatus,
+  type NewsScope,
   type NewsSnapshot,
   type NewsSnapshotResponse,
   type NewsTrackId,
@@ -11,6 +12,7 @@ import {
 const POLL_INTERVAL_MS = 1000;
 
 export interface NewsPageState {
+  scope: NewsScope;
   snapshot: NewsSnapshot | null;
   available: boolean;
   stale: boolean;
@@ -23,6 +25,7 @@ export interface NewsPageState {
 }
 
 export interface NewsPageActions {
+  selectScope: (scope: NewsScope) => void;
   selectTrack: (trackId: NewsTrackId) => void;
   refreshNews: () => Promise<void>;
 }
@@ -33,9 +36,11 @@ type StateAction =
   | { type: "refreshRequested" }
   | { type: "refreshStatus"; status: NewsRefreshStatus }
   | { type: "refreshFailed"; error: unknown }
+  | { type: "scopeSelected"; scope: NewsScope }
   | { type: "trackSelected"; trackId: NewsTrackId };
 
 const initialState: NewsPageState = {
+  scope: "a_share",
   snapshot: null,
   available: false,
   stale: false,
@@ -86,6 +91,8 @@ function reduceNewsState(state: NewsPageState, action: StateAction): NewsPageSta
       return { ...state, isRefreshing: false, error: action.error };
     case "trackSelected":
       return { ...state, selectedTrackId: action.trackId };
+    case "scopeSelected":
+      return { ...state, scope: action.scope, selectedTrackId: null };
   }
 }
 
@@ -142,7 +149,7 @@ export function useNews(): NewsPageState & NewsPageActions {
     const generation = snapshotGenerationRef.current;
 
     try {
-      const response = await api.getNewsSnapshot(controller.signal);
+      const response = await api.getNewsSnapshot(state.scope, controller.signal);
       if (!activeRef.current || controller.signal.aborted || generation !== snapshotGenerationRef.current) return;
       dispatch({ type: "snapshotLoaded", response });
       if (refreshIsRunning(response.refresh)) startPolling();
@@ -152,7 +159,7 @@ export function useNews(): NewsPageState & NewsPageActions {
     } finally {
       if (snapshotControllerRef.current === controller) snapshotControllerRef.current = null;
     }
-  }, [startPolling]);
+  }, [startPolling, state.scope]);
 
   pollRefreshRef.current = async (generation: number) => {
     if (!activeRef.current || generation !== pollGenerationRef.current) return;
@@ -160,7 +167,7 @@ export function useNews(): NewsPageState & NewsPageActions {
     statusControllerRef.current = controller;
 
     try {
-      const status = await api.getNewsRefreshStatus(controller.signal);
+      const status = await api.getNewsRefreshStatus(state.scope, controller.signal);
       if (!activeRef.current || controller.signal.aborted || generation !== pollGenerationRef.current) return;
       dispatch({ type: "refreshStatus", status });
       if (refreshIsRunning(status)) {
@@ -185,7 +192,7 @@ export function useNews(): NewsPageState & NewsPageActions {
     dispatch({ type: "refreshRequested" });
 
     try {
-      const accepted = await api.startNewsRefresh(controller.signal);
+      const accepted = await api.startNewsRefresh(state.scope, controller.signal);
       if (!activeRef.current || controller.signal.aborted) return;
       dispatch({ type: "refreshStatus", status: accepted.status });
       if (refreshIsRunning(accepted.status)) {
@@ -199,11 +206,15 @@ export function useNews(): NewsPageState & NewsPageActions {
     } finally {
       if (refreshControllerRef.current === controller) refreshControllerRef.current = null;
     }
-  }, [invalidateSnapshot, loadSnapshot, startPolling, stopPolling]);
+  }, [invalidateSnapshot, loadSnapshot, startPolling, state.scope, stopPolling]);
 
   const selectTrack = useCallback((trackId: NewsTrackId) => {
     dispatch({ type: "trackSelected", trackId });
   }, []);
+
+  const selectScope = useCallback((scope: NewsScope) => {
+    if (scope !== state.scope) dispatch({ type: "scopeSelected", scope });
+  }, [state.scope]);
 
   useEffect(() => {
     activeRef.current = true;
@@ -229,5 +240,5 @@ export function useNews(): NewsPageState & NewsPageActions {
     };
   }, [invalidateSnapshot, loadSnapshot, stopPolling]);
 
-  return { ...state, selectTrack, refreshNews };
+  return { ...state, selectScope, selectTrack, refreshNews };
 }

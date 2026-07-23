@@ -62,6 +62,7 @@ const publicError: NewsPublicError = {
 
 const idleRefresh: NewsRefreshStatus = {
   state: "idle",
+  scope: "a_share",
   task_id: null,
   started_at: null,
   completed_at: null,
@@ -81,13 +82,14 @@ function article(overrides: Partial<NewsArticle> = {}): NewsArticle {
     title: "Original AI headline",
     title_zh: "人工智能新闻",
     summary: "这是一条用于投资研究的摘要。",
-    source: {
-      id: "source-1",
-      name: "Example Wire",
-      url: "https://example.com/feed",
-    },
-    published_at: "2026-07-20T08:00:00Z",
-    url: "https://example.com/article",
+  source: {
+    id: "source-1",
+    name: "Example Wire",
+  },
+  published_at: "2026-07-20T08:00:00Z",
+  url: "https://example.com/article",
+  article_access: "direct",
+  first_seen_at: "2026-07-20T08:00:00Z",
     ...overrides,
   };
 }
@@ -116,23 +118,29 @@ function track(
       error: null,
     },
     source_stats: {
+      endpoint_total: 2,
       endpoint_success_count: 2,
       endpoint_failure_count: 0,
+      assignment_total: 2,
       assignment_success_count: 2,
       assignment_failure_count: 0,
     },
+    source_outcomes: [],
     ...overrides,
   };
 }
 
 function snapshot(overrides: Partial<NewsSnapshot> = {}): NewsSnapshot {
   return {
-    schema_version: 1,
+    schema_version: 2,
+    scope: "a_share",
     generated_at: "2026-07-20T09:00:00Z",
     upstream_commit: "fixture-commit",
     source_stats: {
+      endpoint_total: 24,
       endpoint_success_count: 24,
       endpoint_failure_count: 0,
+      assignment_total: 24,
       assignment_success_count: 24,
       assignment_failure_count: 0,
     },
@@ -144,6 +152,7 @@ function snapshot(overrides: Partial<NewsSnapshot> = {}): NewsSnapshot {
 
 function pageState(overrides: Partial<NewsPageState> = {}): NewsPageState {
   return {
+    scope: "a_share",
     snapshot: snapshot(),
     available: true,
     stale: false,
@@ -439,6 +448,28 @@ describe("News workspace", () => {
     expect(safe).toHaveAttribute("rel", "noopener noreferrer");
     expect(within(screen.getByTestId("unsafe")).queryByRole("link")).not.toBeInTheDocument();
     expect(within(screen.getByTestId("malformed")).queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("keeps global-industry articles as summaries without original links", () => {
+    const current = track("ai", {
+      items: [article({
+        id: "global-summary",
+        title_zh: "海外摘要",
+        article_access: "summary_only",
+      })],
+    });
+    mocks.state = pageState({
+      scope: "global_industry",
+      snapshot: snapshot({
+        scope: "global_industry",
+        tracks: TRACK_IDS.map((id) => (id === "ai" ? current : track(id))),
+      }),
+    });
+
+    render(<News />);
+
+    expect(screen.getByTestId("global-summary")).toHaveTextContent("仅摘要");
+    expect(within(screen.getByTestId("global-summary")).queryByRole("link")).not.toBeInTheDocument();
   });
 
   it("localizes the complete workspace and formats dates with the resolved language", async () => {

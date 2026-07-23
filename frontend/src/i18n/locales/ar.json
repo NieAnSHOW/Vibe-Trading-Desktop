@@ -818,6 +818,13 @@
     "aiUnavailable": "أبرز نقاط الذكاء الاصطناعي غير متاحة",
     "error": "حدثت مشكلة أثناء تحميل الأخبار",
     "refresh": "تحديث جميع الأخبار",
+    "scope": "نطاق الأخبار",
+    "summaryOnly": "ملخص فقط",
+    "sourceHealth": "المصادر غير المتاحة",
+    "scopes": {
+      "a_share": "أخبار الأسهم الصينية",
+      "global_industry": "ملخصات الصناعة العالمية"
+    },
     "trackList": "مسارات الأخبار",
     "selectTrack": "اختر مسار الأخبار",
     "refreshProgress": "جارٍ التحديث: {{processedEndpoints}} / {{totalEndpoints}} من المصادر، {{processedTracks}} / {{totalTracks}} من المسارات",

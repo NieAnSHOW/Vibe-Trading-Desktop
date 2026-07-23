@@ -10,7 +10,7 @@ import type { KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Skeleton } from "@/components/common/Skeleton";
 import { useNews } from "@/hooks/useNews";
-import type { NewsArticle, NewsPublicError, NewsTrackId } from "@/lib/api";
+import type { NewsArticle, NewsPublicError, NewsScope, NewsTrackId } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const TRACK_IDS: NewsTrackId[] = [
@@ -27,6 +27,7 @@ const TRACK_IDS: NewsTrackId[] = [
   "macro",
   "science",
 ];
+const NEWS_SCOPES: NewsScope[] = ["a_share", "global_industry"];
 
 function safeArticleUrl(value: string): string | null {
   try {
@@ -77,7 +78,7 @@ function ArticleRow({ article }: { article: NewsArticle }) {
             {article.summary ?? t("news.noSummary")}
           </p>
         </div>
-        {url && (
+        {article.article_access === "direct" && url ? (
           <a
             href={url}
             target="_blank"
@@ -87,7 +88,11 @@ function ArticleRow({ article }: { article: NewsArticle }) {
             {t("news.viewOriginal")}
             <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
           </a>
-        )}
+        ) : article.article_access === "summary_only" ? (
+          <span className="inline-flex shrink-0 items-center text-xs font-medium text-muted-foreground">
+            {t("news.summaryOnly")}
+          </span>
+        ) : null}
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
         <span>{article.source.name}</span>
@@ -147,10 +152,12 @@ export function News() {
     snapshotError,
     refreshStatus,
     selectedTrackId,
+    scope,
     isLoading,
     isRefreshing,
     error,
     selectTrack,
+    selectScope,
     refreshNews,
   } = useNews();
 
@@ -211,6 +218,29 @@ export function News() {
                 {snapshotGeneratedAt}
               </time>
             )}
+            <div
+              role="radiogroup"
+              aria-label={t("news.scope")}
+              className="mt-3 inline-flex rounded-md border bg-card p-0.5"
+            >
+              {NEWS_SCOPES.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  role="radio"
+                  aria-checked={scope === item}
+                  onClick={() => selectScope(item)}
+                  className={cn(
+                    "h-7 px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                    scope === item
+                      ? "rounded-sm bg-primary text-primary-foreground"
+                      : "rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  {t(`news.scopes.${item}`)}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
         <button
@@ -403,13 +433,35 @@ export function News() {
                       {t("news.fresh")}
                     </span>
                   )}
-                  {selectedTrack.partial && (
+              {selectedTrack.partial && (
                     <span className="inline-flex items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
                       {t("news.partial")}
                     </span>
-                  )}
-                </div>
-              </div>
+              )}
+            </div>
+          </div>
+
+              {selectedTrack.source_outcomes.some(
+                (outcome) => outcome.state !== "success",
+              ) && (
+                <section
+                  aria-label={t("news.sourceHealth")}
+                  className="mt-4 border-b pb-4 text-xs text-muted-foreground"
+                >
+                  <p className="font-medium text-foreground">
+                    {t("news.sourceHealth")}
+                  </p>
+                  <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                    {selectedTrack.source_outcomes
+                      .filter((outcome) => outcome.state !== "success")
+                      .map((outcome) => (
+                        <li key={outcome.source_id}>
+                          {outcome.source_name}
+                        </li>
+                      ))}
+                  </ul>
+                </section>
+              )}
 
               <section
                 aria-labelledby="news-ai-heading"

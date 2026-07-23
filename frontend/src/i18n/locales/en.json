@@ -1179,6 +1179,13 @@
     "aiUnavailable": "AI highlights are unavailable",
     "error": "There was a problem loading news",
     "refresh": "Refresh all news",
+    "scope": "News scope",
+    "summaryOnly": "Summary only",
+    "sourceHealth": "Unavailable sources",
+    "scopes": {
+      "a_share": "A-share news",
+      "global_industry": "Global industry summaries"
+    },
     "trackList": "News tracks",
     "selectTrack": "Select news track",
     "refreshProgress": "Refreshing: {{processedEndpoints}} / {{totalEndpoints}} sources, {{processedTracks}} / {{totalTracks}} tracks",

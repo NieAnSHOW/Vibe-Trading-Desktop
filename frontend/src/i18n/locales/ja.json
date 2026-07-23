@@ -818,6 +818,13 @@
     "aiUnavailable": "AI ハイライトを利用できません",
     "error": "ニュースの読み込み中に問題が発生しました",
     "refresh": "すべてのニュースを更新",
+    "scope": "ニュースの範囲",
+    "summaryOnly": "概要のみ",
+    "sourceHealth": "利用できない情報源",
+    "scopes": {
+      "a_share": "中国A株ニュース",
+      "global_industry": "世界の業界要約"
+    },
     "trackList": "ニュース分野",
     "selectTrack": "ニュース分野を選択",
     "refreshProgress": "更新中：情報源 {{processedEndpoints}} / {{totalEndpoints}}、分野 {{processedTracks}} / {{totalTracks}}",

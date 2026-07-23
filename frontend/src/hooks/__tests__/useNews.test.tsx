@@ -15,6 +15,7 @@ vi.mock("@/lib/api", () => ({ api: apiMock }));
 
 const runningStatus = (state: NewsRefreshStatus["state"] = "fetching"): NewsRefreshStatus => ({
   state,
+  scope: "a_share",
   task_id: "00000000-0000-4000-8000-000000000001",
   started_at: "2026-07-20T10:00:00Z",
   completed_at: state === "succeeded" || state === "failed" || state === "cancelled" ? "2026-07-20T10:01:00Z" : null,
@@ -32,12 +33,15 @@ function snapshotResponse(articleId: string, refresh = runningStatus("succeeded"
     available: true,
     stale: false,
     snapshot: {
-      schema_version: 1,
+      schema_version: 2,
+      scope: "a_share",
       generated_at: "2026-07-20T10:00:00Z",
       upstream_commit: "commit",
       source_stats: {
+        endpoint_total: 12,
         endpoint_success_count: 1,
         endpoint_failure_count: 0,
+        assignment_total: 12,
         assignment_success_count: 1,
         assignment_failure_count: 0,
       },
@@ -54,17 +58,22 @@ function snapshotResponse(articleId: string, refresh = runningStatus("succeeded"
           title: "Headline",
           title_zh: null,
           summary: null,
-          source: { id: "source", name: "Source", url: "https://example.com/feed" },
+          source: { id: "source", name: "Source" },
           published_at: null,
           url: "https://example.com/article",
+          article_access: "direct",
+          first_seen_at: "2026-07-20T10:00:00Z",
         }],
         ai: { available: false, generated_at: null, highlights: [], error: null },
         source_stats: {
+          endpoint_total: 1,
           endpoint_success_count: 1,
           endpoint_failure_count: 0,
+          assignment_total: 1,
           assignment_success_count: 1,
           assignment_failure_count: 0,
         },
+        source_outcomes: [],
       })),
     },
     refresh,
@@ -111,6 +120,14 @@ describe("useNews", () => {
     expect(result.current.snapshot?.tracks[0].items[0].id).toBe("after-ai");
   });
 
+  it("loads the A-share scope by default", async () => {
+    apiMock.getNewsSnapshot.mockResolvedValue(snapshotResponse("default"));
+
+    renderHook(() => useNews());
+
+    await waitFor(() => expect(apiMock.getNewsSnapshot).toHaveBeenCalledWith("a_share", expect.any(AbortSignal)));
+  });
+
   it("loads the initial snapshot only once under StrictMode", async () => {
     apiMock.getNewsSnapshot.mockResolvedValue(snapshotResponse("initial"));
 
@@ -134,7 +151,7 @@ describe("useNews", () => {
 
     await act(async () => { await result.current.refreshNews(); });
 
-    expect(apiMock.startNewsRefresh).toHaveBeenCalledWith(expect.any(AbortSignal));
+    expect(apiMock.startNewsRefresh).toHaveBeenCalledWith("a_share", expect.any(AbortSignal));
     await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
     expect(apiMock.getNewsRefreshStatus).toHaveBeenCalledTimes(1);
   });
@@ -156,7 +173,7 @@ describe("useNews", () => {
   it("does not apply a stale snapshot that resolves while a refresh is starting", async () => {
     const pendingSnapshot = deferred<NewsSnapshotResponse>();
     let snapshotSignal: AbortSignal | undefined;
-    apiMock.getNewsSnapshot.mockImplementation((signal?: AbortSignal) => {
+    apiMock.getNewsSnapshot.mockImplementation((_scope: string, signal?: AbortSignal) => {
       snapshotSignal = signal;
       return pendingSnapshot.promise;
     });
@@ -202,15 +219,15 @@ describe("useNews", () => {
     const pendingRefresh = deferred<NewsRefreshAccepted>();
     apiMock.getNewsSnapshot
       .mockResolvedValueOnce(snapshotResponse("before", runningStatus()))
-      .mockImplementationOnce((signal?: AbortSignal) => {
+      .mockImplementationOnce((_scope: string, signal?: AbortSignal) => {
         snapshotSignal = signal;
         return pendingSnapshot.promise;
       });
-    apiMock.getNewsRefreshStatus.mockImplementation((signal?: AbortSignal) => {
+    apiMock.getNewsRefreshStatus.mockImplementation((_scope: string, signal?: AbortSignal) => {
       statusSignal = signal;
       return Promise.resolve(runningStatus("succeeded"));
     });
-    apiMock.startNewsRefresh.mockImplementation((signal?: AbortSignal) => {
+    apiMock.startNewsRefresh.mockImplementation((_scope: string, signal?: AbortSignal) => {
       refreshSignal = signal;
       return pendingRefresh.promise;
     });
