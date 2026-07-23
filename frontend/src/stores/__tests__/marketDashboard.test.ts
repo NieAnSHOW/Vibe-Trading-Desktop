@@ -281,6 +281,47 @@ describe("useMarketDashboardStore", () => {
   });
 
   describe("setSelectedCode", () => {
+    it("ignores a stale request when the same stock is selected again", async () => {
+      let resolveFirstDaily: (value: { data: never[]; asOf: string; stale: boolean }) => void;
+      let resolveFirstIntraday: (value: { data: never[]; asOf: string; stale: boolean }) => void;
+      let resolveSecondDaily: (value: { data: never[]; asOf: string; stale: boolean }) => void;
+      let resolveSecondIntraday: (value: { data: never[]; asOf: string; stale: boolean }) => void;
+      const firstDaily = new Promise<{ data: never[]; asOf: string; stale: boolean }>((resolve) => {
+        resolveFirstDaily = resolve;
+      });
+      const firstIntraday = new Promise<{ data: never[]; asOf: string; stale: boolean }>((resolve) => {
+        resolveFirstIntraday = resolve;
+      });
+      const secondDaily = new Promise<{ data: never[]; asOf: string; stale: boolean }>((resolve) => {
+        resolveSecondDaily = resolve;
+      });
+      const secondIntraday = new Promise<{ data: never[]; asOf: string; stale: boolean }>((resolve) => {
+        resolveSecondIntraday = resolve;
+      });
+      mockFetchDailyBars
+        .mockReturnValueOnce(firstDaily)
+        .mockReturnValueOnce(Promise.resolve({ data: [], asOf: "2026-07-13T10:00:00Z", stale: false }))
+        .mockReturnValueOnce(secondDaily);
+      mockFetchIntradayBars
+        .mockReturnValueOnce(firstIntraday)
+        .mockReturnValueOnce(Promise.resolve({ data: [], asOf: "2026-07-13T10:00:00Z", stale: false }))
+        .mockReturnValueOnce(secondIntraday);
+
+      const firstSelection = useMarketDashboardStore.getState().setSelectedCode("600519");
+      await useMarketDashboardStore.getState().setSelectedCode("000001");
+      const secondSelection = useMarketDashboardStore.getState().setSelectedCode("600519");
+      resolveFirstDaily!({ data: [], asOf: "2026-07-13T10:00:00Z", stale: false });
+      resolveFirstIntraday!({ data: [], asOf: "2026-07-13T10:00:00Z", stale: false });
+      await firstSelection;
+
+      expect(useMarketDashboardStore.getState().barsLoading).toBe(true);
+      expect(useMarketDashboardStore.getState().intradayLoading).toBe(true);
+
+      resolveSecondDaily!({ data: [], asOf: "2026-07-13T10:00:00Z", stale: false });
+      resolveSecondIntraday!({ data: [], asOf: "2026-07-13T10:00:00Z", stale: false });
+      await secondSelection;
+    });
+
     it("loads daily and intraday data independently for the selected stock", async () => {
       const dailyBar = {
         time: "2026-07-13",

@@ -49,6 +49,7 @@ export interface MarketDashboardState {
 }
 
 const POLL_INTERVAL = 15000;
+let selectedCodeRequestId = 0;
 
 export const useMarketDashboardStore = create<MarketDashboardState>((set, get) => ({
   indexes: [],
@@ -162,6 +163,10 @@ export const useMarketDashboardStore = create<MarketDashboardState>((set, get) =
   },
 
   setSelectedCode: async (code: string) => {
+    const requestId = ++selectedCodeRequestId;
+    const isActiveRequest = () =>
+      get().selectedCode === code && selectedCodeRequestId === requestId;
+
     set({
       selectedCode: code,
       selectedBars: [],
@@ -176,22 +181,22 @@ export const useMarketDashboardStore = create<MarketDashboardState>((set, get) =
     const loadDaily = async () => {
       try {
         const result = await fetchDashboardDailyBars(code);
-        if (get().selectedCode === code) {
+        if (isActiveRequest()) {
           set({ selectedBars: result.data, barsError: result.error ?? null });
         }
       } catch (error) {
-        if (get().selectedCode === code) {
+        if (isActiveRequest()) {
           set({ barsError: (error as Error)?.message ?? "bars failed" });
         }
       } finally {
-        if (get().selectedCode === code) set({ barsLoading: false });
+        if (isActiveRequest()) set({ barsLoading: false });
       }
     };
 
     const loadIntraday = async () => {
       try {
         const result = await fetchDashboardIntradayBars(code);
-        if (get().selectedCode === code) {
+        if (isActiveRequest()) {
           set({
             selectedIntradayBars: result.data,
             intradayError: result.error ?? null,
@@ -199,14 +204,14 @@ export const useMarketDashboardStore = create<MarketDashboardState>((set, get) =
           });
         }
       } catch (error) {
-        if (get().selectedCode === code) {
+        if (isActiveRequest()) {
           set({
             intradayError: (error as Error)?.message ?? "intraday bars failed",
             intradayStale: true,
           });
         }
       } finally {
-        if (get().selectedCode === code) set({ intradayLoading: false });
+        if (isActiveRequest()) set({ intradayLoading: false });
       }
     };
 

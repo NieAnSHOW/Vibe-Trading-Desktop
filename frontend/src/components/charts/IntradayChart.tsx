@@ -118,7 +118,7 @@ export function IntradayChart({
         },
       ],
     });
-  }, [data, labels]);
+  }, [dark, data, labels]);
 
   return (
     <div
