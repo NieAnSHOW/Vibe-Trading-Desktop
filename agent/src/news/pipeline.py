@@ -69,8 +69,12 @@ def build_track_candidates(
         current_items = _limit_track_items(by_track[track_id])
         prior = prior_tracks.get(track_id)
         if current_items:
-            updated_track_ids.add(track_id)
-            tracks.append(_fresh_track(track_id, current_items, prior, now, stats_by_track[track_id]))
+            fresh_track = _fresh_track(track_id, current_items, prior, now, stats_by_track[track_id])
+            if fresh_track.items:
+                updated_track_ids.add(track_id)
+                tracks.append(fresh_track)
+            else:
+                tracks.append(_unavailable_track(track_id, stats_by_track[track_id]))
         elif prior is not None and prior.items:
             retained_items = _sort_and_cap_items(_retained_items(prior, now))
             if retained_items:
@@ -175,11 +179,14 @@ def _fresh_track(
     now: datetime,
     source_stats: SourceStats,
 ) -> TrackSnapshot:
+    prior_by_id = {item.id: item for item in prior.items} if prior is not None else {}
     retained_by_id = {item.id: item for item in _retained_items(prior, now)} if prior is not None else {}
     by_id = dict(retained_by_id)
     for item in current_items:
-        prior_item = retained_by_id.get(item.id)
-        by_id[item.id] = item.model_copy(update={"first_seen_at": prior_item.first_seen_at}) if prior_item else item
+        prior_item = prior_by_id.get(item.id)
+        merged_item = item.model_copy(update={"first_seen_at": prior_item.first_seen_at}) if prior_item else item
+        if _within_retention(merged_item, now):
+            by_id[item.id] = merged_item
     merged = _sort_and_cap_items(by_id.values())
     has_failures = source_stats.endpoint_failure_count > 0 or source_stats.assignment_failure_count > 0
     return TrackSnapshot(

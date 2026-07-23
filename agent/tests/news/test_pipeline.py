@@ -6,7 +6,7 @@ from types import MappingProxyType
 from src.news.catalog import NewsCatalog, SourceAssignment, load_catalog
 from src.news.feeds import RawFeedItem
 from src.news.models import CANONICAL_TRACK_IDS, FeedItem, FeedSource, NewsSnapshot, SourceStats, TrackAi, TrackSnapshot
-from src.news.pipeline import UNDATED_RETENTION, AssignmentItems, build_track_candidates
+from src.news.pipeline import UNDATED_RETENTION, WINDOW, AssignmentItems, build_track_candidates
 
 
 NOW = datetime(2026, 7, 20, 12, tzinfo=timezone.utc)
@@ -114,14 +114,14 @@ def item(
     )
 
 
-def snapshot_with(track_id: str, entry: FeedItem) -> NewsSnapshot:
+def snapshot_with(track_id: str, entry: FeedItem, *, state: str = "fresh") -> NewsSnapshot:
     return make_snapshot_with_tracks(
         [
             TrackSnapshot(
                 track_id=track_id,
-                state="fresh",
+                state=state,
                 generated_at=OLD_TIME,
-                stale=False,
+                stale=state == "stale",
                 partial=False,
                 items=[entry],
                 ai=TrackAi(),
@@ -217,11 +217,67 @@ def test_new_item_inherits_summary_only_access_policy() -> None:
     assert result.tracks[0].items[0].article_access == "summary_only"
 
 
+def test_new_item_records_current_time_as_first_seen_at() -> None:
+    source = catalog().assignments[0]
+
+    result = build_track_candidates(catalog(), [AssignmentItems(source, (raw(source),))], None, NOW)
+
+    assert result.tracks[0].items[0].first_seen_at == NOW
+
+
+def test_reappearing_stable_item_preserves_original_first_seen_time() -> None:
+    source = catalog().assignments[0]
+    first = build_track_candidates(catalog(), [AssignmentItems(source, (raw(source, published_at=None),))], None, NOW)
+    original = first.tracks[0].items[0].model_copy(update={"first_seen_at": NOW - timedelta(days=1)})
+
+    result = build_track_candidates(
+        catalog(),
+        [AssignmentItems(source, (raw(source, published_at=None),))],
+        snapshot_with("ai", original),
+        NOW,
+    )
+
+    assert result.tracks[0].items[0].first_seen_at == original.first_seen_at
+
+
+def test_expired_undated_stable_reappearance_is_unavailable() -> None:
+    source = catalog().assignments[0]
+    first = build_track_candidates(catalog(), [AssignmentItems(source, (raw(source, published_at=None),))], None, NOW)
+    expired = first.tracks[0].items[0].model_copy(update={"first_seen_at": NOW - UNDATED_RETENTION - timedelta(seconds=1)})
+
+    result = build_track_candidates(
+        catalog(),
+        [AssignmentItems(source, (raw(source, published_at=None),))],
+        snapshot_with("ai", expired),
+        NOW,
+    )
+
+    assert result.tracks[0].state == "unavailable"
+    assert result.tracks[0].items == []
+
+
 def test_retained_undated_item_expires_from_first_seen_time() -> None:
     old = item(title="old", published_at=None, first_seen_at=NOW - UNDATED_RETENTION - timedelta(seconds=1))
 
     result = build_track_candidates(catalog(), [], snapshot_with("ai", old), NOW)
 
+    assert result.tracks[0].items == []
+
+
+def test_retained_dated_item_expires_from_publication_time() -> None:
+    expired = item(title="expired", published_at=NOW - WINDOW - timedelta(seconds=1))
+
+    result = build_track_candidates(catalog(), [], snapshot_with("ai", expired), NOW)
+
+    assert result.tracks[0].items == []
+
+
+def test_stale_track_becomes_unavailable_when_no_items_survive_retention() -> None:
+    expired = item(title="expired", published_at=None, first_seen_at=NOW - UNDATED_RETENTION - timedelta(seconds=1))
+
+    result = build_track_candidates(catalog(), [], snapshot_with("ai", expired, state="stale"), NOW)
+
+    assert result.tracks[0].state == "unavailable"
     assert result.tracks[0].items == []
 
 
