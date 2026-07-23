@@ -10,7 +10,7 @@ import logging
 from typing import Any, Protocol
 from uuid import UUID, uuid4
 
-from .catalog import NewsCatalog, SourceAssignment, group_endpoints, load_catalog
+from .catalog import NewsCatalog, NewsScope, SourceAssignment, group_endpoints, load_catalog
 from .feeds import RawFeedItem, parse_feed
 from .llm import enrich_tracks
 from .models import (
@@ -20,6 +20,7 @@ from .models import (
     RefreshAcceptedResponse,
     RefreshStatus,
     SnapshotResponse,
+    SourceOutcome,
     SourceStats,
     TrackSnapshot,
 )
@@ -46,12 +47,14 @@ _SAFE_ENDPOINT_ERROR_CODES = frozenset(
         "invalid_url",
         "network_error",
         "response_too_large",
+        "rate_limited",
         "timeout",
         "too_many_redirects",
         "unsafe_target",
         "unsupported_scheme",
     }
 )
+_OUTCOME_FAILURE_REASONS = frozenset({"http_status", "network_error", "rate_limited", "timeout"})
 
 
 class FeedClient(Protocol):
@@ -93,7 +96,7 @@ class NewsRefreshCoordinator:
         self._pipeline = pipeline
         self._enricher = enricher
         self._llm_factory = llm_factory or _build_project_llm
-        self._store = store or AtomicSnapshotStore()
+        self._store = store or AtomicSnapshotStore(self._catalog.scope)
         self._now = now or _utc_now
 
         self._lock = asyncio.Lock()
@@ -101,7 +104,7 @@ class NewsRefreshCoordinator:
         self._task: asyncio.Task[None] | None = None
         self._client: FeedClient | None = None
         self._snapshot: NewsSnapshot | None = None
-        self._status = RefreshStatus(state="idle", total_endpoints=len(self._endpoints))
+        self._status = RefreshStatus(scope=self._catalog.scope, state="idle", total_endpoints=len(self._endpoints))
 
     async def start(self) -> RefreshAcceptedResponse:
         """Start one background refresh, or reuse the currently running task."""
@@ -118,6 +121,7 @@ class NewsRefreshCoordinator:
 
             task_id = uuid4()
             self._status = RefreshStatus(
+                scope=self._catalog.scope,
                 state="fetching",
                 task_id=task_id,
                 started_at=self._now(),
@@ -218,11 +222,13 @@ class NewsRefreshCoordinator:
                 return
 
             await self._replace_status(state="enriching", processed_tracks=len(CANONICAL_TRACK_IDS))
-            tracks = await self._enricher(built.tracks, built.updated_track_ids, self._llm_factory)
+            tracks_with_outcomes = self._attach_source_outcomes(built.tracks, fetch_results, assignments)
+            tracks = await self._enricher(tracks_with_outcomes, built.updated_track_ids, self._llm_factory)
             source_stats = self._source_stats(fetch_results, assignment_failures)
             errors = [_public_error("upstream_failed")] if source_stats.endpoint_failure_count or assignment_failures else []
             snapshot = NewsSnapshot(
-                schema_version=1,
+                schema_version=2,
+                scope=self._catalog.scope,
                 generated_at=self._now(),
                 upstream_commit=self._catalog.commit,
                 source_stats=source_stats,
@@ -338,11 +344,55 @@ class NewsRefreshCoordinator:
         successful_endpoints = sum(result.ok for result in fetch_results)
         assignment_count = sum(len(result.endpoint.assignments) for result in fetch_results)
         return SourceStats(
+            endpoint_total=len(fetch_results),
             endpoint_success_count=successful_endpoints,
             endpoint_failure_count=len(fetch_results) - successful_endpoints,
+            assignment_total=assignment_count,
             assignment_success_count=assignment_count - assignment_failures,
             assignment_failure_count=assignment_failures,
         )
+
+    def _attach_source_outcomes(
+        self,
+        tracks: Sequence[TrackSnapshot],
+        fetch_results: Sequence[EndpointFetchResult],
+        assignments: Sequence[AssignmentItems],
+    ) -> tuple[TrackSnapshot, ...]:
+        outcomes_by_track: dict[str, list[SourceOutcome]] = {track_id: [] for track_id in CANONICAL_TRACK_IDS}
+        parser_failed_assignment_ids = {
+            assignment_items.source.id for assignment_items in assignments if assignment_items.assignment_failed
+        }
+        for result in fetch_results:
+            endpoint_state, endpoint_reason = self._outcome_state(result)
+            for assignment in result.endpoint.assignments:
+                state, reason = (
+                    ("failed", "network_error")
+                    if assignment.id in parser_failed_assignment_ids
+                    else (endpoint_state, endpoint_reason)
+                )
+                outcomes_by_track[assignment.track_id].append(
+                    SourceOutcome(
+                        source_id=assignment.id,
+                        source_name=assignment.name,
+                        state=state,
+                        reason=reason,
+                        last_success_at=self._now() if state == "success" else None,
+                    )
+                )
+        return tuple(
+            track.model_copy(
+                update={"source_outcomes": sorted(outcomes_by_track[track.track_id], key=lambda outcome: outcome.source_id)}
+            )
+            for track in tracks
+        )
+
+    @staticmethod
+    def _outcome_state(result: EndpointFetchResult) -> tuple[str, str | None]:
+        if result.ok:
+            return "success", None
+        if result.error_code == "circuit_open":
+            return "skipped_circuit_open", "circuit_open"
+        return "failed", result.error_code if result.error_code in _OUTCOME_FAILURE_REASONS else "network_error"
 
     async def _replace_status(self, **updates: Any) -> None:
         async with self._lock:
@@ -385,12 +435,34 @@ def _build_project_llm() -> Any:
     return build_llm()
 
 
-_news_coordinator: NewsRefreshCoordinator | None = None
+class NewsCoordinatorRegistry:
+    """Lazily construct one independent coordinator for each supported scope."""
+
+    def __init__(self, factory: Callable[[NewsScope], NewsRefreshCoordinator]) -> None:
+        self._factory = factory
+        self._coordinators: dict[NewsScope, NewsRefreshCoordinator] = {}
+
+    def get(self, scope: NewsScope) -> NewsRefreshCoordinator:
+        if scope not in {"a_share", "global_industry"}:
+            raise ValueError("news coordinator scope is invalid")
+        coordinator = self._coordinators.get(scope)
+        if coordinator is None:
+            coordinator = self._factory(scope)
+            self._coordinators[scope] = coordinator
+        return coordinator
+
+    async def close(self) -> None:
+        await asyncio.gather(*(coordinator.close() for coordinator in self._coordinators.values()))
 
 
-def get_news_coordinator() -> NewsRefreshCoordinator:
-    """Return the process coordinator without starting I/O or constructing an LLM."""
-    global _news_coordinator
-    if _news_coordinator is None:
-        _news_coordinator = NewsRefreshCoordinator()
-    return _news_coordinator
+_news_coordinator_registry: NewsCoordinatorRegistry | None = None
+
+
+def get_news_coordinator_registry() -> NewsCoordinatorRegistry:
+    """Return the lazy process registry without starting feed or LLM I/O."""
+    global _news_coordinator_registry
+    if _news_coordinator_registry is None:
+        _news_coordinator_registry = NewsCoordinatorRegistry(
+            lambda scope: NewsRefreshCoordinator(catalog=load_catalog(scope))
+        )
+    return _news_coordinator_registry

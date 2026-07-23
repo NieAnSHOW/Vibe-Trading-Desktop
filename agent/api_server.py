@@ -253,12 +253,12 @@ async def _stop_scheduled_research_on_shutdown() -> None:
     await _stop_scheduled_research_executor()
 
 
-async def _close_news_coordinator() -> None:
-    """Release the same lazy coordinator instance used by the news routes."""
-    await news_coordinator.close()
+async def _close_news_coordinator_registry() -> None:
+    """Release the same lazy coordinator registry used by the news routes."""
+    await news_coordinator_registry.close()
 
 
-app.on_event("shutdown")(_close_news_coordinator)
+app.on_event("shutdown")(_close_news_coordinator_registry)
 
 
 # ============================================================================
@@ -383,10 +383,10 @@ register_dashboard_routes(app, require_auth=require_auth)
 # --- Investment news ---
 # Register before ``serve_main`` can mount the root SPA catch-all.
 from src.api.news_routes import register_news_routes  # noqa: E402
-from src.news.coordinator import get_news_coordinator  # noqa: E402
+from src.news.coordinator import get_news_coordinator_registry  # noqa: E402
 
-news_coordinator = get_news_coordinator()
-register_news_routes(app, require_auth=require_auth, coordinator=news_coordinator)
+news_coordinator_registry = get_news_coordinator_registry()
+register_news_routes(app, require_auth=require_auth, registry=news_coordinator_registry)
 
 
 # ============================================================================

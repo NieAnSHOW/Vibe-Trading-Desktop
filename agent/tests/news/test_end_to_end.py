@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from src.news.catalog import NewsCatalog, SourceAssignment
+from src.news.catalog import NewsCatalog, group_endpoints, load_catalog
 from src.news.coordinator import NewsRefreshCoordinator
 from src.news.models import CANONICAL_TRACK_IDS
 from src.news.network import PublicFeedClient
@@ -22,7 +22,6 @@ THIRD_RUN = datetime(2026, 7, 20, 10, 0, tzinfo=timezone.utc)
 
 class FakeResolver:
     async def resolve(self, host: str) -> tuple[str, ...]:
-        assert host == "feeds.example"
         return ("93.184.216.34",)
 
 
@@ -32,24 +31,12 @@ class FakeLLM:
 
 
 def _catalog() -> NewsCatalog:
-    assignments = tuple(
-        SourceAssignment(
-            id=f"source-{track_id}",
-            track_id=track_id,
-            name=f"Source {track_id}",
-            url=f"https://feeds.example/{track_id}.xml",
-            filters=(),
-        )
-        for track_id in CANONICAL_TRACK_IDS
-    )
-    return NewsCatalog(
-        schema_version=1,
-        repository="https://github.com/simonlin1212/investment-news",
-        commit="d98aa603228f4839fb48859812c63a58ca10cead",
-        tracks=tuple({"id": track_id, "name": track_id} for track_id in CANONICAL_TRACK_IDS),
-        assignments=assignments,
-        filters=(),
-    )
+    return load_catalog("global_industry")
+
+
+def _endpoint_key(url: str) -> tuple[str, str, str]:
+    parsed = urlsplit(url)
+    return parsed.netloc, parsed.path or "/", parsed.query
 
 
 def _rss(track_id: str, run: int) -> bytes:
@@ -68,23 +55,32 @@ def _rss(track_id: str, run: int) -> bytes:
 def test_refresh_degrades_without_network_or_llm_and_preserves_last_good_snapshot(tmp_path: Path) -> None:
     async def run_case() -> None:
         phase = {"run": 1, "now": FIRST_RUN}
+        catalog = _catalog()
+        endpoint_tracks = {
+            _endpoint_key(endpoint.url): frozenset(assignment.track_id for assignment in endpoint.assignments)
+            for endpoint in group_endpoints(catalog)
+        }
 
         def handler(request: httpx.Request) -> httpx.Response:
-            track_id = Path(urlsplit(str(request.url)).path).stem
+            key = (request.headers["host"], request.url.path, request.url.query.decode("ascii"))
+            track_ids = endpoint_tracks[key]
             unavailable = {
                 1: {"semi", "science"},
                 2: {"ai"},
                 3: set(CANONICAL_TRACK_IDS),
             }[phase["run"]]
-            if track_id in unavailable:
+            if track_ids.intersection(unavailable):
                 return httpx.Response(503, request=request)
-            return httpx.Response(200, content=_rss(track_id, phase["run"]), request=request)
+            return httpx.Response(200, content=_rss(sorted(track_ids)[0], phase["run"]), request=request)
+
+        async def no_sleep(delay: float) -> None:
+            return None
 
         transport = httpx.MockTransport(handler)
-        store = AtomicSnapshotStore(tmp_path / "news" / "latest.json")
+        store = AtomicSnapshotStore("global_industry", data_dir=tmp_path)
         coordinator = NewsRefreshCoordinator(
-            catalog=_catalog(),
-            client_factory=lambda: PublicFeedClient(FakeResolver(), transport=transport),
+            catalog=catalog,
+            client_factory=lambda: PublicFeedClient(FakeResolver(), transport=transport, sleep=no_sleep),
             llm_factory=FakeLLM,
             store=store,
             now=lambda: phase["now"],
@@ -133,7 +129,10 @@ def test_refresh_degrades_without_network_or_llm_and_preserves_last_good_snapsho
         assert snapshot_path.stat().st_mtime_ns == before_stat.st_mtime_ns
         await coordinator.close()
 
-        rebuilt = NewsRefreshCoordinator(catalog=_catalog(), store=AtomicSnapshotStore(snapshot_path))
+        rebuilt = NewsRefreshCoordinator(
+            catalog=catalog,
+            store=AtomicSnapshotStore("global_industry", data_dir=tmp_path),
+        )
         rebuilt_response = await rebuilt.snapshot_response()
         assert rebuilt_response.refresh.state == "idle"
         assert rebuilt_response.snapshot == second.snapshot
