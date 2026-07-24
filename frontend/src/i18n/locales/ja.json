@@ -806,7 +806,8 @@
     "apply": "適用",
     "previousPage": "前のページ",
     "nextPage": "次のページ",
-    "notProvided": "未提供"
+    "notProvided": "未提供",
+    "periodOverview": "期間の使用量"
   },
   "news": {
     "title": "投資ニュース",

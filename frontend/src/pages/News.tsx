@@ -10,7 +10,12 @@ import type { KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Skeleton } from "@/components/common/Skeleton";
 import { useNews } from "@/hooks/useNews";
-import type { NewsArticle, NewsPublicError, NewsScope, NewsTrackId } from "@/lib/api";
+import type {
+  NewsArticle,
+  NewsPublicError,
+  NewsScope,
+  NewsTrackId,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const TRACK_IDS: NewsTrackId[] = [
@@ -209,15 +214,6 @@ export function News() {
             <h1 className="break-words text-xl font-semibold leading-6">
               {t("news.title")}
             </h1>
-            {snapshot && snapshotGeneratedAt && (
-              <time
-                dateTime={snapshot.generated_at}
-                className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground"
-              >
-                <Clock3 className="h-3 w-3" aria-hidden="true" />
-                {snapshotGeneratedAt}
-              </time>
-            )}
             <div
               role="radiogroup"
               aria-label={t("news.scope")}
@@ -240,6 +236,15 @@ export function News() {
                   {t(`news.scopes.${item}`)}
                 </button>
               ))}
+              {snapshot && snapshotGeneratedAt && (
+                <time
+                  dateTime={snapshot.generated_at}
+                  className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground"
+                >
+                  <Clock3 className="h-3 w-3" aria-hidden="true" />
+                  {snapshotGeneratedAt}
+                </time>
+              )}
             </div>
           </div>
         </div>
@@ -433,13 +438,13 @@ export function News() {
                       {t("news.fresh")}
                     </span>
                   )}
-              {selectedTrack.partial && (
+                  {selectedTrack.partial && (
                     <span className="inline-flex items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
                       {t("news.partial")}
                     </span>
-              )}
-            </div>
-          </div>
+                  )}
+                </div>
+              </div>
 
               {selectedTrack.source_outcomes.some(
                 (outcome) => outcome.state !== "success",
@@ -455,9 +460,7 @@ export function News() {
                     {selectedTrack.source_outcomes
                       .filter((outcome) => outcome.state !== "success")
                       .map((outcome) => (
-                        <li key={outcome.source_id}>
-                          {outcome.source_name}
-                        </li>
+                        <li key={outcome.source_id}>{outcome.source_name}</li>
                       ))}
                   </ul>
                 </section>

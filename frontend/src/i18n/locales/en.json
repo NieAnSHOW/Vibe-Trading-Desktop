@@ -1167,7 +1167,8 @@
     "apply": "Apply",
     "previousPage": "Previous page",
     "nextPage": "Next page",
-    "notProvided": "Not provided"
+    "notProvided": "Not provided",
+    "periodOverview": "Period overview"
   },
   "news": {
     "title": "Investment News",

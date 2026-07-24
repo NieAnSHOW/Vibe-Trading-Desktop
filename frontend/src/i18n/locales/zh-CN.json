@@ -1167,7 +1167,8 @@
     "apply": "应用",
     "previousPage": "上一页",
     "nextPage": "下一页",
-    "notProvided": "未提供"
+    "notProvided": "未提供",
+    "periodOverview": "时间维度用量概览"
   },
   "news": {
     "title": "投资资讯",

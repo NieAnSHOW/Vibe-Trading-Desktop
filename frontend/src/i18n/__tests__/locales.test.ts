@@ -94,7 +94,7 @@ describe("i18n — global LLM usage center", () => {
     "sessionDetails", "searchSessions", "runs", "expandSession",
     "collapseSession", "empty", "partialData", "missingUsageRuns",
     "invalidUsageRuns", "loadFailed", "retry", "apply", "previousPage",
-    "nextPage", "notProvided",
+    "nextPage", "notProvided", "periodOverview",
   ].sort();
 
   it.each([

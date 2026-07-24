@@ -279,6 +279,43 @@ async def test_fetch_rejects_mixed_public_and_private_dns_answers_before_transpo
 
 
 @_async_test
+async def test_fetch_allows_proxy_fake_ip_for_the_configured_feed_hostname() -> None:
+    resolver = FakeResolver({"feed.example": ["198.18.0.1"]})
+    transport = FakeTransport({"https://198.18.0.1/rss": rss_response()})
+
+    result = await PublicFeedClient(resolver, transport=transport).fetch(endpoint())
+
+    assert result.ok
+    assert transport.requests[0].headers["host"] == "feed.example"
+    assert transport.requests[0].extensions["sni_hostname"] == "feed.example"
+
+
+@pytest.mark.parametrize("addresses", [["198.18.0.1", "93.184.216.34"], ["198.18.0.1", "10.0.0.1"]])
+@_async_test
+async def test_fetch_rejects_mixed_proxy_fake_ip_dns_answers_for_configured_hostname(addresses: list[str]) -> None:
+    transport = FakeTransport()
+    resolver = FakeResolver({"feed.example": addresses})
+
+    result = await PublicFeedClient(resolver, transport=transport).fetch(endpoint())
+
+    assert result.error_code == "unsafe_target"
+    assert transport.requests == []
+
+
+@_async_test
+async def test_fetch_rejects_proxy_fake_ip_for_a_redirect_hostname() -> None:
+    resolver = FakeResolver({"feed.example": ["93.184.216.34"], "redirect.example": ["198.18.0.1"]})
+    transport = FakeTransport(
+        {"https://93.184.216.34/rss": httpx.Response(302, headers={"location": "https://redirect.example/new"})}
+    )
+
+    result = await PublicFeedClient(resolver, transport=transport).fetch(endpoint())
+
+    assert result.error_code == "unsafe_target"
+    assert len(transport.requests) == 1
+
+
+@_async_test
 async def test_fetch_revalidates_each_redirect_before_pinning_next_request() -> None:
     resolver = FakeResolver(
         {"feed.example": ["93.184.216.34"], "redirect.example": ["93.184.216.35"]}

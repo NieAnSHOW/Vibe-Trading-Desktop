@@ -1,52 +1,116 @@
-# Task 4 Report: 安全 RSS/Atom 解析与字段规范化
+# Task 4 Report: Article Policy And Bounded Item Retention
 
-## 状态
+Date: 2026-07-23
 
-DONE
+## Scope
 
-## 恢复性审计
+Implemented Task 4 only in:
 
-既有实现来自 `aa3d401` 和 `63a3409`，但当时的 RED/GREEN 证据未持久化。本次新增了一个真实边界回归：合法 RSS CDATA 文本中出现 `<!DOCTYPE ...>` 字样时，不能被误当作 XML 声明拒绝。
+- `agent/src/news/pipeline.py`
+- `agent/tests/news/test_pipeline.py`
 
-代码提交：`873660d6e72d229957ce808b73a766bfbdf1aace`（`fix(news): preserve literal XML markers in CDATA`，DCO 已签名）。
+The requested report replaces an obsolete report at this path. The unrelated
+`frontend/src/pages/Usage.tsx` change was not edited or staged.
 
-## 改动文件
+## TDD Evidence
 
-- `agent/src/news/feeds.py`
-- `agent/tests/news/test_feeds.py`
-- `.superpowers/sdd/task-4-report.md`
+### RED
 
-未改动既有 fixtures；已通过 `rss.xml`、`atom.xml` 和 `malicious_dtd.xml` 进行验证。
+Command:
 
-## RED 证据
-
-命令：
-
-```bash
-pytest agent/tests/news/test_feeds.py -q
+```sh
+pytest agent/tests/news/test_pipeline.py -q
 ```
 
-结果：`1 failed, 11 passed`。新增的 `test_valid_cdata_that_mentions_dtd_is_not_treated_as_a_declaration` 以 `FeedParseError: invalid_xml` 失败，确认原始字节预过滤错误地将 CDATA 内容视为 DTD 标记。
+Result: collection failed with `ImportError` because `UNDATED_RETENTION` did
+not exist. This confirmed the v2 retention contract was absent; the old
+pipeline also constructed `FeedItem` without required `article_access` and
+`first_seen_at` fields.
 
-## GREEN 证据
+### GREEN
 
-命令：
+Commands:
 
-```bash
-pytest agent/tests/news/test_feeds.py -q
-python -c "import sys; sys.modules['defusedxml'] = None; import src.news.feeds"
+```sh
+pytest agent/tests/news/test_pipeline.py -q
+ruff check agent/src/news/pipeline.py agent/tests/news/test_pipeline.py
+python -m py_compile agent/src/news/pipeline.py agent/tests/news/test_pipeline.py
+git diff --check -- agent/src/news/pipeline.py agent/tests/news/test_pipeline.py
 ```
 
-结果：`12 passed`；延迟导入命令退出 `0`。
+Results:
 
-## 约束核对
+- `12 passed in 0.17s`
+- Ruff: `All checks passed!`
+- Compilation and whitespace checks passed with no output.
 
-- `defusedxml.ElementTree` 仅在 `parse_feed()` 内延迟导入；缺失时稳定地报 `parser_unavailable`。
-- RSS `item` 与命名空间 Atom `entry` 均有回归覆盖。
-- DTD/外部实体由预过滤和 `defusedxml` 拒绝；XSLT 处理指令拒绝。
-- HTML 文本经 `HTMLParser`、实体解码、NFKC、空白折叠和标题 300/摘要 1000 字符截断。
-- 非空标题与 HTTP(S) URL 是必需字段；摘要和时间缺失时为 `None`。
+## Implementation
 
-## 风险信号与顾虑
+- New normalized items now copy `SourceAssignment.article_access` and record
+  `first_seen_at=now`.
+- Retained dated items use the existing seven-day `WINDOW`; undated items use
+  the seven-day `UNDATED_RETENTION` from `first_seen_at`.
+- Fresh merges discard expired prior entries before sorting/capping and keep an
+  existing item's original `first_seen_at` when its stable ID reappears.
+- Stale-track reconstruction applies the same retention and cap. A stale track
+  with no surviving items becomes unavailable.
+- The pipeline now supplies v2 `SourceStats` totals and no longer exposes the
+  RSS feed URL through `FeedSource`.
+- No fetch or article-body request was added; this remains a pure normalization
+  and merge path.
 
-风险信号命中：是，输入为不可信外部 XML。未访问链接内容、未执行实体或 XSLT。此次修复仅跳过 CDATA/注释中的标记文本，实际 XML 声明仍会被拒绝；无未解决顾虑。
+## Integration Note
+
+`pytest agent/tests/news -q` currently reports `19 failed, 139 passed, 2
+skipped`. The failures are outside Task 4 ownership: coordinator tests still
+construct `RefreshStatus` without required `scope`, and LLM enrichment tests
+still construct pre-v2 `FeedSource(url=...)`/`FeedItem` values. The focused
+Task 4 pipeline suite is green.
+
+## Commit
+
+- `d0ac14b fix(news): expire stale article links` (signed; contains only the
+  two Task 4 implementation/test files).
+
+## Review Remediation
+
+Independent review found that an expired undated item could reappear from the
+feed with the same stable ID and be assigned a new `first_seen_at`. That made
+the item fresh again indefinitely.
+
+### RED
+
+```sh
+pytest agent/tests/news/test_pipeline.py -q
+```
+
+Result: `1 failed, 16 passed`. The new
+`test_expired_undated_stable_reappearance_is_unavailable` received `fresh`
+instead of `unavailable`, reproducing the retention bypass.
+
+### Fix
+
+- Use a complete prior-ID map solely to preserve an item's original
+  `first_seen_at`, including when its prior version is already expired.
+- Filter the merged replacement by retention after timestamp inheritance.
+- When all current candidates are expired replacements, emit an unavailable
+  track rather than an empty fresh track and do not mark it as updated.
+
+The regression suite also adds explicit coverage for a new item's timestamp,
+non-expired stable-ID reappearance, dated stale expiry, and a stale track with
+no retention survivors.
+
+### GREEN
+
+```sh
+pytest agent/tests/news/test_pipeline.py -q
+ruff check agent/src/news/pipeline.py agent/tests/news/test_pipeline.py
+python -m py_compile agent/src/news/pipeline.py agent/tests/news/test_pipeline.py
+git diff --check -- agent/src/news/pipeline.py agent/tests/news/test_pipeline.py
+```
+
+Results: `17 passed in 0.23s`; Ruff, compilation, and whitespace checks
+passed.
+
+- `245f919 fix(news): retain expired article timestamps` (signed; contains
+  only the two Task 4 implementation/test files).

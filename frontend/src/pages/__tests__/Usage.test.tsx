@@ -164,6 +164,11 @@ describe("Usage", () => {
       "rounded-lg",
       "bg-card",
     );
+    // Detail surface defaults to the unselected overview; selecting a session
+    // surfaces that session's run links.
+    await userEvent
+      .setup({ advanceTimers: vi.advanceTimersByTime })
+      .click(screen.getByRole("button", { name: "会话 A" }));
     expect(screen.getByRole("link", { name: "run-a" })).toBeInTheDocument();
   });
 
@@ -184,6 +189,7 @@ describe("Usage", () => {
 
     renderUsage();
 
+    await user.click(await screen.findByRole("button", { name: "会话 A" }));
     expect(await screen.findByRole("link", { name: "run-a" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "会话 B" }));
 
@@ -198,6 +204,28 @@ describe("Usage", () => {
     );
     expect(screen.queryByText("second-prompt-sentinel")).not.toBeInTheDocument();
     expect(screen.queryByText("second-response-sentinel")).not.toBeInTheDocument();
+  });
+
+  it("drives the trend chart from the selected session and back when toggled off", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderUsage();
+    await screen.findByText("1,000");
+
+    const aggregateTrend = expect.objectContaining({
+      xAxis: expect.objectContaining({ data: ["2026-07-22", "2026-07-23"] }),
+      series: [expect.objectContaining({ data: [400, 600] })],
+    });
+    // session-a has a single run on 2026-07-23 (600 tokens).
+    const sessionATrend = expect.objectContaining({
+      xAxis: expect.objectContaining({ data: ["2026-07-23"] }),
+      series: [expect.objectContaining({ data: [600] })],
+    });
+
+    await user.click(screen.getByRole("button", { name: "会话 A" }));
+    await waitFor(() => expect(setOption).toHaveBeenCalledWith(sessionATrend));
+
+    await user.click(screen.getByRole("button", { name: "会话 A" }));
+    await waitFor(() => expect(setOption).toHaveBeenCalledWith(aggregateTrend));
   });
 
   it.each([

@@ -34,6 +34,8 @@ RETRYABLE_STATUS_CODES = frozenset({408, 429, *range(500, 600)})
 RETRY_BASE_DELAY_SECONDS = 1.0
 CIRCUIT_FAILURE_THRESHOLD = 3
 CIRCUIT_COOLDOWN_SECONDS = 60.0
+# Transparent proxy Fake-IP mode uses this RFC 2544 benchmarking range for approved feed hosts.
+_PROXY_FAKE_IP_NETWORK = ipaddress.ip_network("198.18.0.0/15")
 
 
 class HostResolver(Protocol):
@@ -105,6 +107,7 @@ class PublicFeedClient:
 
     async def _fetch_once(self, endpoint: FeedEndpoint) -> tuple[EndpointFetchResult, float | None, bool]:
         current_url = endpoint.url
+        configured_hostname = _normalized_hostname(endpoint.url)
         redirects = 0
         timeout = httpx.Timeout(
             connect=CONNECT_TIMEOUT_SECONDS,
@@ -121,7 +124,9 @@ class PublicFeedClient:
                 limits=httpx.Limits(max_keepalive_connections=0),
             ) as client:
                 while True:
-                    target, error_code = await self._validated_target(current_url)
+                    target, error_code = await self._validated_target(
+                        current_url, allowed_fake_ip_hostname=configured_hostname
+                    )
                     if error_code is not None:
                         return self._failure(endpoint, error_code), None, False
                     assert target is not None
@@ -239,7 +244,9 @@ class PublicFeedClient:
             return None
         return delay if math.isfinite(delay) and delay >= 0 else None
 
-    async def _validated_target(self, value: str) -> tuple["_RequestTarget | None", str | None]:
+    async def _validated_target(
+        self, value: str, *, allowed_fake_ip_hostname: str | None = None
+    ) -> tuple["_RequestTarget | None", str | None]:
         try:
             parsed = urlsplit(value)
             hostname = parsed.hostname
@@ -265,7 +272,10 @@ class PublicFeedClient:
             parsed_addresses = tuple(ipaddress.ip_address(address) for address in addresses)
         except ValueError:
             return None, "dns_failed"
-        if any(not address.is_global or address.is_multicast for address in parsed_addresses):
+        all_proxy_fake_ips = all(address in _PROXY_FAKE_IP_NETWORK for address in parsed_addresses)
+        if any(not address.is_global or address.is_multicast for address in parsed_addresses) and not (
+            hostname == allowed_fake_ip_hostname and all_proxy_fake_ips
+        ):
             return None, "unsafe_target"
 
         selected = parsed_addresses[0]
@@ -341,6 +351,19 @@ class _RequestTarget:
 def _host_with_port(hostname: str, port: int | None) -> str:
     rendered_host = f"[{hostname}]" if ":" in hostname else hostname
     return f"{rendered_host}:{port}" if port is not None else rendered_host
+
+
+def _normalized_hostname(value: str) -> str | None:
+    try:
+        hostname = urlsplit(value).hostname
+    except ValueError:
+        return None
+    if not hostname:
+        return None
+    try:
+        return hostname.encode("idna").decode("ascii")
+    except UnicodeError:
+        return None
 
 
 def _request_url(parsed: SplitResult, address: ipaddress.IPv4Address | ipaddress.IPv6Address, port: int | None) -> str:

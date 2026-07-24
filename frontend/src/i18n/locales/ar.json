@@ -806,7 +806,8 @@
     "apply": "تطبيق",
     "previousPage": "الصفحة السابقة",
     "nextPage": "الصفحة التالية",
-    "notProvided": "غير متوفر"
+    "notProvided": "غير متوفر",
+    "periodOverview": "نظرة عامة على استخدام الفترة"
   },
   "news": {
     "title": "أخبار الاستثمار",

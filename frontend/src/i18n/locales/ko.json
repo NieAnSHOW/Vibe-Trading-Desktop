@@ -806,7 +806,8 @@
     "apply": "적용",
     "previousPage": "이전 페이지",
     "nextPage": "다음 페이지",
-    "notProvided": "제공되지 않음"
+    "notProvided": "제공되지 않음",
+    "periodOverview": "기간 사용량 개요"
   },
   "news": {
     "title": "투자 뉴스",
