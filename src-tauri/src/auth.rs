@@ -12,7 +12,7 @@ use aes_gcm::aead::{AeadInPlace, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce, Tag};
 use base64::Engine;
 use hkdf::Hkdf;
-use rand_core::OsRng;
+use rand_core::{OsRng, RngCore};
 use sha2::Sha256;
 use x25519_dalek::{PublicKey, StaticSecret};
 
@@ -421,6 +421,28 @@ fn credential_error(message: impl Into<String>) -> AuthError {
     }
 }
 
+fn log_vip_runtime_event(layout: &Layout, event: &str) {
+    crate::sidecar::log_vip_runtime_event(&layout.logs_dir, event);
+}
+
+fn new_vip_credential_trace_id() -> String {
+    let mut bytes = [0_u8; 12];
+    OsRng.fill_bytes(&mut bytes);
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn log_vip_credential_event(layout: &Layout, trace_id: &str, event: &str) {
+    log_vip_runtime_event(layout, &format!("trace_id={trace_id} {event}"));
+}
+
+/// 用于本地诊断的安全摘要；不得把凭据字段本身写入日志。
+fn vip_runtime_log_summary(credential: &VipRuntimeCredential) -> String {
+    format!(
+        "credential accepted (models_count={}); retained in process memory only",
+        credential.models.len()
+    )
+}
+
 pub fn public_key_base64(private_key: &StaticSecret) -> String {
     let public_key = PublicKey::from(private_key);
     let mut der = X25519_SPKI_PREFIX.to_vec();
@@ -494,24 +516,84 @@ pub fn decrypt_member_envelope(
     Ok(credential)
 }
 
-pub fn fetch_vip_credential(token: &str) -> Result<VipRuntimeCredential, AuthError> {
+pub fn fetch_vip_credential(
+    token: &str,
+    layout: &Layout,
+) -> Result<VipRuntimeCredential, AuthError> {
+    let trace_id = new_vip_credential_trace_id();
+    log_vip_credential_event(
+        layout,
+        &trace_id,
+        "requesting encrypted member credential from server",
+    );
     let client_private_key = StaticSecret::random_from_rng(OsRng);
     let text = http_client()?
         .post(endpoint("/app/ai/member/credentials"))
         .header("Authorization", token)
+        .header("X-Vibe-Trace-Id", &trace_id)
         .json(&serde_json::json!({
             "clientPublicKey": public_key_base64(&client_private_key),
         }))
         .send()
-        .map_err(|e| AuthError::Network {
-            message: format!("member credentials: {e}"),
+        .map_err(|e| {
+            log_vip_credential_event(
+                layout,
+                &trace_id,
+                "encrypted member credential request failed (network)",
+            );
+            AuthError::Network {
+                message: format!("member credentials: {e}"),
+            }
         })?
         .text()
-        .map_err(|e| AuthError::Network {
-            message: format!("member credentials body: {e}"),
+        .map_err(|e| {
+            log_vip_credential_event(
+                layout,
+                &trace_id,
+                "encrypted member credential response could not be read",
+            );
+            AuthError::Network {
+                message: format!("member credentials body: {e}"),
+            }
         })?;
-    let envelope: EncryptedMemberEnvelope = parse_cool_response(&text)?;
+    let envelope: EncryptedMemberEnvelope = parse_cool_response(&text).map_err(|error| {
+        log_vip_credential_event(
+            layout,
+            &trace_id,
+            "encrypted member credential response was rejected",
+        );
+        error
+    })?;
+    log_vip_credential_event(
+        layout,
+        &trace_id,
+        "encrypted member credential response received",
+    );
+    log_vip_credential_event(
+        layout,
+        &trace_id,
+        &format!(
+            "decrypting encrypted member credential envelope (version={})",
+            envelope.version
+        ),
+    );
     decrypt_member_envelope(&client_private_key, &envelope)
+        .map(|credential| {
+            log_vip_credential_event(
+                layout,
+                &trace_id,
+                &format!("decrypted {}", vip_runtime_log_summary(&credential)),
+            );
+            credential
+        })
+        .map_err(|error| {
+            log_vip_credential_event(
+                layout,
+                &trace_id,
+                "encrypted member credential decryption failed",
+            );
+            error
+        })
 }
 
 pub fn fetch_captcha() -> Result<Captcha, AuthError> {
@@ -668,17 +750,36 @@ pub fn decide_session_action(now: i64, sess: &UserSession) -> SessionAction {
 /// 启动服务前调：校验内存 session；过期则尝试 refresh（成功后重写 .env）。
 /// refresh 失败或 refreshExpire 已到则返回 LoginExpired。
 pub fn ensure_session_valid(state: &AuthState, layout: &Layout) -> Result<UserSession, AuthError> {
-    let sess = state
-        .0
-        .lock()
-        .unwrap()
-        .clone()
-        .or_else(|| read_env_token_section(layout))
-        .ok_or(AuthError::NotAuthenticated)?;
+    let sess = match state.0.lock().unwrap().clone() {
+        Some(session) => {
+            log_vip_runtime_event(layout, "validating authenticated session from memory");
+            session
+        }
+        None => match read_env_token_section(layout) {
+            Some(session) => {
+                log_vip_runtime_event(
+                    layout,
+                    "restored authenticated session from local token configuration",
+                );
+                session
+            }
+            None => {
+                log_vip_runtime_event(layout, "no authenticated session available for VIP service");
+                return Err(AuthError::NotAuthenticated);
+            }
+        },
+    };
     match decide_session_action(now_secs(), &sess) {
-        SessionAction::Valid => Ok(sess),
+        SessionAction::Valid => {
+            log_vip_runtime_event(layout, "authenticated session is valid; no refresh needed");
+            Ok(sess)
+        }
         SessionAction::NeedsRefresh => {
-            let raw = refresh_token(&sess.refresh_token)?;
+            log_vip_runtime_event(layout, "authenticated session expired; refreshing token");
+            let raw = refresh_token(&sess.refresh_token).map_err(|error| {
+                log_vip_runtime_event(layout, "session refresh failed");
+                error
+            })?;
             // refresh 未必返回新 userInfo，沿用旧 session 的 userInfo（若有）
             let mut new_sess = session_from_refresh(raw, &sess);
             // userInfo 缺失则尝试补全（旧 session 恢复时 user_info 为 None 时仍可工作）
@@ -689,9 +790,19 @@ pub fn ensure_session_valid(state: &AuthState, layout: &Layout) -> Result<UserSe
             }
             write_env_token_section(layout, &new_sess)?;
             *state.0.lock().unwrap() = Some(new_sess.clone());
+            log_vip_runtime_event(
+                layout,
+                "session refresh succeeded; persisted tokens and cleared cached VIP credential",
+            );
             Ok(new_sess)
         }
-        SessionAction::Expired => Err(AuthError::LoginExpired),
+        SessionAction::Expired => {
+            log_vip_runtime_event(
+                layout,
+                "authenticated session and refresh window are expired",
+            );
+            Err(AuthError::LoginExpired)
+        }
     }
 }
 
@@ -699,7 +810,17 @@ pub fn ensure_session_valid(state: &AuthState, layout: &Layout) -> Result<UserSe
 pub fn ensure_vip_credential(state: &AuthState, layout: &Layout) -> Result<UserSession, AuthError> {
     let mut sess = ensure_session_valid(state, layout)?;
     if sess.vip.is_none() {
-        sess.vip = Some(fetch_vip_credential(&sess.token)?);
+        log_vip_runtime_event(
+            layout,
+            "no cached VIP credential; fetching a new runtime credential",
+        );
+        sess.vip = Some(fetch_vip_credential(&sess.token, layout)?);
+        log_vip_runtime_event(
+            layout,
+            "VIP runtime credential cached in memory for this desktop session",
+        );
+    } else {
+        log_vip_runtime_event(layout, "using cached VIP runtime credential from memory");
     }
     *state.0.lock().unwrap() = Some(sess.clone());
     Ok(sess)
@@ -772,6 +893,32 @@ mod tests {
         assert_eq!(credential.base_url, "https://api.example/v1");
         assert_eq!(credential.api_key, "member-key");
         assert_eq!(credential.models, vec!["model-a"]);
+    }
+
+    #[test]
+    fn vip_runtime_log_summary_never_discloses_credential_values() {
+        let credential = VipRuntimeCredential {
+            base_url: "https://api.example/v1".into(),
+            api_key: "member-key".into(),
+            models: vec!["model-a".into(), "model-b".into()],
+        };
+
+        let summary = vip_runtime_log_summary(&credential);
+
+        assert!(summary.contains("models_count=2"));
+        assert!(!summary.contains(&credential.base_url));
+        assert!(!summary.contains(&credential.api_key));
+        assert!(!summary.contains("model-a"));
+    }
+
+    #[test]
+    fn vip_credential_trace_id_is_safe_for_logs_and_request_header() {
+        let trace_id = new_vip_credential_trace_id();
+
+        assert_eq!(trace_id.len(), 24);
+        assert!(trace_id
+            .chars()
+            .all(|character| character.is_ascii_hexdigit()));
     }
 
     #[test]

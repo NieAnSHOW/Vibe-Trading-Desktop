@@ -7,6 +7,26 @@ use crate::auth::VipRuntimeCredential;
 
 const BOOT: &str = "import cli, sys; raise SystemExit(cli.main(sys.argv[1:]))";
 
+/// 将桌面 VIP 链路的非敏感诊断事件同时输出到 stderr 和持久日志。
+/// 凭据值、令牌、密文与 Base URL 不得传入此函数。
+pub fn log_vip_runtime_event(log_dir: &Path, event: &str) {
+    let line = format!("[vip-runtime] {event}");
+    eprintln!("{line}");
+    if std::fs::create_dir_all(log_dir).is_err() {
+        eprintln!("[vip-runtime] unable to create persistent log directory");
+        return;
+    }
+    use std::io::Write;
+    let result = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_dir.join("desktop-vip-runtime.log"))
+        .and_then(|mut file| writeln!(file, "{line}"));
+    if result.is_err() {
+        eprintln!("[vip-runtime] unable to persist diagnostic event");
+    }
+}
+
 /// Build the Command for spawning the python sidecar.
 /// Extracted for testability — allows verifying the argument/env construction
 /// without actually spawning a process.
@@ -98,14 +118,34 @@ pub fn spawn(
     port: u16,
     runtime_libs: &Path,
     sessions_dir: &Path,
+    logs_dir: &Path,
     vip: Option<&VipRuntimeCredential>,
 ) -> Result<Child, String> {
+    let models_count = vip.map(|credential| credential.models.len());
+    log_vip_runtime_event(
+        logs_dir,
+        &format!(
+            "preparing sidecar environment (port={port}, vip_runtime_credential={}, models_count={})",
+            vip.is_some(),
+            models_count.map_or_else(|| "n/a".to_string(), |count| count.to_string())
+        ),
+    );
     let mut cmd = build_cmd_with_vip(python, runtime_agent, port, runtime_libs, sessions_dir, vip);
     // ponytail: kill stale listener before bind, else await_health may
     // connect to a leftover sidecar from a killed previous session.
     crate::port::kill_listener_on_port(port);
     cmd.spawn()
-        .map_err(|e| format!("spawn sidecar failed: {e}"))
+        .map(|child| {
+            log_vip_runtime_event(
+                logs_dir,
+                &format!("sidecar process spawned (pid={})", child.id()),
+            );
+            child
+        })
+        .map_err(|e| {
+            log_vip_runtime_event(logs_dir, "sidecar process spawn failed");
+            format!("spawn sidecar failed: {e}")
+        })
 }
 
 /// SIGTERM 后回收 sidecar 的最长等待时间。超时则升级为 SIGKILL 兜底。
@@ -320,6 +360,16 @@ fn drain_line(w: &mut Option<std::io::BufWriter<std::fs::File>>, tag: &str, line
 mod tests {
     use super::*;
     use std::path::Path;
+
+    #[test]
+    fn vip_runtime_events_are_persisted_in_desktop_log() {
+        let temp = tempfile::tempdir().unwrap();
+
+        log_vip_runtime_event(temp.path(), "credential request started");
+
+        let text = std::fs::read_to_string(temp.path().join("desktop-vip-runtime.log")).unwrap();
+        assert_eq!(text, "[vip-runtime] credential request started\n");
+    }
 
     #[test]
     fn spawn_command_has_expected_args() {

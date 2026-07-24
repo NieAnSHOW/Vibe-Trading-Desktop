@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import logging
 import os
 import sys as _sys
 from pathlib import Path
@@ -18,6 +19,7 @@ from src.api.helpers import _write_env_text_atomically
 
 # Agent root (agent/) — resolved from this file's location (agent/src/api/).
 _AGENT_DIR = Path(__file__).resolve().parent.parent.parent
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -332,6 +334,14 @@ def _sync_runtime_env(provider: LLMProviderOption, updates: Dict[str, str]) -> N
         os.environ.pop("OPENAI_API_BASE", None)
         os.environ.pop("OPENAI_BASE_URL", None)
 
+    logger.info(
+        "LLM runtime switched to custom provider (provider=%s, api_key_configured=%s)",
+        provider.name,
+        bool(provider.api_key_env and host._is_configured_secret(
+            os.environ.get(provider.api_key_env, ""), LLM_API_KEY_PLACEHOLDERS
+        )),
+    )
+
 
 def _vip_runtime_model_name() -> str:
     """Select a runtime model from the hidden sidecar-provided model list."""
@@ -361,6 +371,10 @@ def _sync_vip_runtime_env() -> None:
             "OPENAI_API_BASE": base_url,
             "OPENAI_BASE_URL": base_url,
         }
+    )
+    logger.info(
+        "VIP runtime credentials activated from sidecar memory (model_selected=%s)",
+        os.environ["LANGCHAIN_MODEL_NAME"],
     )
 
 
@@ -442,7 +456,14 @@ def register_settings_routes(
     )
     async def get_llm_settings():
         """Return project-local LLM settings for the Web UI."""
-        return _build_llm_settings_response()
+        response = _build_llm_settings_response()
+        logger.info(
+            "LLM settings inspected (mode=%s, vip_runtime_available=%s, desktop_login=%s)",
+            response.desktop_llm_mode,
+            response.desktop_vip_available,
+            response.desktop_login_provisioned,
+        )
+        return response
 
     @app.put(
         "/settings/llm",
@@ -455,6 +476,9 @@ def register_settings_routes(
         if payload.mode == "vip":
             current_values = _read_settings_env_values()
             if not _desktop_vip_available({**current_values, DESKTOP_LLM_MODE_KEY: "vip"}):
+                logger.warning(
+                    "VIP mode switch rejected because transient desktop credentials are unavailable"
+                )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Desktop VIP is not available for this session",
@@ -465,6 +489,7 @@ def register_settings_routes(
                 drop_keys={DESKTOP_LLM_MODE_KEY},
             )
             _sync_vip_runtime_env()
+            logger.info("LLM mode persisted as VIP; no VIP credential was written to dotenv")
             return _build_llm_settings_response(
                 host_ref._read_env_values(host_ref._resolve_settings_env_path())
             )
@@ -544,6 +569,12 @@ def register_settings_routes(
         _sync_runtime_env(provider, updates)
         os.environ.pop("VIP_API_KEY", None)
         os.environ.pop("VIP_BASE_URL", None)
+        logger.info(
+            "LLM mode persisted as custom (provider=%s, supplied_api_key=%s, cleared_api_key=%s)",
+            provider.name,
+            bool(payload.api_key and payload.api_key.strip()),
+            payload.clear_api_key,
+        )
         return _build_llm_settings_response(host_ref._read_env_values(host_ref._resolve_settings_env_path()))
 
     @app.get(

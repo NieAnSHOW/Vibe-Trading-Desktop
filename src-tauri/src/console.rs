@@ -311,6 +311,7 @@ pub async fn console_start_service(
     auth_state: State<'_, AuthState>,
 ) -> Result<u16, ServiceStartError> {
     let layout = Layout::from_home().map_err(|e| ServiceStartError::Other { message: e })?;
+    crate::sidecar::log_vip_runtime_event(&layout.logs_dir, "service start requested");
     if compute_env_status(&layout) != EnvStatus::Ready {
         return Err(ServiceStartError::EnvNotReady);
     }
@@ -320,33 +321,75 @@ pub async fn console_start_service(
     // custom 模式完全不依赖会员登录；VIP 模式的未登录用户同样可按 .env 配置启动。
     // 已登录但无法获取 VIP 凭据时保持失败，避免悄然切换到其他供应商。
     let vip_session = match auth::read_llm_mode(&layout) {
-        auth::DesktopLlmMode::Custom => None,
-        auth::DesktopLlmMode::Vip => match run_blocking({
-            let auth_state = auth_state.inner().clone();
-            let layout = layout.clone();
-            move || auth::ensure_vip_credential(&auth_state, &layout)
-        })
-        .await
-        .map_err(|message| ServiceStartError::Other { message })?
-        {
-            Ok(session) => Some(session),
-            Err(error) if can_start_without_vip(&error) => None,
-            Err(error) => {
-                return Err(ServiceStartError::Other {
-                    message: error.to_string(),
-                });
+        auth::DesktopLlmMode::Custom => {
+            crate::sidecar::log_vip_runtime_event(
+                &layout.logs_dir,
+                "selected LLM mode=custom; VIP credential flow skipped",
+            );
+            None
+        }
+        auth::DesktopLlmMode::Vip => {
+            crate::sidecar::log_vip_runtime_event(
+                &layout.logs_dir,
+                "selected LLM mode=vip; preparing runtime credential",
+            );
+            match run_blocking({
+                let auth_state = auth_state.inner().clone();
+                let layout = layout.clone();
+                move || auth::ensure_vip_credential(&auth_state, &layout)
+            })
+            .await
+            .map_err(|message| ServiceStartError::Other { message })?
+            {
+                Ok(session) => {
+                    crate::sidecar::log_vip_runtime_event(
+                        &layout.logs_dir,
+                        "VIP runtime credential is ready for sidecar injection",
+                    );
+                    Some(session)
+                }
+                Err(error) if can_start_without_vip(&error) => {
+                    let event = match error {
+                        AuthError::NotAuthenticated => {
+                            "no login found; starting with existing .env model configuration"
+                        }
+                        AuthError::LoginExpired => {
+                            "login expired; starting with existing .env model configuration"
+                        }
+                        _ => unreachable!("fallback predicate only accepts unauthenticated errors"),
+                    };
+                    crate::sidecar::log_vip_runtime_event(&layout.logs_dir, event);
+                    None
+                }
+                Err(error) => {
+                    crate::sidecar::log_vip_runtime_event(
+                        &layout.logs_dir,
+                        "VIP runtime credential preparation failed; service not started",
+                    );
+                    return Err(ServiceStartError::Other {
+                        message: error.to_string(),
+                    });
+                }
             }
-        },
+        }
     };
 
     let port =
         crate::port::pick_free_port().map_err(|e| ServiceStartError::Other { message: e })?;
+    crate::sidecar::log_vip_runtime_event(
+        &layout.logs_dir,
+        &format!(
+            "starting sidecar (port={port}, vip_runtime_credential={})",
+            vip_session.is_some()
+        ),
+    );
     let mut child = crate::sidecar::spawn(
         &layout.venv_python,
         &layout.runtime_agent,
         port,
         &layout.runtime_libs,
         &layout.sessions_dir,
+        &layout.logs_dir,
         vip_session
             .as_ref()
             .and_then(|session| session.vip.as_ref()),
@@ -356,6 +399,10 @@ pub async fn console_start_service(
     // await_health 是同步阻塞(reqwest::blocking + thread::sleep,最长 120s)。
     // 甩到阻塞线程池执行——否则会卡死 Tauri main thread,整个窗口假死、
     // 前端 spinner 也转不动(对照 console_bootstrap 用 async + 后台线程,从不卡)。
+    crate::sidecar::log_vip_runtime_event(
+        &layout.logs_dir,
+        &format!("waiting for sidecar health check (port={port})"),
+    );
     let shared = state.inner().clone();
     let (ready, mut child) = tauri::async_runtime::spawn_blocking(move || {
         let ready = crate::sidecar::await_health(&mut child, port);
@@ -367,6 +414,10 @@ pub async fn console_start_service(
     })?;
     match ready {
         crate::sidecar::Ready::Ok => {
+            crate::sidecar::log_vip_runtime_event(
+                &layout.logs_dir,
+                &format!("sidecar health check succeeded (port={port})"),
+            );
             // 启动后台线程消费 stdout/stderr 管道，防止缓冲区（~64 KB）写满后
             // Python uvicorn write() 阻塞，导致长时间运行假死（根因 A）。
             // 日志按天写入 ~/.vibe-trading/logs/sidecar-YYYY-MM-DD.log，
@@ -380,9 +431,19 @@ pub async fn console_start_service(
             Ok(port)
         }
         crate::sidecar::Ready::ProcessExited(c) => {
+            crate::sidecar::log_vip_runtime_event(
+                &layout.logs_dir,
+                &format!("sidecar exited before health check (code={c:?})"),
+            );
             Err(ServiceStartError::ProcessExited { code: c })
         }
-        crate::sidecar::Ready::Timeout => Err(ServiceStartError::HealthTimeout),
+        crate::sidecar::Ready::Timeout => {
+            crate::sidecar::log_vip_runtime_event(
+                &layout.logs_dir,
+                &format!("sidecar health check timed out (port={port})"),
+            );
+            Err(ServiceStartError::HealthTimeout)
+        }
     }
 }
 
@@ -418,6 +479,10 @@ fn finalize_login(
     auth::write_env_token_section(layout, &sess)?;
     sess.user_info = Some(info.clone());
     *auth_state.0.lock().unwrap() = Some(sess.clone());
+    crate::sidecar::log_vip_runtime_event(
+        &layout.logs_dir,
+        "login succeeded; persisted session tokens only and deferred VIP credential retrieval",
+    );
     Ok(LoginResultView {
         user_info: info,
         has_password,
@@ -448,6 +513,7 @@ pub async fn console_login_by_phone(
     auth_state: State<'_, AuthState>,
 ) -> Result<LoginResultView, AuthError> {
     let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
+    crate::sidecar::log_vip_runtime_event(&layout.logs_dir, "login requested (method=phone)");
     let auth_state = auth_state.inner().clone();
     run_blocking(move || {
         let response = auth::login_by_phone(&phone, &sms_code)?;
@@ -471,6 +537,7 @@ pub async fn console_login_by_password(
     auth_state: State<'_, AuthState>,
 ) -> Result<LoginResultView, AuthError> {
     let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
+    crate::sidecar::log_vip_runtime_event(&layout.logs_dir, "login requested (method=password)");
     let auth_state = auth_state.inner().clone();
     run_blocking(move || {
         let response = auth::login_by_password(&phone, &password)?;
@@ -495,6 +562,7 @@ pub async fn console_login_register(
     auth_state: State<'_, AuthState>,
 ) -> Result<LoginResultView, AuthError> {
     let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
+    crate::sidecar::log_vip_runtime_event(&layout.logs_dir, "login requested (method=register)");
     let auth_state = auth_state.inner().clone();
     run_blocking(move || {
         let response = auth::register(&phone, &sms_code, &password)?;
