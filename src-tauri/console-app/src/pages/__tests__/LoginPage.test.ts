@@ -20,6 +20,11 @@ const mocks = vi.hoisted(() => ({
     hasPassword: true,
     expireAt: 9999999999,
   })),
+  consoleLoginRegister: vi.fn(async (_phone: string, _smsCode: string, _password: string) => ({
+    userInfo: { id: 1, nickName: "Tester", gender: 0, status: 1, loginType: 2 },
+    hasPassword: true,
+    expireAt: 9999999999,
+  })),
   consoleLoginSetPassword: vi.fn(async (_password: string) => {}),
 }));
 
@@ -28,6 +33,7 @@ vi.mock("../../ipc/commands", () => ({
   consoleLoginSendSms: mocks.consoleLoginSendSms,
   consoleLoginByPhone: mocks.consoleLoginByPhone,
   consoleLoginByPassword: mocks.consoleLoginByPassword,
+  consoleLoginRegister: mocks.consoleLoginRegister,
   consoleLoginSetPassword: mocks.consoleLoginSetPassword,
 }));
 
@@ -93,6 +99,43 @@ describe("LoginPage", () => {
     expect(mocks.consoleLoginByPhone).toHaveBeenCalledWith(
       "13800000000",
       "1234",
+    );
+  });
+
+  it("注册页在密码和图形验证码都合法前禁用获取验证码", async () => {
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    await w.get('[data-test="register-tab"]').trigger("click");
+    await w.get('[data-test="register-phone"]').setValue("13800000000");
+    await w.get('[data-test="register-password"]').setValue("weak");
+    await w.get('[data-test="register-captcha"]').setValue("abcd");
+
+    expect(w.get('[data-test="register-send-code"]').attributes("disabled")).toBeDefined();
+  });
+
+  it("注册仅接受服务端规则的可打印 ASCII 密码", async () => {
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    await w.get('[data-test="register-tab"]').trigger("click");
+    await w.get('[data-test="register-phone"]').setValue("13800000000");
+    await w.get('[data-test="register-captcha"]').setValue("abcd");
+    await w.get('[data-test="register-password"]').setValue("Passw0rd! ");
+
+    expect(w.get('[data-test="register-send-code"]').attributes("disabled")).toBeDefined();
+  });
+
+  it("完整注册表单调用注册 IPC", async () => {
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    await w.get('[data-test="register-tab"]').trigger("click");
+    await w.get('[data-test="register-phone"]').setValue("13800000000");
+    await w.get('[data-test="register-password"]').setValue("Passw0rd!");
+    await w.get('[data-test="register-captcha"]').setValue("abcd");
+    await w.get('[data-test="register-sms"]').setValue("1234");
+    await w.get('[data-test="register-submit"]').trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleLoginRegister).toHaveBeenCalledWith(
+      "13800000000",
+      "1234",
+      "Passw0rd!",
     );
   });
 });

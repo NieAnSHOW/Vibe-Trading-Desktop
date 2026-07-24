@@ -7,8 +7,9 @@ import {
   consoleLoginSendSms,
   consoleLoginByPhone,
   consoleLoginByPassword,
+  consoleLoginRegister,
 } from "../ipc/commands";
-import type { Captcha } from "../ipc/types";
+import type { Captcha, LoginResultView } from "../ipc/types";
 import { useAuthStore } from "../stores/auth";
 import { useBusy } from "../composables/useBusy";
 import SetPasswordModal from "../components/SetPasswordModal.vue";
@@ -17,12 +18,16 @@ import logoPng from "../assets/128x128@2x.png";
 const router = useRouter();
 const auth = useAuthStore();
 
-const tab = ref<"sms" | "password">("sms");
+const tab = ref<"sms" | "password" | "register">("sms");
 const captcha = ref<Captcha | null>(null);
 const phone = ref("");
 const captchaCode = ref("");
 const smsCode = ref("");
 const password = ref("");
+const registerPhone = ref("");
+const registerPassword = ref("");
+const registerCaptchaCode = ref("");
+const registerSmsCode = ref("");
 const countdown = ref(0);
 const err = ref("");
 const showSetPwd = ref(false);
@@ -30,10 +35,18 @@ let timer: ReturnType<typeof setInterval> | null = null;
 
 const PHONE_RE = /^1\d{10}$/;
 const isCode4 = (s: string) => /^\d{4}$/.test(s) || /^[0-9a-zA-Z]{4}$/.test(s);
+const PASSWORD_RE = /^(?=.{6,10}$)(?=.*[A-Z])(?=.*\d)(?=.*[!-/:-@[-`{-~])[!-~]+$/;
 const phoneValid = computed(() => PHONE_RE.test(phone.value));
 const captchaValid = computed(() => isCode4(captchaCode.value));
 const smsValid = computed(() => isCode4(smsCode.value));
 const passwordValid = computed(() => password.value.length >= 6);
+const registerPhoneValid = computed(() => PHONE_RE.test(registerPhone.value));
+const registerPasswordValid = computed(() => PASSWORD_RE.test(registerPassword.value));
+const registerCaptchaValid = computed(() => isCode4(registerCaptchaCode.value));
+const registerSmsValid = computed(() => isCode4(registerSmsCode.value));
+const registerValid = computed(
+  () => registerPhoneValid.value && registerPasswordValid.value && registerCaptchaValid.value && registerSmsValid.value,
+);
 
 async function loadCaptcha() {
   err.value = "";
@@ -68,10 +81,37 @@ async function sendCode() {
   }
 }
 
+async function sendRegisterCode() {
+  if (
+    !registerPhoneValid.value ||
+    !registerPasswordValid.value ||
+    !registerCaptchaValid.value ||
+    countdown.value > 0 ||
+    !captcha.value
+  ) return;
+  try {
+    await consoleLoginSendSms(
+      registerPhone.value,
+      captcha.value.captchaId,
+      registerCaptchaCode.value,
+    );
+    countdown.value = 60;
+    timer = setInterval(() => {
+      countdown.value -= 1;
+      if (countdown.value <= 0 && timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    }, 1000);
+  } catch (e) {
+    setErr(e, "短信发送失败");
+  }
+}
+
 const submitBusy = useBusy();
 
 async function finishLogin(
-  view: { userInfo: any; hasPassword: boolean; expireAt: number },
+  view: LoginResultView,
 ) {
   auth.setFromLogin(view);
   if (!view.hasPassword) {
@@ -103,6 +143,23 @@ async function submitPassword() {
       await finishLogin(view);
     } catch (e) {
       setErr(e, "密码登录失败");
+    }
+  });
+}
+
+async function submitRegister() {
+  if (!registerValid.value) return;
+  await submitBusy.run("注册中", async () => {
+    err.value = "";
+    try {
+      const view = await consoleLoginRegister(
+        registerPhone.value,
+        registerSmsCode.value,
+        registerPassword.value,
+      );
+      await finishLogin(view);
+    } catch (e) {
+      setErr(e, "注册失败");
     }
   });
 }
@@ -141,6 +198,10 @@ onUnmounted(() => {
         <button :class="['tab', tab === 'password' && 'active']" role="tab" :aria-selected="tab === 'password'"
           @click="tab = 'password'">
           密码登录
+        </button>
+        <button data-test="register-tab" :class="['tab', tab === 'register' && 'active']" role="tab"
+          :aria-selected="tab === 'register'" @click="tab = 'register'">
+          注册
         </button>
       </nav>
 
@@ -187,7 +248,7 @@ onUnmounted(() => {
         </button>
       </form>
 
-      <form v-else class="form" @submit.prevent="submitPassword">
+      <form v-else-if="tab === 'password'" class="form" @submit.prevent="submitPassword">
         <label class="row">
           <span class="lbl">手机号</span>
           <input class="field" v-model="phone" inputmode="numeric" placeholder="13800000000" autocomplete="tel"
@@ -200,6 +261,53 @@ onUnmounted(() => {
         <button type="button" class="submit" :disabled="!phoneValid || !passwordValid || submitBusy.busy.value"
           @click="submitPassword">
           {{ submitBusy.busy.value ? "登录中…" : "登录" }}
+        </button>
+        <button type="button" class="skip-btn" @click="router.replace('/')">
+          回到首页
+        </button>
+      </form>
+
+      <form v-else class="form" @submit.prevent="submitRegister">
+        <label class="row">
+          <span class="lbl">手机号</span>
+          <input data-test="register-phone" class="field" v-model="registerPhone" inputmode="numeric"
+            placeholder="13800000000" autocomplete="tel"
+            @input="registerPhone = registerPhone.replace(/\D/g, '').slice(0, 11)" />
+        </label>
+        <label class="row">
+          <span class="lbl">密码</span>
+          <input data-test="register-password" class="field" type="password" v-model="registerPassword"
+            placeholder="6-10 位，含大写、数字和符号" autocomplete="new-password" />
+        </label>
+        <label class="row">
+          <span class="lbl">图形验证码</span>
+          <div class="inline">
+            <input data-test="register-captcha" class="field" v-model="registerCaptchaCode" placeholder="abcd"
+              autocomplete="off" @input="registerCaptchaCode = registerCaptchaCode.trim().slice(0, 4)" />
+            <button type="button" class="captcha-btn" title="刷新验证码" aria-label="刷新验证码" @click="loadCaptcha">
+              <img v-if="captcha" :src="captcha.data.startsWith('data:')
+                ? captcha.data
+                : `data:image/svg+xml;base64,${captcha.data}`" alt="图形验证码" />
+              <span v-else class="captcha-loading">…</span>
+            </button>
+          </div>
+        </label>
+        <label class="row">
+          <span class="lbl">短信验证码</span>
+          <div class="inline">
+            <input data-test="register-sms" class="field" v-model="registerSmsCode" inputmode="numeric"
+              placeholder="1234" autocomplete="one-time-code"
+              @input="registerSmsCode = registerSmsCode.trim().slice(0, 4)" />
+            <button data-test="register-send-code" type="button" class="code-btn"
+              :disabled="!registerPhoneValid || !registerPasswordValid || !registerCaptchaValid || countdown > 0"
+              @click="sendRegisterCode">
+              {{ countdown > 0 ? `${countdown}s` : "获取" }}
+            </button>
+          </div>
+        </label>
+        <button data-test="register-submit" type="button" class="submit"
+          :disabled="!registerValid || submitBusy.busy.value" @click="submitRegister">
+          {{ submitBusy.busy.value ? "注册中…" : "注册" }}
         </button>
         <button type="button" class="skip-btn" @click="router.replace('/')">
           回到首页

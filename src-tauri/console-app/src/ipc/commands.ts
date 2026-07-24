@@ -70,6 +70,13 @@ export const consoleLoginByPassword = (
 ): Promise<LoginResultView> =>
   invoke<LoginResultView>("console_login_by_password", { phone, password });
 
+export const consoleLoginRegister = (
+  phone: string,
+  smsCode: string,
+  password: string,
+): Promise<LoginResultView> =>
+  invoke<LoginResultView>("console_login_register", { phone, smsCode, password });
+
 export const consoleLoginSetPassword = (password: string): Promise<void> =>
   invoke<void>("console_login_set_password", { password });
 
