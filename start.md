@@ -21,6 +21,11 @@ vibe-trading serve --port 8899
 
 cd frontend
 pnpm i
+pnpm dev # 启动前端开发服务器
+或
+bun dev # 启动前端开发服务器
+
+
 
 # 桌端环境依赖安装
 
