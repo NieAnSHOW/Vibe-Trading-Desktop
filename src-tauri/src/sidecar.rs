@@ -3,6 +3,8 @@ use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+use crate::auth::VipRuntimeCredential;
+
 const BOOT: &str = "import cli, sys; raise SystemExit(cli.main(sys.argv[1:]))";
 
 /// Build the Command for spawning the python sidecar.
@@ -14,6 +16,24 @@ pub fn build_cmd(
     port: u16,
     runtime_libs: &Path,
     sessions_dir: &Path,
+) -> std::process::Command {
+    build_cmd_with_vip(
+        python,
+        runtime_agent,
+        port,
+        runtime_libs,
+        sessions_dir,
+        None,
+    )
+}
+
+pub fn build_cmd_with_vip(
+    python: &Path,
+    runtime_agent: &Path,
+    port: u16,
+    runtime_libs: &Path,
+    sessions_dir: &Path,
+    vip: Option<&VipRuntimeCredential>,
 ) -> std::process::Command {
     let mut cmd = Command::new(python);
     cmd.arg("-c")
@@ -37,8 +57,22 @@ pub fn build_cmd(
         // per-install via --index-url; this is just the process default.
         .env("PIP_INDEX_URL", "https://pypi.tuna.tsinghua.edu.cn/simple")
         .env("PIP_DISABLE_PIP_VERSION_CHECK", "1")
+        .env_remove("VIBE_DESKTOP_VIP_PROVISIONED")
+        .env_remove("VIBE_DESKTOP_VIP_API_KEY")
+        .env_remove("VIBE_DESKTOP_VIP_BASE_URL")
+        .env_remove("VIBE_DESKTOP_VIP_MODELS_JSON")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+
+    if let Some(vip) = vip {
+        cmd.env("VIBE_DESKTOP_VIP_PROVISIONED", "1")
+            .env("VIBE_DESKTOP_VIP_API_KEY", &vip.api_key)
+            .env("VIBE_DESKTOP_VIP_BASE_URL", &vip.base_url)
+            .env(
+                "VIBE_DESKTOP_VIP_MODELS_JSON",
+                serde_json::to_string(&vip.models).expect("Vec<String> always serializes"),
+            );
+    }
 
     #[cfg(unix)]
     unsafe {
@@ -64,8 +98,9 @@ pub fn spawn(
     port: u16,
     runtime_libs: &Path,
     sessions_dir: &Path,
+    vip: Option<&VipRuntimeCredential>,
 ) -> Result<Child, String> {
-    let mut cmd = build_cmd(python, runtime_agent, port, runtime_libs, sessions_dir);
+    let mut cmd = build_cmd_with_vip(python, runtime_agent, port, runtime_libs, sessions_dir, vip);
     // ponytail: kill stale listener before bind, else await_health may
     // connect to a leftover sidecar from a killed previous session.
     crate::port::kill_listener_on_port(port);
@@ -215,7 +250,10 @@ fn cleanup_old_logs(log_dir: &Path, today_day: i64) {
             let _ = std::fs::remove_file(ent.path());
             continue;
         }
-        let Some(date) = name.strip_prefix("sidecar-").and_then(|s| s.strip_suffix(".log")) else {
+        let Some(date) = name
+            .strip_prefix("sidecar-")
+            .and_then(|s| s.strip_suffix(".log"))
+        else {
             continue;
         };
         if date.len() == 10 && date < cutoff.as_str() {
@@ -246,7 +284,10 @@ fn drain_stream<R: std::io::Read>(stream: R, dir: &Path, tag: &str) {
     let mut cur_day = today_epoch_day();
     let mut w = open_log_append(&dir.join(today_stamp()));
     cleanup_old_logs(dir, cur_day);
-    for line in std::io::BufReader::new(stream).lines().map_while(Result::ok) {
+    for line in std::io::BufReader::new(stream)
+        .lines()
+        .map_while(Result::ok)
+    {
         let day = today_epoch_day();
         if day != cur_day {
             // 跨天：重开当天文件并清理过期日志。
@@ -284,7 +325,13 @@ mod tests {
     fn spawn_command_has_expected_args() {
         let python = Path::new("/fake/python3");
         let agent = Path::new("/fake/agent");
-        let cmd = build_cmd(python, agent, 8899, Path::new("/fake/libs"), Path::new("/fake/sessions"));
+        let cmd = build_cmd(
+            python,
+            agent,
+            8899,
+            Path::new("/fake/libs"),
+            Path::new("/fake/sessions"),
+        );
 
         // Verify the program path is set correctly
         assert_eq!(cmd.get_program(), "/fake/python3");
@@ -352,7 +399,10 @@ mod tests {
 
         assert!(!base.join(&old_name).exists(), "过期日志应被清理");
         assert!(base.join(&recent_name).exists(), "近期日志应保留");
-        assert!(!base.join("sidecar.log").exists(), "无日期遗留 sidecar.log 应被清理");
+        assert!(
+            !base.join("sidecar.log").exists(),
+            "无日期遗留 sidecar.log 应被清理"
+        );
 
         fs::remove_dir_all(&base).ok();
     }
@@ -361,7 +411,13 @@ mod tests {
     fn build_cmd_includes_serve_args() {
         let python = Path::new("/fake/python3");
         let agent = Path::new("/fake/agent");
-        let cmd = build_cmd(python, agent, 8899, Path::new("/fake/libs"), Path::new("/fake/sessions"));
+        let cmd = build_cmd(
+            python,
+            agent,
+            8899,
+            Path::new("/fake/libs"),
+            Path::new("/fake/sessions"),
+        );
 
         let args: Vec<&str> = cmd.get_args().map(|a| a.to_str().unwrap()).collect();
         let args_str = args.join(" ");
@@ -450,7 +506,13 @@ mod tests {
         // autostart,微信 poll 循环不会恢复 → 前端判定需重新扫码(磁盘 token 仍在)。
         let python = Path::new("/fake/python3");
         let agent = Path::new("/fake/agent");
-        let cmd = build_cmd(python, agent, 8899, Path::new("/fake/libs"), Path::new("/fake/sessions"));
+        let cmd = build_cmd(
+            python,
+            agent,
+            8899,
+            Path::new("/fake/libs"),
+            Path::new("/fake/sessions"),
+        );
         let mut found = false;
         for (key, val) in cmd.get_envs() {
             if key.to_str() == Some("VIBE_TRADING_CHANNELS_AUTO_START")

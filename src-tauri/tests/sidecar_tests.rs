@@ -2,6 +2,15 @@
 // Integration tests for sidecar module — testing auxiliary/unit-testable functions.
 use std::path::PathBuf;
 
+#[path = "../src/runtime_dir.rs"]
+mod runtime_dir;
+
+#[path = "../src/version.rs"]
+mod version;
+
+#[path = "../src/auth.rs"]
+mod auth;
+
 // We can't directly import from the binary crate, so we test via the
 // fact that the sidecar module path is accessible.
 // For a proper unit-test approach, we use the module's exported functions
@@ -18,13 +27,61 @@ mod port {
 #[path = "../src/sidecar.rs"]
 mod sidecar;
 
-use sidecar::{build_cmd, health_url};
+use auth::VipRuntimeCredential;
+use sidecar::{build_cmd, build_cmd_with_vip, health_url};
+
+fn env(cmd: &std::process::Command, name: &str) -> Option<String> {
+    cmd.get_envs().find_map(|(key, value)| {
+        (key == name)
+            .then(|| value.and_then(|v| v.to_str()).map(str::to_string))
+            .flatten()
+    })
+}
+
+#[test]
+fn sidecar_command_receives_vip_values_only_as_process_env() {
+    let vip = VipRuntimeCredential {
+        base_url: "https://api.example/v1".into(),
+        api_key: "member-key".into(),
+        models: vec!["model-a".into()],
+    };
+    let cmd = build_cmd_with_vip(
+        std::path::Path::new("/fake/python"),
+        std::path::Path::new("/fake/agent"),
+        8899,
+        std::path::Path::new("/fake/libs"),
+        std::path::Path::new("/fake/sessions"),
+        Some(&vip),
+    );
+    assert_eq!(
+        env(&cmd, "VIBE_DESKTOP_VIP_PROVISIONED").as_deref(),
+        Some("1")
+    );
+    assert_eq!(
+        env(&cmd, "VIBE_DESKTOP_VIP_API_KEY").as_deref(),
+        Some("member-key")
+    );
+    assert_eq!(
+        env(&cmd, "VIBE_DESKTOP_VIP_BASE_URL").as_deref(),
+        Some("https://api.example/v1")
+    );
+    assert_eq!(
+        env(&cmd, "VIBE_DESKTOP_VIP_MODELS_JSON").as_deref(),
+        Some(r#"["model-a"]"#)
+    );
+}
 
 #[test]
 fn build_cmd_sets_current_dir() {
     let python = PathBuf::from("/fake/python3");
     let agent = PathBuf::from("/fake/agent");
-    let cmd = build_cmd(&python, &agent, 9999, &PathBuf::from("/fake/libs"), &PathBuf::from("/fake/sessions"));
+    let cmd = build_cmd(
+        &python,
+        &agent,
+        9999,
+        &PathBuf::from("/fake/libs"),
+        &PathBuf::from("/fake/sessions"),
+    );
 
     assert_eq!(cmd.get_current_dir(), Some(agent.as_path()));
 }
@@ -33,7 +90,13 @@ fn build_cmd_sets_current_dir() {
 fn build_cmd_sets_environment_vars() {
     let python = PathBuf::from("/fake/python3");
     let agent = PathBuf::from("/fake/agent");
-    let cmd = build_cmd(&python, &agent, 9999, &PathBuf::from("/fake/libs"), &PathBuf::from("/fake/sessions"));
+    let cmd = build_cmd(
+        &python,
+        &agent,
+        9999,
+        &PathBuf::from("/fake/libs"),
+        &PathBuf::from("/fake/sessions"),
+    );
 
     let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> = cmd.get_envs().collect();
 

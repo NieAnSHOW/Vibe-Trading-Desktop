@@ -176,6 +176,14 @@ pub struct LoginResultView {
     pub user_info: UserInfo,
     pub has_password: bool,
     pub expire_at: i64, // epoch 秒
+    pub message: String,
+}
+
+/// 无业务 data 的命令返回给前端的用户可见消息。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandMessage {
+    pub message: String,
 }
 
 /// console_auth_status 返回。
@@ -295,8 +303,18 @@ pub async fn console_start_service(
     if state.lock().unwrap().is_some() {
         return Err(ServiceStartError::AlreadyRunning);
     }
-    // 启动前尝试刷新登录态（静默；未登录不阻塞———用户可自行配 .env）
-    let _ = auth::ensure_session_valid(&auth_state, &layout);
+    // custom 模式完全不依赖会员登录；仅 vip 模式会在启动时获取当前 token 的凭据。
+    let vip_session = match auth::read_llm_mode(&layout) {
+        auth::DesktopLlmMode::Custom => None,
+        auth::DesktopLlmMode::Vip => match auth::ensure_vip_credential(&auth_state, &layout) {
+            Ok(session) => Some(session),
+            Err(error) => {
+                return Err(ServiceStartError::Other {
+                    message: error.to_string(),
+                });
+            }
+        },
+    };
 
     let port =
         crate::port::pick_free_port().map_err(|e| ServiceStartError::Other { message: e })?;
@@ -306,6 +324,9 @@ pub async fn console_start_service(
         port,
         &layout.runtime_libs,
         &layout.sessions_dir,
+        vip_session
+            .as_ref()
+            .and_then(|session| session.vip.as_ref()),
     )
     .map_err(|e| ServiceStartError::SpawnFailed { message: e })?;
 
@@ -352,16 +373,17 @@ pub fn console_login_send_sms(
     phone: String,
     captcha_id: String,
     code: String,
-) -> Result<(), AuthError> {
-    auth::send_sms(&phone, &captcha_id, &code)
+) -> Result<CommandMessage, AuthError> {
+    auth::send_sms(&phone, &captcha_id, &code).map(|message| CommandMessage { message })
 }
 
-/// 登录通用收尾：调 cool-admin 拿 raw → 写 .env → fetch userInfo → 缓存 → 返 view。
+/// 登录通用收尾：仅写 token 段；会员 LLM 凭据只在 VIP 模式启动时获取。
 fn finalize_login(
     raw: LoginRaw,
     has_password: bool,
     layout: &Layout,
     auth_state: &AuthState,
+    message: String,
 ) -> Result<LoginResultView, AuthError> {
     let info = fetch_user_info_or_default(&raw.token);
     let mut sess = auth::session_from_login(raw, Some(info.clone()));
@@ -372,6 +394,7 @@ fn finalize_login(
         user_info: info,
         has_password,
         expire_at: sess.expire_at,
+        message,
     })
 }
 
@@ -397,9 +420,15 @@ pub fn console_login_by_phone(
     auth_state: State<'_, AuthState>,
 ) -> Result<LoginResultView, AuthError> {
     let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
-    let raw = auth::login_by_phone(&phone, &sms_code)?;
-    let has_password = raw.has_password;
-    finalize_login(raw, has_password, &layout, &auth_state)
+    let response = auth::login_by_phone(&phone, &sms_code)?;
+    let has_password = response.data.has_password;
+    finalize_login(
+        response.data,
+        has_password,
+        &layout,
+        &auth_state,
+        response.message,
+    )
 }
 
 #[tauri::command]
@@ -409,9 +438,15 @@ pub fn console_login_by_password(
     auth_state: State<'_, AuthState>,
 ) -> Result<LoginResultView, AuthError> {
     let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
-    let raw = auth::login_by_password(&phone, &password)?;
-    let has_password = raw.has_password;
-    finalize_login(raw, has_password, &layout, &auth_state)
+    let response = auth::login_by_password(&phone, &password)?;
+    let has_password = response.data.has_password;
+    finalize_login(
+        response.data,
+        has_password,
+        &layout,
+        &auth_state,
+        response.message,
+    )
 }
 
 #[tauri::command]
@@ -422,9 +457,15 @@ pub fn console_login_register(
     auth_state: State<'_, AuthState>,
 ) -> Result<LoginResultView, AuthError> {
     let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
-    let raw = auth::register(&phone, &sms_code, &password)?;
-    let has_password = raw.has_password;
-    finalize_login(raw, has_password, &layout, &auth_state)
+    let response = auth::register(&phone, &sms_code, &password)?;
+    let has_password = response.data.has_password;
+    finalize_login(
+        response.data,
+        has_password,
+        &layout,
+        &auth_state,
+        response.message,
+    )
 }
 
 #[tauri::command]
