@@ -1,4 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import i18n from "@/i18n";
 import { Settings } from "../Settings";
@@ -8,6 +14,7 @@ const apiMock = vi.hoisted(() => ({
   getDataSourceSettings: vi.fn(),
   getChannelStatus: vi.fn(),
   getLiveStatus: vi.fn(),
+  updateLLMSettings: vi.fn(),
 }));
 
 vi.mock("@/lib/api", async () => {
@@ -38,6 +45,8 @@ function llmSettings() {
     reasoning_effort: "",
     sse_timeout_seconds: 300,
     env_path: "agent/.env",
+    desktop_llm_mode: "custom" as const,
+    desktop_vip_available: false,
     providers: [
       {
         name: "openrouter",
@@ -86,7 +95,10 @@ describe("Settings workspace layout", () => {
     apiMock.getLLMSettings.mockResolvedValue(llmSettings());
     apiMock.getDataSourceSettings.mockResolvedValue(dataSourceSettings());
     apiMock.getChannelStatus.mockResolvedValue(channelStatus());
-    apiMock.getLiveStatus.mockResolvedValue({ global_halted: false, brokers: [] });
+    apiMock.getLiveStatus.mockResolvedValue({
+      global_halted: false,
+      brokers: [],
+    });
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -116,6 +128,7 @@ describe("Settings workspace layout", () => {
   });
 
   afterEach(() => {
+    cleanup();
     vi.unstubAllGlobals();
   });
 
@@ -164,13 +177,120 @@ describe("Settings workspace layout", () => {
     expect(helperColumn).toContainElement(qVerisHeading);
     expect(helperColumn).toContainElement(screen.getByRole("switch"));
 
-    expect(screen.getByRole("combobox", { name: /^Provider/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: /^Provider/ }),
+    ).toBeInTheDocument();
     const dataSourceForm = screen
       .getByRole("heading", { name: "Data Source Settings" })
       .closest("form");
-    expect(dataSourceForm?.querySelector('input[type="password"]')).not.toBeNull();
-    expect(screen.getByRole("button", { name: "Save data source settings" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "IM Channels" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Live / Paper Runtime Status" })).toBeInTheDocument();
+    expect(
+      dataSourceForm?.querySelector('input[type="password"]'),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Save data source settings" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "IM Channels" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Live / Paper Runtime Status" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows VIP mode without model, API-key, or save controls", async () => {
+    apiMock.getLLMSettings.mockResolvedValue({
+      ...llmSettings(),
+      desktop_llm_mode: "vip",
+      desktop_vip_available: true,
+    });
+
+    const { container } = render(
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>,
+    );
+    const page = within(container);
+
+    await page.findByRole("radio", { name: "Use VIP service", checked: true });
+    const llmSection = within(
+      page.getByRole("heading", { name: "LLM Settings" }).closest("section")!,
+    );
+    expect(
+      llmSection.queryByRole("textbox", { name: /^Model/ }),
+    ).not.toBeInTheDocument();
+    expect(llmSection.queryByLabelText(/^API key/)).not.toBeInTheDocument();
+    expect(
+      llmSection.queryByRole("button", { name: "Save LLM settings" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("restores the custom form after choosing custom mode", async () => {
+    apiMock.getLLMSettings.mockResolvedValue({
+      ...llmSettings(),
+      desktop_llm_mode: "vip",
+      desktop_vip_available: true,
+    });
+    apiMock.updateLLMSettings.mockResolvedValue(llmSettings());
+
+    const { container } = render(
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>,
+    );
+    const page = within(container);
+
+    await page.findByRole("radio", { name: "Use custom model" });
+    fireEvent.click(page.getByRole("radio", { name: "Use custom model" }));
+    const llmSection = within(
+      page.getByRole("heading", { name: "LLM Settings" }).closest("section")!,
+    );
+
+    expect(
+      await llmSection.findByRole("combobox", { name: /^Provider/ }),
+    ).toBeInTheDocument();
+    expect(
+      llmSection.getByRole("textbox", { name: /^Model/ }),
+    ).toBeInTheDocument();
+    expect(llmSection.getByLabelText(/^API key/)).toBeInTheDocument();
+    expect(
+      llmSection.getByRole("button", { name: "Save LLM settings" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      llmSection.getByRole("button", { name: "Save LLM settings" }),
+    );
+    expect(apiMock.updateLLMSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "custom",
+        provider: "openrouter",
+        model_name: "deepseek/deepseek-v3.2",
+      }),
+    );
+  });
+
+  it("switches to VIP with a mode-only update", async () => {
+    apiMock.updateLLMSettings.mockResolvedValue({
+      ...llmSettings(),
+      desktop_llm_mode: "vip",
+      desktop_vip_available: true,
+    });
+
+    const { container } = render(
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>,
+    );
+    const page = within(container);
+
+    await page.findByRole("radio", { name: "Use VIP service" });
+    fireEvent.click(page.getByRole("radio", { name: "Use VIP service" }));
+
+    expect(apiMock.updateLLMSettings).toHaveBeenCalledWith({ mode: "vip" });
+    expect(
+      await page.findByRole("radio", {
+        name: "Use VIP service",
+        checked: true,
+      }),
+    ).toBeInTheDocument();
   });
 });

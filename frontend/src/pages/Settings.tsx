@@ -62,26 +62,6 @@ function toForm(settings: LLMSettings): LLMFormState {
   };
 }
 
-// VIP Server 为后端一等公民 provider(agent/src/providers/llm_providers.json)。
-// 前端仅用此常量判定"当前是否 VIP provider"以切换 UI(VIP 走模型下拉,其他走自由输入)。
-const VIP_PROVIDER_NAME = "vip_server";
-
-// ponytail: VIP 已获取模型列表的本地缓存,跨页面/重挂载保留,避免每次重进设置页都要重新点"获取"。
-const VIP_MODELS_KEY = "vt_vip_models";
-
-function readVipModels(): string[] {
-  try {
-    const raw = localStorage.getItem(VIP_MODELS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed)
-      ? parsed.filter((m): m is string => typeof m === "string")
-      : [];
-  } catch {
-    return [];
-  }
-}
-
 export function Settings() {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<LLMSettings | null>(null);
@@ -110,9 +90,6 @@ export function Settings() {
   );
   const [usageDataOn, setUsageDataOn] = useState(getConsent());
   // const [flushing, setFlushing] = useState(false);
-  const [vipModels, setVipModels] = useState<string[]>(() => readVipModels());
-  const [vipModelsLoading, setVipModelsLoading] = useState(false);
-
   // WeChat QR login state
   const [weixinQr, setWeixinQr] = useState<{
     loginId: string;
@@ -208,7 +185,6 @@ export function Settings() {
           toast.error(t("settings.loadChannelStatusFailed", { message }));
           setChannelStatus(null);
         }
-
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -358,37 +334,6 @@ export function Settings() {
     setClearApiKey(false);
   };
 
-  const fetchVipModels = async () => {
-    setVipModelsLoading(true);
-    try {
-      const submittedApiKey = apiKey.trim();
-      const submittedBaseUrl = form?.base_url.trim();
-      const { models } = await api.getVipModels({
-        ...(submittedApiKey ? { api_key: submittedApiKey } : {}),
-        ...(submittedBaseUrl ? { base_url: submittedBaseUrl } : {}),
-      });
-      setVipModels(models);
-      try {
-        localStorage.setItem(VIP_MODELS_KEY, JSON.stringify(models));
-      } catch {
-        // ponytail: 配额满/隐私模式 — 静默降级,列表仅本会话有效。
-      }
-      if (models[0] && form) {
-        setForm({ ...form, model_name: models[0] });
-      }
-      toast.success(t("settings.vipModelsUpdated"));
-    } catch (error) {
-      toast.error(
-        t("settings.vipModelsFailed", {
-          message:
-            error instanceof Error ? error.message : t("settings.unknownError"),
-        }),
-      );
-    } finally {
-      setVipModelsLoading(false);
-    }
-  };
-
   const submitLocalApiKey = (event: FormEvent) => {
     event.preventDefault();
     setApiAuthKey(localApiKey);
@@ -402,6 +347,7 @@ export function Settings() {
     setSaving(true);
     try {
       const updated = await api.updateLLMSettings({
+        mode: "custom",
         ...form,
         api_key: apiKey.trim() || undefined,
         clear_api_key: clearApiKey,
@@ -421,6 +367,31 @@ export function Settings() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const setVipMode = async () => {
+    setSaving(true);
+    try {
+      const updated = await api.updateLLMSettings({ mode: "vip" });
+      setSettings(updated);
+      setForm(toForm(updated));
+      setApiKey("");
+      setClearApiKey(false);
+      toast.success(t("settings.llmSettingsSaved"));
+    } catch (error) {
+      toast.error(
+        t("settings.saveLlmSettingsFailed", {
+          message:
+            error instanceof Error ? error.message : t("settings.unknownError"),
+        }),
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setCustomMode = () => {
+    setSettings({ ...settings!, desktop_llm_mode: "custom" });
   };
 
   const submitDataSources = async (event: FormEvent) => {
@@ -541,7 +512,6 @@ export function Settings() {
               {i18n.t("settings.loading")}
             </>
           )}
-
         </div>
       </div>
     );
@@ -558,9 +528,7 @@ export function Settings() {
           })
         : t("settings.noApiKeyRequired");
   const apiKeyDisabled = !selectedProvider?.api_key_required || clearApiKey;
-  const vipModelOptions = Array.from(
-    new Set([form.model_name, ...vipModels].filter(Boolean)),
-  );
+  const vipActive = settings.desktop_llm_mode === "vip";
   const tushareStatus = dataSettings.tushare_token_configured
     ? t("settings.configured")
     : t("settings.keepCurrentToken");
@@ -581,8 +549,6 @@ export function Settings() {
   // channel 状态未知时(getChannelStatus 失败, channelStatus=null)禁用启停,
   // 但 Refresh 仍可用 —— 与 upstream 降级语义一致(状态未知不盲目 start/stop)。
   const channelControlsDisabled = channelBusy || !channelStatus;
-  // 桌面端登录后,.env 由 console 自动注入 VIP 大模型配置,WebUI 不再需要手配。
-  const hideLlm = !!settings.desktop_login_provisioned;
 
   return (
     <div
@@ -601,15 +567,8 @@ export function Settings() {
       {/* {localApiAccessSection} */}
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)]">
         <div className="grid content-start gap-3">
-          {/* LLM Settings */}
-          {hideLlm ? (
-            <div className="flex items-center gap-3 rounded-lg border bg-card p-4 text-sm text-muted-foreground shadow-sm">
-              <Server className="h-4 w-4 shrink-0 text-primary" />
-              <span>{i18n.t("settings.hideLlmNotice")}</span>
-            </div>
-          ) : (
-            <form onSubmit={submit} className="grid gap-3">
-              <section className="rounded-lg border bg-card p-4 shadow-sm">
+          <form onSubmit={submit} className="grid gap-3">
+            <section className="rounded-lg border bg-card p-4 shadow-sm">
               <div className="mb-5 flex items-center gap-2">
                 <Server className="h-4 w-4 text-primary" />
                 <h2 className="text-base font-semibold">
@@ -617,179 +576,178 @@ export function Settings() {
                 </h2>
               </div>
 
-              <div className="grid gap-4">
-                <label className="grid gap-2">
-                  <span className={labelClass}>
-                    {i18n.t("settings.provider")}
-                  </span>
-                  <select
-                    value={form.provider}
-                    onChange={(event) => onProviderChange(event.target.value)}
-                    className={fieldClass}
-                  >
-                    {providers.map((provider) => (
-                      <option key={provider.name} value={provider.name}>
-                        {provider.label}
-                      </option>
-                    ))}
-                  </select>
-                  <span className={hintClass}>
-                    {i18n.t("settings.providerChangeHint")}
-                  </span>
-                </label>
+              <div
+                role="radiogroup"
+                aria-label={t("settings.llmMode")}
+                className="mb-5 grid grid-cols-2 rounded-md border p-1"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={vipActive}
+                  onClick={setVipMode}
+                  disabled={saving || vipActive}
+                  className={`rounded px-3 py-2 text-sm font-medium transition ${vipActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                >
+                  {t("settings.useVipService")}
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={!vipActive}
+                  onClick={setCustomMode}
+                  disabled={!vipActive}
+                  className={`rounded px-3 py-2 text-sm font-medium transition ${!vipActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                >
+                  {t("settings.useCustomModel")}
+                </button>
+              </div>
 
-                {form.provider === VIP_PROVIDER_NAME ? (
-                  <label className="grid gap-2">
-                    <span className={labelClass}>
-                      {i18n.t("settings.model")}
-                    </span>
-                    <div className="flex gap-2">
+              {vipActive ? (
+                <div className="flex items-center gap-3 rounded-md border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                  <Server className="h-4 w-4 shrink-0 text-primary" />
+                  <span>
+                    {settings.desktop_vip_available
+                      ? t("settings.vipAvailable")
+                      : t("settings.vipUnavailable")}
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-4">
+                    <label className="grid gap-2">
+                      <span className={labelClass}>
+                        {i18n.t("settings.provider")}
+                      </span>
                       <select
-                        value={form.model_name}
+                        value={form.provider}
                         onChange={(event) =>
-                          setForm({ ...form, model_name: event.target.value })
+                          onProviderChange(event.target.value)
                         }
                         className={fieldClass}
-                        required
                       >
-                        {vipModelOptions.map((model) => (
-                          <option key={model} value={model}>
-                            {model}
+                        {providers.map((provider) => (
+                          <option key={provider.name} value={provider.name}>
+                            {provider.label}
                           </option>
                         ))}
                       </select>
-                      <button
-                        type="button"
-                        onClick={fetchVipModels}
-                        disabled={vipModelsLoading}
-                        className="inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {vipModelsLoading ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="h-4 w-4" />
-                        )}
-                        <span className="hidden sm:inline">
-                          {i18n.t("settings.getVipModels")}
-                        </span>
-                      </button>
-                    </div>
-                    <span className={hintClass}>
-                      {i18n.t("settings.vipModelsHint")}
-                    </span>
-                  </label>
-                ) : (
-                  <label className="grid gap-2">
-                    <span className={labelClass}>
-                      {i18n.t("settings.model")}
-                    </span>
-                    <div className="flex gap-2">
+                      <span className={hintClass}>
+                        {i18n.t("settings.providerChangeHint")}
+                      </span>
+                    </label>
+
+                    <label className="grid gap-2">
+                      <span className={labelClass}>
+                        {i18n.t("settings.model")}
+                      </span>
+                      <div className="flex gap-2">
+                        <input
+                          value={form.model_name}
+                          onChange={(event) =>
+                            setForm({ ...form, model_name: event.target.value })
+                          }
+                          className={fieldClass}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => applyProviderDefaults()}
+                          className="inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                          title={i18n.t("settings.useProviderDefaults")}
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                          <span className="hidden sm:inline">
+                            {i18n.t("settings.useProviderDefaults")}
+                          </span>
+                        </button>
+                      </div>
+                      <span className={hintClass}>
+                        {i18n.t("settings.modelIdHint")}
+                      </span>
+                    </label>
+
+                    <label className="grid gap-2">
+                      <span className={labelClass}>
+                        {i18n.t("settings.baseUrl")}
+                      </span>
                       <input
-                        value={form.model_name}
+                        value={form.base_url}
                         onChange={(event) =>
-                          setForm({ ...form, model_name: event.target.value })
+                          setForm({ ...form, base_url: event.target.value })
                         }
                         className={fieldClass}
-                        required
+                        placeholder={selectedProvider?.default_base_url}
+                        disabled={selectedProvider?.auth_type === "oauth"}
                       />
-                      <button
-                        type="button"
-                        onClick={() => applyProviderDefaults()}
-                        className="inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                        title={i18n.t("settings.useProviderDefaults")}
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                        <span className="hidden sm:inline">
-                          {i18n.t("settings.useProviderDefaults")}
-                        </span>
-                      </button>
-                    </div>
-                    <span className={hintClass}>
-                      {i18n.t("settings.modelIdHint")}
-                    </span>
-                  </label>
-                )}
+                    </label>
 
-                {form.provider !== VIP_PROVIDER_NAME && (
-                  <label className="grid gap-2">
-                    <span className={labelClass}>
-                      {i18n.t("settings.baseUrl")}
-                    </span>
-                    <input
-                      value={form.base_url}
-                      onChange={(event) =>
-                        setForm({ ...form, base_url: event.target.value })
-                      }
-                      className={fieldClass}
-                      placeholder={selectedProvider?.default_base_url}
-                      disabled={selectedProvider?.auth_type === "oauth"}
-                    />
-                  </label>
-                )}
-
-                <label className="grid gap-2">
-                  <span className={labelClass}>
-                    {selectedProvider?.auth_type === "oauth"
-                      ? i18n.t("settings.oauth")
-                      : i18n.t("settings.apiKey")}
-                  </span>
-                  <div className="relative">
-                    <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <input
-                      type="password"
-                      value={apiKey}
-                      onChange={(event) => setApiKey(event.target.value)}
-                      className={`${fieldClass} pl-9`}
-                      placeholder={keyStatus}
-                      autoComplete="current-password"
-                      disabled={apiKeyDisabled}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className={hintClass}>{keyStatus}</span>
-                    {selectedProvider?.api_key_required ? (
-                      <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                    <label className="grid gap-2">
+                      <span className={labelClass}>
+                        {selectedProvider?.auth_type === "oauth"
+                          ? i18n.t("settings.oauth")
+                          : i18n.t("settings.apiKey")}
+                      </span>
+                      <div className="relative">
+                        <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                         <input
-                          type="checkbox"
-                          checked={clearApiKey}
-                          onChange={(event) => {
-                            setClearApiKey(event.target.checked);
-                            if (event.target.checked) setApiKey("");
-                          }}
-                          className="h-3.5 w-3.5 accent-primary"
+                          type="password"
+                          value={apiKey}
+                          onChange={(event) => setApiKey(event.target.value)}
+                          className={`${fieldClass} pl-9`}
+                          placeholder={keyStatus}
+                          autoComplete="current-password"
+                          disabled={apiKeyDisabled}
                         />
-                        {i18n.t("settings.clearApiKey")}
-                      </label>
-                    ) : null}
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className={hintClass}>{keyStatus}</span>
+                        {selectedProvider?.api_key_required ? (
+                          <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                            <input
+                              type="checkbox"
+                              checked={clearApiKey}
+                              onChange={(event) => {
+                                setClearApiKey(event.target.checked);
+                                if (event.target.checked) setApiKey("");
+                              }}
+                              className="h-3.5 w-3.5 accent-primary"
+                            />
+                            {i18n.t("settings.clearApiKey")}
+                          </label>
+                        ) : null}
+                      </div>
+                    </label>
                   </div>
-                </label>
-              </div>
-              <div className="mt-5 grid gap-4 border-t pt-5">
-                <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    {i18n.t("settings.saved")}:{" "}
-                  </span>
-                  <span className="break-all font-mono">
-                    {settings.env_path}
-                  </span>
-                </div>
+                  <div className="mt-5 grid gap-4 border-t pt-5">
+                    <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        {i18n.t("settings.saved")}:{" "}
+                      </span>
+                      <span className="break-all font-mono">
+                        {settings.env_path}
+                      </span>
+                    </div>
 
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="w-full inline-flex items-center justify-center gap-2 justify-self-start rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
-                  {saving ? i18n.t("settings.saving") : i18n.t("settings.save")}
-                </button>
-              </div>
-              </section>
-            </form>
-          )}
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="w-full inline-flex items-center justify-center gap-2 justify-self-start rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {saving ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
+                      {saving
+                        ? i18n.t("settings.saving")
+                        : i18n.t("settings.saveLlmSettings")}
+                    </button>
+                  </div>
+                </>
+              )}
+            </section>
+          </form>
 
           <form
             onSubmit={submitDataSources}
@@ -845,7 +803,7 @@ export function Settings() {
 
               <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">
-                  {i18n.t("settings.saved")}: {" "}
+                  {i18n.t("settings.saved")}:{" "}
                 </span>
                 <span className="break-all font-mono">
                   {dataSettings.env_path}
