@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use aes_gcm::aead::{AeadInPlace, KeyInit};
@@ -132,7 +132,8 @@ pub struct UserSession {
     pub vip: Option<VipRuntimeCredential>,
 }
 
-pub struct AuthState(pub Mutex<Option<UserSession>>);
+#[derive(Clone)]
+pub struct AuthState(pub Arc<Mutex<Option<UserSession>>>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DesktopLlmMode {
@@ -1245,8 +1246,8 @@ mod tests {
 
     #[test]
     fn ensure_session_valid_returns_not_authenticated_when_empty() {
-        use std::sync::Mutex;
-        let state = AuthState(Mutex::new(None));
+        use std::sync::{Arc, Mutex};
+        let state = AuthState(Arc::new(Mutex::new(None)));
         let tmp = tempfile::tempdir().unwrap();
         let layout = Layout::new(&tmp.path().join(".vibe-trading"));
         let err = ensure_session_valid(&state, &layout).unwrap_err();

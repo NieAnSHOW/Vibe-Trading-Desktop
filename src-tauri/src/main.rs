@@ -18,7 +18,7 @@ type SharedChild = console::SharedChild;
 fn main() {
     let shared: SharedChild = Arc::new(Mutex::new(None));
     let shared_setup = shared.clone();
-    let auth_state = auth::AuthState(std::sync::Mutex::new(None));
+    let auth_state = auth::AuthState(std::sync::Arc::new(std::sync::Mutex::new(None)));
 
     // bootstrap 进行中标志(console::console_bootstrap 维护)。托盘「退出」据此判断
     // 是否需要二次确认;窗口关闭按钮 X 不再触发确认——它一律静默收纳到后台。

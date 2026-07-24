@@ -19,6 +19,16 @@ pub type SharedChild = Arc<Mutex<Option<Child>>>;
 /// 依赖安装(bootstrap)进行中标志。托盘「退出」据此判断是否需要二次确认。
 pub struct InstallingFlag(pub Arc<AtomicBool>);
 
+async fn run_blocking<F, R>(operation: F) -> Result<R, String>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(operation)
+        .await
+        .map_err(|e| format!("blocking task join: {e}"))
+}
+
 /// 托盘「退出」在有活跃工作时,发给前端(触发二次确认框)的事件名。
 /// 窗口关闭按钮 X 不再触发确认——它一律静默收纳到后台(见 main.rs 的 CloseRequested 处理)。
 pub const QUIT_REQUESTED_EVENT: &str = "app://quit-requested";
@@ -207,6 +217,10 @@ pub enum ServiceStartError {
     Other { message: String },
 }
 
+fn can_start_without_vip(error: &AuthError) -> bool {
+    matches!(error, AuthError::NotAuthenticated | AuthError::LoginExpired)
+}
+
 impl std::fmt::Display for ServiceStartError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -303,11 +317,20 @@ pub async fn console_start_service(
     if state.lock().unwrap().is_some() {
         return Err(ServiceStartError::AlreadyRunning);
     }
-    // custom 模式完全不依赖会员登录；仅 vip 模式会在启动时获取当前 token 的凭据。
+    // custom 模式完全不依赖会员登录；VIP 模式的未登录用户同样可按 .env 配置启动。
+    // 已登录但无法获取 VIP 凭据时保持失败，避免悄然切换到其他供应商。
     let vip_session = match auth::read_llm_mode(&layout) {
         auth::DesktopLlmMode::Custom => None,
-        auth::DesktopLlmMode::Vip => match auth::ensure_vip_credential(&auth_state, &layout) {
+        auth::DesktopLlmMode::Vip => match run_blocking({
+            let auth_state = auth_state.inner().clone();
+            let layout = layout.clone();
+            move || auth::ensure_vip_credential(&auth_state, &layout)
+        })
+        .await
+        .map_err(|message| ServiceStartError::Other { message })?
+        {
             Ok(session) => Some(session),
+            Err(error) if can_start_without_vip(&error) => None,
             Err(error) => {
                 return Err(ServiceStartError::Other {
                     message: error.to_string(),
@@ -364,17 +387,22 @@ pub async fn console_start_service(
 }
 
 #[tauri::command]
-pub fn console_login_captcha() -> Result<Captcha, AuthError> {
-    auth::fetch_captcha()
+pub async fn console_login_captcha() -> Result<Captcha, AuthError> {
+    run_blocking(auth::fetch_captcha)
+        .await
+        .map_err(|message| AuthError::Network { message })?
 }
 
 #[tauri::command]
-pub fn console_login_send_sms(
+pub async fn console_login_send_sms(
     phone: String,
     captcha_id: String,
     code: String,
 ) -> Result<CommandMessage, AuthError> {
-    auth::send_sms(&phone, &captcha_id, &code).map(|message| CommandMessage { message })
+    run_blocking(move || auth::send_sms(&phone, &captcha_id, &code))
+        .await
+        .map_err(|message| AuthError::Network { message })?
+        .map(|message| CommandMessage { message })
 }
 
 /// 登录通用收尾：仅写 token 段；会员 LLM 凭据只在 VIP 模式启动时获取。
@@ -414,62 +442,77 @@ fn fetch_user_info_or_default(token: &str) -> UserInfo {
 }
 
 #[tauri::command]
-pub fn console_login_by_phone(
+pub async fn console_login_by_phone(
     phone: String,
     sms_code: String,
     auth_state: State<'_, AuthState>,
 ) -> Result<LoginResultView, AuthError> {
     let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
-    let response = auth::login_by_phone(&phone, &sms_code)?;
-    let has_password = response.data.has_password;
-    finalize_login(
-        response.data,
-        has_password,
-        &layout,
-        &auth_state,
-        response.message,
-    )
+    let auth_state = auth_state.inner().clone();
+    run_blocking(move || {
+        let response = auth::login_by_phone(&phone, &sms_code)?;
+        let has_password = response.data.has_password;
+        finalize_login(
+            response.data,
+            has_password,
+            &layout,
+            &auth_state,
+            response.message,
+        )
+    })
+    .await
+    .map_err(|message| AuthError::Network { message })?
 }
 
 #[tauri::command]
-pub fn console_login_by_password(
+pub async fn console_login_by_password(
     phone: String,
     password: String,
     auth_state: State<'_, AuthState>,
 ) -> Result<LoginResultView, AuthError> {
     let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
-    let response = auth::login_by_password(&phone, &password)?;
-    let has_password = response.data.has_password;
-    finalize_login(
-        response.data,
-        has_password,
-        &layout,
-        &auth_state,
-        response.message,
-    )
+    let auth_state = auth_state.inner().clone();
+    run_blocking(move || {
+        let response = auth::login_by_password(&phone, &password)?;
+        let has_password = response.data.has_password;
+        finalize_login(
+            response.data,
+            has_password,
+            &layout,
+            &auth_state,
+            response.message,
+        )
+    })
+    .await
+    .map_err(|message| AuthError::Network { message })?
 }
 
 #[tauri::command]
-pub fn console_login_register(
+pub async fn console_login_register(
     phone: String,
     sms_code: String,
     password: String,
     auth_state: State<'_, AuthState>,
 ) -> Result<LoginResultView, AuthError> {
     let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
-    let response = auth::register(&phone, &sms_code, &password)?;
-    let has_password = response.data.has_password;
-    finalize_login(
-        response.data,
-        has_password,
-        &layout,
-        &auth_state,
-        response.message,
-    )
+    let auth_state = auth_state.inner().clone();
+    run_blocking(move || {
+        let response = auth::register(&phone, &sms_code, &password)?;
+        let has_password = response.data.has_password;
+        finalize_login(
+            response.data,
+            has_password,
+            &layout,
+            &auth_state,
+            response.message,
+        )
+    })
+    .await
+    .map_err(|message| AuthError::Network { message })?
 }
 
 #[tauri::command]
-pub fn console_login_set_password(
+pub async fn console_login_set_password(
     password: String,
     auth_state: State<'_, AuthState>,
 ) -> Result<(), AuthError> {
@@ -480,7 +523,9 @@ pub fn console_login_set_password(
         .as_ref()
         .map(|s| s.token.clone())
         .ok_or(AuthError::NotAuthenticated)?;
-    auth::set_password(&token, &password)
+    run_blocking(move || auth::set_password(&token, &password))
+        .await
+        .map_err(|message| AuthError::Network { message })?
 }
 
 #[tauri::command]
@@ -831,6 +876,20 @@ mod tests {
     use std::fs;
 
     #[test]
+    fn run_blocking_drops_reqwest_client_outside_tokio_task() {
+        tauri::async_runtime::block_on(async {
+            let result = run_blocking(|| {
+                let client = reqwest::blocking::Client::builder().build().unwrap();
+                drop(client);
+                7
+            })
+            .await;
+
+            assert_eq!(result, Ok(7));
+        });
+    }
+
+    #[test]
     fn clear_logs_removes_log_files_keeps_others() {
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path();
@@ -1002,5 +1061,17 @@ mod tests {
         assert!(needs_quit_confirmation(false, true), "安装中应确认");
         assert!(needs_quit_confirmation(true, true), "同时进行更应确认");
         assert!(!needs_quit_confirmation(false, false), "空闲直接退出");
+    }
+
+    #[test]
+    fn unauthenticated_start_can_fall_back_to_env_configuration() {
+        assert!(can_start_without_vip(&AuthError::NotAuthenticated));
+        assert!(can_start_without_vip(&AuthError::LoginExpired));
+        assert!(!can_start_without_vip(&AuthError::Network {
+            message: "offline".into(),
+        }));
+        assert!(!can_start_without_vip(&AuthError::Credential {
+            message: "membership unavailable".into(),
+        }));
     }
 }

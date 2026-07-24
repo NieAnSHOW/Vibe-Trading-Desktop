@@ -4,7 +4,7 @@ import { storeToRefs } from "pinia";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
 import { useAuthStore } from "../stores/auth";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 import { useEnvStore } from "../stores/env";
 import { useServiceStore } from "../stores/service";
@@ -51,6 +51,7 @@ const bootstrap = useBootstrapStore();
 const channels = useChannelsStore();
 const authStore = useAuthStore();
 const router = useRouter();
+const route = useRoute();
 
 const { env: envState, port, serviceRunning } = storeToRefs(env);
 const { running } = storeToRefs(service);
@@ -58,6 +59,7 @@ const { running } = storeToRefs(service);
 const logViewer = ref<InstanceType<typeof LogViewer> | null>(null);
 const updateBanner = ref<InstanceType<typeof UpdateBanner> | null>(null);
 const errorMsg = ref("");
+const loginNotice = ref(typeof route.query.loginMessage === "string" ? route.query.loginMessage : "");
 
 function log(line: string) {
   logViewer.value?.append(line);
@@ -327,6 +329,9 @@ let pollTimer: ReturnType<typeof setInterval> | null = null;
 let adTimer: ReturnType<typeof setInterval> | null = null;
 
 onMounted(async () => {
+  if (loginNotice.value) {
+    void router.replace({ query: { ...route.query, loginMessage: undefined } });
+  }
   // 恢复登录态（静默，不阻塞）
   await authStore.refresh();
   // TODO: 暂时禁用自动更新，启动时静默检查更新（失败不影响主流程）
@@ -406,6 +411,8 @@ onUnmounted(() => {
     </div>
     <!-- 版本更新通知横幅 -->
     <UpdateBanner ref="updateBanner" />
+
+    <p v-if="loginNotice" class="login-notice" role="status">{{ loginNotice }}</p>
 
     <!-- 广告位 banner:标题 + 多图轮播 / 文字 -->
     <AdSlot :ad="adBanner" variant="banner" />
@@ -493,4 +500,14 @@ onUnmounted(() => {
 
 <style>
 @import "../styles/console.css";
+
+.login-notice {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid hsl(var(--ok) / 0.3);
+  border-radius: 8px;
+  background: hsl(var(--ok) / 0.1);
+  color: hsl(var(--ok-fg));
+  font-size: 13px;
+}
 </style>

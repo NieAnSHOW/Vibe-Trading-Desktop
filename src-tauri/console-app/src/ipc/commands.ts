@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AuthStatusView,
   Captcha,
+  CommandMessage,
   LoginResultView,
   StatusReport,
   AdItem,
@@ -55,8 +56,8 @@ export const consoleLoginSendSms = (
   phone: string,
   captchaId: string,
   code: string,
-): Promise<void> =>
-  invoke<void>("console_login_send_sms", { phone, captchaId, code });
+): Promise<CommandMessage> =>
+  invoke<CommandMessage>("console_login_send_sms", { phone, captchaId, code });
 
 export const consoleLoginByPhone = (
   phone: string,

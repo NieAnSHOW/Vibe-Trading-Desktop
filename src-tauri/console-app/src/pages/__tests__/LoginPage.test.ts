@@ -9,21 +9,24 @@ const mocks = vi.hoisted(() => ({
     captchaId: "c1",
     data: "data:image/svg+xml;base64,AA==",
   })),
-  consoleLoginSendSms: vi.fn(async () => {}),
+  consoleLoginSendSms: vi.fn(async () => ({ message: "" })),
   consoleLoginByPhone: vi.fn(async (_phone: string, _code: string) => ({
     userInfo: { id: 1, nickName: "Tester", gender: 0, status: 1, loginType: 2 },
     hasPassword: true,
     expireAt: 9999999999,
+    message: "登录成功",
   })),
   consoleLoginByPassword: vi.fn(async (_phone: string, _password: string) => ({
     userInfo: { id: 1, nickName: "Tester", gender: 0, status: 1, loginType: 2 },
     hasPassword: true,
     expireAt: 9999999999,
+    message: "登录成功",
   })),
   consoleLoginRegister: vi.fn(async (_phone: string, _smsCode: string, _password: string) => ({
     userInfo: { id: 1, nickName: "Tester", gender: 0, status: 1, loginType: 2 },
     hasPassword: true,
     expireAt: 9999999999,
+    message: "注册成功",
   })),
   consoleLoginSetPassword: vi.fn(async (_password: string) => {}),
 }));
@@ -38,6 +41,7 @@ vi.mock("../../ipc/commands", () => ({
 }));
 
 import LoginPage from "../LoginPage.vue";
+import { useAuthStore } from "../../stores/auth";
 
 const router = createRouter({
   history: createMemoryHistory(),
@@ -55,6 +59,19 @@ beforeEach(async () => {
 });
 
 describe("LoginPage", () => {
+  it("redirects a fully restored session to the console", async () => {
+    const auth = useAuthStore();
+    auth.setFromLogin({
+      userInfo: { id: 1, nickName: "Tester", gender: 0, status: 1, loginType: 2 },
+      expireAt: 9999999999,
+    });
+
+    mount(LoginPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/");
+  });
+
   it("渲染两个 tab 且默认短信", () => {
     const w = mount(LoginPage, { global: { plugins: [router] } });
     expect(w.text()).toContain("短信登录");
@@ -86,6 +103,26 @@ describe("LoginPage", () => {
     );
   });
 
+  it("密码登录成功后将 API 消息带到控制台", async () => {
+    mocks.consoleLoginByPassword.mockResolvedValueOnce({
+      userInfo: { id: 1, nickName: "Tester", gender: 0, status: 1, loginType: 2 },
+      hasPassword: true,
+      expireAt: 9999999999,
+      message: "欢迎回来",
+    });
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    const pwdTab = w.findAll(".tab").find((button) => button.text().includes("密码登录"))!;
+    await pwdTab.trigger("click");
+    const inputs = w.findAll("input");
+    await inputs[0]!.setValue("13800000000");
+    await inputs[1]!.setValue("secret1");
+
+    await w.findAll("button").find((button) => button.text() === "登录")!.trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.loginMessage).toBe("欢迎回来");
+  });
+
   it("短信登录：手机号 11 位 + 4 位验证码后提交", async () => {
     const w = mount(LoginPage, { global: { plugins: [router] } });
     const inputs = w.findAll("input");
@@ -100,6 +137,32 @@ describe("LoginPage", () => {
       "13800000000",
       "1234",
     );
+  });
+
+  it("获取验证码后显示 API 返回的成功消息", async () => {
+    mocks.consoleLoginSendSms.mockResolvedValueOnce({ message: "验证码已发送" });
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    const inputs = w.findAll("input");
+    await inputs[0]!.setValue("13800000000");
+    await inputs[1]!.setValue("abcd");
+
+    await w.find(".code-btn").trigger("click");
+    await flushPromises();
+
+    expect(w.get('[role="status"]').text()).toBe("验证码已发送");
+  });
+
+  it("获取验证码失败后保留 API 返回的错误消息", async () => {
+    mocks.consoleLoginSendSms.mockRejectedValueOnce({ message: "图形验证码错误" });
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    const inputs = w.findAll("input");
+    await inputs[0]!.setValue("13800000000");
+    await inputs[1]!.setValue("abcd");
+
+    await w.find(".code-btn").trigger("click");
+    await flushPromises();
+
+    expect(w.get('[role="alert"]').text()).toBe("图形验证码错误");
   });
 
   it("注册页在密码和图形验证码都合法前禁用获取验证码", async () => {

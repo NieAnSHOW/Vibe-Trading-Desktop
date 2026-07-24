@@ -6,6 +6,7 @@ use std::sync::Mutex;
 static PREPARE_LOCK: Mutex<()> = Mutex::new(());
 
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct Layout {
     pub root: PathBuf,          // ~/.vibe-trading
     pub runtime_agent: PathBuf, // ~/.vibe-trading/runtime/agent
@@ -376,9 +377,15 @@ mod tests {
         let layout = Layout::new(home);
         assert_eq!(layout.venv_dir, home.join("venv"));
         if cfg!(windows) {
-            assert_eq!(layout.venv_python, home.join("venv").join("Scripts").join("python.exe"));
+            assert_eq!(
+                layout.venv_python,
+                home.join("venv").join("Scripts").join("python.exe")
+            );
         } else {
-            assert_eq!(layout.venv_python, home.join("venv").join("bin").join("python"));
+            assert_eq!(
+                layout.venv_python,
+                home.join("venv").join("bin").join("python")
+            );
         }
     }
 
@@ -432,16 +439,20 @@ mod tests {
         .unwrap();
 
         // live/ 资产必须存活
-        assert!(live_dir.join("audit_ledger.json").exists(),
-            "live/audit_ledger.json must survive upgrade");
+        assert!(
+            live_dir.join("audit_ledger.json").exists(),
+            "live/audit_ledger.json must survive upgrade"
+        );
         assert_eq!(
             fs::read_to_string(live_dir.join("audit_ledger.json")).unwrap(),
             r#"{"trades":[]}"#
         );
 
         // sessions/ 资产必须存活
-        assert!(sessions_dir.join("session_abc.json").exists(),
-            "sessions/session_abc.json must survive upgrade");
+        assert!(
+            sessions_dir.join("session_abc.json").exists(),
+            "sessions/session_abc.json must survive upgrade"
+        );
         assert_eq!(
             fs::read_to_string(sessions_dir.join("session_abc.json")).unwrap(),
             r#"{"runId":"abc"}"#
@@ -479,7 +490,10 @@ mod tests {
             None,
             &layout,
         );
-        assert!(err.is_err(), "should fail writing to a path that is a directory");
+        assert!(
+            err.is_err(),
+            "should fail writing to a path that is a directory"
+        );
         let msg = err.unwrap_err();
         // 错误消息必须包含失败的路径信息
         assert!(

@@ -30,6 +30,7 @@ const registerCaptchaCode = ref("");
 const registerSmsCode = ref("");
 const countdown = ref(0);
 const err = ref("");
+const notice = ref("");
 const showSetPwd = ref(false);
 let timer: ReturnType<typeof setInterval> | null = null;
 
@@ -48,26 +49,50 @@ const registerValid = computed(
   () => registerPhoneValid.value && registerPasswordValid.value && registerCaptchaValid.value && registerSmsValid.value,
 );
 
-async function loadCaptcha() {
-  err.value = "";
+function responseMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error) return error;
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message) return message;
+  }
+  return fallback;
+}
+
+async function loadCaptcha(clearFeedback = true) {
+  if (clearFeedback) {
+    err.value = "";
+    notice.value = "";
+  }
   try {
     captcha.value = await consoleLoginCaptcha();
-  } catch (e: any) {
-    err.value = e?.message || "验证码加载失败";
+  } catch (e) {
+    if (clearFeedback) err.value = responseMessage(e, "验证码加载失败");
   }
 }
 
-function setErr(e: unknown, fallback: string) {
-  const ae = e as { message?: string };
-  err.value = ae?.message || fallback;
+function refreshCaptcha() {
   void loadCaptcha();
+}
+
+function setErr(e: unknown, fallback: string) {
+  notice.value = "";
+  err.value = responseMessage(e, fallback);
+  // 刷新图形验证码不能清掉刚捕获的接口错误，也不能用刷新失败覆盖它。
+  void loadCaptcha(false);
+}
+
+function setNotice(message: string, fallback: string) {
+  err.value = "";
+  notice.value = message || fallback;
 }
 
 async function sendCode() {
   if (!phoneValid.value || !captchaValid.value || countdown.value > 0) return;
   if (!captcha.value) return;
   try {
-    await consoleLoginSendSms(phone.value, captcha.value.captchaId, captchaCode.value);
+    const response = await consoleLoginSendSms(phone.value, captcha.value.captchaId, captchaCode.value);
+    setNotice(response.message, "验证码已发送");
     countdown.value = 60;
     timer = setInterval(() => {
       countdown.value -= 1;
@@ -90,11 +115,12 @@ async function sendRegisterCode() {
     !captcha.value
   ) return;
   try {
-    await consoleLoginSendSms(
+    const response = await consoleLoginSendSms(
       registerPhone.value,
       captcha.value.captchaId,
       registerCaptchaCode.value,
     );
+    setNotice(response.message, "验证码已发送");
     countdown.value = 60;
     timer = setInterval(() => {
       countdown.value -= 1;
@@ -114,17 +140,22 @@ async function finishLogin(
   view: LoginResultView,
 ) {
   auth.setFromLogin(view);
+  setNotice(view.message, "登录成功");
   if (!view.hasPassword) {
     showSetPwd.value = true;
     return;
   }
-  router.replace("/");
+  await router.replace({
+    path: "/",
+    query: { loginMessage: view.message || "登录成功" },
+  });
 }
 
 async function submitSms() {
   if (!phoneValid.value || !smsValid.value) return;
   await submitBusy.run("登录中", async () => {
     err.value = "";
+    notice.value = "";
     try {
       const view = await consoleLoginByPhone(phone.value, smsCode.value);
       await finishLogin(view);
@@ -138,6 +169,7 @@ async function submitPassword() {
   if (!phoneValid.value || !passwordValid.value) return;
   await submitBusy.run("登录中", async () => {
     err.value = "";
+    notice.value = "";
     try {
       const view = await consoleLoginByPassword(phone.value, password.value);
       await finishLogin(view);
@@ -151,6 +183,7 @@ async function submitRegister() {
   if (!registerValid.value) return;
   await submitBusy.run("注册中", async () => {
     err.value = "";
+    notice.value = "";
     try {
       const view = await consoleLoginRegister(
         registerPhone.value,
@@ -171,8 +204,8 @@ function onPwdModalClose() {
 
 onMounted(() => {
   void loadCaptcha();
-  // 已登录直接跳走
-  if (auth.authenticated) router.replace("/");
+  // 仅完整恢复的登录态跳走；重启后仅恢复 token 的会话可重新认证。
+  if (auth.authenticated && auth.userInfo) router.replace("/");
 });
 onUnmounted(() => {
   if (timer) clearInterval(timer);
@@ -217,7 +250,7 @@ onUnmounted(() => {
           <div class="inline">
             <input class="field" v-model="captchaCode" placeholder="abcd" autocomplete="off"
               @input="captchaCode = captchaCode.trim().slice(0, 4)" />
-            <button type="button" class="captcha-btn" title="刷新验证码" aria-label="刷新验证码" @click="loadCaptcha">
+            <button type="button" class="captcha-btn" title="刷新验证码" aria-label="刷新验证码" @click="refreshCaptcha">
               <img v-if="captcha" :src="captcha.data.startsWith('data:')
                 ? captcha.data
                 : `data:image/svg+xml;base64,${captcha.data}`
@@ -284,7 +317,7 @@ onUnmounted(() => {
           <div class="inline">
             <input data-test="register-captcha" class="field" v-model="registerCaptchaCode" placeholder="abcd"
               autocomplete="off" @input="registerCaptchaCode = registerCaptchaCode.trim().slice(0, 4)" />
-            <button type="button" class="captcha-btn" title="刷新验证码" aria-label="刷新验证码" @click="loadCaptcha">
+            <button type="button" class="captcha-btn" title="刷新验证码" aria-label="刷新验证码" @click="refreshCaptcha">
               <img v-if="captcha" :src="captcha.data.startsWith('data:')
                 ? captcha.data
                 : `data:image/svg+xml;base64,${captcha.data}`" alt="图形验证码" />
@@ -314,6 +347,7 @@ onUnmounted(() => {
         </button>
       </form>
 
+      <p v-if="notice" class="notice" role="status">{{ notice }}</p>
       <p v-if="err" class="err" role="alert">{{ err }}</p>
     </section>
 
@@ -660,6 +694,18 @@ h1 {
   border: 1px solid hsl(var(--bad) / 0.3);
   border-radius: 9px;
   color: hsl(var(--bad-fg));
+  font-size: 12.5px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.notice {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: hsl(var(--ok) / 0.1);
+  border: 1px solid hsl(var(--ok) / 0.3);
+  border-radius: 9px;
+  color: hsl(var(--ok-fg));
   font-size: 12.5px;
   line-height: 1.5;
   word-break: break-word;

@@ -50,6 +50,11 @@ export interface LoginResultView {
   userInfo: UserInfo;
   hasPassword: boolean;
   expireAt: number; // epoch 秒
+  message: string;
+}
+
+export interface CommandMessage {
+  message: string;
 }
 
 export interface AuthStatusView {

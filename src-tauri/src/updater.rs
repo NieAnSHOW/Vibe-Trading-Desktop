@@ -12,7 +12,8 @@ use std::time::Duration;
 
 use tauri::{AppHandle, Emitter};
 
-const GITHUB_API: &str = "https://api.github.com/repos/NieAnSHOW/Vibe-Trading-Desktop/releases/latest";
+const GITHUB_API: &str =
+    "https://api.github.com/repos/NieAnSHOW/Vibe-Trading-Desktop/releases/latest";
 const USER_AGENT: &str = "vibe-trading-desktop-updater/1.0";
 
 // ── 类型 ──────────────────────────────────────────────────────────────
@@ -60,7 +61,9 @@ pub fn strip_v(s: &str) -> &str {
 pub fn is_newer(latest: &str, current: &str) -> bool {
     fn parse(s: &str) -> Option<(u64, u64, u64)> {
         let parts: Vec<&str> = s.split('.').collect();
-        if parts.len() < 3 { return None; }
+        if parts.len() < 3 {
+            return None;
+        }
         let a = parts[0].parse().ok()?;
         let b = parts[1].parse().ok()?;
         let c = parts[2].parse().ok()?;
@@ -103,7 +106,13 @@ pub fn pick_asset(assets: &[serde_json::Value]) -> Option<(String, String)> {
 
     #[cfg(target_os = "windows")]
     {
-        let candidates = ["_x64-setup.exe", "_x64_zh-CN.msi", "_x64.msi", ".exe", ".msi"];
+        let candidates = [
+            "_x64-setup.exe",
+            "_x64_zh-CN.msi",
+            "_x64.msi",
+            ".exe",
+            ".msi",
+        ];
         for suffix in candidates {
             if let Some(p) = pairs.iter().find(|(n, _)| n.ends_with(suffix)) {
                 return Some(p.clone());
@@ -143,9 +152,7 @@ pub fn check_update(current_version: &str) -> Result<UpdateInfo, String> {
         return Err(format!("GitHub API 返回 {status}"));
     }
 
-    let body: serde_json::Value = resp
-        .json()
-        .map_err(|e| format!("解析 release JSON: {e}"))?;
+    let body: serde_json::Value = resp.json().map_err(|e| format!("解析 release JSON: {e}"))?;
 
     let tag = body
         .get("tag_name")
@@ -167,8 +174,8 @@ pub fn check_update(current_version: &str) -> Result<UpdateInfo, String> {
         .cloned()
         .unwrap_or_default();
 
-    let (asset_name, download_url) = pick_asset(&assets)
-        .ok_or_else(|| "未找到当前平台对应的安装包".to_string())?;
+    let (asset_name, download_url) =
+        pick_asset(&assets).ok_or_else(|| "未找到当前平台对应的安装包".to_string())?;
 
     Ok(UpdateInfo {
         current: strip_v(current_version).to_string(),
@@ -198,12 +205,15 @@ pub fn download_update(info: &UpdateInfo, app: &AppHandle) -> Result<PathBuf, St
 
     // 已下载且文件非空则直接复用（无需重新下载）
     if dest.exists() && dest.metadata().map(|m| m.len()).unwrap_or(0) > 0 {
-        let _ = app.emit("update://progress", DownloadProgress {
-            downloaded: dest.metadata().map(|m| m.len()).unwrap_or(0),
-            total: dest.metadata().map(|m| m.len()).unwrap_or(0),
-            done: true,
-            path: Some(dest.to_string_lossy().to_string()),
-        });
+        let _ = app.emit(
+            "update://progress",
+            DownloadProgress {
+                downloaded: dest.metadata().map(|m| m.len()).unwrap_or(0),
+                total: dest.metadata().map(|m| m.len()).unwrap_or(0),
+                done: true,
+                path: Some(dest.to_string_lossy().to_string()),
+            },
+        );
         return Ok(dest);
     }
 
@@ -224,8 +234,8 @@ pub fn download_update(info: &UpdateInfo, app: &AppHandle) -> Result<PathBuf, St
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(0);
 
-    let mut file = std::fs::File::create(&dest)
-        .map_err(|e| format!("创建文件 {}: {e}", dest.display()))?;
+    let mut file =
+        std::fs::File::create(&dest).map_err(|e| format!("创建文件 {}: {e}", dest.display()))?;
 
     let mut downloaded: u64 = 0;
     let mut buf = [0u8; 65536]; // 64 KB chunk
@@ -237,21 +247,27 @@ pub fn download_update(info: &UpdateInfo, app: &AppHandle) -> Result<PathBuf, St
         file.write_all(&buf[..n])
             .map_err(|e| format!("写入文件: {e}"))?;
         downloaded += n as u64;
-        let _ = app.emit("update://progress", DownloadProgress {
-            downloaded,
-            total,
-            done: false,
-            path: None,
-        });
+        let _ = app.emit(
+            "update://progress",
+            DownloadProgress {
+                downloaded,
+                total,
+                done: false,
+                path: None,
+            },
+        );
     }
 
     // 完成事件
-    let _ = app.emit("update://progress", DownloadProgress {
-        downloaded,
-        total: if total == 0 { downloaded } else { total },
-        done: true,
-        path: Some(dest.to_string_lossy().to_string()),
-    });
+    let _ = app.emit(
+        "update://progress",
+        DownloadProgress {
+            downloaded,
+            total: if total == 0 { downloaded } else { total },
+            done: true,
+            path: Some(dest.to_string_lossy().to_string()),
+        },
+    );
 
     Ok(dest)
 }

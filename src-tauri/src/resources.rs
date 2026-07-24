@@ -114,7 +114,10 @@ mod tests {
         let base = Path::new("/opt/app/resources");
         let res = resolve_from_base(base);
 
-        assert_eq!(res.agent_template, PathBuf::from("/opt/app/resources/agent"));
+        assert_eq!(
+            res.agent_template,
+            PathBuf::from("/opt/app/resources/agent")
+        );
     }
 
     #[test]
@@ -130,7 +133,10 @@ mod tests {
         let base = Path::new("/opt/app/resources");
         let res = resolve_from_base(base);
 
-        assert_eq!(res.version_file, PathBuf::from("/opt/app/resources/VERSION"));
+        assert_eq!(
+            res.version_file,
+            PathBuf::from("/opt/app/resources/VERSION")
+        );
     }
 
     #[test]
