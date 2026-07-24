@@ -1,8 +1,8 @@
 //! 桌面控制台 IPC —— 环境/服务状态、启停服务、bootstrap 转发、打开 WebUI/日志。
 //! 逻辑尽量做成纯函数(可 cargo 测);Tauri command 是薄壳(设计 D3)。
 
-use std::io::{BufRead, BufReader};
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::Child;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -11,9 +11,7 @@ use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, State};
 
-use crate::auth::{
-    self, AuthError, AuthState, Captcha, LoginRaw, UserInfo,
-};
+use crate::auth::{self, AuthError, AuthState, Captcha, LoginRaw, UserInfo};
 use crate::runtime_dir::Layout;
 
 pub type SharedChild = Arc<Mutex<Option<Child>>>;
@@ -300,8 +298,8 @@ pub async fn console_start_service(
     // 启动前尝试刷新登录态（静默；未登录不阻塞———用户可自行配 .env）
     let _ = auth::ensure_session_valid(&auth_state, &layout);
 
-    let port = crate::port::pick_free_port()
-        .map_err(|e| ServiceStartError::Other { message: e })?;
+    let port =
+        crate::port::pick_free_port().map_err(|e| ServiceStartError::Other { message: e })?;
     let mut child = crate::sidecar::spawn(
         &layout.venv_python,
         &layout.runtime_agent,
@@ -320,7 +318,9 @@ pub async fn console_start_service(
         (ready, child)
     })
     .await
-    .map_err(|e| ServiceStartError::Other { message: e.to_string() })?;
+    .map_err(|e| ServiceStartError::Other {
+        message: e.to_string(),
+    })?;
     match ready {
         crate::sidecar::Ready::Ok => {
             // 启动后台线程消费 stdout/stderr 管道，防止缓冲区（~64 KB）写满后
@@ -335,7 +335,9 @@ pub async fn console_start_service(
             let _ = app.emit("service://started", port);
             Ok(port)
         }
-        crate::sidecar::Ready::ProcessExited(c) => Err(ServiceStartError::ProcessExited { code: c }),
+        crate::sidecar::Ready::ProcessExited(c) => {
+            Err(ServiceStartError::ProcessExited { code: c })
+        }
         crate::sidecar::Ready::Timeout => Err(ServiceStartError::HealthTimeout),
     }
 }
@@ -346,7 +348,11 @@ pub fn console_login_captcha() -> Result<Captcha, AuthError> {
 }
 
 #[tauri::command]
-pub fn console_login_send_sms(phone: String, captcha_id: String, code: String) -> Result<(), AuthError> {
+pub fn console_login_send_sms(
+    phone: String,
+    captcha_id: String,
+    code: String,
+) -> Result<(), AuthError> {
     auth::send_sms(&phone, &captcha_id, &code)
 }
 
@@ -390,8 +396,7 @@ pub fn console_login_by_phone(
     sms_code: String,
     auth_state: State<'_, AuthState>,
 ) -> Result<LoginResultView, AuthError> {
-    let layout = Layout::from_home()
-        .map_err(|e| AuthError::EnvWrite { message: e })?;
+    let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
     let raw = auth::login_by_phone(&phone, &sms_code)?;
     let has_password = raw.has_password;
     finalize_login(raw, has_password, &layout, &auth_state)
@@ -403,9 +408,21 @@ pub fn console_login_by_password(
     password: String,
     auth_state: State<'_, AuthState>,
 ) -> Result<LoginResultView, AuthError> {
-    let layout = Layout::from_home()
-        .map_err(|e| AuthError::EnvWrite { message: e })?;
+    let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
     let raw = auth::login_by_password(&phone, &password)?;
+    let has_password = raw.has_password;
+    finalize_login(raw, has_password, &layout, &auth_state)
+}
+
+#[tauri::command]
+pub fn console_login_register(
+    phone: String,
+    sms_code: String,
+    password: String,
+    auth_state: State<'_, AuthState>,
+) -> Result<LoginResultView, AuthError> {
+    let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
+    let raw = auth::register(&phone, &sms_code, &password)?;
     let has_password = raw.has_password;
     finalize_login(raw, has_password, &layout, &auth_state)
 }
@@ -426,22 +443,16 @@ pub fn console_login_set_password(
 }
 
 #[tauri::command]
-pub fn console_logout(
-    auth_state: State<'_, AuthState>,
-) -> Result<(), AuthError> {
-    let layout = Layout::from_home()
-        .map_err(|e| AuthError::EnvWrite { message: e })?;
+pub fn console_logout(auth_state: State<'_, AuthState>) -> Result<(), AuthError> {
+    let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
     auth::clear_env_token_section(&layout)?;
     *auth_state.0.lock().unwrap() = None;
     Ok(())
 }
 
 #[tauri::command]
-pub fn console_auth_status(
-    auth_state: State<'_, AuthState>,
-) -> Result<AuthStatusView, AuthError> {
-    let layout = Layout::from_home()
-        .map_err(|e| AuthError::EnvWrite { message: e })?;
+pub fn console_auth_status(auth_state: State<'_, AuthState>) -> Result<AuthStatusView, AuthError> {
+    let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
     // 内存空则从 .env 恢复（不调网络）
     let mut guard = auth_state.0.lock().unwrap();
     if guard.is_none() {
@@ -550,10 +561,7 @@ pub async fn console_channels_status(port: u16) -> Result<String, String> {
 /// `pip install --no-input 'vibe-trading-ai[<channel>]'`,逐行 emit "channeldep://progress"。
 /// pip 进度几乎全走 stderr,故 stdout/stderr 各开一线程转发,避免日志空白。
 #[tauri::command]
-pub async fn console_install_channel_dep(
-    app: AppHandle,
-    channel: String,
-) -> Result<(), String> {
+pub async fn console_install_channel_dep(app: AppHandle, channel: String) -> Result<(), String> {
     validate_channel(&channel)?;
     let layout = Layout::from_home()?;
     if !layout.venv_python.exists() {
@@ -621,8 +629,7 @@ pub fn console_clear_venv() -> Result<(), String> {
 #[tauri::command]
 pub fn console_open_logs() -> Result<(), String> {
     let layout = Layout::from_home()?;
-    std::fs::create_dir_all(&layout.logs_dir)
-        .map_err(|e| format!("mkdir logs: {e}"))?;
+    std::fs::create_dir_all(&layout.logs_dir).map_err(|e| format!("mkdir logs: {e}"))?;
     open_path_in_file_manager(&layout.logs_dir)
 }
 
@@ -632,8 +639,7 @@ pub fn console_open_logs() -> Result<(), String> {
 #[tauri::command]
 pub fn console_clear_logs() -> Result<usize, String> {
     let layout = Layout::from_home()?;
-    std::fs::create_dir_all(&layout.logs_dir)
-        .map_err(|e| format!("mkdir logs: {e}"))?;
+    std::fs::create_dir_all(&layout.logs_dir).map_err(|e| format!("mkdir logs: {e}"))?;
     clear_logs_in(&layout.logs_dir)
 }
 
@@ -746,11 +752,9 @@ pub async fn console_fetch_ads(position: String) -> Result<Vec<AdItem>, String> 
 #[tauri::command]
 pub async fn console_check_update(app: AppHandle) -> Result<crate::updater::UpdateInfo, String> {
     let current = app.package_info().version.to_string();
-    tauri::async_runtime::spawn_blocking(move || {
-        crate::updater::check_update(&current)
-    })
-    .await
-    .map_err(|e| format!("spawn_blocking join: {e}"))?
+    tauri::async_runtime::spawn_blocking(move || crate::updater::check_update(&current))
+        .await
+        .map_err(|e| format!("spawn_blocking join: {e}"))?
 }
 
 /// 下载最新安装包到 ~/.vibe-trading/updates/，流式推送 update://progress 事件。
@@ -761,12 +765,10 @@ pub async fn console_download_update(
     info: crate::updater::UpdateInfo,
 ) -> Result<String, String> {
     let app2 = app.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        crate::updater::download_update(&info, &app2)
-    })
-    .await
-    .map_err(|e| format!("spawn_blocking join: {e}"))?
-    .map(|p| p.to_string_lossy().to_string())
+    tauri::async_runtime::spawn_blocking(move || crate::updater::download_update(&info, &app2))
+        .await
+        .map_err(|e| format!("spawn_blocking join: {e}"))?
+        .map(|p| p.to_string_lossy().to_string())
 }
 
 /// 用系统命令打开已下载的安装包（macOS 打开 DMG，Windows 启动安装程序）。
@@ -847,9 +849,7 @@ mod tests {
         assert!(joined.contains("--sse"), "args: {joined}");
         let mut has_pythonpath = false;
         for (k, v) in cmd.get_envs() {
-            if k.to_str() == Some("PYTHONPATH")
-                && v.and_then(|x| x.to_str()) == Some("/rt/agent")
-            {
+            if k.to_str() == Some("PYTHONPATH") && v.and_then(|x| x.to_str()) == Some("/rt/agent") {
                 has_pythonpath = true;
             }
         }
@@ -861,14 +861,24 @@ mod tests {
 
     #[test]
     fn validate_channel_accepts_known_channels() {
-        for ok in ["telegram", "slack", "discord", "weixin", "wecom", "qq", "napcat", "feishu", "dingtalk"] {
+        for ok in [
+            "telegram", "slack", "discord", "weixin", "wecom", "qq", "napcat", "feishu", "dingtalk",
+        ] {
             assert!(validate_channel(ok).is_ok(), "{ok} 应合法");
         }
     }
 
     #[test]
     fn validate_channel_rejects_injection_and_garbage() {
-        for bad in ["", "tel egram", "tel;egram", "../etc", "Telegram", "a$b", "with space"] {
+        for bad in [
+            "",
+            "tel egram",
+            "tel;egram",
+            "../etc",
+            "Telegram",
+            "a$b",
+            "with space",
+        ] {
             assert!(validate_channel(bad).is_err(), "{bad:?} 应被拒");
         }
     }
@@ -887,8 +897,11 @@ mod tests {
 
     #[test]
     fn parse_sse_progress_frame_extracts_stage_and_message() {
-        let ev = parse_sse_data("progress", r#"{"stage": "installing", "message": "Collecting pandas"}"#)
-            .expect("progress 帧应解析成功");
+        let ev = parse_sse_data(
+            "progress",
+            r#"{"stage": "installing", "message": "Collecting pandas"}"#,
+        )
+        .expect("progress 帧应解析成功");
         assert_eq!(ev.stage, "installing");
         assert_eq!(ev.message, "Collecting pandas");
         assert!(ev.ok, "progress 帧默认 ok=true");
@@ -906,8 +919,11 @@ mod tests {
 
     #[test]
     fn parse_sse_failed_frame_preserves_ok_false() {
-        let ev = parse_sse_data("failed", r#"{"ok": false, "message": "deps incomplete: numpy"}"#)
-            .expect("failed 帧应解析成功");
+        let ev = parse_sse_data(
+            "failed",
+            r#"{"ok": false, "message": "deps incomplete: numpy"}"#,
+        )
+        .expect("failed 帧应解析成功");
         assert_eq!(ev.stage, "failed");
         assert!(!ev.ok, "failed 帧须保留 ok=false 供前端标红");
     }

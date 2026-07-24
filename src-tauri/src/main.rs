@@ -1,5 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-mod resources; mod version; mod runtime_dir; mod port; mod sidecar; mod console; mod auth; mod tray; mod updater;
+mod auth;
+mod console;
+mod port;
+mod resources;
+mod runtime_dir;
+mod sidecar;
+mod tray;
+mod updater;
+mod version;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
@@ -42,6 +50,7 @@ fn main() {
             console::console_login_send_sms,
             console::console_login_by_phone,
             console::console_login_by_password,
+            console::console_login_register,
             console::console_login_set_password,
             console::console_auth_status,
             console::console_logout,
@@ -62,11 +71,12 @@ fn main() {
         })
         .setup(move |app| {
             let handle = app.handle().clone();
-            let res = resources::Resources::resolve(&handle)
-                .map_err(|e| format!("resources: {e}"))?;
+            let res =
+                resources::Resources::resolve(&handle).map_err(|e| format!("resources: {e}"))?;
             // 安装系统托盘:后台挂载态下唤回窗口 / 退出应用的唯一入口。
             tray::build(&handle).map_err(|e| format!("tray: {e}"))?;
-            let win = app.get_webview_window("main")
+            let win = app
+                .get_webview_window("main")
                 .expect("main window (defined in tauri.conf.json)");
 
             let shared = shared_setup.clone();
@@ -176,8 +186,8 @@ mod tests {
     // module script 抛 TypeError 中断 —— 环境徽标卡在"检测中...",按钮不绑定。
     #[test]
     fn tauri_conf_enables_global_tauri_for_console() {
-        let cfg: serde_json::Value =
-            serde_json::from_str(include_str!("../tauri.conf.json")).expect("parse tauri.conf.json");
+        let cfg: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("parse tauri.conf.json");
         assert_eq!(
             cfg["app"]["withGlobalTauri"],
             serde_json::Value::Bool(true),
@@ -187,8 +197,8 @@ mod tests {
 
     #[test]
     fn tauri_conf_bundles_runtime_version_marker() {
-        let cfg: serde_json::Value =
-            serde_json::from_str(include_str!("../tauri.conf.json")).expect("parse tauri.conf.json");
+        let cfg: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("parse tauri.conf.json");
         assert_eq!(
             cfg["bundle"]["resources"]["../.desktop-build/VERSION"],
             serde_json::Value::String("VERSION".into()),

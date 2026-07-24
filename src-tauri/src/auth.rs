@@ -12,28 +12,16 @@ use crate::runtime_dir::Layout;
 
 // ── 可覆盖配置 ──
 // 业务接口（captcha/sms/login/person...），独立于大模型 MaaS 接口。
-// 默认值与 frontend/src/pages/auth/Login.tsx 对齐。
+// 默认值与 frontend/src/pages/auth/Login.tsx 对齐。 https://trading-server.nieanshow.cn
 pub fn user_api_url() -> String {
-    std::env::var("VIBE_USER_API_URL")
-        .unwrap_or_else(|_| "https://trading-server.nieanshow.cn".into())
+    std::env::var("VIBE_USER_API_URL").unwrap_or_else(|_| "http://127.0.0.1:8001".into())
 }
-pub fn default_model() -> String {
-    std::env::var("VIBE_DEFAULT_MODEL").unwrap_or_else(|_| "deepseek-v4-flash".into())
-}
-/// MaaS（大模型）接口根，独立于业务接口。登录成功后写入 webui .env 作为 OPENAI_BASE_URL。
-pub fn maas_api_url() -> String {
-    std::env::var("VIBE_MAAS_API_URL").unwrap_or_else(|_| "https://maas.nieanshow.cn".into())
-}
-/// maas 的 OpenAI 兼容端点 = {MAAS_API_URL}/v1
-pub fn maas_base_url() -> String {
-    format!("{}/v1", maas_api_url())
-}
-
 // ── .env 中由本模块管辖的 key（其余 key 不动）──
 pub const ENV_KEY_PROVIDER: &str = "LANGCHAIN_PROVIDER";
 pub const ENV_KEY_MODEL: &str = "LANGCHAIN_MODEL_NAME";
 pub const ENV_KEY_BASE_URL: &str = "OPENAI_BASE_URL";
 pub const ENV_KEY_API_KEY: &str = "OPENAI_API_KEY";
+pub const ENV_KEY_ACCESS: &str = "USER_ACCESS_TOKEN";
 pub const ENV_KEY_REFRESH: &str = "USER_REFRESH_TOKEN";
 pub const ENV_KEY_EXPIRE: &str = "USER_TOKEN_EXPIRE";
 pub const ENV_KEY_REFRESH_EXPIRE: &str = "USER_REFRESH_EXPIRE";
@@ -89,9 +77,26 @@ pub struct UserInfo {
 pub struct LoginRaw {
     pub token: String,
     pub refresh_token: String,
-    pub expire: i64,          // 相对秒
-    pub refresh_expire: i64,  // 相对秒
+    pub expire: i64,         // 相对秒
+    pub refresh_expire: i64, // 相对秒
     pub has_password: bool,
+    pub member: MemberLoginRaw,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemberLoginRaw {
+    pub level_code: String,
+    pub provider: MemberProviderRaw,
+    pub models: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemberProviderRaw {
+    #[serde(rename = "baseURL")]
+    pub base_url: String,
+    pub api_key: String,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -109,6 +114,7 @@ pub struct UserSession {
     pub expire_at: i64,         // 绝对 epoch 秒
     pub refresh_expire_at: i64, // 绝对 epoch 秒
     pub user_info: Option<UserInfo>,
+    pub member: MemberLoginRaw,
 }
 
 pub struct AuthState(pub Mutex<Option<UserSession>>);
@@ -133,10 +139,7 @@ pub fn rewrite_env_keys(content: &str, updates: &[(String, String)]) -> String {
         }
         if !found {
             // 追加：若末行非空，先补一个空行分隔
-            let need_sep = lines
-                .last()
-                .map(|s| !s.trim().is_empty())
-                .unwrap_or(false);
+            let need_sep = lines.last().map(|s| !s.trim().is_empty()).unwrap_or(false);
             if need_sep {
                 lines.push(String::new());
             }
@@ -176,11 +179,12 @@ pub fn now_secs() -> i64 {
 // ── .env 原子写（tmp→fsync→rename；unix 权限 0600）──
 
 pub fn write_env_atomic(path: &Path, content: &str) -> Result<(), AuthError> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| AuthError::EnvWrite { message: "no parent dir".into() })?;
-    fs::create_dir_all(parent)
-        .map_err(|e| AuthError::EnvWrite { message: format!("mkdir {:?}: {e}", parent) })?;
+    let parent = path.parent().ok_or_else(|| AuthError::EnvWrite {
+        message: "no parent dir".into(),
+    })?;
+    fs::create_dir_all(parent).map_err(|e| AuthError::EnvWrite {
+        message: format!("mkdir {:?}: {e}", parent),
+    })?;
     let file_name = path
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -190,39 +194,72 @@ pub fn write_env_atomic(path: &Path, content: &str) -> Result<(), AuthError> {
     #[cfg(unix)]
     {
         use std::io::Write;
-        use std::os::unix::fs::OpenOptionsExt;
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
         let mut f = fs::OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
             .mode(0o600)
             .open(&tmp)
-            .map_err(|e| AuthError::EnvWrite { message: format!("open tmp: {e}") })?;
+            .map_err(|e| AuthError::EnvWrite {
+                message: format!("open tmp: {e}"),
+            })?;
+        f.set_permissions(fs::Permissions::from_mode(0o600))
+            .map_err(|e| AuthError::EnvWrite {
+                message: format!("chmod tmp: {e}"),
+            })?;
         f.write_all(content.as_bytes())
-            .map_err(|e| AuthError::EnvWrite { message: format!("write tmp: {e}") })?;
-        f.sync_all()
-            .map_err(|e| AuthError::EnvWrite { message: format!("fsync tmp: {e}") })?;
+            .map_err(|e| AuthError::EnvWrite {
+                message: format!("write tmp: {e}"),
+            })?;
+        f.sync_all().map_err(|e| AuthError::EnvWrite {
+            message: format!("fsync tmp: {e}"),
+        })?;
     }
     #[cfg(not(unix))]
     {
-        fs::write(&tmp, content)
-            .map_err(|e| AuthError::EnvWrite { message: format!("write tmp: {e}") })?;
+        fs::write(&tmp, content).map_err(|e| AuthError::EnvWrite {
+            message: format!("write tmp: {e}"),
+        })?;
     }
 
-    fs::rename(&tmp, path)
-        .map_err(|e| AuthError::EnvWrite { message: format!("rename tmp: {e}") })?;
+    fs::rename(&tmp, path).map_err(|e| AuthError::EnvWrite {
+        message: format!("rename tmp: {e}"),
+    })?;
     Ok(())
 }
 
-/// 把登录 session 写进 layout.user_env 的 7 个 key，其余 key 不动。
+/// 把登录 session 与 member provider 写进 layout.user_env，其余 key 不动。
 pub fn write_env_token_section(layout: &Layout, sess: &UserSession) -> Result<(), AuthError> {
+    let model = sess
+        .member
+        .models
+        .first()
+        .ok_or_else(|| AuthError::EnvWrite {
+            message: "member models 为空".into(),
+        })?;
+    if sess.member.provider.base_url.trim().is_empty()
+        || sess.member.provider.api_key.trim().is_empty()
+        || model.trim().is_empty()
+    {
+        return Err(AuthError::EnvWrite {
+            message: "member provider baseURL、apiKey 和首个 model 均不能为空".into(),
+        });
+    }
     let path = &layout.user_env;
     let content = fs::read_to_string(path).unwrap_or_default();
     let updates = vec![
         (ENV_KEY_PROVIDER.to_string(), "openai".to_string()),
-        (ENV_KEY_MODEL.to_string(), default_model()),
-        (ENV_KEY_BASE_URL.to_string(), maas_base_url()),
-        (ENV_KEY_API_KEY.to_string(), sess.token.clone()),
+        (ENV_KEY_MODEL.to_string(), model.clone()),
+        (
+            ENV_KEY_BASE_URL.to_string(),
+            sess.member.provider.base_url.clone(),
+        ),
+        (
+            ENV_KEY_API_KEY.to_string(),
+            sess.member.provider.api_key.clone(),
+        ),
+        (ENV_KEY_ACCESS.to_string(), sess.token.clone()),
         (ENV_KEY_REFRESH.to_string(), sess.refresh_token.clone()),
         (ENV_KEY_EXPIRE.to_string(), sess.expire_at.to_string()),
         (
@@ -234,7 +271,7 @@ pub fn write_env_token_section(layout: &Layout, sess: &UserSession) -> Result<()
     write_env_atomic(path, &new_content)
 }
 
-/// 清掉登录写入 .env 的 7 个 key（置空，复用 rewrite_env_keys）；其余 key 不动。
+/// 清掉登录写入 .env 的 key（置空，复用 rewrite_env_keys）；其余 key 不动。
 /// token 为空后 read_env_token_section 返回 None，等价于未登录。
 pub fn clear_env_token_section(layout: &Layout) -> Result<(), AuthError> {
     let path = &layout.user_env;
@@ -244,6 +281,7 @@ pub fn clear_env_token_section(layout: &Layout) -> Result<(), AuthError> {
         ENV_KEY_MODEL,
         ENV_KEY_BASE_URL,
         ENV_KEY_API_KEY,
+        ENV_KEY_ACCESS,
         ENV_KEY_REFRESH,
         ENV_KEY_EXPIRE,
         ENV_KEY_REFRESH_EXPIRE,
@@ -260,23 +298,32 @@ pub fn clear_env_token_section(layout: &Layout) -> Result<(), AuthError> {
 pub fn read_env_token_section(layout: &Layout) -> Option<UserSession> {
     let content = fs::read_to_string(&layout.user_env).ok()?;
     let map = parse_env_to_map(&content);
-    let token = map.get(ENV_KEY_API_KEY)?.trim();
-    if token.is_empty() {
+    let provider_api_key = map.get(ENV_KEY_API_KEY)?.trim();
+    let access_token = map.get(ENV_KEY_ACCESS)?.trim();
+    if provider_api_key.is_empty() || access_token.is_empty() {
         return None;
     }
     let refresh_token = map.get(ENV_KEY_REFRESH)?.trim().to_string();
     let expire_at = map.get(ENV_KEY_EXPIRE)?.trim().parse::<i64>().ok()?;
     let refresh_expire_at = map
-        .get(ENV_KEY_REFRESH_EXPIRE)
-        ?.trim()
+        .get(ENV_KEY_REFRESH_EXPIRE)?
+        .trim()
         .parse::<i64>()
         .ok()?;
     Some(UserSession {
-        token: token.to_string(),
+        token: access_token.to_string(),
         refresh_token,
         expire_at,
         refresh_expire_at,
         user_info: None,
+        member: MemberLoginRaw {
+            level_code: String::new(),
+            provider: MemberProviderRaw {
+                base_url: map.get(ENV_KEY_BASE_URL)?.clone(),
+                api_key: provider_api_key.to_string(),
+            },
+            models: vec![map.get(ENV_KEY_MODEL)?.clone()],
+        },
     })
 }
 
@@ -293,10 +340,8 @@ struct CoolResponse {
 
 /// 把 cool-admin 响应体解析为 data；code!=1000 或解析失败转 AuthError。
 pub fn parse_cool_response<T: serde::de::DeserializeOwned>(text: &str) -> Result<T, AuthError> {
-    let resp: CoolResponse = serde_json::from_str(text).map_err(|e| {
-        AuthError::Network {
-            message: format!("解析响应失败: {e}"),
-        }
+    let resp: CoolResponse = serde_json::from_str(text).map_err(|e| AuthError::Network {
+        message: format!("解析响应失败: {e}"),
     })?;
     if resp.code != 1000 {
         return Err(AuthError::Api {
@@ -323,7 +368,9 @@ fn http_client() -> Result<reqwest::blocking::Client, AuthError> {
     reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SECS))
         .build()
-        .map_err(|e| AuthError::Network { message: format!("build client: {e}") })
+        .map_err(|e| AuthError::Network {
+            message: format!("build client: {e}"),
+        })
 }
 
 fn endpoint(path: &str) -> String {
@@ -335,9 +382,13 @@ pub fn fetch_captcha() -> Result<Captcha, AuthError> {
     let text = http_client()?
         .get(&url)
         .send()
-        .map_err(|e| AuthError::Network { message: format!("captcha: {e}") })?
+        .map_err(|e| AuthError::Network {
+            message: format!("captcha: {e}"),
+        })?
         .text()
-        .map_err(|e| AuthError::Network { message: format!("captcha body: {e}") })?;
+        .map_err(|e| AuthError::Network {
+            message: format!("captcha body: {e}"),
+        })?;
     parse_cool_response(&text)
 }
 
@@ -348,9 +399,13 @@ pub fn send_sms(phone: &str, captcha_id: &str, code: &str) -> Result<(), AuthErr
         .post(&url)
         .json(&body)
         .send()
-        .map_err(|e| AuthError::Network { message: format!("sms: {e}") })?
+        .map_err(|e| AuthError::Network {
+            message: format!("sms: {e}"),
+        })?
         .text()
-        .map_err(|e| AuthError::Network { message: format!("sms body: {e}") })?;
+        .map_err(|e| AuthError::Network {
+            message: format!("sms body: {e}"),
+        })?;
     parse_cool_response::<serde_json::Value>(&text).map(|_| ())
 }
 
@@ -363,46 +418,51 @@ pub fn session_from_login(raw: LoginRaw, user_info: Option<UserInfo>) -> UserSes
         expire_at: now + raw.expire,
         refresh_expire_at: now + raw.refresh_expire,
         user_info,
+        member: raw.member,
     }
 }
 
-pub fn login_by_phone(phone: &str, sms_code: &str) -> Result<LoginRaw, AuthError> {
-    let url = endpoint("/app/user/login/phone");
-    let body = serde_json::json!({ "phone": phone, "smsCode": sms_code });
+fn post_login(path: &str, body: serde_json::Value) -> Result<LoginRaw, AuthError> {
     let text = http_client()?
-        .post(&url)
+        .post(endpoint(path))
         .json(&body)
         .send()
-        .map_err(|e| AuthError::Network { message: format!("login phone: {e}") })?
+        .map_err(|e| AuthError::Network {
+            message: format!("login: {e}"),
+        })?
         .text()
-        .map_err(|e| AuthError::Network { message: format!("login phone body: {e}") })?;
+        .map_err(|e| AuthError::Network {
+            message: format!("login body: {e}"),
+        })?;
     parse_cool_response(&text)
+}
+
+pub fn login_by_phone(phone: &str, sms_code: &str) -> Result<LoginRaw, AuthError> {
+    post_login(
+        "/app/user/login/phone",
+        serde_json::json!({ "phone": phone, "smsCode": sms_code }),
+    )
 }
 
 pub fn login_by_password(phone: &str, password: &str) -> Result<LoginRaw, AuthError> {
-    let url = endpoint("/app/user/login/password");
-    let body = serde_json::json!({ "phone": phone, "password": password });
-    let text = http_client()?
-        .post(&url)
-        .json(&body)
-        .send()
-        .map_err(|e| AuthError::Network { message: format!("login pwd: {e}") })?
-        .text()
-        .map_err(|e| AuthError::Network { message: format!("login pwd body: {e}") })?;
-    parse_cool_response(&text)
+    post_login(
+        "/app/user/login/password",
+        serde_json::json!({ "phone": phone, "password": password }),
+    )
+}
+
+pub fn register(phone: &str, sms_code: &str, password: &str) -> Result<LoginRaw, AuthError> {
+    post_login(
+        "/app/user/login/register",
+        serde_json::json!({ "phone": phone, "smsCode": sms_code, "password": password }),
+    )
 }
 
 pub fn refresh_token(rt: &str) -> Result<LoginRaw, AuthError> {
-    let url = endpoint("/app/user/login/refreshToken");
-    let body = serde_json::json!({ "refreshToken": rt });
-    let text = http_client()?
-        .post(&url)
-        .json(&body)
-        .send()
-        .map_err(|e| AuthError::Network { message: format!("refresh: {e}") })?
-        .text()
-        .map_err(|e| AuthError::Network { message: format!("refresh body: {e}") })?;
-    parse_cool_response(&text)
+    post_login(
+        "/app/user/login/refreshToken",
+        serde_json::json!({ "refreshToken": rt }),
+    )
 }
 
 pub fn set_password(token: &str, password: &str) -> Result<(), AuthError> {
@@ -413,9 +473,13 @@ pub fn set_password(token: &str, password: &str) -> Result<(), AuthError> {
         .header("Authorization", token)
         .json(&body)
         .send()
-        .map_err(|e| AuthError::Network { message: format!("set pwd: {e}") })?
+        .map_err(|e| AuthError::Network {
+            message: format!("set pwd: {e}"),
+        })?
         .text()
-        .map_err(|e| AuthError::Network { message: format!("set pwd body: {e}") })?;
+        .map_err(|e| AuthError::Network {
+            message: format!("set pwd body: {e}"),
+        })?;
     parse_cool_response::<serde_json::Value>(&text).map(|_| ())
 }
 
@@ -425,9 +489,13 @@ pub fn fetch_user_info(token: &str) -> Result<UserInfo, AuthError> {
         .get(&url)
         .header("Authorization", token)
         .send()
-        .map_err(|e| AuthError::Network { message: format!("userinfo: {e}") })?
+        .map_err(|e| AuthError::Network {
+            message: format!("userinfo: {e}"),
+        })?
         .text()
-        .map_err(|e| AuthError::Network { message: format!("userinfo body: {e}") })?;
+        .map_err(|e| AuthError::Network {
+            message: format!("userinfo body: {e}"),
+        })?;
     parse_cool_response(&text)
 }
 
@@ -452,10 +520,7 @@ pub fn decide_session_action(now: i64, sess: &UserSession) -> SessionAction {
 
 /// 启动服务前调：校验内存 session；过期则尝试 refresh（成功后重写 .env）。
 /// refresh 失败或 refreshExpire 已到则返回 LoginExpired。
-pub fn ensure_session_valid(
-    state: &AuthState,
-    layout: &Layout,
-) -> Result<UserSession, AuthError> {
+pub fn ensure_session_valid(state: &AuthState, layout: &Layout) -> Result<UserSession, AuthError> {
     let sess = state
         .0
         .lock()
@@ -486,6 +551,85 @@ pub fn ensure_session_valid(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sample_member() -> MemberLoginRaw {
+        MemberLoginRaw {
+            level_code: "normal".into(),
+            provider: MemberProviderRaw {
+                base_url: "https://api.example/v1".into(),
+                api_key: "member-key".into(),
+            },
+            models: vec!["model-a".into()],
+        }
+    }
+
+    #[test]
+    fn parse_member_login_and_persist_its_provider() {
+        let raw: LoginRaw = parse_cool_response(r#"{"code":1000,"data":{"token":"t","refreshToken":"r","expire":1,"refreshExpire":2,"hasPassword":true,"member":{"levelCode":"normal","provider":{"baseURL":"https://api.example/v1","apiKey":"member-key"},"models":["model-a"]}}}"#).unwrap();
+        assert_eq!(raw.member.level_code, "normal");
+        assert_eq!(raw.member.provider.base_url, "https://api.example/v1");
+        assert_eq!(raw.member.provider.api_key, "member-key");
+        assert_eq!(raw.member.models, vec!["model-a"]);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        let sess = session_from_login(raw, None);
+        write_env_token_section(&layout, &sess).unwrap();
+        let env = parse_env_to_map(&fs::read_to_string(&layout.user_env).unwrap());
+        assert_eq!(
+            env.get(ENV_KEY_BASE_URL).map(String::as_str),
+            Some("https://api.example/v1")
+        );
+        assert_eq!(
+            env.get(ENV_KEY_API_KEY).map(String::as_str),
+            Some("member-key")
+        );
+        assert_eq!(env.get(ENV_KEY_MODEL).map(String::as_str), Some("model-a"));
+    }
+
+    #[test]
+    fn invalid_member_provider_does_not_mutate_env() {
+        for member in [
+            MemberLoginRaw {
+                provider: MemberProviderRaw {
+                    base_url: " ".into(),
+                    api_key: "key".into(),
+                },
+                ..sample_member()
+            },
+            MemberLoginRaw {
+                provider: MemberProviderRaw {
+                    base_url: "https://api.example/v1".into(),
+                    api_key: " ".into(),
+                },
+                ..sample_member()
+            },
+            MemberLoginRaw {
+                models: vec![" ".into()],
+                ..sample_member()
+            },
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let home = tmp.path().join(".vibe-trading");
+            fs::create_dir_all(&home).unwrap();
+            let layout = Layout::new(&home);
+            fs::write(&layout.user_env, "KEEP=unchanged\n").unwrap();
+            let raw = LoginRaw {
+                token: "t".into(),
+                refresh_token: "r".into(),
+                expire: 1,
+                refresh_expire: 2,
+                has_password: true,
+                member,
+            };
+            let err = write_env_token_section(&layout, &session_from_login(raw, None)).unwrap_err();
+            assert!(matches!(err, AuthError::EnvWrite { .. }));
+            assert_eq!(
+                fs::read_to_string(&layout.user_env).unwrap(),
+                "KEEP=unchanged\n"
+            );
+        }
+    }
 
     #[test]
     fn rewrite_replaces_existing_key() {
@@ -524,7 +668,7 @@ mod tests {
         let content = "OPENAI_API_KEY_EXTRA=x\n";
         let out = rewrite_env_keys(content, &[("OPENAI_API_KEY".into(), "tok".into())]);
         assert!(out.contains("OPENAI_API_KEY_EXTRA=x")); // 原行保留
-        assert!(out.contains("OPENAI_API_KEY=tok"));     // 新行追加
+        assert!(out.contains("OPENAI_API_KEY=tok")); // 新行追加
     }
 
     #[test]
@@ -538,26 +682,9 @@ mod tests {
     }
 
     #[test]
-    fn user_api_url_defaults_to_business_server() {
+    fn user_api_url_defaults_to_local_server() {
         std::env::remove_var("VIBE_USER_API_URL");
-        assert_eq!(user_api_url(), "https://trading-server.nieanshow.cn");
-    }
-
-    #[test]
-    fn maas_base_url_appends_v1() {
-        // 默认值
-        std::env::remove_var("VIBE_MAAS_API_URL");
-        assert_eq!(maas_base_url(), "https://maas.nieanshow.cn/v1");
-        // 覆盖
-        std::env::set_var("VIBE_MAAS_API_URL", "https://example.com");
-        assert_eq!(maas_base_url(), "https://example.com/v1");
-        std::env::remove_var("VIBE_MAAS_API_URL");
-    }
-
-    #[test]
-    fn default_model_falls_back_to_deepseek() {
-        std::env::remove_var("VIBE_DEFAULT_MODEL");
-        assert_eq!(default_model(), "deepseek-v4-flash");
+        assert_eq!(user_api_url(), "http://127.0.0.1:8001");
     }
 
     #[test]
@@ -576,6 +703,25 @@ mod tests {
         assert!(path.exists());
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn write_env_atomic_forces_0600_when_temp_file_already_exists() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join(".env");
+        let stale_tmp = tmp.path().join("..env.tmp");
+        fs::write(&stale_tmp, "stale").unwrap();
+        fs::set_permissions(&stale_tmp, fs::Permissions::from_mode(0o644)).unwrap();
+
+        write_env_atomic(&path, "SECRET=value\n").unwrap();
+
+        assert_eq!(
+            fs::metadata(path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
+
     #[test]
     fn write_token_section_preserves_other_keys() {
         let tmp = tempfile::tempdir().unwrap();
@@ -583,7 +729,11 @@ mod tests {
         fs::create_dir_all(&home).unwrap();
         let layout = Layout::new(&home);
         // 预置其他 provider 配置
-        fs::write(&layout.user_env, "OPENROUTER_API_KEY=xxx\nTUSHARE_TOKEN=t\n").unwrap();
+        fs::write(
+            &layout.user_env,
+            "OPENROUTER_API_KEY=xxx\nTUSHARE_TOKEN=t\n",
+        )
+        .unwrap();
 
         let sess = UserSession {
             token: "tok".into(),
@@ -591,15 +741,19 @@ mod tests {
             expire_at: 1700000000,
             refresh_expire_at: 1700000100,
             user_info: None,
+            member: sample_member(),
         };
         write_env_token_section(&layout, &sess).unwrap();
 
         let after = fs::read_to_string(&layout.user_env).unwrap();
-        assert!(after.contains("OPENROUTER_API_KEY=xxx"), "其他 provider 须保留");
+        assert!(
+            after.contains("OPENROUTER_API_KEY=xxx"),
+            "其他 provider 须保留"
+        );
         assert!(after.contains("TUSHARE_TOKEN=t"));
-        assert!(after.contains("OPENAI_API_KEY=tok"));
-        assert!(after.contains("OPENAI_BASE_URL=https://maas.nieanshow.cn/v1"));
-        assert!(after.contains("LANGCHAIN_MODEL_NAME=deepseek-v4-flash"));
+        assert!(after.contains("OPENAI_API_KEY=member-key"));
+        assert!(after.contains("OPENAI_BASE_URL=https://api.example/v1"));
+        assert!(after.contains("LANGCHAIN_MODEL_NAME=model-a"));
         assert!(after.contains("USER_REFRESH_TOKEN=rt"));
         assert!(after.contains("USER_TOKEN_EXPIRE=1700000000"));
     }
@@ -610,13 +764,18 @@ mod tests {
         let home = tmp.path().join(".vibe-trading");
         fs::create_dir_all(&home).unwrap();
         let layout = Layout::new(&home);
-        fs::write(&layout.user_env, "OPENROUTER_API_KEY=xxx\nTUSHARE_TOKEN=t\n").unwrap();
+        fs::write(
+            &layout.user_env,
+            "OPENROUTER_API_KEY=xxx\nTUSHARE_TOKEN=t\n",
+        )
+        .unwrap();
         let sess = UserSession {
             token: "tok".into(),
             refresh_token: "rt".into(),
             expire_at: 1700000000,
             refresh_expire_at: 1700000100,
             user_info: None,
+            member: sample_member(),
         };
         write_env_token_section(&layout, &sess).unwrap();
         clear_env_token_section(&layout).unwrap();
@@ -624,9 +783,15 @@ mod tests {
         let after = fs::read_to_string(&layout.user_env).unwrap();
         assert!(!after.contains("tok"), "token 不得残留");
         assert!(!after.contains("USER_REFRESH_TOKEN=rt"));
-        assert!(after.contains("OPENROUTER_API_KEY=xxx"), "其他 provider 须保留");
+        assert!(
+            after.contains("OPENROUTER_API_KEY=xxx"),
+            "其他 provider 须保留"
+        );
         assert!(after.contains("TUSHARE_TOKEN=t"));
-        assert!(read_env_token_section(&layout).is_none(), "清理后读不到 session");
+        assert!(
+            read_env_token_section(&layout).is_none(),
+            "清理后读不到 session"
+        );
     }
 
     #[test]
@@ -641,11 +806,13 @@ mod tests {
             expire_at: 1700000000,
             refresh_expire_at: 1700000100,
             user_info: None,
+            member: sample_member(),
         };
         write_env_token_section(&layout, &sess).unwrap();
 
         let got = read_env_token_section(&layout).expect("应读到 session");
         assert_eq!(got.token, "tok");
+        assert_eq!(got.member.provider.api_key, "member-key");
         assert_eq!(got.refresh_token, "rt");
         assert_eq!(got.expire_at, 1700000000);
         assert_eq!(got.refresh_expire_at, 1700000100);
@@ -706,28 +873,47 @@ mod tests {
             expire_at,
             refresh_expire_at,
             user_info: None,
+            member: sample_member(),
         }
     }
 
     #[test]
     fn decide_action_valid_before_expire() {
         let sess = sample_session(1000, 2000);
-        assert!(matches!(decide_session_action(999, &sess), SessionAction::Valid));
-        assert!(matches!(decide_session_action(0, &sess), SessionAction::Valid));
+        assert!(matches!(
+            decide_session_action(999, &sess),
+            SessionAction::Valid
+        ));
+        assert!(matches!(
+            decide_session_action(0, &sess),
+            SessionAction::Valid
+        ));
     }
 
     #[test]
     fn decide_action_needs_refresh_between_expire_and_refresh_expire() {
         let sess = sample_session(1000, 2000);
-        assert!(matches!(decide_session_action(1000, &sess), SessionAction::NeedsRefresh));
-        assert!(matches!(decide_session_action(1999, &sess), SessionAction::NeedsRefresh));
+        assert!(matches!(
+            decide_session_action(1000, &sess),
+            SessionAction::NeedsRefresh
+        ));
+        assert!(matches!(
+            decide_session_action(1999, &sess),
+            SessionAction::NeedsRefresh
+        ));
     }
 
     #[test]
     fn decide_action_expired_after_refresh_expire() {
         let sess = sample_session(1000, 2000);
-        assert!(matches!(decide_session_action(2000, &sess), SessionAction::Expired));
-        assert!(matches!(decide_session_action(5000, &sess), SessionAction::Expired));
+        assert!(matches!(
+            decide_session_action(2000, &sess),
+            SessionAction::Expired
+        ));
+        assert!(matches!(
+            decide_session_action(5000, &sess),
+            SessionAction::Expired
+        ));
     }
 
     #[test]
