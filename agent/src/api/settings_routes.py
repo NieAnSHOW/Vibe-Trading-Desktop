@@ -10,7 +10,7 @@ import json
 import os
 import sys as _sys
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Literal, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from pydantic import BaseModel, Field
@@ -60,13 +60,16 @@ class LLMSettingsResponse(BaseModel):
     # USER_REFRESH_TOKEN/USER_REFRESH_EXPIRE 只由桌面端 Rust write_env_token_section 写入,
     # 手动配 LLM 不会写这两个 key —— 它们是"桌面登录自动配置"的唯一指纹。
     desktop_login_provisioned: bool = False
+    desktop_llm_mode: Literal["vip", "custom"] = "custom"
+    desktop_vip_available: bool = False
 
 
 class UpdateLLMSettingsRequest(BaseModel):
     """Update LLM settings persisted to agent/.env."""
 
-    provider: str = Field(..., min_length=1)
-    model_name: str = Field(..., min_length=1)
+    mode: Literal["vip", "custom"]
+    provider: Optional[str] = Field(None, min_length=1)
+    model_name: Optional[str] = Field(None, min_length=1)
     base_url: Optional[str] = None
     api_key: Optional[str] = None
     clear_api_key: bool = False
@@ -74,19 +77,6 @@ class UpdateLLMSettingsRequest(BaseModel):
     timeout_seconds: int = Field(120, ge=1, le=3600)
     max_retries: int = Field(2, ge=0, le=20)
     reasoning_effort: Optional[str] = None
-
-
-class VIPModelListResponse(BaseModel):
-    """Model IDs available from the configured VIP Server."""
-
-    models: List[str]
-
-
-class VIPModelListRequest(BaseModel):
-    """Optional transient VIP connection details for model discovery."""
-
-    api_key: Optional[str] = None
-    base_url: Optional[str] = None
 
 
 class DataSourceSettingsResponse(BaseModel):
@@ -137,6 +127,13 @@ LLM_PROVIDER_BY_NAME = {provider.name: provider for provider in LLM_PROVIDERS}
 LLM_REASONING_EFFORTS = {"", "low", "medium", "high", "max"}
 LLM_API_KEY_PLACEHOLDERS = {"", "sk-or-v1-your-key-here", "sk-xxx", "xxx", "gsk_xxx"}
 TUSHARE_TOKEN_PLACEHOLDERS = {"", "your-tushare-token"}
+DESKTOP_LLM_MODE_KEY = "DESKTOP_LLM_MODE"
+VIP_RUNTIME_ENV = {
+    "api_key": "VIBE_DESKTOP_VIP_API_KEY",
+    "base_url": "VIBE_DESKTOP_VIP_BASE_URL",
+    "provisioned": "VIBE_DESKTOP_VIP_PROVISIONED",
+    "models": "VIBE_DESKTOP_VIP_MODELS_JSON",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +187,30 @@ def _read_settings_env_values() -> Dict[str, str]:
     return {}
 
 
+def _desktop_llm_mode(values: Dict[str, str]) -> Literal["vip", "custom"]:
+    """Return the persisted desktop LLM mode, defaulting to custom."""
+    configured_mode = values.get(DESKTOP_LLM_MODE_KEY, "custom").strip().lower()
+    return "vip" if configured_mode == "vip" else "custom"
+
+
+def _desktop_vip_active(values: Dict[str, str]) -> bool:
+    """Whether desktop VIP mode is selected and provisioned for this process."""
+    return (
+        _desktop_llm_mode(values) == "vip"
+        and os.environ.get(VIP_RUNTIME_ENV["provisioned"]) == "1"
+    )
+
+
+def _desktop_vip_available(values: Dict[str, str]) -> bool:
+    """Whether the selected VIP mode has usable, transient runtime credentials."""
+    return (
+        _desktop_vip_active(values)
+        and bool(os.environ.get(VIP_RUNTIME_ENV["base_url"], "").strip())
+        and os.environ.get(VIP_RUNTIME_ENV["api_key"], "").strip()
+        not in LLM_API_KEY_PLACEHOLDERS
+    )
+
+
 # ---------------------------------------------------------------------------
 # Response builders
 # ---------------------------------------------------------------------------
@@ -201,9 +222,18 @@ def _build_llm_settings_response(
     """Build the public settings payload from dotenv values."""
     host = _host()
     env_values = values if values is not None else _read_settings_env_values()
-    provider_name = env_values.get("LANGCHAIN_PROVIDER", "openai").strip().lower()
+    desktop_llm_mode = _desktop_llm_mode(env_values)
+    desktop_vip_available = _desktop_vip_available(env_values)
+    provider_name = "vip_server" if desktop_vip_available else env_values.get(
+        "LANGCHAIN_PROVIDER", "openai"
+    ).strip().lower()
     provider = LLM_PROVIDER_BY_NAME.get(provider_name, LLM_PROVIDER_BY_NAME["openai"])
-    api_key = env_values.get(provider.api_key_env or "", "") if provider.api_key_env else ""
+    if desktop_vip_available:
+        api_key = os.environ.get(VIP_RUNTIME_ENV["api_key"], "")
+    elif provider.api_key_env:
+        api_key = env_values.get(provider.api_key_env, "")
+    else:
+        api_key = ""
     api_key_configured = host._is_configured_secret(api_key, LLM_API_KEY_PLACEHOLDERS)
     api_key_hint = None
     if provider.auth_type == "oauth":
@@ -221,9 +251,14 @@ def _build_llm_settings_response(
         host._coerce_int(env_values.get("USER_REFRESH_EXPIRE", "0"), 0) > int(time.time())
     return LLMSettingsResponse(
         provider=provider.name,
-        model_name=env_values.get("LANGCHAIN_MODEL_NAME", provider.default_model),
-        base_url=env_values.get(provider.base_url_env, provider.default_base_url),
-        api_key_env=provider.api_key_env,
+        # VIP values are only ever read from process memory; none are sent to the WebUI.
+        model_name=provider.default_model if desktop_vip_available else env_values.get(
+            "LANGCHAIN_MODEL_NAME", provider.default_model
+        ),
+        base_url="" if desktop_vip_available else env_values.get(
+            provider.base_url_env, provider.default_base_url
+        ),
+        api_key_env=None if desktop_vip_available else provider.api_key_env,
         api_key_configured=api_key_configured,
         api_key_hint=api_key_hint,
         api_key_required=provider.api_key_required,
@@ -233,8 +268,10 @@ def _build_llm_settings_response(
         reasoning_effort=env_values.get("LANGCHAIN_REASONING_EFFORT", "").strip().lower(),
         sse_timeout_seconds=host._coerce_int(env_values.get("VIBE_TRADING_SSE_TIMEOUT", "90"), 90),
         env_path=host._project_relative_path(host._resolve_settings_env_path()),
-        providers=LLM_PROVIDERS,
+        providers=[provider for provider in LLM_PROVIDERS if provider.name != "vip_server"],
         desktop_login_provisioned=desktop_login_provisioned,
+        desktop_llm_mode=desktop_llm_mode,
+        desktop_vip_available=desktop_vip_available,
     )
 
 
@@ -267,61 +304,6 @@ def _build_data_source_settings_response(
     )
 
 
-async def _fetch_vip_model_ids(
-    api_key_override: Optional[str] = None,
-    base_url_override: Optional[str] = None,
-) -> List[str]:
-    """Retrieve OpenAI-compatible model IDs without exposing VIP credentials."""
-    host = _host()
-    provider = LLM_PROVIDER_BY_NAME["vip_server"]
-    values = _read_settings_env_values()
-    submitted_api_key = (api_key_override or "").strip()
-    api_key = (submitted_api_key or values.get(provider.api_key_env or "", "")).strip()
-    if not host._is_configured_secret(api_key, LLM_API_KEY_PLACEHOLDERS):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="VIP Server API key is not configured")
-
-    configured_base_url = values.get(provider.base_url_env, provider.default_base_url).strip()
-    submitted_base_url = (base_url_override or "").strip()
-    trusted_base_urls = {
-        configured_base_url.rstrip("/"),
-        provider.default_base_url.rstrip("/"),
-    }
-    if submitted_base_url and submitted_base_url.rstrip("/") not in trusted_base_urls:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="VIP Server base URL is not supported",
-        )
-
-    base_url = submitted_base_url or configured_base_url
-    models_url = f"{base_url.rstrip('/')}/models"
-    try:
-        async with host.httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(
-                models_url,
-                headers={"Authorization": f"Bearer {api_key}"},
-            )
-            response.raise_for_status()
-            payload = response.json()
-    except (host.httpx.HTTPError, ValueError, TypeError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Failed to fetch VIP Server models",
-        ) from exc
-
-    entries = payload.get("data", []) if isinstance(payload, dict) else []
-    models: List[str] = []
-    seen: set[str] = set()
-    for entry in entries:
-        model_id = entry.get("id") if isinstance(entry, dict) else None
-        if not isinstance(model_id, str):
-            continue
-        model_id = model_id.strip()
-        if model_id and model_id not in seen:
-            seen.add(model_id)
-            models.append(model_id)
-    return models
-
-
 def _sync_runtime_env(provider: LLMProviderOption, updates: Dict[str, str]) -> None:
     """Apply saved LLM settings to the running API process."""
     host = _host()
@@ -351,6 +333,37 @@ def _sync_runtime_env(provider: LLMProviderOption, updates: Dict[str, str]) -> N
         os.environ.pop("OPENAI_BASE_URL", None)
 
 
+def _vip_runtime_model_name() -> str:
+    """Select a runtime model from the hidden sidecar-provided model list."""
+    provider = LLM_PROVIDER_BY_NAME["vip_server"]
+    try:
+        models = json.loads(os.environ.get(VIP_RUNTIME_ENV["models"], "[]"))
+    except json.JSONDecodeError:
+        models = []
+    if isinstance(models, list):
+        for model in models:
+            if isinstance(model, str) and model.strip():
+                return model.strip()
+    return provider.default_model
+
+
+def _sync_vip_runtime_env() -> None:
+    """Activate injected VIP credentials without writing them to dotenv."""
+    api_key = os.environ[VIP_RUNTIME_ENV["api_key"]].strip()
+    base_url = os.environ[VIP_RUNTIME_ENV["base_url"]].strip()
+    os.environ.update(
+        {
+            "LANGCHAIN_PROVIDER": "vip_server",
+            "LANGCHAIN_MODEL_NAME": _vip_runtime_model_name(),
+            "VIP_API_KEY": api_key,
+            "VIP_BASE_URL": base_url,
+            "OPENAI_API_KEY": api_key,
+            "OPENAI_API_BASE": base_url,
+            "OPENAI_BASE_URL": base_url,
+        }
+    )
+
+
 # ---------------------------------------------------------------------------
 # fork: stale-key cleanup on provider switch
 # ---------------------------------------------------------------------------
@@ -360,6 +373,7 @@ def _sync_runtime_env(provider: LLMProviderOption, updates: Dict[str, str]) -> N
 # LLM-controlled key set first, then writes the new provider's values.
 
 CORE_LLM_ENV_KEYS = {
+    DESKTOP_LLM_MODE_KEY,
     "LANGCHAIN_PROVIDER",
     "LANGCHAIN_MODEL_NAME",
     "LANGCHAIN_TEMPERATURE",
@@ -373,6 +387,8 @@ def _llm_env_keys() -> set[str]:
     """Return active dotenv keys controlled by the LLM settings form."""
     keys = set(CORE_LLM_ENV_KEYS)
     for provider in LLM_PROVIDERS:
+        if provider.name == "vip_server":
+            continue
         if provider.api_key_env:
             keys.add(provider.api_key_env)
         keys.add(provider.base_url_env)
@@ -428,17 +444,6 @@ def register_settings_routes(
         """Return project-local LLM settings for the Web UI."""
         return _build_llm_settings_response()
 
-    @app.post(
-        "/settings/llm/vip-models",
-        response_model=VIPModelListResponse,
-        dependencies=[Depends(require_settings_write_auth)],
-    )
-    async def get_vip_models(payload: VIPModelListRequest):
-        """Return configured VIP Server models without exposing its connection details."""
-        return VIPModelListResponse(
-            models=await _fetch_vip_model_ids(payload.api_key, payload.base_url)
-        )
-
     @app.put(
         "/settings/llm",
         response_model=LLMSettingsResponse,
@@ -447,14 +452,31 @@ def register_settings_routes(
     async def update_llm_settings(payload: UpdateLLMSettingsRequest):
         """Persist project-local LLM settings and update the running process."""
         host_ref = _host()
-        provider_name = payload.provider.strip().lower()
+        if payload.mode == "vip":
+            current_values = _read_settings_env_values()
+            if not _desktop_vip_available({**current_values, DESKTOP_LLM_MODE_KEY: "vip"}):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Desktop VIP is not available for this session",
+                )
+            _rewrite_env_values(
+                host_ref._resolve_settings_env_path(),
+                {DESKTOP_LLM_MODE_KEY: "vip"},
+                drop_keys={DESKTOP_LLM_MODE_KEY},
+            )
+            _sync_vip_runtime_env()
+            return _build_llm_settings_response(
+                host_ref._read_env_values(host_ref._resolve_settings_env_path())
+            )
+
+        provider_name = (payload.provider or "").strip().lower()
         provider = LLM_PROVIDER_BY_NAME.get(provider_name)
-        if provider is None:
+        if provider is None or provider.name == "vip_server":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported LLM provider"
             )
 
-        model_name = payload.model_name.strip()
+        model_name = (payload.model_name or "").strip()
         if not model_name:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Model name is required"
@@ -487,6 +509,7 @@ def register_settings_routes(
                     status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
                 ) from exc
         updates: Dict[str, str] = {
+            DESKTOP_LLM_MODE_KEY: "custom",
             "LANGCHAIN_PROVIDER": provider.name,
             "LANGCHAIN_MODEL_NAME": model_name,
             provider.base_url_env: base_url,
@@ -519,6 +542,8 @@ def register_settings_routes(
             host_ref._resolve_settings_env_path(), updates, drop_keys=_llm_env_keys()
         )
         _sync_runtime_env(provider, updates)
+        os.environ.pop("VIP_API_KEY", None)
+        os.environ.pop("VIP_BASE_URL", None)
         return _build_llm_settings_response(host_ref._read_env_values(host_ref._resolve_settings_env_path()))
 
     @app.get(

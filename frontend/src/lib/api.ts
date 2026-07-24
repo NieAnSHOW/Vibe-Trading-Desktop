@@ -570,11 +570,6 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(settings),
     }),
-  getVipModels: (body: VIPModelListRequest = {}) =>
-    request<VIPModelListResponse>("/settings/llm/vip-models", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
   getDataSourceSettings: () => request<DataSourceSettings>("/settings/data-sources"),
   updateDataSourceSettings: (settings: UpdateDataSourceSettingsRequest) =>
     request<DataSourceSettings>("/settings/data-sources", {
@@ -745,27 +740,21 @@ export interface LLMSettings {
   env_path: string;
   providers: LLMProviderOption[];
   desktop_login_provisioned?: boolean;
+  desktop_llm_mode: "vip" | "custom";
+  desktop_vip_available: boolean;
 }
 
 export interface UpdateLLMSettingsRequest {
-  provider: string;
-  model_name: string;
-  base_url: string;
+  mode: "vip" | "custom";
+  provider?: string;
+  model_name?: string;
+  base_url?: string;
   api_key?: string;
   clear_api_key?: boolean;
-  temperature: number;
-  timeout_seconds: number;
-  max_retries: number;
+  temperature?: number;
+  timeout_seconds?: number;
+  max_retries?: number;
   reasoning_effort?: string;
-}
-
-export interface VIPModelListResponse {
-  models: string[];
-}
-
-export interface VIPModelListRequest {
-  api_key?: string;
-  base_url?: string;
 }
 
 export interface DataSourceSettings {

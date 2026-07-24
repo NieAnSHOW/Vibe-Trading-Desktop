@@ -7,12 +7,11 @@ import os
 import stat
 from pathlib import Path
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 import api_server
-from src.api import helpers, settings_routes
+from src.api import helpers
 
 
 def test_env_updates_are_atomic_and_owner_only(tmp_path: Path) -> None:
@@ -92,6 +91,7 @@ def test_update_llm_settings_persists_desktop_user_env(
     response = asyncio.run(
         api_server.update_llm_settings(
             api_server.UpdateLLMSettingsRequest(
+                mode="custom",
                 provider="openrouter",
                 model_name="deepseek/deepseek-v4-pro",
                 base_url="https://openrouter.ai/api/v1",
@@ -142,6 +142,7 @@ def test_update_llm_settings_removes_stale_active_provider_values(
     asyncio.run(
         api_server.update_llm_settings(
             api_server.UpdateLLMSettingsRequest(
+                mode="custom",
                 provider="openrouter",
                 model_name="deepseek/deepseek-v4-pro",
                 base_url="https://openrouter.ai/api/v1",
@@ -162,6 +163,39 @@ def test_update_llm_settings_removes_stale_active_provider_values(
     assert "OPENAI_BASE_URL=" not in user_env_text
     assert "DEEPSEEK_API_KEY=" not in user_env_text
     assert "gpt-old" not in user_env_text
+
+
+def test_vip_update_persists_only_mode_and_uses_hidden_runtime_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "LANGCHAIN_PROVIDER=openrouter\nOPENROUTER_API_KEY=custom-key\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api_server, "ENV_PATH", env_path)
+    monkeypatch.setattr(api_server, "ENV_EXAMPLE_PATH", tmp_path / ".env.example")
+    monkeypatch.setattr(api_server, "USER_ENV_PATH", tmp_path / "home" / ".vibe-trading" / ".env")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_PROVISIONED", "1")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_API_KEY", "member-key")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_BASE_URL", "https://vip.example/v1")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_MODELS_JSON", '["member-model"]')
+
+    response = asyncio.run(
+        api_server.update_llm_settings(api_server.UpdateLLMSettingsRequest(mode="vip"))
+    )
+
+    env_text = env_path.read_text(encoding="utf-8")
+    assert response.desktop_llm_mode == "vip"
+    assert response.desktop_vip_available is True
+    assert "DESKTOP_LLM_MODE=vip" in env_text
+    assert "LANGCHAIN_PROVIDER=openrouter" in env_text
+    assert "OPENROUTER_API_KEY=custom-key" in env_text
+    assert "member-key" not in env_text
+    assert "vip.example" not in env_text
+    assert "member-model" not in env_text
+    assert os.environ["LANGCHAIN_PROVIDER"] == "vip_server"
+    assert os.environ["LANGCHAIN_MODEL_NAME"] == "member-model"
 
 
 @pytest.fixture
@@ -211,122 +245,77 @@ def test_get_llm_settings_is_side_effect_free_and_hides_placeholders(
     assert not (tmp_path / ".env").exists()
 
 
-def test_vip_model_list_proxies_models_without_exposing_credentials(
+def test_vip_mode_reads_only_transient_environment_and_hides_secrets(
     client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     (tmp_path / ".env").write_text(
-        "\n".join(
-            [
-                "LANGCHAIN_PROVIDER=vip_server",
-                "VIP_BASE_URL=https://vip.example/v1",
-                "VIP_API_KEY=vip-secret-value",
-            ]
-        )
-        + "\n",
+        "DESKTOP_LLM_MODE=vip\nVIP_API_KEY=stale-dotenv-key\nVIP_BASE_URL=https://stale.example/v1\n",
         encoding="utf-8",
     )
-    captured: dict[str, str] = {}
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_PROVISIONED", "1")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_API_KEY", "member-key")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_BASE_URL", "https://vip.example/v1")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_MODELS_JSON", '["gpt-5-mini"]')
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["url"] = str(request.url)
-        captured["authorization"] = request.headers["authorization"]
-        return httpx.Response(
-            200,
-            json={"data": [{"id": "gpt-5-mini"}, {"id": "gpt-5"}, {"id": "gpt-5"}]},
-        )
-
-    transport = httpx.MockTransport(handler)
-
-    class MockedAsyncClient(httpx.AsyncClient):
-        def __init__(self, *args, **kwargs):
-            kwargs["transport"] = transport
-            super().__init__(*args, **kwargs)
-
-    monkeypatch.setattr(api_server.httpx, "AsyncClient", MockedAsyncClient)
-
-    response = client.post(
-        "/settings/llm/vip-models",
-        json={"api_key": "form-vip-key"},
-    )
+    response = client.get("/settings/llm")
 
     assert response.status_code == 200
-    assert response.json() == {"models": ["gpt-5-mini", "gpt-5"]}
-    assert captured == {
-        "url": "https://vip.example/v1/models",
-        "authorization": "Bearer form-vip-key",
-    }
-    assert "vip-secret-value" not in response.text
-    assert "form-vip-key" not in response.text
+    body = response.json()
+    assert body["desktop_llm_mode"] == "vip"
+    assert body["desktop_vip_available"] is True
+    assert body["provider"] == "vip_server"
+    assert body["api_key_configured"] is True
+    assert "member-key" not in response.text
     assert "vip.example" not in response.text
+    assert "gpt-5-mini" not in response.text
+    assert "stale-dotenv-key" not in response.text
+    assert "stale.example" not in response.text
+    assert "VIP_API_KEY" not in response.text
+    assert "VIP_BASE_URL" not in response.text
 
 
-def test_vip_model_list_uses_transient_vip_default_base_url(
+def test_custom_save_keeps_mode_and_custom_env_after_vip_mode(
     client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    (tmp_path / ".env").write_text(
-        "VIP_BASE_URL=https://stale.example/v1\nVIP_API_KEY=vip-secret-value\n",
-        encoding="utf-8",
-    )
-    captured: dict[str, str] = {}
+    (tmp_path / ".env").write_text("DESKTOP_LLM_MODE=vip\n", encoding="utf-8")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_PROVISIONED", "1")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_API_KEY", "member-key")
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["url"] = str(request.url)
-        captured["authorization"] = request.headers["authorization"]
-        return httpx.Response(200, json={"data": [{"id": "gpt-5-mini"}]})
-
-    transport = httpx.MockTransport(handler)
-
-    class MockedAsyncClient(httpx.AsyncClient):
-        def __init__(self, *args, **kwargs):
-            kwargs["transport"] = transport
-            super().__init__(*args, **kwargs)
-
-    monkeypatch.setattr(api_server.httpx, "AsyncClient", MockedAsyncClient)
-
-    vip_default_base_url = settings_routes.LLM_PROVIDER_BY_NAME["vip_server"].default_base_url
-    response = client.post(
-        "/settings/llm/vip-models",
-        json={"base_url": vip_default_base_url},
+    response = client.put(
+        "/settings/llm",
+        json={
+            "mode": "custom",
+            "provider": "openrouter",
+            "model_name": "deepseek/deepseek-v3.2",
+            "base_url": "https://openrouter.ai/api/v1",
+            "api_key": "or-secret-value",
+            "temperature": 0.1,
+            "timeout_seconds": 120,
+            "max_retries": 2,
+        },
     )
 
     assert response.status_code == 200
-    assert response.json() == {"models": ["gpt-5-mini"]}
-    assert captured == {
-        "url": f"{vip_default_base_url}/models",
-        "authorization": "Bearer vip-secret-value",
-    }
+    assert response.json()["desktop_llm_mode"] == "custom"
+    env_text = (tmp_path / ".env").read_text(encoding="utf-8")
+    assert "DESKTOP_LLM_MODE=custom" in env_text
+    assert "OPENROUTER_API_KEY=or-secret-value" in env_text
+    assert "VIBE_DESKTOP_VIP" not in env_text
+    assert "member-key" not in env_text
 
 
-def test_vip_model_list_rejects_non_vip_base_url(
-    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+def test_vip_mode_without_transient_credential_is_not_reported_as_active(
+    client: TestClient, tmp_path: Path,
 ) -> None:
-    (tmp_path / ".env").write_text(
-        "VIP_BASE_URL=https://stale.example/v1\nVIP_API_KEY=vip-secret-value\n",
-        encoding="utf-8",
-    )
-    requested_urls: list[str] = []
+    (tmp_path / ".env").write_text("DESKTOP_LLM_MODE=vip\n", encoding="utf-8")
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        requested_urls.append(str(request.url))
-        return httpx.Response(200, json={"data": []})
+    response = client.get("/settings/llm")
 
-    transport = httpx.MockTransport(handler)
-
-    class MockedAsyncClient(httpx.AsyncClient):
-        def __init__(self, *args, **kwargs):
-            kwargs["transport"] = transport
-            super().__init__(*args, **kwargs)
-
-    monkeypatch.setattr(api_server.httpx, "AsyncClient", MockedAsyncClient)
-
-    response = client.post(
-        "/settings/llm/vip-models",
-        json={"api_key": "form-vip-key", "base_url": "https://untrusted.example/v1"},
-    )
-
-    assert response.status_code == 400
-    assert requested_urls == []
-    assert "vip-secret-value" not in response.text
+    assert response.status_code == 200
+    body = response.json()
+    assert body["desktop_llm_mode"] == "vip"
+    assert body["desktop_vip_available"] is False
+    assert body["provider"] != "vip_server"
 
 
 @pytest.mark.parametrize("placeholder", ["sk-xxx", "xxx", "gsk_xxx"])
@@ -365,6 +354,7 @@ def test_update_llm_settings_persists_project_env(
     response = client.put(
         "/settings/llm",
         json={
+            "mode": "custom",
             "provider": "openrouter",
             "model_name": "deepseek/deepseek-v4-pro",
             "base_url": "https://openrouter.ai/api/v1",
