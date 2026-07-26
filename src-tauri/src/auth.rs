@@ -29,7 +29,9 @@ pub const ENV_KEY_ACCESS: &str = "USER_ACCESS_TOKEN";
 pub const ENV_KEY_REFRESH: &str = "USER_REFRESH_TOKEN";
 pub const ENV_KEY_EXPIRE: &str = "USER_TOKEN_EXPIRE";
 pub const ENV_KEY_REFRESH_EXPIRE: &str = "USER_REFRESH_EXPIRE";
+pub const ENV_KEY_REMEMBER_UNTIL: &str = "USER_REMEMBER_UNTIL";
 pub const ENV_KEY_LLM_MODE: &str = "DESKTOP_LLM_MODE";
+pub const REMEMBER_LOGIN_SECS: i64 = 14 * 24 * 60 * 60;
 
 const MEMBER_CREDENTIAL_INFO: &[u8] = b"vibe-trading/member-credential/v1";
 const X25519_SPKI_PREFIX: [u8; 12] = [
@@ -128,6 +130,7 @@ pub struct UserSession {
     pub refresh_token: String,
     pub expire_at: i64,         // 绝对 epoch 秒
     pub refresh_expire_at: i64, // 绝对 epoch 秒
+    pub remember_until: Option<i64>,
     pub user_info: Option<UserInfo>,
     pub vip: Option<VipRuntimeCredential>,
 }
@@ -275,6 +278,9 @@ pub fn write_env_atomic(path: &Path, content: &str) -> Result<(), AuthError> {
 
 /// 把登录 token 和规范化的 LLM 模式写进 layout.user_env，其余 key 不动。
 pub fn write_env_token_section(layout: &Layout, sess: &UserSession) -> Result<(), AuthError> {
+    let Some(remember_until) = sess.remember_until else {
+        return clear_env_token_section(layout);
+    };
     let path = &layout.user_env;
     let content = fs::read_to_string(path).unwrap_or_default();
     let values = parse_env_to_map(&content);
@@ -286,6 +292,10 @@ pub fn write_env_token_section(layout: &Layout, sess: &UserSession) -> Result<()
         (
             ENV_KEY_REFRESH_EXPIRE.to_string(),
             sess.refresh_expire_at.to_string(),
+        ),
+        (
+            ENV_KEY_REMEMBER_UNTIL.to_string(),
+            remember_until.to_string(),
         ),
         (
             ENV_KEY_LLM_MODE.to_string(),
@@ -307,6 +317,7 @@ pub fn clear_env_token_section(layout: &Layout) -> Result<(), AuthError> {
         ENV_KEY_REFRESH,
         ENV_KEY_EXPIRE,
         ENV_KEY_REFRESH_EXPIRE,
+        ENV_KEY_REMEMBER_UNTIL,
     ];
     let updates: Vec<(String, String)> = keys
         .iter()
@@ -325,8 +336,23 @@ pub fn clear_env_token_section(layout: &Layout) -> Result<(), AuthError> {
 
 /// 从 layout.user_env 读回 session（重启恢复用）。机密 VIP 凭据绝不从磁盘读取。
 pub fn read_env_token_section(layout: &Layout) -> Option<UserSession> {
+    read_env_token_section_at(layout, now_secs())
+}
+
+/// 从 layout.user_env 读回尚未超过持久化期限的 session。
+pub fn read_env_token_section_at(layout: &Layout, now: i64) -> Option<UserSession> {
     let content = fs::read_to_string(&layout.user_env).ok()?;
     let map = parse_env_to_map(&content);
+    let remember_until = match map
+        .get(ENV_KEY_REMEMBER_UNTIL)
+        .and_then(|value| value.trim().parse::<i64>().ok())
+    {
+        Some(deadline) if deadline > now => deadline,
+        _ => {
+            let _ = clear_env_token_section(layout);
+            return None;
+        }
+    };
     let access_token = map.get(ENV_KEY_ACCESS)?.trim();
     if access_token.is_empty() {
         return None;
@@ -343,6 +369,7 @@ pub fn read_env_token_section(layout: &Layout) -> Option<UserSession> {
         refresh_token,
         expire_at,
         refresh_expire_at,
+        remember_until: Some(remember_until),
         user_info: None,
         vip: None,
     })
@@ -636,6 +663,7 @@ pub fn session_from_login(raw: LoginRaw, user_info: Option<UserInfo>) -> UserSes
         refresh_token: raw.refresh_token,
         expire_at: now + raw.expire,
         refresh_expire_at: now + raw.refresh_expire,
+        remember_until: None,
         user_info,
         vip: None,
     }
@@ -643,7 +671,9 @@ pub fn session_from_login(raw: LoginRaw, user_info: Option<UserInfo>) -> UserSes
 
 /// refresh 后的 token 必须重新获取会员凭据，不能复用旧 token 的内存缓存。
 fn session_from_refresh(raw: LoginRaw, previous: &UserSession) -> UserSession {
-    session_from_login(raw, previous.user_info.clone())
+    let mut refreshed = session_from_login(raw, previous.user_info.clone());
+    refreshed.remember_until = previous.remember_until;
+    refreshed
 }
 
 fn post_login(path: &str, body: serde_json::Value) -> Result<CoolSuccess<LoginRaw>, AuthError> {
@@ -938,6 +968,7 @@ mod tests {
             refresh_token: "refresh".into(),
             expire_at: 1_700_000_000,
             refresh_expire_at: 1_700_000_100,
+            remember_until: Some(1_800_000_000),
             user_info: None,
             vip: None,
         };
@@ -964,6 +995,7 @@ mod tests {
             refresh_token: "refresh".into(),
             expire_at: 1_700_000_000,
             refresh_expire_at: 1_700_000_100,
+            remember_until: Some(1_800_000_000),
             user_info: None,
             vip: None,
         };
@@ -999,6 +1031,7 @@ mod tests {
             refresh_token: "refresh".into(),
             expire_at: 1_700_000_000,
             refresh_expire_at: 1_700_000_100,
+            remember_until: Some(1_800_000_000),
             user_info: None,
             vip: None,
         };
@@ -1050,6 +1083,7 @@ mod tests {
             refresh_token: "old-refresh".into(),
             expire_at: 0,
             refresh_expire_at: 1,
+            remember_until: Some(99),
             user_info: Some(UserInfo {
                 id: 1,
                 unionid: None,
@@ -1091,7 +1125,8 @@ mod tests {
 
         let tmp = tempfile::tempdir().unwrap();
         let layout = Layout::new(&tmp.path().join(".vibe-trading"));
-        let sess = session_from_login(raw, None);
+        let mut sess = session_from_login(raw, None);
+        sess.remember_until = Some(1_800_000_000);
         write_env_token_section(&layout, &sess).unwrap();
         let text = fs::read_to_string(&layout.user_env).unwrap();
         assert!(text.contains("USER_ACCESS_TOKEN=t"));
@@ -1209,6 +1244,7 @@ mod tests {
             refresh_token: "rt".into(),
             expire_at: 1700000000,
             refresh_expire_at: 1700000100,
+            remember_until: Some(1800000000),
             user_info: None,
             vip: None,
         };
@@ -1242,6 +1278,7 @@ mod tests {
             refresh_token: "rt".into(),
             expire_at: 1700000000,
             refresh_expire_at: 1700000100,
+            remember_until: Some(1800000000),
             user_info: None,
             vip: None,
         };
@@ -1273,6 +1310,7 @@ mod tests {
             refresh_token: "rt".into(),
             expire_at: 1700000000,
             refresh_expire_at: 1700000100,
+            remember_until: Some(1800000000),
             user_info: None,
             vip: None,
         };
@@ -1347,9 +1385,64 @@ mod tests {
             refresh_token: "r".into(),
             expire_at,
             refresh_expire_at,
+            remember_until: Some(2_000_000_000),
             user_info: None,
             vip: None,
         }
+    }
+
+    fn remembered_session(remember_until: i64) -> (Layout, UserSession) {
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.keep().join(".vibe-trading"));
+        let session = UserSession {
+            remember_until: Some(remember_until),
+            ..sample_session(20, 40)
+        };
+        (layout, session)
+    }
+
+    fn sample_login_raw() -> LoginRaw {
+        LoginRaw {
+            token: "new-token".into(),
+            refresh_token: "new-refresh".into(),
+            expire: 60,
+            refresh_expire: 120,
+            has_password: true,
+        }
+    }
+
+    #[test]
+    fn remembered_token_section_roundtrips_before_deadline() {
+        let (layout, session) = remembered_session(1_700_000_000);
+        write_env_token_section(&layout, &session).unwrap();
+        assert_eq!(
+            read_env_token_section_at(&layout, 1_699_999_999)
+                .unwrap()
+                .remember_until,
+            Some(1_700_000_000)
+        );
+    }
+
+    #[test]
+    fn expired_remembered_token_section_is_cleared() {
+        let (layout, session) = remembered_session(1_700_000_000);
+        write_env_token_section(&layout, &session).unwrap();
+        assert!(read_env_token_section_at(&layout, 1_700_000_000).is_none());
+        assert!(!fs::read_to_string(&layout.user_env)
+            .unwrap()
+            .contains("USER_ACCESS_TOKEN=tok"));
+    }
+
+    #[test]
+    fn refresh_keeps_original_remember_deadline() {
+        let previous = UserSession {
+            remember_until: Some(99),
+            ..sample_session(20, 40)
+        };
+        assert_eq!(
+            session_from_refresh(sample_login_raw(), &previous).remember_until,
+            Some(99)
+        );
     }
 
     #[test]
