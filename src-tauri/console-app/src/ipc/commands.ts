@@ -62,14 +62,16 @@ export const consoleLoginSendSms = (
 export const consoleLoginByPhone = (
   phone: string,
   smsCode: string,
+  remember: boolean,
 ): Promise<LoginResultView> =>
-  invoke<LoginResultView>("console_login_by_phone", { phone, smsCode });
+  invoke<LoginResultView>("console_login_by_phone", { phone, smsCode, remember });
 
 export const consoleLoginByPassword = (
   phone: string,
   password: string,
+  remember: boolean,
 ): Promise<LoginResultView> =>
-  invoke<LoginResultView>("console_login_by_password", { phone, password });
+  invoke<LoginResultView>("console_login_by_password", { phone, password, remember });
 
 export const consoleLoginRegister = (
   phone: string,

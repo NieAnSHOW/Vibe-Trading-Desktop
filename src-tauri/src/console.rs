@@ -97,6 +97,10 @@ pub fn compute_env_status(layout: &Layout) -> EnvStatus {
     }
 }
 
+fn remember_until(remember: bool, now: i64) -> Option<i64> {
+    remember.then_some(now + auth::REMEMBER_LOGIN_SECS)
+}
+
 /// 构造 `vibe-trading bootstrap --sse` 子进程命令。
 /// bootstrap 用 bundle 的 Tier 0 python 执行(此时 venv 尚不存在),它内部再建 venv。
 pub fn build_bootstrap_cmd(tier0_python: &Path, runtime_agent: &Path) -> std::process::Command {
@@ -470,12 +474,14 @@ pub async fn console_login_send_sms(
 fn finalize_login(
     raw: LoginRaw,
     has_password: bool,
+    remember: bool,
     layout: &Layout,
     auth_state: &AuthState,
     message: String,
 ) -> Result<LoginResultView, AuthError> {
     let info = fetch_user_info_or_default(&raw.token);
     let mut sess = auth::session_from_login(raw, Some(info.clone()));
+    sess.remember_until = remember_until(remember, auth::now_secs());
     auth::write_env_token_section(layout, &sess)?;
     sess.user_info = Some(info.clone());
     *auth_state.0.lock().unwrap() = Some(sess.clone());
@@ -510,6 +516,7 @@ fn fetch_user_info_or_default(token: &str) -> UserInfo {
 pub async fn console_login_by_phone(
     phone: String,
     sms_code: String,
+    remember: bool,
     auth_state: State<'_, AuthState>,
 ) -> Result<LoginResultView, AuthError> {
     let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
@@ -521,6 +528,7 @@ pub async fn console_login_by_phone(
         finalize_login(
             response.data,
             has_password,
+            remember,
             &layout,
             &auth_state,
             response.message,
@@ -534,6 +542,7 @@ pub async fn console_login_by_phone(
 pub async fn console_login_by_password(
     phone: String,
     password: String,
+    remember: bool,
     auth_state: State<'_, AuthState>,
 ) -> Result<LoginResultView, AuthError> {
     let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
@@ -545,6 +554,7 @@ pub async fn console_login_by_password(
         finalize_login(
             response.data,
             has_password,
+            remember,
             &layout,
             &auth_state,
             response.message,
@@ -570,6 +580,7 @@ pub async fn console_login_register(
         finalize_login(
             response.data,
             has_password,
+            false,
             &layout,
             &auth_state,
             response.message,
@@ -941,6 +952,19 @@ pub fn console_install_update(path: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn login_without_remembering_has_no_deadline() {
+        assert_eq!(remember_until(false, 100), None);
+    }
+
+    #[test]
+    fn remembered_login_has_a_fourteen_day_deadline() {
+        assert_eq!(
+            remember_until(true, 100),
+            Some(100 + auth::REMEMBER_LOGIN_SECS)
+        );
+    }
     use std::fs;
 
     #[test]
