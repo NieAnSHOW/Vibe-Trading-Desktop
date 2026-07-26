@@ -209,6 +209,58 @@ pub struct AuthStatusView {
     pub expire_at: Option<i64>,
 }
 
+fn unauthenticated_status() -> AuthStatusView {
+    AuthStatusView {
+        authenticated: false,
+        user_info: None,
+        expire_at: None,
+    }
+}
+
+fn invalidate_authentication<F>(state: &AuthState, clear_persistence: F) -> Result<(), AuthError>
+where
+    F: FnOnce() -> Result<(), AuthError>,
+{
+    let mut guard = state.0.lock().unwrap();
+    clear_persistence()?;
+    *guard = None;
+    Ok(())
+}
+
+fn clear_invalid_authentication_for_token(
+    state: &AuthState,
+    layout: &Layout,
+    token: &str,
+) -> Result<bool, AuthError> {
+    let mut guard = state.0.lock().unwrap();
+    if !matches!(guard.as_ref(), Some(current) if current.token == token) {
+        return Ok(false);
+    }
+    auth::clear_env_token_section(layout)?;
+    *guard = None;
+    Ok(true)
+}
+
+fn is_authentication_error(error: &AuthError) -> bool {
+    match error {
+        AuthError::LoginExpired
+        | AuthError::NotAuthenticated
+        | AuthError::Api { code: 401, .. } => true,
+        // UserMiddleware wraps a rejected app token as Cool COMMFAIL (1001) with this
+        // message and a 200 response. Keep the message check so unrelated 1001 errors do
+        // not discard a usable remembered session.
+        AuthError::Api {
+            code: 1001,
+            message,
+        } => message.contains("登录失效"),
+        _ => false,
+    }
+}
+
+fn session_is_still_current(state: &AuthState, session: &auth::UserSession) -> bool {
+    matches!(state.0.lock().unwrap().as_ref(), Some(current) if current.token == session.token)
+}
+
 /// console_start_service 的错误。
 #[derive(Debug, serde::Serialize)]
 #[serde(tag = "variant")]
@@ -610,31 +662,97 @@ pub async fn console_login_set_password(
 #[tauri::command]
 pub fn console_logout(auth_state: State<'_, AuthState>) -> Result<(), AuthError> {
     let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
-    auth::clear_env_token_section(&layout)?;
-    *auth_state.0.lock().unwrap() = None;
-    Ok(())
+    invalidate_authentication(auth_state.inner(), || {
+        auth::clear_env_token_section(&layout)
+    })
 }
 
 #[tauri::command]
-pub fn console_auth_status(auth_state: State<'_, AuthState>) -> Result<AuthStatusView, AuthError> {
+pub async fn console_auth_status(
+    auth_state: State<'_, AuthState>,
+) -> Result<AuthStatusView, AuthError> {
     let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
-    // 内存空则从 .env 恢复（不调网络）
-    let mut guard = auth_state.0.lock().unwrap();
-    if guard.is_none() {
-        *guard = auth::read_env_token_section(&layout);
-    }
-    match guard.clone() {
-        Some(sess) => Ok(AuthStatusView {
+    let auth_state = auth_state.inner().clone();
+    run_blocking(move || {
+        // Remember which session began the request so a late failure cannot clear a newer login.
+        let requested_token = auth_state
+            .0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|session| session.token.clone())
+            .or_else(|| auth::read_env_token_section(&layout).map(|session| session.token));
+        let mut session = match auth::ensure_session_valid(&auth_state, &layout) {
+            Ok(session) => session,
+            Err(error) if is_authentication_error(&error) => {
+                if let Some(token) = requested_token.as_deref() {
+                    clear_invalid_authentication_for_token(&auth_state, &layout, token)?;
+                }
+                return Ok(unauthenticated_status());
+            }
+            // 网络暂时不可用时仍保留有效期限内的本地记住登录。
+            Err(AuthError::Network { .. }) => match auth::read_env_token_section(&layout) {
+                Some(session) => session,
+                None => return Ok(unauthenticated_status()),
+            },
+            Err(error) => return Err(error),
+        };
+
+        if !session_is_still_current(&auth_state, &session) {
+            // `ensure_session_valid` installs a disk-restored session itself. A missing state
+            // here therefore means logout happened while validation was in flight.
+            return Ok(unauthenticated_status());
+        }
+
+        match auth::refresh_user_info(&mut session, auth::fetch_user_info) {
+            Ok(()) => {
+                let mut guard = auth_state.0.lock().unwrap();
+                match guard.as_mut() {
+                    Some(current) if current.token == session.token => {
+                        current.user_info = session.user_info.clone();
+                    }
+                    _ => {
+                        return Ok(unauthenticated_status());
+                    }
+                }
+            }
+            // 资料接口临时不可用时，回退到本次会话已有的缓存资料。
+            Err(AuthError::Network { .. }) => {
+                let guard = auth_state.0.lock().unwrap();
+                match guard.as_ref() {
+                    Some(current) if current.token == session.token => {
+                        session.user_info = current.user_info.clone();
+                    }
+                    _ => {
+                        return Ok(unauthenticated_status());
+                    }
+                }
+            }
+            Err(error) if is_authentication_error(&error) => {
+                clear_invalid_authentication_for_token(&auth_state, &layout, &session.token)?;
+                return Ok(unauthenticated_status());
+            }
+            // Business and server errors do not prove a valid token has been revoked.
+            Err(AuthError::Api { .. }) => {
+                let guard = auth_state.0.lock().unwrap();
+                match guard.as_ref() {
+                    Some(current) if current.token == session.token => {
+                        session.user_info = current.user_info.clone();
+                    }
+                    _ => return Ok(unauthenticated_status()),
+                }
+            }
+            Err(error) => return Err(error),
+        }
+
+        Ok(AuthStatusView {
             authenticated: true,
-            user_info: sess.user_info,
-            expire_at: Some(sess.expire_at),
-        }),
-        None => Ok(AuthStatusView {
-            authenticated: false,
-            user_info: None,
-            expire_at: None,
-        }),
-    }
+            user_info: session.user_info,
+            expire_at: Some(session.expire_at),
+        })
+    })
+    .await
+    .map_err(|message| AuthError::Network { message })?
 }
 
 /// 停止服务:干净回收 sidecar 进程组。
@@ -952,6 +1070,7 @@ pub fn console_install_update(path: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn login_without_remembering_has_no_deadline() {
@@ -964,6 +1083,122 @@ mod tests {
             remember_until(true, 100),
             Some(100 + auth::REMEMBER_LOGIN_SECS)
         );
+    }
+
+    #[test]
+    fn invalid_authentication_clears_memory_and_persisted_tokens() {
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        let session = auth::UserSession {
+            token: "access-token".into(),
+            refresh_token: "refresh-token".into(),
+            expire_at: 1_800_000_000,
+            refresh_expire_at: 1_900_000_000,
+            remember_until: Some(1_900_000_000),
+            user_info: None,
+            vip: None,
+        };
+        auth::write_env_token_section(&layout, &session).unwrap();
+        let state = AuthState(Arc::new(Mutex::new(Some(session))));
+
+        assert!(clear_invalid_authentication_for_token(&state, &layout, "access-token").unwrap());
+
+        assert!(state.0.lock().unwrap().is_none());
+        assert!(auth::read_env_token_section_at(&layout, 1_700_000_000).is_none());
+    }
+
+    #[test]
+    fn stale_profile_failure_does_not_clear_a_newer_login() {
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        let old_session = auth::UserSession {
+            token: "old-token".into(),
+            refresh_token: "old-refresh".into(),
+            expire_at: 1_800_000_000,
+            refresh_expire_at: 1_900_000_000,
+            remember_until: Some(1_900_000_000),
+            user_info: None,
+            vip: None,
+        };
+        let new_session = auth::UserSession {
+            token: "new-token".into(),
+            refresh_token: "new-refresh".into(),
+            ..old_session.clone()
+        };
+        auth::write_env_token_section(&layout, &new_session).unwrap();
+        let state = AuthState(Arc::new(Mutex::new(Some(new_session.clone()))));
+
+        let cleared =
+            clear_invalid_authentication_for_token(&state, &layout, &old_session.token).unwrap();
+
+        assert!(!cleared);
+        assert_eq!(state.0.lock().unwrap().as_ref().unwrap().token, "new-token");
+        assert_eq!(
+            auth::read_env_token_section_at(&layout, 1_700_000_000)
+                .unwrap()
+                .token,
+            "new-token"
+        );
+    }
+
+    #[test]
+    fn only_unauthorized_api_errors_invalidate_authentication() {
+        assert!(is_authentication_error(&AuthError::Api {
+            code: 401,
+            message: "未授权".into(),
+        }));
+        assert!(is_authentication_error(&AuthError::Api {
+            code: 1001,
+            message: "登录失效~".into(),
+        }));
+        assert!(!is_authentication_error(&AuthError::Api {
+            code: 1001,
+            message: "数据库暂时不可用".into(),
+        }));
+        assert!(!is_authentication_error(&AuthError::Api {
+            code: 500,
+            message: "服务繁忙".into(),
+        }));
+    }
+
+    #[test]
+    fn absent_session_after_validation_is_not_restored() {
+        let session = auth::UserSession {
+            token: "old-token".into(),
+            refresh_token: "old-refresh".into(),
+            expire_at: 1_800_000_000,
+            refresh_expire_at: 1_900_000_000,
+            remember_until: Some(1_900_000_000),
+            user_info: None,
+            vip: None,
+        };
+        let state = AuthState(Arc::new(Mutex::new(None)));
+
+        assert!(!session_is_still_current(&state, &session));
+    }
+
+    #[test]
+    fn invalidation_waits_for_the_auth_lock_before_clearing_persistence() {
+        let state = AuthState(Arc::new(Mutex::new(None)));
+        let held_lock = state.0.lock().unwrap();
+        let (cleared, observed_clear) = std::sync::mpsc::channel();
+        let worker_state = state.clone();
+        let worker = std::thread::spawn(move || {
+            invalidate_authentication(&worker_state, || {
+                cleared.send(()).unwrap();
+                Ok(())
+            })
+            .unwrap();
+        });
+
+        assert!(observed_clear
+            .recv_timeout(std::time::Duration::from_millis(50))
+            .is_err());
+        drop(held_lock);
+        observed_clear
+            .recv_timeout(std::time::Duration::from_secs(1))
+            .unwrap();
+        worker.join().unwrap();
     }
     use std::fs;
 

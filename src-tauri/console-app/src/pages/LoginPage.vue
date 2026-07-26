@@ -28,6 +28,7 @@ const registerPhone = ref("");
 const registerPassword = ref("");
 const registerCaptchaCode = ref("");
 const registerSmsCode = ref("");
+const rememberLogin = ref(false);
 const countdown = ref(0);
 const err = ref("");
 const notice = ref("");
@@ -157,7 +158,7 @@ async function submitSms() {
     err.value = "";
     notice.value = "";
     try {
-      const view = await consoleLoginByPhone(phone.value, smsCode.value);
+      const view = await consoleLoginByPhone(phone.value, smsCode.value, rememberLogin.value);
       await finishLogin(view);
     } catch (e) {
       setErr(e, "登录失败");
@@ -171,7 +172,7 @@ async function submitPassword() {
     err.value = "";
     notice.value = "";
     try {
-      const view = await consoleLoginByPassword(phone.value, password.value);
+      const view = await consoleLoginByPassword(phone.value, password.value, rememberLogin.value);
       await finishLogin(view);
     } catch (e) {
       setErr(e, "密码登录失败");
@@ -202,10 +203,20 @@ function onPwdModalClose() {
   router.replace("/");
 }
 
-onMounted(() => {
+function showRegister() {
+  rememberLogin.value = false;
+  tab.value = "register";
+}
+
+function showLogin() {
+  tab.value = "sms";
+}
+
+onMounted(async () => {
   void loadCaptcha();
-  // 仅完整恢复的登录态跳走；重启后仅恢复 token 的会话可重新认证。
-  if (auth.authenticated && auth.userInfo) router.replace("/");
+  // 从磁盘恢复的会话没有 userInfo，但仍是有效的记住登录。
+  if (!auth.authenticated) await auth.refresh();
+  if (auth.authenticated) await router.replace("/");
 });
 onUnmounted(() => {
   if (timer) clearInterval(timer);
@@ -223,7 +234,7 @@ onUnmounted(() => {
         </div>
       </header>
 
-      <nav class="tabs" role="tablist" aria-label="登录方式">
+      <nav v-if="tab !== 'register'" class="tabs" role="tablist" aria-label="登录方式">
         <button :class="['tab', tab === 'sms' && 'active']" role="tab" :aria-selected="tab === 'sms'"
           @click="tab = 'sms'">
           短信登录
@@ -232,10 +243,6 @@ onUnmounted(() => {
           @click="tab = 'password'">
           密码登录
         </button>
-        <button data-test="register-tab" :class="['tab', tab === 'register' && 'active']" role="tab"
-          :aria-selected="tab === 'register'" @click="tab = 'register'">
-          注册
-        </button>
       </nav>
 
       <form v-if="tab === 'sms'" class="form" @submit.prevent="submitSms">
@@ -243,6 +250,11 @@ onUnmounted(() => {
           <span class="lbl">手机号</span>
           <input class="field" v-model="phone" inputmode="numeric" placeholder="13800000000" autocomplete="tel"
             @input="phone = phone.replace(/\D/g, '').slice(0, 11)" />
+        </label>
+
+        <label class="remember-row">
+          <input data-test="remember-login" v-model="rememberLogin" type="checkbox" />
+          <span>记住登录（有效期 14 天）</span>
         </label>
 
         <label class="row">
@@ -279,6 +291,9 @@ onUnmounted(() => {
         <button type="button" class="skip-btn" @click="router.replace('/')">
           回到首页
         </button>
+        <button data-test="register-entry" type="button" class="register-entry" @click="showRegister">
+          没有账号？注册
+        </button>
       </form>
 
       <form v-else-if="tab === 'password'" class="form" @submit.prevent="submitPassword">
@@ -286,6 +301,10 @@ onUnmounted(() => {
           <span class="lbl">手机号</span>
           <input class="field" v-model="phone" inputmode="numeric" placeholder="13800000000" autocomplete="tel"
             @input="phone = phone.replace(/\D/g, '').slice(0, 11)" />
+        </label>
+        <label class="remember-row">
+          <input data-test="remember-login" v-model="rememberLogin" type="checkbox" />
+          <span>记住登录（有效期 14 天）</span>
         </label>
         <label class="row">
           <span class="lbl">密码</span>
@@ -297,6 +316,9 @@ onUnmounted(() => {
         </button>
         <button type="button" class="skip-btn" @click="router.replace('/')">
           回到首页
+        </button>
+        <button data-test="register-entry" type="button" class="register-entry" @click="showRegister">
+          没有账号？注册
         </button>
       </form>
 
@@ -344,6 +366,9 @@ onUnmounted(() => {
         </button>
         <button type="button" class="skip-btn" @click="router.replace('/')">
           回到首页
+        </button>
+        <button data-test="back-to-login" type="button" class="register-entry" @click="showLogin">
+          已有账号？去登录
         </button>
       </form>
 
@@ -685,6 +710,42 @@ h1 {
 .skip-btn:focus-visible {
   outline: 2px solid hsl(var(--brand));
   outline-offset: 2px;
+}
+
+.remember-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: hsl(var(--ink-dim));
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.remember-row input {
+  width: 15px;
+  height: 15px;
+  accent-color: hsl(var(--brand));
+}
+
+.register-entry {
+  align-self: center;
+  padding: 2px 6px;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--brand));
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.register-entry:hover {
+  text-decoration: underline;
+}
+
+.register-entry:focus-visible {
+  outline: 2px solid hsl(var(--brand));
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .err {

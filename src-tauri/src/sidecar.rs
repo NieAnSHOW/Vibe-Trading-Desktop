@@ -27,26 +27,6 @@ pub fn log_vip_runtime_event(log_dir: &Path, event: &str) {
     }
 }
 
-/// Build the Command for spawning the python sidecar.
-/// Extracted for testability — allows verifying the argument/env construction
-/// without actually spawning a process.
-pub fn build_cmd(
-    python: &Path,
-    runtime_agent: &Path,
-    port: u16,
-    runtime_libs: &Path,
-    sessions_dir: &Path,
-) -> std::process::Command {
-    build_cmd_with_vip(
-        python,
-        runtime_agent,
-        port,
-        runtime_libs,
-        sessions_dir,
-        None,
-    )
-}
-
 pub fn build_cmd_with_vip(
     python: &Path,
     runtime_agent: &Path,
@@ -375,12 +355,13 @@ mod tests {
     fn spawn_command_has_expected_args() {
         let python = Path::new("/fake/python3");
         let agent = Path::new("/fake/agent");
-        let cmd = build_cmd(
+        let cmd = build_cmd_with_vip(
             python,
             agent,
             8899,
             Path::new("/fake/libs"),
             Path::new("/fake/sessions"),
+            None,
         );
 
         // Verify the program path is set correctly
@@ -461,12 +442,13 @@ mod tests {
     fn build_cmd_includes_serve_args() {
         let python = Path::new("/fake/python3");
         let agent = Path::new("/fake/agent");
-        let cmd = build_cmd(
+        let cmd = build_cmd_with_vip(
             python,
             agent,
             8899,
             Path::new("/fake/libs"),
             Path::new("/fake/sessions"),
+            None,
         );
 
         let args: Vec<&str> = cmd.get_args().map(|a| a.to_str().unwrap()).collect();
@@ -493,7 +475,7 @@ mod tests {
         let python = Path::new("/fake/python3");
         let agent = Path::new("/fake/agent");
         let libs = Path::new("/fake/libs");
-        let cmd = build_cmd(python, agent, 8899, libs, Path::new("/fake/sessions"));
+        let cmd = build_cmd_with_vip(python, agent, 8899, libs, Path::new("/fake/sessions"), None);
 
         let mut found = false;
         for (key, val) in cmd.get_envs() {
@@ -511,7 +493,7 @@ mod tests {
         let python = Path::new("/fake/python3");
         let agent = Path::new("/fake/agent");
         let libs = Path::new("/fake/libs");
-        let cmd = build_cmd(python, agent, 8899, libs, Path::new("/fake/sessions"));
+        let cmd = build_cmd_with_vip(python, agent, 8899, libs, Path::new("/fake/sessions"), None);
 
         let mut index = None;
         let mut trusted = None;
@@ -537,7 +519,7 @@ mod tests {
         let agent = Path::new("/fake/agent");
         let libs = Path::new("/fake/libs");
         let sessions = Path::new("/fake/home/.vibe-trading/sessions");
-        let cmd = build_cmd(python, agent, 8899, libs, sessions);
+        let cmd = build_cmd_with_vip(python, agent, 8899, libs, sessions, None);
 
         let mut found = false;
         for (key, val) in cmd.get_envs() {
@@ -556,12 +538,13 @@ mod tests {
         // autostart,微信 poll 循环不会恢复 → 前端判定需重新扫码(磁盘 token 仍在)。
         let python = Path::new("/fake/python3");
         let agent = Path::new("/fake/agent");
-        let cmd = build_cmd(
+        let cmd = build_cmd_with_vip(
             python,
             agent,
             8899,
             Path::new("/fake/libs"),
             Path::new("/fake/sessions"),
+            None,
         );
         let mut found = false;
         for (key, val) in cmd.get_envs() {

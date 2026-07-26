@@ -722,6 +722,16 @@ pub fn refresh_token(rt: &str) -> Result<LoginRaw, AuthError> {
         serde_json::json!({ "refreshToken": rt }),
     )
     .map(|response| response.data)
+    // This endpoint uses Cool Admin's generic COMMFAIL (1001) for invalid or expired
+    // refresh tokens. It is not a generic server error in this endpoint's contract.
+    .map_err(normalize_refresh_token_error)
+}
+
+fn normalize_refresh_token_error(error: AuthError) -> AuthError {
+    match error {
+        AuthError::Api { code: 1001, .. } => AuthError::LoginExpired,
+        error => error,
+    }
 }
 
 pub fn set_password(token: &str, password: &str) -> Result<(), AuthError> {
@@ -744,18 +754,29 @@ pub fn set_password(token: &str, password: &str) -> Result<(), AuthError> {
 
 pub fn fetch_user_info(token: &str) -> Result<UserInfo, AuthError> {
     let url = endpoint("/app/user/info/person");
-    let text = http_client()?
+    let response = http_client()?
         .get(&url)
         .header("Authorization", token)
         .send()
         .map_err(|e| AuthError::Network {
             message: format!("userinfo: {e}"),
-        })?
-        .text()
-        .map_err(|e| AuthError::Network {
-            message: format!("userinfo body: {e}"),
         })?;
+    if response.status().as_u16() == 401 {
+        return Err(AuthError::NotAuthenticated);
+    }
+    let text = response.text().map_err(|e| AuthError::Network {
+        message: format!("userinfo body: {e}"),
+    })?;
     parse_cool_response(&text)
+}
+
+/// 从服务端刷新已认证会话的展示资料；用户资料不写入磁盘。
+pub fn refresh_user_info<F>(session: &mut UserSession, fetch: F) -> Result<(), AuthError>
+where
+    F: FnOnce(&str) -> Result<UserInfo, AuthError>,
+{
+    session.user_info = Some(fetch(&session.token)?);
+    Ok(())
 }
 
 // ── 会话校验：纯决策 + IO 包装 ──
@@ -780,24 +801,31 @@ pub fn decide_session_action(now: i64, sess: &UserSession) -> SessionAction {
 /// 启动服务前调：校验内存 session；过期则尝试 refresh（成功后重写 .env）。
 /// refresh 失败或 refreshExpire 已到则返回 LoginExpired。
 pub fn ensure_session_valid(state: &AuthState, layout: &Layout) -> Result<UserSession, AuthError> {
-    let sess = match state.0.lock().unwrap().clone() {
-        Some(session) => {
-            log_vip_runtime_event(layout, "validating authenticated session from memory");
-            session
-        }
-        None => match read_env_token_section(layout) {
+    let sess = {
+        let mut guard = state.0.lock().unwrap();
+        match guard.clone() {
             Some(session) => {
-                log_vip_runtime_event(
-                    layout,
-                    "restored authenticated session from local token configuration",
-                );
+                log_vip_runtime_event(layout, "validating authenticated session from memory");
                 session
             }
-            None => {
-                log_vip_runtime_event(layout, "no authenticated session available for VIP service");
-                return Err(AuthError::NotAuthenticated);
-            }
-        },
+            None => match read_env_token_section(layout) {
+                Some(session) => {
+                    log_vip_runtime_event(
+                        layout,
+                        "restored authenticated session from local token configuration",
+                    );
+                    *guard = Some(session.clone());
+                    session
+                }
+                None => {
+                    log_vip_runtime_event(
+                        layout,
+                        "no authenticated session available for VIP service",
+                    );
+                    return Err(AuthError::NotAuthenticated);
+                }
+            },
+        }
     };
     match decide_session_action(now_secs(), &sess) {
         SessionAction::Valid => {
@@ -818,8 +846,7 @@ pub fn ensure_session_valid(state: &AuthState, layout: &Layout) -> Result<UserSe
                     new_sess.user_info = Some(info);
                 }
             }
-            write_env_token_section(layout, &new_sess)?;
-            *state.0.lock().unwrap() = Some(new_sess.clone());
+            let new_sess = commit_refreshed_session(state, layout, &sess, new_sess)?;
             log_vip_runtime_event(
                 layout,
                 "session refresh succeeded; persisted tokens and cleared cached VIP credential",
@@ -833,6 +860,24 @@ pub fn ensure_session_valid(state: &AuthState, layout: &Layout) -> Result<UserSe
             );
             Err(AuthError::LoginExpired)
         }
+    }
+}
+
+fn commit_refreshed_session(
+    state: &AuthState,
+    layout: &Layout,
+    previous: &UserSession,
+    refreshed: UserSession,
+) -> Result<UserSession, AuthError> {
+    let mut guard = state.0.lock().unwrap();
+    match guard.as_ref() {
+        Some(active) if active.token == previous.token => {
+            // 持锁覆盖短暂的原子文件写，避免 logout 在检查后重新写入旧会话。
+            write_env_token_section(layout, &refreshed)?;
+            *guard = Some(refreshed.clone());
+            Ok(refreshed)
+        }
+        _ => Err(AuthError::NotAuthenticated),
     }
 }
 
@@ -1372,6 +1417,17 @@ mod tests {
     }
 
     #[test]
+    fn refresh_token_commfail_is_login_expired() {
+        assert!(matches!(
+            normalize_refresh_token_error(AuthError::Api {
+                code: 1001,
+                message: "刷新token失败，请检查refreshToken是否正确或过期".into(),
+            }),
+            AuthError::LoginExpired
+        ));
+    }
+
+    #[test]
     fn parse_cool_response_maps_bad_json_to_network_error() {
         let err = parse_cool_response::<Captcha>("not json").unwrap_err();
         assert!(matches!(err, AuthError::Network { .. }));
@@ -1442,6 +1498,63 @@ mod tests {
         assert_eq!(
             session_from_refresh(sample_login_raw(), &previous).remember_until,
             Some(99)
+        );
+    }
+
+    #[test]
+    fn refresh_result_is_not_committed_after_logout() {
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        let original = UserSession {
+            remember_until: Some(1_900_000_000),
+            ..sample_session(0, 1_800_000_000)
+        };
+        write_env_token_section(&layout, &original).unwrap();
+        let state = AuthState(Arc::new(Mutex::new(Some(original.clone()))));
+
+        clear_env_token_section(&layout).unwrap();
+        *state.0.lock().unwrap() = None;
+
+        let refreshed = session_from_refresh(sample_login_raw(), &original);
+        let err = commit_refreshed_session(&state, &layout, &original, refreshed).unwrap_err();
+        assert!(matches!(err, AuthError::NotAuthenticated));
+        assert!(read_env_token_section(&layout).is_none());
+    }
+
+    #[test]
+    fn refreshes_user_info_from_the_authenticated_server_profile() {
+        let mut session = sample_session(1_800_000_000, 1_900_000_000);
+        session.user_info = Some(UserInfo {
+            id: 7,
+            unionid: None,
+            avatar_url: None,
+            nick_name: Some("Stale name".into()),
+            phone: None,
+            gender: 0,
+            status: 1,
+            login_type: 2,
+            description: None,
+        });
+
+        refresh_user_info(&mut session, |token| {
+            assert_eq!(token, "t");
+            Ok(UserInfo {
+                id: 7,
+                unionid: None,
+                avatar_url: None,
+                nick_name: Some("Trader".into()),
+                phone: Some("13800000000".into()),
+                gender: 0,
+                status: 1,
+                login_type: 2,
+                description: None,
+            })
+        })
+        .unwrap();
+
+        assert_eq!(
+            session.user_info.unwrap().nick_name.as_deref(),
+            Some("Trader")
         );
     }
 

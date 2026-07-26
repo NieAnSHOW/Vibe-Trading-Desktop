@@ -5,6 +5,11 @@ import { createPinia, setActivePinia } from "pinia";
 
 // vi.mock 工厂在提升阶段执行，变量必须通过 vi.hoisted() 声明
 const mocks = vi.hoisted(() => ({
+  consoleAuthStatus: vi.fn(async () => ({
+    authenticated: false,
+    userInfo: null,
+    expireAt: 0,
+  })),
   consoleLoginCaptcha: vi.fn(async () => ({
     captchaId: "c1",
     data: "data:image/svg+xml;base64,AA==",
@@ -32,6 +37,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../ipc/commands", () => ({
+  consoleAuthStatus: mocks.consoleAuthStatus,
   consoleLoginCaptcha: mocks.consoleLoginCaptcha,
   consoleLoginSendSms: mocks.consoleLoginSendSms,
   consoleLoginByPhone: mocks.consoleLoginByPhone,
@@ -59,6 +65,19 @@ beforeEach(async () => {
 });
 
 describe("LoginPage", () => {
+  it("redirects a remembered token-only session after restoring auth status", async () => {
+    mocks.consoleAuthStatus.mockResolvedValueOnce({
+      authenticated: true,
+      userInfo: null,
+      expireAt: 9999999999,
+    });
+
+    mount(LoginPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/");
+  });
+
   it("redirects a fully restored session to the console", async () => {
     const auth = useAuthStore();
     auth.setFromLogin({
@@ -80,6 +99,14 @@ describe("LoginPage", () => {
     expect(w.text()).toContain("获取");
   });
 
+  it("进入注册页后隐藏登录方式切换", async () => {
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    await w.get('[data-test="register-entry"]').trigger("click");
+
+    expect(w.findAll('[role="tablist"]')).toHaveLength(0);
+    expect(w.findAll('[data-test="back-to-login"]')).toHaveLength(1);
+  });
+
   it("切换到密码 tab 后提交调 consoleLoginByPassword", async () => {
     const w = mount(LoginPage, { global: { plugins: [router] } });
     // 点"密码登录" tab 切换
@@ -90,7 +117,7 @@ describe("LoginPage", () => {
     const inputs = w.findAll("input");
     // 手机号 + 密码
     await inputs[0]!.setValue("13800000000");
-    await inputs[1]!.setValue("secret1");
+    await inputs[2]!.setValue("secret1");
 
     // 在密码 tab 下","登录"是 submit 按钮的唯一内容
     const submit = w.findAll("button").find((b) => b.text() === "登录")!;
@@ -100,6 +127,26 @@ describe("LoginPage", () => {
     expect(mocks.consoleLoginByPassword).toHaveBeenCalledWith(
       "13800000000",
       "secret1",
+      false,
+    );
+  });
+
+  it("勾选记住登录后将持久化请求传给密码登录 IPC", async () => {
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    const pwdTab = w.findAll(".tab").find((button) => button.text().includes("密码登录"))!;
+    await pwdTab.trigger("click");
+    await w.get('[data-test="remember-login"]').setValue(true);
+
+    const inputs = w.findAll("input");
+    await inputs[0]!.setValue("13800000000");
+    await inputs[2]!.setValue("secret1");
+    await w.findAll("button").find((button) => button.text() === "登录")!.trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleLoginByPassword).toHaveBeenCalledWith(
+      "13800000000",
+      "secret1",
+      true,
     );
   });
 
@@ -115,7 +162,7 @@ describe("LoginPage", () => {
     await pwdTab.trigger("click");
     const inputs = w.findAll("input");
     await inputs[0]!.setValue("13800000000");
-    await inputs[1]!.setValue("secret1");
+    await inputs[2]!.setValue("secret1");
 
     await w.findAll("button").find((button) => button.text() === "登录")!.trigger("click");
     await flushPromises();
@@ -127,8 +174,8 @@ describe("LoginPage", () => {
     const w = mount(LoginPage, { global: { plugins: [router] } });
     const inputs = w.findAll("input");
     await inputs[0]!.setValue("13800000000"); // phone
-    await inputs[1]!.setValue("abcd"); // captchaCode
-    await inputs[2]!.setValue("1234"); // smsCode
+    await inputs[2]!.setValue("abcd"); // captchaCode
+    await inputs[3]!.setValue("1234"); // smsCode
     // 短信 tab 下","登录"是 submit 按钮的唯一内容
     const submit = w.findAll("button").find((b) => b.text() === "登录")!;
     await submit.trigger("click");
@@ -136,6 +183,7 @@ describe("LoginPage", () => {
     expect(mocks.consoleLoginByPhone).toHaveBeenCalledWith(
       "13800000000",
       "1234",
+      false,
     );
   });
 
@@ -144,7 +192,7 @@ describe("LoginPage", () => {
     const w = mount(LoginPage, { global: { plugins: [router] } });
     const inputs = w.findAll("input");
     await inputs[0]!.setValue("13800000000");
-    await inputs[1]!.setValue("abcd");
+    await inputs[2]!.setValue("abcd");
 
     await w.find(".code-btn").trigger("click");
     await flushPromises();
@@ -157,7 +205,7 @@ describe("LoginPage", () => {
     const w = mount(LoginPage, { global: { plugins: [router] } });
     const inputs = w.findAll("input");
     await inputs[0]!.setValue("13800000000");
-    await inputs[1]!.setValue("abcd");
+    await inputs[2]!.setValue("abcd");
 
     await w.find(".code-btn").trigger("click");
     await flushPromises();
@@ -167,7 +215,7 @@ describe("LoginPage", () => {
 
   it("注册页在密码和图形验证码都合法前禁用获取验证码", async () => {
     const w = mount(LoginPage, { global: { plugins: [router] } });
-    await w.get('[data-test="register-tab"]').trigger("click");
+    await w.get('[data-test="register-entry"]').trigger("click");
     await w.get('[data-test="register-phone"]').setValue("13800000000");
     await w.get('[data-test="register-password"]').setValue("weak");
     await w.get('[data-test="register-captcha"]').setValue("abcd");
@@ -177,7 +225,7 @@ describe("LoginPage", () => {
 
   it("注册仅接受服务端规则的可打印 ASCII 密码", async () => {
     const w = mount(LoginPage, { global: { plugins: [router] } });
-    await w.get('[data-test="register-tab"]').trigger("click");
+    await w.get('[data-test="register-entry"]').trigger("click");
     await w.get('[data-test="register-phone"]').setValue("13800000000");
     await w.get('[data-test="register-captcha"]').setValue("abcd");
     await w.get('[data-test="register-password"]').setValue("Passw0rd! ");
@@ -187,7 +235,7 @@ describe("LoginPage", () => {
 
   it("完整注册表单调用注册 IPC", async () => {
     const w = mount(LoginPage, { global: { plugins: [router] } });
-    await w.get('[data-test="register-tab"]').trigger("click");
+    await w.get('[data-test="register-entry"]').trigger("click");
     await w.get('[data-test="register-phone"]').setValue("13800000000");
     await w.get('[data-test="register-password"]').setValue("Passw0rd!");
     await w.get('[data-test="register-captcha"]').setValue("abcd");

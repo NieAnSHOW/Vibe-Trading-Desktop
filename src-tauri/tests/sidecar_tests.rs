@@ -28,7 +28,7 @@ mod port {
 mod sidecar;
 
 use auth::VipRuntimeCredential;
-use sidecar::{build_cmd, build_cmd_with_vip, health_url};
+use sidecar::{build_cmd_with_vip, health_url};
 
 fn env(cmd: &std::process::Command, name: &str) -> Option<String> {
     cmd.get_envs().find_map(|(key, value)| {
@@ -75,12 +75,13 @@ fn sidecar_command_receives_vip_values_only_as_process_env() {
 fn build_cmd_sets_current_dir() {
     let python = PathBuf::from("/fake/python3");
     let agent = PathBuf::from("/fake/agent");
-    let cmd = build_cmd(
+    let cmd = build_cmd_with_vip(
         &python,
         &agent,
         9999,
         &PathBuf::from("/fake/libs"),
         &PathBuf::from("/fake/sessions"),
+        None,
     );
 
     assert_eq!(cmd.get_current_dir(), Some(agent.as_path()));
@@ -90,12 +91,13 @@ fn build_cmd_sets_current_dir() {
 fn build_cmd_sets_environment_vars() {
     let python = PathBuf::from("/fake/python3");
     let agent = PathBuf::from("/fake/agent");
-    let cmd = build_cmd(
+    let cmd = build_cmd_with_vip(
         &python,
         &agent,
         9999,
         &PathBuf::from("/fake/libs"),
         &PathBuf::from("/fake/sessions"),
+        None,
     );
 
     let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> = cmd.get_envs().collect();

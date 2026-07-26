@@ -397,8 +397,8 @@ onUnmounted(() => {
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <div v-if="ProdConfig.enableLogin">
-          <template v-if="authStore.authenticated && authStore.userInfo">
-            <span style="font-size:12px;color:#666">{{ authStore.userInfo.nickName || authStore.userInfo.phone || '已登录'
+          <template v-if="authStore.authenticated">
+            <span style="font-size:12px;color:#666">{{ authStore.userInfo?.nickName || authStore.userInfo?.phone || '已登录'
               }}</span>
             <AppButton variant="ghost" :busy="logoutBusy.busy.value" @click="onLogout">退出登录</AppButton>
           </template>

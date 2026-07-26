@@ -54,7 +54,6 @@ vi.mock("../../ipc/events", () => ({
   onUpdateProgress: vi.fn(async () => mocks.unlisten),
 }));
 
-import App from "../../App.vue";
 import ConsolePage from "../ConsolePage.vue";
 import LoginPage from "../LoginPage.vue";
 
@@ -83,16 +82,12 @@ describe("ConsolePage", () => {
     expect(wrapper.get('[role="status"]').text()).toBe("欢迎回来");
   });
 
-  it("keeps a token-only restored session on the login page after clicking login", async () => {
-    const wrapper = mount(App, { global: { plugins: [router] } });
+  it("shows a remembered token-only session as logged in", async () => {
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
 
     await flushPromises();
 
-    const loginButton = wrapper.findAll("button").find((button) => button.text() === "登录");
-    await loginButton?.trigger("click");
-    await flushPromises();
-
-    expect(router.currentRoute.value.path).toBe("/login");
-    expect(wrapper.find(".login-wrap").exists()).toBe(true);
+    expect(wrapper.text()).toContain("已登录");
+    expect(wrapper.findAll("button").some((button) => button.text() === "退出登录")).toBe(true);
   });
 });

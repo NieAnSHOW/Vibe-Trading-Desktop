@@ -1,4 +1,5 @@
 // src-tauri/src/runtime_dir.rs
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -69,6 +70,34 @@ fn replace_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
     copy_dir_recursive(src, dst)
 }
 
+fn merge_missing_env_keys(existing: &str, seed: &str) -> String {
+    let mut known_keys: HashSet<String> = crate::auth::parse_env_to_map(existing)
+        .into_keys()
+        .collect();
+    let mut merged = existing.to_string();
+
+    for line in seed.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let Some((key, _)) = trimmed.split_once('=') else {
+            continue;
+        };
+        let key = key.trim();
+        if key.is_empty() || !known_keys.insert(key.to_string()) {
+            continue;
+        }
+        if !merged.is_empty() && !merged.ends_with('\n') {
+            merged.push('\n');
+        }
+        merged.push_str(line);
+        merged.push('\n');
+    }
+
+    merged
+}
+
 pub fn prepare(
     bundle_agent: &Path,
     bundle_env_seed: &Path,
@@ -118,8 +147,18 @@ pub fn prepare(
         crate::version::Action::FirstRun | crate::version::Action::Upgrade => {
             copy_dir_recursive(bundle_agent, &layout.runtime_agent)?;
             if bundle_env_seed.exists() {
-                fs::copy(bundle_env_seed, &layout.user_env)
-                    .map_err(|e| format!("seed .env: {e}"))?;
+                if layout.user_env.exists() {
+                    let existing = fs::read_to_string(&layout.user_env)
+                        .map_err(|e| format!("read user .env: {e}"))?;
+                    let seed = fs::read_to_string(bundle_env_seed)
+                        .map_err(|e| format!("read seed .env: {e}"))?;
+                    let merged = merge_missing_env_keys(&existing, &seed);
+                    crate::auth::write_env_atomic(&layout.user_env, &merged)
+                        .map_err(|e| format!("merge .env: {e}"))?;
+                } else {
+                    fs::copy(bundle_env_seed, &layout.user_env)
+                        .map_err(|e| format!("seed .env: {e}"))?;
+                }
             }
             if let Some(parent) = layout.marker.parent() {
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -168,14 +207,12 @@ mod tests {
     }
 
     #[test]
-    fn upgrade_overwrites_existing_user_env_with_bundle_seed() {
+    fn upgrade_preserves_existing_user_env_including_remembered_auth() {
         let tmp = tempdir().unwrap();
         let bundle = tmp.path().join("bundle");
         let home = tmp.path().join("home");
         make_bundle(&bundle, "1.0.0");
         let layout = Layout::new(&home);
-        fs::create_dir_all(&home).unwrap();
-        fs::write(&layout.user_env, "OLD_KEY=stale").unwrap();
 
         prepare(
             &bundle.join("agent"),
@@ -186,7 +223,8 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(fs::read_to_string(&layout.user_env).unwrap(), "SEED=1");
+        let user_env = "SEED=user-config\nLLM_PROVIDER=openai\nUSER_ACCESS_TOKEN=remembered-access-token\nUSER_REFRESH_TOKEN=remembered-refresh-token\nUSER_TOKEN_EXPIRE=1800000000\nUSER_REFRESH_EXPIRE=1900000000\nUSER_REMEMBER_UNTIL=1790000000\n";
+        fs::write(&layout.user_env, user_env).unwrap();
 
         fs::write(bundle.join("agent/.env"), "SEED=2\nNEW_KEY=fresh\n").unwrap();
         fs::write(bundle.join("VERSION"), "2.0.0").unwrap();
@@ -202,8 +240,11 @@ mod tests {
 
         assert_eq!(
             fs::read_to_string(&layout.user_env).unwrap(),
-            "SEED=2\nNEW_KEY=fresh\n"
+            format!("{user_env}NEW_KEY=fresh\n")
         );
+        let session = crate::auth::read_env_token_section_at(&layout, 1_700_000_000).unwrap();
+        assert_eq!(session.token, "remembered-access-token");
+        assert_eq!(session.refresh_token, "remembered-refresh-token");
     }
 
     #[test]
