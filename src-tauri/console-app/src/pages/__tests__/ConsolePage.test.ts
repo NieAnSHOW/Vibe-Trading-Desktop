@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
+import type { AuthStatusView } from "../../ipc/types";
 
 const mocks = vi.hoisted(() => ({
-  consoleAuthStatus: vi.fn(async () => ({
+  consoleAuthStatus: vi.fn(async (): Promise<AuthStatusView> => ({
     authenticated: true,
     userInfo: null,
     expireAt: 9999999999,
@@ -89,5 +90,25 @@ describe("ConsolePage", () => {
 
     expect(wrapper.text()).toContain("已登录");
     expect(wrapper.findAll("button").some((button) => button.text() === "退出登录")).toBe(true);
+  });
+
+  it("shows the membership level returned with the authenticated profile", async () => {
+    mocks.consoleAuthStatus.mockResolvedValueOnce({
+      authenticated: true,
+      userInfo: {
+        id: 1,
+        nickName: "Tester",
+        gender: 0,
+        status: 1,
+        loginType: 2,
+        memberLevel: { id: 3, name: "Pro", code: "pro", levelValue: 20 },
+      },
+      expireAt: 9999999999,
+    });
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Pro 会员");
   });
 });

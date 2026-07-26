@@ -561,6 +561,7 @@ fn fetch_user_info_or_default(token: &str) -> UserInfo {
         status: 1,
         login_type: 2,
         description: None,
+        member_level: None,
     })
 }
 

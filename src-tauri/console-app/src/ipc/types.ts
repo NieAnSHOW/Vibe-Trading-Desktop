@@ -44,6 +44,15 @@ export interface UserInfo {
   status: number;
   loginType: number;
   description?: string | null;
+  memberLevel?: MemberLevel | null;
+}
+
+export interface MemberLevel {
+  id: number;
+  name: string;
+  code?: string | null;
+  levelValue: number;
+  expireTime?: string | null;
 }
 
 export interface LoginResultView {

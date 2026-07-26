@@ -66,6 +66,19 @@ impl std::fmt::Display for AuthError {
 // ── 类型：与 cool-admin JSON 对齐（camelCase）──
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MemberLevel {
+    pub id: i64,
+    pub name: String,
+    #[serde(default)]
+    pub code: Option<String>,
+    #[serde(default)]
+    pub level_value: i64,
+    #[serde(default)]
+    pub expire_time: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UserInfo {
     pub id: i64,
     #[serde(default)]
@@ -84,6 +97,8 @@ pub struct UserInfo {
     pub login_type: i64,
     #[serde(default)]
     pub description: Option<String>,
+    #[serde(default)]
+    pub member_level: Option<MemberLevel>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -971,6 +986,18 @@ mod tests {
     }
 
     #[test]
+    fn user_profile_preserves_the_server_membership_level() {
+        let info: UserInfo = parse_cool_response(
+            r#"{"code":1000,"data":{"id":7,"nickName":"Trader","gender":0,"status":1,"loginType":2,"memberLevel":{"id":3,"name":"Pro","code":"pro","levelValue":20}}}"#,
+        )
+        .unwrap();
+
+        let serialized = serde_json::to_value(info).unwrap();
+        assert_eq!(serialized["memberLevel"]["name"], "Pro");
+        assert_eq!(serialized["memberLevel"]["levelValue"], 20);
+    }
+
+    #[test]
     fn vip_runtime_log_summary_never_discloses_credential_values() {
         let credential = VipRuntimeCredential {
             base_url: "https://api.example/v1".into(),
@@ -1139,6 +1166,7 @@ mod tests {
                 status: 1,
                 login_type: 0,
                 description: None,
+                member_level: None,
             }),
             vip: Some(VipRuntimeCredential {
                 base_url: "https://old.example/v1".into(),
@@ -1534,6 +1562,7 @@ mod tests {
             status: 1,
             login_type: 2,
             description: None,
+            member_level: None,
         });
 
         refresh_user_info(&mut session, |token| {
@@ -1548,6 +1577,7 @@ mod tests {
                 status: 1,
                 login_type: 2,
                 description: None,
+                member_level: None,
             })
         })
         .unwrap();

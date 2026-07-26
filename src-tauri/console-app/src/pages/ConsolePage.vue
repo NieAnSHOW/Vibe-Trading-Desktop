@@ -400,6 +400,9 @@ onUnmounted(() => {
           <template v-if="authStore.authenticated">
             <span style="font-size:12px;color:#666">{{ authStore.userInfo?.nickName || authStore.userInfo?.phone || '已登录'
               }}</span>
+            <span v-if="authStore.userInfo?.memberLevel" style="font-size:12px;color:#666">
+              {{ authStore.userInfo.memberLevel.name }} 会员
+            </span>
             <AppButton variant="ghost" :busy="logoutBusy.busy.value" @click="onLogout">退出登录</AppButton>
           </template>
           <AppButton v-else variant="ghost" @click="router.push('/login')">登录</AppButton>
