@@ -483,6 +483,8 @@
     "cancelGoal": "取消目标",
     "describeGoal": "描述要附加到此会话的研究目标",
     "placeholder": "例如：为 000001.SZ 创建双均线交叉策略，回测 2024 年",
+    "vipModel": "VIP 模型",
+    "vipModelSwitchFailed": "切换 VIP 模型失败",
     "exportChat": "导出对话",
     "stopGeneration": "停止生成",
     "runSwarmTeam": "运行群体团队",

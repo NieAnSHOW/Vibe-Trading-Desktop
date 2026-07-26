@@ -570,6 +570,11 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(settings),
     }),
+  updateVIPModel: (modelName: string) =>
+    request<LLMSettings>("/settings/llm/vip-model", {
+      method: "PUT",
+      body: JSON.stringify({ model_name: modelName }),
+    }),
   getDataSourceSettings: () => request<DataSourceSettings>("/settings/data-sources"),
   updateDataSourceSettings: (settings: UpdateDataSourceSettingsRequest) =>
     request<DataSourceSettings>("/settings/data-sources", {
@@ -742,6 +747,7 @@ export interface LLMSettings {
   desktop_login_provisioned?: boolean;
   desktop_llm_mode: "vip" | "custom";
   desktop_vip_available: boolean;
+  vip_models?: string[];
 }
 
 export interface UpdateLLMSettingsRequest {

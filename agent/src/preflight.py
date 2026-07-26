@@ -117,10 +117,15 @@ def _check_llm_provider() -> CheckResult:
             impact="",
         )
     except Exception as exc:
+        error_message = (
+            f"{type(exc).__name__}: VIP endpoint probe failed"
+            if provider.lower() in {"vip_server", "vip-server"}
+            else f"{type(exc).__name__}: {exc}"
+        )
         return CheckResult(
             name=f"LLM ({provider})",
             status="error",
-            message=f"{type(exc).__name__}: {exc} | {diag_hint}",
+            message=f"{error_message} | {diag_hint}",
             impact="agent cannot function",
             critical=True,
         )

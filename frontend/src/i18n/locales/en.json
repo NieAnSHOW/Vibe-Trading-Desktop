@@ -488,6 +488,8 @@
     "cancelGoal": "Cancel goal",
     "describeGoal": "Describe the research goal to attach to this session",
     "placeholder": "e.g. Create a dual MA crossover strategy for 000001.SZ, backtest 2024",
+    "vipModel": "VIP model",
+    "vipModelSwitchFailed": "Failed to switch VIP model",
     "exportChat": "Export chat",
     "stopGeneration": "Stop generation",
     "runSwarmTeam": "Run swarm team",

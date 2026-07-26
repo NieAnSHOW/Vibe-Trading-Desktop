@@ -12,6 +12,7 @@ import os
 import sys as _sys
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Literal, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from pydantic import BaseModel, Field
@@ -64,6 +65,9 @@ class LLMSettingsResponse(BaseModel):
     desktop_login_provisioned: bool = False
     desktop_llm_mode: Literal["vip", "custom"] = "custom"
     desktop_vip_available: bool = False
+    # Membership-provided model identifiers are safe to render only for an
+    # active desktop login with a usable in-memory VIP runtime.
+    vip_models: List[str] = Field(default_factory=list)
 
 
 class UpdateLLMSettingsRequest(BaseModel):
@@ -79,6 +83,12 @@ class UpdateLLMSettingsRequest(BaseModel):
     timeout_seconds: int = Field(120, ge=1, le=3600)
     max_retries: int = Field(2, ge=0, le=20)
     reasoning_effort: Optional[str] = None
+
+
+class UpdateVipModelRequest(BaseModel):
+    """Switch the active VIP model for this API process only."""
+
+    model_name: str = Field(..., min_length=1)
 
 
 class DataSourceSettingsResponse(BaseModel):
@@ -136,6 +146,8 @@ VIP_RUNTIME_ENV = {
     "provisioned": "VIBE_DESKTOP_VIP_PROVISIONED",
     "models": "VIBE_DESKTOP_VIP_MODELS_JSON",
 }
+LEGACY_VIP_DOTENV_KEYS = {"VIP_API_KEY", "VIP_BASE_URL"}
+_vip_selected_model: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -213,6 +225,44 @@ def _desktop_vip_available(values: Dict[str, str]) -> bool:
     )
 
 
+def _desktop_login_provisioned(values: Dict[str, str]) -> bool:
+    """Whether dotenv contains the unexpired desktop-login fingerprint."""
+    import time  # noqa: PLC0415
+
+    host = _host()
+    return bool(values.get("USER_REFRESH_TOKEN", "").strip()) and (
+        host._coerce_int(values.get("USER_REFRESH_EXPIRE", "0"), 0) > int(time.time())
+    )
+
+
+def _vip_runtime_models() -> List[str]:
+    """Read the sidecar-injected membership model names without exposing secrets."""
+    try:
+        raw_models = json.loads(os.environ.get(VIP_RUNTIME_ENV["models"], "[]"))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(raw_models, list):
+        return []
+
+    models: List[str] = []
+    seen: set[str] = set()
+    for model in raw_models:
+        if not isinstance(model, str):
+            continue
+        normalized = model.strip()
+        if normalized and normalized not in seen:
+            models.append(normalized)
+            seen.add(normalized)
+    return models
+
+
+def _public_vip_models(values: Dict[str, str]) -> List[str]:
+    """Return member model names only for the active logged-in VIP session."""
+    if not (_desktop_vip_available(values) and _desktop_login_provisioned(values)):
+        return []
+    return _vip_runtime_models()
+
+
 # ---------------------------------------------------------------------------
 # Response builders
 # ---------------------------------------------------------------------------
@@ -226,6 +276,8 @@ def _build_llm_settings_response(
     env_values = values if values is not None else _read_settings_env_values()
     desktop_llm_mode = _desktop_llm_mode(env_values)
     desktop_vip_available = _desktop_vip_available(env_values)
+    desktop_login_provisioned = _desktop_login_provisioned(env_values)
+    vip_models = _public_vip_models(env_values)
     provider_name = "vip_server" if desktop_vip_available else env_values.get(
         "LANGCHAIN_PROVIDER", "openai"
     ).strip().lower()
@@ -247,14 +299,12 @@ def _build_llm_settings_response(
             token = None
         api_key_configured = bool(token)
         api_key_hint = None
-    # fork: 桌面端登录指纹 — refresh_token 非空且 refresh_expire 未过 → 由 console 自动配置。
-    import time  # noqa: PLC0415
-    desktop_login_provisioned = bool(env_values.get("USER_REFRESH_TOKEN", "").strip()) and \
-        host._coerce_int(env_values.get("USER_REFRESH_EXPIRE", "0"), 0) > int(time.time())
     return LLMSettingsResponse(
         provider=provider.name,
         # VIP values are only ever read from process memory; none are sent to the WebUI.
-        model_name=provider.default_model if desktop_vip_available else env_values.get(
+        model_name=(
+            _vip_runtime_model_name(vip_models) if vip_models else provider.default_model
+        ) if desktop_vip_available else env_values.get(
             "LANGCHAIN_MODEL_NAME", provider.default_model
         ),
         base_url="" if desktop_vip_available else env_values.get(
@@ -274,6 +324,7 @@ def _build_llm_settings_response(
         desktop_login_provisioned=desktop_login_provisioned,
         desktop_llm_mode=desktop_llm_mode,
         desktop_vip_available=desktop_vip_available,
+        vip_models=vip_models,
     )
 
 
@@ -343,24 +394,39 @@ def _sync_runtime_env(provider: LLMProviderOption, updates: Dict[str, str]) -> N
     )
 
 
-def _vip_runtime_model_name() -> str:
+def _vip_runtime_model_name(models: Optional[List[str]] = None) -> str:
     """Select a runtime model from the hidden sidecar-provided model list."""
+    global _vip_selected_model
+
     provider = LLM_PROVIDER_BY_NAME["vip_server"]
-    try:
-        models = json.loads(os.environ.get(VIP_RUNTIME_ENV["models"], "[]"))
-    except json.JSONDecodeError:
-        models = []
-    if isinstance(models, list):
-        for model in models:
-            if isinstance(model, str) and model.strip():
-                return model.strip()
+    available_models = models if models is not None else _vip_runtime_models()
+    if _vip_selected_model in available_models:
+        return _vip_selected_model
+    if available_models:
+        return available_models[0]
     return provider.default_model
+
+
+def _normalize_vip_openai_base_url(value: str) -> str:
+    """Map a bare provider origin to its OpenAI-compatible ``/v1`` API root."""
+    base_url = value.strip()
+    try:
+        parsed = urlsplit(base_url)
+    except ValueError:
+        return base_url
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.path not in {"", "/"}
+    ):
+        return base_url
+    return urlunsplit((parsed.scheme, parsed.netloc, "/v1", parsed.query, parsed.fragment))
 
 
 def _sync_vip_runtime_env() -> None:
     """Activate injected VIP credentials without writing them to dotenv."""
     api_key = os.environ[VIP_RUNTIME_ENV["api_key"]].strip()
-    base_url = os.environ[VIP_RUNTIME_ENV["base_url"]].strip()
+    base_url = _normalize_vip_openai_base_url(os.environ[VIP_RUNTIME_ENV["base_url"]])
     os.environ.update(
         {
             "LANGCHAIN_PROVIDER": "vip_server",
@@ -373,8 +439,7 @@ def _sync_vip_runtime_env() -> None:
         }
     )
     logger.info(
-        "VIP runtime credentials activated from sidecar memory (model_selected=%s)",
-        os.environ["LANGCHAIN_MODEL_NAME"],
+        "VIP runtime credentials activated from sidecar memory (model_selected=True)"
     )
 
 
@@ -419,6 +484,29 @@ def _rewrite_env_values(path: Path, updates: Dict[str, str], *, drop_keys: set[s
     for key, value in next_values.items():
         lines.append(f"{key}={host._format_env_value(value)}")
     _write_env_text_atomically(path, "\n".join(lines) + "\n")
+
+
+def activate_desktop_vip_runtime_at_startup() -> bool:
+    """Activate valid sidecar VIP credentials before startup preflight runs.
+
+    The sidecar injects credentials only into this process environment.  When
+    VIP mode is selected, make those values authoritative before any dotenv
+    consumer can load a legacy provider configuration.  Removing the two
+    retired VIP dotenv keys is deliberately limited to this active runtime
+    path; custom-provider settings remain untouched.
+    """
+    values = _read_settings_env_values()
+    if not _desktop_vip_available(values):
+        return False
+
+    _sync_vip_runtime_env()
+    _rewrite_env_values(
+        _host()._resolve_settings_env_path(),
+        {},
+        drop_keys=LEGACY_VIP_DOTENV_KEYS,
+    )
+    logger.info("VIP runtime activated before startup preflight; legacy dotenv secrets removed")
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -576,6 +664,38 @@ def register_settings_routes(
             payload.clear_api_key,
         )
         return _build_llm_settings_response(host_ref._read_env_values(host_ref._resolve_settings_env_path()))
+
+    @app.put(
+        "/settings/llm/vip-model",
+        response_model=LLMSettingsResponse,
+        dependencies=[Depends(require_settings_write_auth)],
+    )
+    async def update_vip_model(payload: UpdateVipModelRequest):
+        """Switch the active member VIP model without modifying dotenv."""
+        global _vip_selected_model
+
+        current_values = _read_settings_env_values()
+        available_models = _public_vip_models(current_values)
+        selected_model = payload.model_name.strip()
+        if not available_models:
+            logger.warning(
+                "VIP model switch rejected because the logged-in VIP runtime is unavailable"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Desktop VIP is not available for this session",
+            )
+        if selected_model not in available_models:
+            logger.warning("VIP model switch rejected because the model is not authorized")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Model is not available for this VIP membership",
+            )
+
+        _vip_selected_model = selected_model
+        _sync_vip_runtime_env()
+        logger.info("VIP runtime model selection updated in process memory")
+        return _build_llm_settings_response(current_values)
 
     @app.get(
         "/settings/data-sources",

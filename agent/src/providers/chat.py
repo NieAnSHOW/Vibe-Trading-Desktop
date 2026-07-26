@@ -117,14 +117,26 @@ class ProviderStreamError(RuntimeError):
 
 
 def _redact_provider_error(message: str) -> str:
-    """Redact configured secret/proxy values from provider errors."""
+    """Redact configured secret, proxy, and private VIP endpoint values."""
     redacted = message
     sensitive_markers = ("KEY", "TOKEN", "SECRET", "PASSWORD", "PASS", "PROXY")
-    for key, value in os.environ.items():
-        if not value or len(value) < 8:
-            continue
-        if any(marker in key.upper() for marker in sensitive_markers):
-            redacted = redacted.replace(value, "[redacted]")
+    protected_endpoint_keys = {"VIP_BASE_URL", "VIBE_DESKTOP_VIP_BASE_URL"}
+    sensitive_values = sorted(
+        (
+            value
+            for key, value in os.environ.items()
+            if value
+            and len(value) >= 8
+            and (
+                key in protected_endpoint_keys
+                or any(marker in key.upper() for marker in sensitive_markers)
+            )
+        ),
+        key=len,
+        reverse=True,
+    )
+    for value in sensitive_values:
+        redacted = redacted.replace(value, "[redacted]")
     return redacted
 
 

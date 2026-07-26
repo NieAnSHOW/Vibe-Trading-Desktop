@@ -444,12 +444,18 @@ def _ensure_dotenv() -> None:
     # P08 R1: one-time, behavior-preserving diagnostic so a stale or
     # shadowed .env is observable instead of costing hours. The path is
     # redacted to a symbolic slot label and the API key is never logged.
+    provider = os.getenv("LANGCHAIN_PROVIDER", "").strip().lower()
+    base_label = (
+        "(protected)"
+        if provider in {"vip_server", "vip-server"}
+        else _redact_base_url_for_log(os.getenv("OPENAI_BASE_URL") or os.getenv("OPENAI_API_BASE"))
+    )
     logger.info(
         "dotenv resolved from %s | provider=%s model=%s base=%s",
         _redact_env_source(loaded),
         os.getenv("LANGCHAIN_PROVIDER", "(unset)"),
         os.getenv("LANGCHAIN_MODEL_NAME", "(unset)"),
-        _redact_base_url_for_log(os.getenv("OPENAI_BASE_URL") or os.getenv("OPENAI_API_BASE")),
+        base_label,
     )
 
 
@@ -512,6 +518,7 @@ def provider_diagnostics() -> dict[str, Any]:
     caps = get_provider_capabilities(provider, model)
     key_env, base_env = provider_env_names(provider, model)
     base_url = os.getenv(base_env, "") or os.getenv("OPENAI_BASE_URL", "") or os.getenv("OPENAI_API_BASE", "")
+    protected_vip_runtime = provider in {"vip_server", "vip-server"}
     proxy_names = ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"]
     package_names = ["langchain-openai", "langchain-core", "langchain", "openai", "langchain-deepseek"]
     native_package_version = (
@@ -530,14 +537,14 @@ def provider_diagnostics() -> dict[str, Any]:
     return {
         "provider": caps.name if provider in {"kimi", "openai_codex"} else provider,
         "model": model,
-        "base_url": _redact_base_url_for_log(base_url),
+        "base_url": "(protected)" if protected_vip_runtime else _redact_base_url_for_log(base_url),
         "api_key": {key_env: _redact_env_flag(key_env)} if key_env else {},
         "env": {
             "LANGCHAIN_PROVIDER": _redact_env_flag("LANGCHAIN_PROVIDER"),
             "LANGCHAIN_MODEL_NAME": _redact_env_flag("LANGCHAIN_MODEL_NAME"),
             "OPENAI_API_KEY": _redact_env_flag("OPENAI_API_KEY"),
-            "OPENAI_BASE_URL": _redact_base_url_for_log(os.getenv("OPENAI_BASE_URL")),
-            "OPENAI_API_BASE": _redact_base_url_for_log(os.getenv("OPENAI_API_BASE")),
+            "OPENAI_BASE_URL": "(protected)" if protected_vip_runtime else _redact_base_url_for_log(os.getenv("OPENAI_BASE_URL")),
+            "OPENAI_API_BASE": "(protected)" if protected_vip_runtime else _redact_base_url_for_log(os.getenv("OPENAI_API_BASE")),
         },
         "proxy": {
             name: _redact_proxy_url(name, os.getenv(name))

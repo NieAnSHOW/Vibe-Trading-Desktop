@@ -221,6 +221,28 @@ def test_stream_error_redacts_configured_secret_values() -> None:
     assert "[redacted]" in str(excinfo.value)
 
 
+def test_stream_error_redacts_vip_runtime_endpoint() -> None:
+    """A VIP transport error must not expose its endpoint beyond the sidecar."""
+    endpoint = "https://vip.internal.example/v1"
+    fake = _FakeStreamingLLM(exc=RuntimeError(f"connection failed for {endpoint}/chat/completions"))
+
+    with patch.dict(
+        os.environ,
+        {
+            "LANGCHAIN_PROVIDER": "vip_server",
+            "LANGCHAIN_MODEL_NAME": "member-model",
+            "VIBE_DESKTOP_VIP_BASE_URL": "https://vip.internal.example",
+            "VIP_BASE_URL": endpoint,
+        },
+        clear=True,
+    ):
+        with pytest.raises(ProviderStreamError) as excinfo:
+            _client(fake).stream_chat([{"role": "user", "content": "hi"}])
+
+    assert "vip.internal.example" not in str(excinfo.value)
+    assert "[redacted]" in str(excinfo.value)
+
+
 @pytest.mark.parametrize(
     ("status_code", "expected"),
     [

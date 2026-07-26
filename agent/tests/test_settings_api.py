@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import stat
+import time
 from pathlib import Path
 
 import pytest
@@ -272,6 +273,79 @@ def test_vip_mode_reads_only_transient_environment_and_hides_secrets(
     assert "stale.example" not in response.text
     assert "VIP_API_KEY" not in response.text
     assert "VIP_BASE_URL" not in response.text
+
+
+def test_vip_runtime_normalizes_a_root_openai_base_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text("DESKTOP_LLM_MODE=vip\n", encoding="utf-8")
+    monkeypatch.setattr(api_server, "ENV_PATH", env_path)
+    monkeypatch.setattr(api_server, "ENV_EXAMPLE_PATH", tmp_path / ".env.example")
+    monkeypatch.setattr(api_server, "USER_ENV_PATH", tmp_path / "home" / ".vibe-trading" / ".env")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_PROVISIONED", "1")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_API_KEY", "member-key")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_BASE_URL", "https://vip.example")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_MODELS_JSON", '["member-model"]')
+
+    response = asyncio.run(
+        api_server.update_llm_settings(api_server.UpdateLLMSettingsRequest(mode="vip"))
+    )
+
+    assert response.desktop_llm_mode == "vip"
+    assert os.environ["VIP_BASE_URL"] == "https://vip.example/v1"
+    assert os.environ["OPENAI_BASE_URL"] == "https://vip.example/v1"
+
+
+def test_vip_model_list_requires_runtime_and_desktop_login_fingerprint(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / ".env").write_text(
+        "DESKTOP_LLM_MODE=vip\n"
+        f"USER_REFRESH_TOKEN=desktop-login-fingerprint\n"
+        f"USER_REFRESH_EXPIRE={int(time.time()) + 60}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_PROVISIONED", "1")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_API_KEY", "member-key")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_BASE_URL", "https://vip.example/v1")
+    monkeypatch.setenv(
+        "VIBE_DESKTOP_VIP_MODELS_JSON", '["member-model-a", "member-model-b"]'
+    )
+
+    response = client.get("/settings/llm")
+
+    assert response.status_code == 200
+    assert response.json()["vip_models"] == ["member-model-a", "member-model-b"]
+    assert "member-key" not in response.text
+    assert "vip.example" not in response.text
+
+
+def test_vip_model_switch_is_memory_only_and_rejects_unknown_member_model(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / ".env").write_text(
+        "DESKTOP_LLM_MODE=vip\n"
+        f"USER_REFRESH_TOKEN=desktop-login-fingerprint\n"
+        f"USER_REFRESH_EXPIRE={int(time.time()) + 60}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_PROVISIONED", "1")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_API_KEY", "member-key")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_BASE_URL", "https://vip.example/v1")
+    monkeypatch.setenv(
+        "VIBE_DESKTOP_VIP_MODELS_JSON", '["member-model-a", "member-model-b"]'
+    )
+
+    response = client.put("/settings/llm/vip-model", json={"model_name": "member-model-b"})
+
+    assert response.status_code == 200
+    assert response.json()["model_name"] == "member-model-b"
+    assert os.environ["LANGCHAIN_MODEL_NAME"] == "member-model-b"
+    env_text = (tmp_path / ".env").read_text(encoding="utf-8")
+    assert "member-model-b" not in env_text
+    rejected = client.put("/settings/llm/vip-model", json={"model_name": "not-a-member-model"})
+    assert rejected.status_code == 400
 
 
 def test_custom_save_keeps_mode_and_custom_env_after_vip_mode(

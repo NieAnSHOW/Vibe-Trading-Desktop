@@ -44,6 +44,25 @@ def test_provider_diagnostics_redacts_secrets_and_proxy_values() -> None:
     assert "token=secret" not in encoded
 
 
+def test_vip_diagnostics_hide_the_runtime_endpoint() -> None:
+    """The desktop-only VIP endpoint must not be emitted to ordinary logs."""
+    import src.providers.llm as llm_mod
+
+    llm_mod._dotenv_loaded = True
+    env = {
+        "LANGCHAIN_PROVIDER": "vip_server",
+        "LANGCHAIN_MODEL_NAME": "member-model",
+        "VIP_API_KEY": "member-key",
+        "VIP_BASE_URL": "https://vip.internal.example/v1",
+    }
+
+    with patch.dict(os.environ, env, clear=True):
+        diagnostics = provider_diagnostics()
+
+    assert diagnostics["base_url"] == "(protected)"
+    assert "vip.internal.example" not in json.dumps(diagnostics, sort_keys=True)
+
+
 def test_provider_capabilities_are_provider_specific() -> None:
     """DeepSeek, Kimi, Gemini, and OpenRouter should not share one mutation bag."""
     deepseek = get_provider_capabilities("deepseek", "deepseek-v4-pro")

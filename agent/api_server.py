@@ -238,7 +238,9 @@ from src.api.scheduled_routes import (  # noqa: E402
 async def _run_startup_preflight() -> None:
     """Run preflight checks on server startup."""
     from src.preflight import run_preflight
+    from src.api.settings_routes import activate_desktop_vip_runtime_at_startup
 
+    activate_desktop_vip_runtime_at_startup()
     run_preflight(console)
     _start_scheduled_research_executor()
     await _watchlist_init_db()  # 幂等建表；plan 约束：DB 初始化须在 startup，不在首次请求中建

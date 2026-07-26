@@ -3,13 +3,14 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAgentStore } from "@/stores/agent";
 
-const { apiMock, connectMock, disconnectMock, onStatusChangeMock, handlersRef } = vi.hoisted(() => ({
+const { apiMock, connectMock, disconnectMock, onStatusChangeMock, handlersRef, toastMock } = vi.hoisted(() => ({
   apiMock: {
     getSessionMessages: vi.fn(),
     getRun: vi.fn(),
     getGoal: vi.fn(),
     getLiveStatus: vi.fn(),
     getLLMSettings: vi.fn(),
+    updateVIPModel: vi.fn(),
     sendMessage: vi.fn(),
     sseUrl: vi.fn(),
   },
@@ -17,12 +18,13 @@ const { apiMock, connectMock, disconnectMock, onStatusChangeMock, handlersRef } 
   disconnectMock: vi.fn(),
   onStatusChangeMock: vi.fn(),
   handlersRef: { current: {} as Record<string, (data: Record<string, unknown>) => void> },
+  toastMock: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
 }));
-vi.mock("sonner", () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: toastMock }));
 vi.mock("@/lib/telemetry", () => ({ track: vi.fn() }));
 vi.mock("@/lib/api", () => ({
   api: apiMock,
@@ -324,5 +326,133 @@ describe("Agent attempt completion", () => {
 
     expect(useAgentStore.getState().messages.some((message) => message.content === "New attempt")).toBe(true);
     expect(useAgentStore.getState().status).toBe("streaming");
+  });
+
+  it("shows the VIP model selector only for a logged-in, available VIP service", async () => {
+    apiMock.getLLMSettings.mockResolvedValue({
+      sse_timeout_seconds: 90,
+      desktop_login_provisioned: true,
+      desktop_llm_mode: "vip",
+      desktop_vip_available: true,
+      vip_models: ["vip-fast", "vip-reasoning"],
+      model_name: "vip-fast",
+    });
+
+    renderAgent();
+
+    const selector = await screen.findByLabelText("agent.vipModel");
+    expect(selector).toHaveValue("vip-fast");
+    expect(screen.getByRole("option", { name: "vip-reasoning" })).toBeInTheDocument();
+  });
+
+  it("does not show the VIP model selector in custom mode", async () => {
+    apiMock.getLLMSettings.mockResolvedValue({
+      sse_timeout_seconds: 90,
+      desktop_login_provisioned: true,
+      desktop_llm_mode: "custom",
+      desktop_vip_available: false,
+      vip_models: ["vip-fast"],
+      model_name: "custom-model",
+    });
+
+    renderAgent();
+
+    await waitFor(() => expect(apiMock.getLLMSettings).toHaveBeenCalled());
+    expect(screen.queryByLabelText("agent.vipModel")).not.toBeInTheDocument();
+  });
+
+  it("switches the VIP model through the runtime API and returns focus to the prompt", async () => {
+    apiMock.getLLMSettings.mockResolvedValue({
+      sse_timeout_seconds: 90,
+      desktop_login_provisioned: true,
+      desktop_llm_mode: "vip",
+      desktop_vip_available: true,
+      vip_models: ["vip-fast", "vip-reasoning"],
+      model_name: "vip-fast",
+    });
+    apiMock.updateVIPModel.mockResolvedValue({
+      sse_timeout_seconds: 90,
+      desktop_login_provisioned: true,
+      desktop_llm_mode: "vip",
+      desktop_vip_available: true,
+      vip_models: ["vip-fast", "vip-reasoning"],
+      model_name: "vip-reasoning",
+    });
+
+    renderAgent();
+
+    fireEvent.change(await screen.findByLabelText("agent.vipModel"), {
+      target: { value: "vip-reasoning" },
+    });
+
+    await waitFor(() =>
+      expect(apiMock.updateVIPModel).toHaveBeenCalledWith("vip-reasoning"),
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText("agent.vipModel")).toHaveValue("vip-reasoning"),
+    );
+    expect(screen.getByPlaceholderText("agent.placeholder")).toHaveFocus();
+  });
+
+  it("does not start a prompt while a VIP model switch is in flight", async () => {
+    let resolveSwitch!: (value: Record<string, unknown>) => void;
+    apiMock.getLLMSettings.mockResolvedValue({
+      sse_timeout_seconds: 90,
+      desktop_login_provisioned: true,
+      desktop_llm_mode: "vip",
+      desktop_vip_available: true,
+      vip_models: ["vip-fast", "vip-reasoning"],
+      model_name: "vip-fast",
+    });
+    apiMock.updateVIPModel.mockReturnValue(new Promise((resolve) => { resolveSwitch = resolve; }));
+
+    renderAgent();
+
+    const prompt = screen.getByPlaceholderText("agent.placeholder");
+    fireEvent.change(prompt, { target: { value: "Do not send yet" } });
+    fireEvent.change(await screen.findByLabelText("agent.vipModel"), {
+      target: { value: "vip-reasoning" },
+    });
+    await waitFor(() => expect(apiMock.updateVIPModel).toHaveBeenCalledWith("vip-reasoning"));
+
+    expect(prompt).toBeDisabled();
+    fireEvent.submit(prompt.closest("form")!);
+    expect(apiMock.sendMessage).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveSwitch({
+        sse_timeout_seconds: 90,
+        desktop_login_provisioned: true,
+        desktop_llm_mode: "vip",
+        desktop_vip_available: true,
+        vip_models: ["vip-fast", "vip-reasoning"],
+        model_name: "vip-reasoning",
+      });
+    });
+  });
+
+  it("keeps the prior VIP model and reports a failed switch", async () => {
+    apiMock.getLLMSettings.mockResolvedValue({
+      sse_timeout_seconds: 90,
+      desktop_login_provisioned: true,
+      desktop_llm_mode: "vip",
+      desktop_vip_available: true,
+      vip_models: ["vip-fast", "vip-reasoning"],
+      model_name: "vip-fast",
+    });
+    apiMock.updateVIPModel.mockRejectedValue(new Error("switch failed"));
+
+    renderAgent();
+
+    fireEvent.change(await screen.findByLabelText("agent.vipModel"), {
+      target: { value: "vip-reasoning" },
+    });
+
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("switch failed"));
+    expect(screen.getByLabelText("agent.vipModel")).toHaveValue("vip-fast");
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText("agent.placeholder")).not.toBeDisabled(),
+    );
+    expect(screen.getByPlaceholderText("agent.placeholder")).toHaveFocus();
   });
 });

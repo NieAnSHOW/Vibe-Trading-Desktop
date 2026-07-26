@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { track } from "@/lib/telemetry";
 import { useAgentStore } from "@/stores/agent";
 import { useSSE } from "@/hooks/useSSE";
-import { ApiError, AUTH_REQUIRED_MESSAGE, api, isAuthRequiredError, type GoalSnapshot, type MandateProposal, type MandateCommitted, type LiveAction, type LiveHalted, type LiveStatus } from "@/lib/api";
+import { ApiError, AUTH_REQUIRED_MESSAGE, api, isAuthRequiredError, type GoalSnapshot, type LLMSettings, type MandateProposal, type MandateCommitted, type LiveAction, type LiveHalted, type LiveStatus } from "@/lib/api";
 import { isReportWorthyRun } from "@/lib/runReports";
 import type { AgentMessage, ToolCallEntry } from "@/types/agent";
 import { AgentAvatar } from "@/components/chat/AgentAvatar";
@@ -262,6 +262,9 @@ export function Agent() {
   /* The status endpoint is not wired on every backend; a 404/501 hides the panel
    * and removes status from the kill-switch visibility condition. */
   const [liveStatusUnavailable, setLiveStatusUnavailable] = useState(false);
+  const [llmSettings, setLLMSettings] = useState<LLMSettings | null>(null);
+  const [vipModelSwitching, setVipModelSwitching] = useState(false);
+  const focusInputAfterVipSwitchRef = useRef(false);
 
   const messages = useAgentStore(s => s.messages);
   const streamingText = useAgentStore(s => s.streamingText);
@@ -921,8 +924,41 @@ export function Agent() {
   useEffect(() => {
     api.getLLMSettings().then((s) => {
       sseTimeoutMsRef.current = s.sse_timeout_seconds * 1000;
+      setLLMSettings(s);
     }).catch(() => {});
   }, []);
+
+  const vipModels = llmSettings?.vip_models ?? [];
+  const showVipModelSelector =
+    llmSettings?.desktop_login_provisioned === true &&
+    llmSettings.desktop_llm_mode === "vip" &&
+    llmSettings.desktop_vip_available &&
+    vipModels.length > 0;
+
+  useEffect(() => {
+    if (!vipModelSwitching && focusInputAfterVipSwitchRef.current) {
+      focusInputAfterVipSwitchRef.current = false;
+      inputRef.current?.focus();
+    }
+  }, [vipModelSwitching]);
+
+  const handleVIPModelChange = async (modelName: string) => {
+    if (!llmSettings || modelName === llmSettings.model_name) {
+      inputRef.current?.focus();
+      return;
+    }
+
+    setVipModelSwitching(true);
+    try {
+      const updated = await api.updateVIPModel(modelName);
+      setLLMSettings(updated);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("agent.vipModelSwitchFailed"));
+    } finally {
+      focusInputAfterVipSwitchRef.current = true;
+      setVipModelSwitching(false);
+    }
+  };
 
   /* Safety timeout: if streaming but no SSE event for sseTimeoutMsRef.current ms, reset to idle */
   useEffect(() => {
@@ -945,7 +981,7 @@ export function Agent() {
   }, [status]);
 
   const runPrompt = async (prompt: string) => {
-    if (!prompt.trim() || status === "streaming") return;
+    if (!prompt.trim() || status === "streaming" || vipModelSwitching) return;
 
     if (goalComposerActive) {
       setInput("");
@@ -1683,6 +1719,21 @@ export function Agent() {
                 </div>
               )}
             </div>
+            {/* 模型切换操作按钮 */}
+            {showVipModelSelector && (
+              <select
+                aria-label={t("agent.vipModel")}
+                title={t("agent.vipModel")}
+                value={llmSettings.model_name}
+                onChange={(event) => void handleVIPModelChange(event.target.value)}
+                disabled={status === "streaming" || vipModelSwitching}
+                className="h-9 max-w-40 shrink-0 rounded-lg border bg-background px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {vipModels.map((model) => (
+                  <option key={model} value={model}>{model}</option>
+                ))}
+              </select>
+            )}
             <input
               ref={fileInputRef}
               type="file"
@@ -1728,7 +1779,7 @@ export function Agent() {
                   : t("agent.placeholder")
               }
               className="flex-1 px-4 py-2.5 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition-shadow resize-none max-h-32 overflow-y-auto"
-              disabled={status === "streaming"}
+              disabled={status === "streaming" || vipModelSwitching}
             />
             {messages.length > 0 && (
               <button
@@ -1752,7 +1803,7 @@ export function Agent() {
             ) : (
               <button
                 type="submit"
-                disabled={goalComposerActive ? !input.trim() : (!input.trim() && !attachment)}
+                disabled={vipModelSwitching || (goalComposerActive ? !input.trim() : (!input.trim() && !attachment))}
                 className="px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium disabled:opacity-40 hover:opacity-90 transition-opacity"
               >
                 <Send className="h-4 w-4" />
