@@ -110,6 +110,26 @@ describe("Agent attempt completion", () => {
     expect(input).not.toHaveClass("min-h-24");
   });
 
+  it("only enables textarea scrolling after the maximum input height", async () => {
+    renderAgent();
+
+    const input = await screen.findByPlaceholderText("agent.placeholder");
+    Object.defineProperty(input, "scrollHeight", { configurable: true, value: 36 });
+    fireEvent.input(input);
+
+    expect(input).toHaveStyle({ height: "36px", overflowY: "hidden" });
+
+    Object.defineProperty(input, "scrollHeight", { configurable: true, value: 128 });
+    fireEvent.input(input);
+
+    expect(input).toHaveStyle({ height: "128px", overflowY: "hidden" });
+
+    Object.defineProperty(input, "scrollHeight", { configurable: true, value: 200 });
+    fireEvent.input(input);
+
+    expect(input).toHaveStyle({ height: "128px", overflowY: "auto" });
+  });
+
   it("keeps export and send in one right-side composer action group", async () => {
     apiMock.getSessionMessages.mockResolvedValue([{
       message_id: "assistant-a",

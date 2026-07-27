@@ -52,6 +52,7 @@ const act = () => useAgentStore.getState();
 
 /** Poll cadence for the shared `GET /live/status` snapshot. */
 const LIVE_STATUS_POLL_INTERVAL_MS = 15_000;
+const COMPOSER_MAX_INPUT_HEIGHT_PX = 128;
 const CONNECTOR_CHECK_PROMPT =
   "List my trading connector profiles, show which one is selected, then check that selected connector. If it is not ready, tell me exactly what setup step is missing. Do not place or modify orders.";
 const CONNECTOR_PORTFOLIO_PROMPT =
@@ -1755,7 +1756,8 @@ export function Agent() {
               onInput={(e) => {
                 const el = e.target as HTMLTextAreaElement;
                 el.style.height = "auto";
-                el.style.height = el.scrollHeight + "px";
+                el.style.height = `${Math.min(el.scrollHeight, COMPOSER_MAX_INPUT_HEIGHT_PX)}px`;
+                el.style.overflowY = el.scrollHeight > COMPOSER_MAX_INPUT_HEIGHT_PX ? "auto" : "hidden";
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -1777,7 +1779,7 @@ export function Agent() {
                   ? t("agent.describeGoal")
                   : t("agent.placeholder")
               }
-              className="order-first block w-full max-h-32 resize-none overflow-y-auto border-0 border-b bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              className="order-first block w-full max-h-32 resize-none overflow-y-hidden border-0 border-b bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
               disabled={status === "streaming" || vipModelSwitching}
             />
             <div data-testid="agent-composer-actions" className="ml-auto flex items-center gap-2">
