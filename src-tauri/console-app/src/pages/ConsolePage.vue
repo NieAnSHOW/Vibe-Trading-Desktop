@@ -448,6 +448,8 @@ onUnmounted(() => {
     <!-- 广告位 banner:标题 + 多图轮播 / 文字 -->
     <AdSlot :ad="adBanner" variant="banner" />
 
+    <!-- 会员用量展示区域 -->
+    <div></div>
     <!-- status -->
     <div class="status">
       <div class="status-row">

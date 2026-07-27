@@ -513,7 +513,13 @@ export function Layout() {
                 return (
                   <div
                     key={s.session_id}
-                    className="group relative flex items-center"
+                    className={cn(
+                      "group flex min-w-0 items-center pr-2 rounded-md text-xs transition-colors truncate",
+                      "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
+                      active
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    )}
                   >
                     {isRenaming ? (
                       <input
@@ -531,15 +537,11 @@ export function Layout() {
                       <Link
                         to={`/agent?session=${s.session_id}`}
                         className={cn(
-                          "flex-1 min-w-0 pl-3 pr-14 py-1.5 rounded-md text-xs transition-colors truncate block",
-                          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
-                          active
-                            ? "bg-primary/10 text-primary font-medium"
-                            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                          "flex-1 min-w-0 pl-3 pr-2 py-1.5 rounded-md text-xs transition-colors truncate block",
                         )}
                         title={s.title || s.session_id}
                       >
-                        <span className="flex items-center gap-1.5">
+                        <span className="flex min-w-0 items-center gap-1.5">
                           {streamingSessionId === s.session_id ? (
                             <Loader2 className="h-3 w-3 shrink-0 animate-spin text-primary" />
                           ) : (
@@ -552,12 +554,14 @@ export function Layout() {
                               )}
                             />
                           )}
-                          {s.title || s.session_id.slice(0, 16)}
+                          <span className="truncate">
+                            {s.title || s.session_id.slice(0, 16)}
+                          </span>
                         </span>
                       </Link>
                     )}
                     {!isRenaming && isDeleting ? (
-                      <div className="absolute right-0.5 flex items-center gap-0.5">
+                      <div className="flex shrink-0 items-center gap-0.5">
                         <button
                           onClick={() => {
                             try {
@@ -569,20 +573,24 @@ export function Layout() {
                             } catch {}
                             deleteSession(s.session_id);
                           }}
-                          className="p-1 text-danger hover:bg-danger/10 rounded text-[10px] font-medium"
+                          className="p-1 text-danger rounded text-[10px] font-medium"
                         >
                           {t("layout.confirm")}
                         </button>
                         <button
                           onClick={() => setDeleteTarget(null)}
-                          className="p-1 text-muted-foreground hover:bg-muted rounded text-[10px]"
+                          className="p-1 text-muted-foreground rounded text-[10px]"
                         >
                           {t("layout.cancel")}
                         </button>
                       </div>
                     ) : !isRenaming ? (
-                      <div className="absolute right-1 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity">
+                      <div
+                        data-testid={`session-actions-${s.session_id}`}
+                        className="flex w-12 shrink-0 items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                      >
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -591,10 +599,12 @@ export function Layout() {
                           }}
                           className="p-1 text-muted-foreground hover:text-foreground rounded"
                           title={t("layout.rename")}
+                          aria-label={t("layout.rename")}
                         >
                           <Pencil className="h-3 w-3" />
                         </button>
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -602,6 +612,7 @@ export function Layout() {
                           }}
                           className="p-1 text-muted-foreground hover:text-danger rounded"
                           title={t("layout.delete")}
+                          aria-label={t("layout.delete")}
                         >
                           <Trash2 className="h-3 w-3" />
                         </button>

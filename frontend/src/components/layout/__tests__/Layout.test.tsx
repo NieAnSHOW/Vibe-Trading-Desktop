@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi } from "vitest";
 import i18n from "@/i18n";
+import { api } from "@/lib/api";
 import { Layout } from "../Layout";
 
 vi.mock("@/lib/api", () => ({
@@ -95,6 +96,24 @@ describe("Layout sidebar", () => {
 
     expect(container.querySelector('[data-testid="web-ui-main"]')).toHaveClass("min-h-0", "min-w-0", "overflow-hidden");
     expect(container.querySelector('[data-testid="web-ui-outlet"]')).toHaveClass("min-h-0", "min-w-0", "overflow-auto");
+  });
+
+  it("keeps session actions in the flex flow so long titles cannot overlap them", async () => {
+    const session = {
+      session_id: "session-with-a-long-title",
+      title: "A long session title that must yield space to its actions",
+    };
+    vi.mocked(api.listSessions).mockResolvedValueOnce([session]);
+
+    renderLayout("/agent?session=session-with-a-long-title");
+
+    await screen.findByRole("link", { name: session.title });
+    const actions = screen.getByTestId(`session-actions-${session.session_id}`);
+
+    expect(actions).toHaveClass("shrink-0");
+    expect(actions).not.toHaveClass("absolute");
+    expect(screen.getByRole("button", { name: "重命名" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "删除" })).toBeInTheDocument();
   });
 
   it("renders external shortcut buttons when the group is expanded", async () => {

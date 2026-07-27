@@ -214,10 +214,11 @@ export function News() {
             <h1 className="break-words text-xl font-semibold leading-6">
               {t("news.title")}
             </h1>
+
             <div
               role="radiogroup"
               aria-label={t("news.scope")}
-              className="mt-3 inline-flex rounded-md border bg-card p-0.5"
+              className="mt-2 inline-flex rounded-md border bg-card p-0.5"
             >
               {NEWS_SCOPES.map((item) => (
                 <button
@@ -236,10 +237,12 @@ export function News() {
                   {t(`news.scopes.${item}`)}
                 </button>
               ))}
+            </div>
+            <div className="mt-2">
               {snapshot && snapshotGeneratedAt && (
                 <time
                   dateTime={snapshot.generated_at}
-                  className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground"
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground"
                 >
                   <Clock3 className="h-3 w-3" aria-hidden="true" />
                   {snapshotGeneratedAt}
