@@ -98,7 +98,9 @@ describe("Agent attempt completion", () => {
 
     const composer = await screen.findByTestId("agent-composer");
     expect(composer).toContainElement(screen.getByPlaceholderText("agent.placeholder"));
-    expect(composer).toContainElement(screen.getByLabelText("agent.vipModel"));
+    expect(composer).toContainElement(
+      screen.getByRole("button", { name: /agent\.vipModel/ }),
+    );
     expect(composer.querySelector("button[type='submit']")).toBeInTheDocument();
   });
 
@@ -403,9 +405,78 @@ describe("Agent attempt completion", () => {
 
     renderAgent();
 
-    const selector = await screen.findByLabelText("agent.vipModel");
-    expect(selector).toHaveValue("vip-fast");
-    expect(screen.getByRole("option", { name: "vip-reasoning" })).toBeInTheDocument();
+    const trigger = await screen.findByRole("button", {
+      name: /agent\.vipModel/,
+    });
+    expect(trigger).toHaveTextContent("vip-fast");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
+
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitemradio", { name: "VIP-FAST" }),
+    ).toHaveAttribute("aria-checked", "true");
+    expect(
+      screen.getByRole("menuitemradio", { name: "VIP-REASONING" }),
+    ).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("names the current VIP model and supports keyboard menu navigation", async () => {
+    apiMock.getLLMSettings.mockResolvedValue({
+      sse_timeout_seconds: 90,
+      desktop_login_provisioned: true,
+      desktop_llm_mode: "vip",
+      desktop_vip_available: true,
+      vip_models: ["vip-fast", "vip-reasoning"],
+      model_name: "vip-fast",
+    });
+
+    renderAgent();
+
+    const trigger = await screen.findByRole("button", {
+      name: "agent.vipModel: vip-fast",
+    });
+    fireEvent.click(trigger);
+
+    const selected = screen.getByRole("menuitemradio", { name: "VIP-FAST" });
+    expect(selected).toHaveFocus();
+
+    fireEvent.keyDown(selected, { key: "ArrowDown" });
+    const next = screen.getByRole("menuitemradio", {
+      name: "VIP-REASONING",
+    });
+    expect(next).toHaveFocus();
+
+    fireEvent.keyDown(next, { key: "Escape" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("closes the VIP model menu on Escape and outside pointer presses", async () => {
+    apiMock.getLLMSettings.mockResolvedValue({
+      sse_timeout_seconds: 90,
+      desktop_login_provisioned: true,
+      desktop_llm_mode: "vip",
+      desktop_vip_available: true,
+      vip_models: ["vip-fast", "vip-reasoning"],
+      model_name: "vip-fast",
+    });
+
+    renderAgent();
+
+    const trigger = await screen.findByRole("button", {
+      name: /agent\.vipModel/,
+    });
+    fireEvent.click(trigger);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
   it("does not show the VIP model selector in custom mode", async () => {
@@ -424,7 +495,7 @@ describe("Agent attempt completion", () => {
     expect(screen.queryByLabelText("agent.vipModel")).not.toBeInTheDocument();
   });
 
-  it("switches the VIP model through the runtime API and returns focus to the prompt", async () => {
+  it("disables an open VIP model menu while the agent is streaming", async () => {
     apiMock.getLLMSettings.mockResolvedValue({
       sse_timeout_seconds: 90,
       desktop_login_provisioned: true,
@@ -433,26 +504,56 @@ describe("Agent attempt completion", () => {
       vip_models: ["vip-fast", "vip-reasoning"],
       model_name: "vip-fast",
     });
+
+    renderAgent();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /agent\.vipModel/ }),
+    );
+    act(() => useAgentStore.getState().setStatus("streaming"));
+
+    expect(
+      screen.getByRole("button", { name: /agent\.vipModel/ }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("menuitemradio", { name: "VIP-REASONING" }),
+    ).toBeDisabled();
+  });
+
+  it("displays VIP model names in uppercase while sending the original model ID", async () => {
+    apiMock.getLLMSettings.mockResolvedValue({
+      sse_timeout_seconds: 90,
+      desktop_login_provisioned: true,
+      desktop_llm_mode: "vip",
+      desktop_vip_available: true,
+      vip_models: ["gpt-5.4", "gpt-5.4-mini"],
+      model_name: "gpt-5.4",
+    });
     apiMock.updateVIPModel.mockResolvedValue({
       sse_timeout_seconds: 90,
       desktop_login_provisioned: true,
       desktop_llm_mode: "vip",
       desktop_vip_available: true,
-      vip_models: ["vip-fast", "vip-reasoning"],
-      model_name: "vip-reasoning",
+      vip_models: ["gpt-5.4", "gpt-5.4-mini"],
+      model_name: "gpt-5.4-mini",
     });
 
     renderAgent();
 
-    fireEvent.change(await screen.findByLabelText("agent.vipModel"), {
-      target: { value: "vip-reasoning" },
-    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: /agent\.vipModel/ }),
+    );
+    fireEvent.click(
+      screen.getByRole("menuitemradio", { name: "GPT-5.4-MINI" }),
+    );
 
     await waitFor(() =>
-      expect(apiMock.updateVIPModel).toHaveBeenCalledWith("vip-reasoning"),
+      expect(apiMock.updateVIPModel).toHaveBeenCalledWith("gpt-5.4-mini"),
     );
     await waitFor(() =>
-      expect(screen.getByLabelText("agent.vipModel")).toHaveValue("vip-reasoning"),
+      expect(
+        screen.getByRole("button", { name: /agent\.vipModel/ }),
+      ).toHaveTextContent("gpt-5.4-mini"),
     );
     expect(screen.getByPlaceholderText("agent.placeholder")).toHaveFocus();
   });
@@ -473,12 +574,18 @@ describe("Agent attempt completion", () => {
 
     const prompt = screen.getByPlaceholderText("agent.placeholder");
     fireEvent.change(prompt, { target: { value: "Do not send yet" } });
-    fireEvent.change(await screen.findByLabelText("agent.vipModel"), {
-      target: { value: "vip-reasoning" },
-    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: /agent\.vipModel/ }),
+    );
+    fireEvent.click(
+      screen.getByRole("menuitemradio", { name: "VIP-REASONING" }),
+    );
     await waitFor(() => expect(apiMock.updateVIPModel).toHaveBeenCalledWith("vip-reasoning"));
 
     expect(prompt).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /agent\.vipModel/ }),
+    ).toBeDisabled();
     fireEvent.submit(prompt.closest("form")!);
     expect(apiMock.sendMessage).not.toHaveBeenCalled();
 
@@ -507,12 +614,17 @@ describe("Agent attempt completion", () => {
 
     renderAgent();
 
-    fireEvent.change(await screen.findByLabelText("agent.vipModel"), {
-      target: { value: "vip-reasoning" },
-    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: /agent\.vipModel/ }),
+    );
+    fireEvent.click(
+      screen.getByRole("menuitemradio", { name: "VIP-REASONING" }),
+    );
 
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("switch failed"));
-    expect(screen.getByLabelText("agent.vipModel")).toHaveValue("vip-fast");
+    expect(
+      screen.getByRole("button", { name: /agent\.vipModel/ }),
+    ).toHaveTextContent("vip-fast");
     await waitFor(() =>
       expect(screen.getByPlaceholderText("agent.placeholder")).not.toBeDisabled(),
     );

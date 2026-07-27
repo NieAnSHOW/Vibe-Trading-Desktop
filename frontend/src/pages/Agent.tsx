@@ -1,12 +1,51 @@
-import { useTranslation } from 'react-i18next';
-import { useEffect, useRef, useState, useMemo, useCallback, type FormEvent } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useMemo,
+  useCallback,
+  type FormEvent,
+} from "react";
 import { useSearchParams } from "react-router-dom";
-import { Send, Loader2, ArrowDown, Square, Download, Plus, Paperclip, X, Users, Target, ChevronDown, Pencil, Check, Play, OctagonX, Activity, Ban, CheckCircle2, Landmark } from "lucide-react";
+import {
+  Send,
+  Loader2,
+  ArrowDown,
+  Square,
+  Download,
+  Plus,
+  Paperclip,
+  X,
+  Users,
+  Target,
+  ChevronDown,
+  Pencil,
+  Check,
+  Play,
+  OctagonX,
+  Activity,
+  Ban,
+  CheckCircle2,
+  Landmark,
+} from "lucide-react";
 import { toast } from "sonner";
 import { track } from "@/lib/telemetry";
 import { useAgentStore } from "@/stores/agent";
 import { useSSE } from "@/hooks/useSSE";
-import { ApiError, AUTH_REQUIRED_MESSAGE, api, isAuthRequiredError, type GoalSnapshot, type LLMSettings, type MandateProposal, type MandateCommitted, type LiveAction, type LiveHalted, type LiveStatus } from "@/lib/api";
+import {
+  ApiError,
+  AUTH_REQUIRED_MESSAGE,
+  api,
+  isAuthRequiredError,
+  type GoalSnapshot,
+  type LLMSettings,
+  type MandateProposal,
+  type MandateCommitted,
+  type LiveAction,
+  type LiveHalted,
+  type LiveStatus,
+} from "@/lib/api";
 import { isReportWorthyRun } from "@/lib/runReports";
 import type { AgentMessage, ToolCallEntry } from "@/types/agent";
 import { AgentAvatar } from "@/components/chat/AgentAvatar";
@@ -32,7 +71,12 @@ type MsgGroup =
 function groupMessages(msgs: AgentMessage[]): MsgGroup[] {
   const out: MsgGroup[] = [];
   let buf: AgentMessage[] = [];
-  const flush = () => { if (buf.length) { out.push({ kind: "timeline", msgs: [...buf] }); buf = []; } };
+  const flush = () => {
+    if (buf.length) {
+      out.push({ kind: "timeline", msgs: [...buf] });
+      buf = [];
+    }
+  };
   for (const m of msgs) {
     if (["thinking", "tool_call", "tool_result", "compact"].includes(m.type)) {
       buf.push(m);
@@ -76,7 +120,9 @@ interface LiveActionItem {
 }
 type LiveItem = ProposalItem | LiveActionItem;
 
-function normalizeBrokerScope(broker: string | null | undefined): string | null {
+function normalizeBrokerScope(
+  broker: string | null | undefined,
+): string | null {
   const normalized = broker?.trim().toLowerCase();
   return normalized || null;
 }
@@ -88,23 +134,42 @@ function isGlobalLiveHalt(halt: LiveHalted | null): boolean {
 function haltScopeStillActive(halt: LiveHalted, status: LiveStatus): boolean {
   const broker = normalizeBrokerScope(halt.broker);
   if (!broker) return status.global_halted;
-  return status.global_halted || status.brokers.some((item) => (
-    normalizeBrokerScope(item.auth.broker) === broker && item.halted
-  ));
+  return (
+    status.global_halted ||
+    status.brokers.some(
+      (item) =>
+        normalizeBrokerScope(item.auth.broker) === broker && item.halted,
+    )
+  );
 }
 
-function liveActionStyle(kind: string): { icon: typeof Activity; tone: string } {
+function liveActionStyle(kind: string): {
+  icon: typeof Activity;
+  tone: string;
+} {
   switch (kind) {
     case "order_rejected":
     case "breach":
-      return { icon: Ban, tone: "border-amber-500/40 bg-amber-500/5 text-amber-600 dark:text-amber-400" };
+      return {
+        icon: Ban,
+        tone: "border-amber-500/40 bg-amber-500/5 text-amber-600 dark:text-amber-400",
+      };
     case "halt_tripped":
-      return { icon: OctagonX, tone: "border-destructive/40 bg-destructive/5 text-destructive" };
+      return {
+        icon: OctagonX,
+        tone: "border-destructive/40 bg-destructive/5 text-destructive",
+      };
     case "mandate_committed":
     case "halt_cleared":
-      return { icon: CheckCircle2, tone: "border-emerald-500/40 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400" };
+      return {
+        icon: CheckCircle2,
+        tone: "border-emerald-500/40 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400",
+      };
     default:
-      return { icon: Activity, tone: "border-sky-500/40 bg-sky-500/5 text-sky-600 dark:text-sky-400" };
+      return {
+        icon: Activity,
+        tone: "border-sky-500/40 bg-sky-500/5 text-sky-600 dark:text-sky-400",
+      };
   }
 }
 
@@ -119,20 +184,37 @@ function LiveActionChip({ action }: { action: LiveAction }) {
     <div className="flex gap-3">
       <AgentAvatar />
       <div className="flex-1 min-w-0">
-        <div className={["inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs", tone].join(" ")}>
+        <div
+          className={[
+            "inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs",
+            tone,
+          ].join(" ")}
+        >
           <Icon className="h-3 w-3 shrink-0" />
-          <span className="shrink-0 font-medium uppercase tracking-wide text-[10px]">{t("agent.runtimeBadge")}</span>
-          <span className="shrink-0 font-medium">{liveActionLabel(action)}</span>
+          <span className="shrink-0 font-medium uppercase tracking-wide text-[10px]">
+            {t("agent.runtimeBadge")}
+          </span>
+          <span className="shrink-0 font-medium">
+            {liveActionLabel(action)}
+          </span>
           {action.intent_normalized && (
-            <span className="truncate text-foreground/80">· {action.intent_normalized}</span>
+            <span className="truncate text-foreground/80">
+              · {action.intent_normalized}
+            </span>
           )}
           {action.outcome && (
-            <span className="shrink-0 font-mono text-[10px] text-muted-foreground">· {action.outcome}</span>
+            <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+              · {action.outcome}
+            </span>
           )}
           {action.remote_tool && (
-            <span className="shrink-0 font-mono text-[10px] text-muted-foreground">· {action.remote_tool}</span>
+            <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+              · {action.remote_tool}
+            </span>
           )}
-          {action.error && <span className="truncate text-destructive">· {action.error}</span>}
+          {action.error && (
+            <span className="truncate text-destructive">· {action.error}</span>
+          )}
         </div>
       </div>
     </div>
@@ -151,7 +233,9 @@ function getGoalProgress(snapshot: GoalSnapshot | null): {
   evidenceTotal: number;
 } {
   const total = snapshot?.criteria.length ?? 0;
-  const met = snapshot?.criteria.filter((item) => criterionCovered(snapshot, item)).length ?? 0;
+  const met =
+    snapshot?.criteria.filter((item) => criterionCovered(snapshot, item))
+      .length ?? 0;
   const evidenceTotal = snapshot?.evidence_count ?? 0;
   return {
     met,
@@ -167,24 +251,43 @@ function statusLabel(status: string): string {
 }
 
 function isTerminalGoalStatus(status: string): boolean {
-  return ["complete", "cancelled", "blocked", "superseded", "usage_limited"].includes(status);
+  return [
+    "complete",
+    "cancelled",
+    "blocked",
+    "superseded",
+    "usage_limited",
+  ].includes(status);
 }
 
 function criterionIndexLabel(index: number): string {
   return String(index + 1);
 }
 
-function criterionEvidenceCount(snapshot: GoalSnapshot, criterionId: string): number {
-  return snapshot.evidence.filter((item) => item.criterion_id === criterionId).length;
+function criterionEvidenceCount(
+  snapshot: GoalSnapshot,
+  criterionId: string,
+): number {
+  return snapshot.evidence.filter((item) => item.criterion_id === criterionId)
+    .length;
 }
 
-function criterionCovered(snapshot: GoalSnapshot, criterion: GoalSnapshot["criteria"][number]): boolean {
-  return isCriterionStatusMet(criterion.status) || criterionEvidenceCount(snapshot, criterion.criterion_id) > 0;
+function criterionCovered(
+  snapshot: GoalSnapshot,
+  criterion: GoalSnapshot["criteria"][number],
+): boolean {
+  return (
+    isCriterionStatusMet(criterion.status) ||
+    criterionEvidenceCount(snapshot, criterion.criterion_id) > 0
+  );
 }
 
 function latestGoalEvidence(snapshot: GoalSnapshot) {
   return [...snapshot.evidence]
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    )
     .slice(0, 2);
 }
 
@@ -207,7 +310,9 @@ function goalContinuePrompt(snapshot: GoalSnapshot): string {
     "Use real available tools as needed, add evidence to the goal ledger, and only stop when the goal is complete, blocked, waiting for user input, or budget-limited.",
     "",
     `Goal: ${snapshot.goal.objective}`,
-    openCriteria ? `Open criteria:\n${openCriteria}` : "All criteria appear covered; audit the ledger and update the goal status if completion is justified.",
+    openCriteria
+      ? `Open criteria:\n${openCriteria}`
+      : "All criteria appear covered; audit the ledger and update the goal status if completion is justified.",
   ].join("\n");
 }
 
@@ -231,15 +336,27 @@ export function Agent() {
   const sseTimeoutMsRef = useRef(90_000);
 
   /* tool_progress coalescing — keep latest payload per-tool, flush once per rAF. */
-  const pendingProgressRef = useRef<Map<string, NonNullable<ToolCallEntry["progress"]>>>(new Map());
+  const pendingProgressRef = useRef<
+    Map<string, NonNullable<ToolCallEntry["progress"]>>
+  >(new Map());
   const progressRafRef = useRef(0);
 
-  const [attachment, setAttachment] = useState<{ filename: string; filePath: string } | null>(null);
+  const [attachment, setAttachment] = useState<{
+    filename: string;
+    filePath: string;
+  } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const uploadMenuRef = useRef<HTMLDivElement>(null);
+  const [showVipModelMenu, setShowVipModelMenu] = useState(false);
+  const vipModelMenuRef = useRef<HTMLDivElement>(null);
+  const vipModelTriggerRef = useRef<HTMLButtonElement>(null);
+  const vipModelOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [swarmPreset, setSwarmPreset] = useState<{ name: string; title: string } | null>(null);
+  const [swarmPreset, setSwarmPreset] = useState<{
+    name: string;
+    title: string;
+  } | null>(null);
   const [goalComposerActive, setGoalComposerActive] = useState(false);
   const [goalDetailsOpen, setGoalDetailsOpen] = useState(false);
   const [goalSnapshot, setGoalSnapshot] = useState<GoalSnapshot | null>(null);
@@ -248,7 +365,9 @@ export function Agent() {
 
   /* Connector runtime channel state (SPEC Consent §1/§4/§5) */
   const [liveItems, setLiveItems] = useState<LiveItem[]>([]);
-  const [committedMandates, setCommittedMandates] = useState<Record<string, MandateCommitted>>({});
+  const [committedMandates, setCommittedMandates] = useState<
+    Record<string, MandateCommitted>
+  >({});
   const [liveHalted, setLiveHalted] = useState<LiveHalted | null>(null);
   const [halting, setHalting] = useState(false);
   /* Bumped to force an immediate live-status re-poll on a live event
@@ -267,12 +386,12 @@ export function Agent() {
   const [vipModelSwitching, setVipModelSwitching] = useState(false);
   const focusInputAfterVipSwitchRef = useRef(false);
 
-  const messages = useAgentStore(s => s.messages);
-  const streamingText = useAgentStore(s => s.streamingText);
-  const status = useAgentStore(s => s.status);
-  const sessionId = useAgentStore(s => s.sessionId);
-  const toolCalls = useAgentStore(s => s.toolCalls);
-  const sessionLoading = useAgentStore(s => s.sessionLoading);
+  const messages = useAgentStore((s) => s.messages);
+  const streamingText = useAgentStore((s) => s.streamingText);
+  const status = useAgentStore((s) => s.status);
+  const sessionId = useAgentStore((s) => s.sessionId);
+  const toolCalls = useAgentStore((s) => s.toolCalls);
+  const sessionLoading = useAgentStore((s) => s.sessionLoading);
 
   const { connect, disconnect, onStatusChange } = useSSE();
 
@@ -284,9 +403,16 @@ export function Agent() {
     if (prefillText) {
       setInput(prefillText);
       // 清除 prefill 参数，避免刷新时重复预填
-      setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete("prefill"); return next; }, { replace: true });
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("prefill");
+          return next;
+        },
+        { replace: true },
+      );
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* Smart scroll — only auto-scroll when near bottom */
@@ -304,14 +430,16 @@ export function Agent() {
     }
     cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(() => {
-      if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+      if (listRef.current)
+        listRef.current.scrollTop = listRef.current.scrollHeight;
     });
   }, [isNearBottom]);
 
   const forceScrollToBottom = useCallback(() => {
     setShowScrollBtn(false);
     requestAnimationFrame(() => {
-      if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+      if (listRef.current)
+        listRef.current.scrollTop = listRef.current.scrollHeight;
     });
   }, []);
 
@@ -329,8 +457,10 @@ export function Agent() {
   useEffect(() => {
     onStatusChange((s) => {
       act().setSseStatus(s);
-      if (s === "reconnecting" && prevSseStatusRef.current === "connected") toast.warning(t('agent.connectionLostReconnect'));
-      else if (s === "connected" && prevSseStatusRef.current === "reconnecting") toast.success(t('agent.connectionRestored'));
+      if (s === "reconnecting" && prevSseStatusRef.current === "connected")
+        toast.warning(t("agent.connectionLostReconnect"));
+      else if (s === "connected" && prevSseStatusRef.current === "reconnecting")
+        toast.success(t("agent.connectionRestored"));
       prevSseStatusRef.current = s;
     });
   }, [onStatusChange]);
@@ -359,470 +489,660 @@ export function Agent() {
         setGoalDetailsOpen(false);
         setGoalEditActive(false);
       } else {
-        toast.error(error instanceof Error ? error.message : t('agent.failedToLoadGoal'));
+        toast.error(
+          error instanceof Error ? error.message : t("agent.failedToLoadGoal"),
+        );
       }
     }
   }, []);
 
-  const loadSessionMessages = useCallback(async (
-    sid: string,
-    gen: number,
-    expectedAttemptGeneration?: number,
-  ) => {
-    const isStale = () => (
-      genRef.current !== gen ||
-      (expectedAttemptGeneration !== undefined && attemptGenerationRef.current !== expectedAttemptGeneration)
-    );
-    try {
-      const msgs = await api.getSessionMessages(sid);
-      if (isStale()) return;
-      const agentMsgs: AgentMessage[] = [];
-      for (const m of msgs) {
-        const meta = m.metadata as Record<string, unknown> | undefined;
-        const runId = meta?.run_id as string | undefined;
-        const metrics = meta?.metrics as Record<string, number> | undefined;
-        const ts = new Date(m.created_at).getTime();
-        if (m.role === "user") {
-          agentMsgs.push({ id: m.message_id, type: "user", content: m.content, timestamp: ts });
-        } else if (runId) {
-          // Show text answer first (if non-empty), then chart card
-          if (m.content && m.content !== "Strategy execution completed.") {
-            agentMsgs.push({ id: m.message_id + "_ans", type: "answer", content: m.content, timestamp: ts });
-          }
-          // Fetch once for the run card.
-          let runData: Awaited<ReturnType<typeof api.getRun>> | undefined;
-          try {
-            runData = await api.getRun(runId);
-          } catch {
-            // Preserve the previous run-card fallback when the detail request fails.
-          }
-          if (metrics && Object.keys(metrics).length > 0) {
-            agentMsgs.push({ id: m.message_id, type: "run_complete", content: "", runId, metrics, timestamp: ts + 1 });
-          } else {
-            // Show a card for report-worthy runs, with the existing fetch-failure fallback.
-            let fetchedMetrics: Record<string, number> | undefined;
-            let fetchedCurve: Array<{ time: string; equity: number }> | undefined;
-            let showCard = false;
-            if (runData) {
-              if (isReportWorthyRun(runData)) {
-                fetchedMetrics = runData.metrics;
-                fetchedCurve = runData.equity_curve?.map((e) => ({ time: e.time, equity: Number(e.equity) }));
-                showCard = true;
-              }
-              // succeeded but not report-worthy (plain chat turn) → skip card
-            } else {
-              // fetch failed (auth/404/network) → can't tell, show link as fallback
-              showCard = true;
+  const loadSessionMessages = useCallback(
+    async (sid: string, gen: number, expectedAttemptGeneration?: number) => {
+      const isStale = () =>
+        genRef.current !== gen ||
+        (expectedAttemptGeneration !== undefined &&
+          attemptGenerationRef.current !== expectedAttemptGeneration);
+      try {
+        const msgs = await api.getSessionMessages(sid);
+        if (isStale()) return;
+        const agentMsgs: AgentMessage[] = [];
+        for (const m of msgs) {
+          const meta = m.metadata as Record<string, unknown> | undefined;
+          const runId = meta?.run_id as string | undefined;
+          const metrics = meta?.metrics as Record<string, number> | undefined;
+          const ts = new Date(m.created_at).getTime();
+          if (m.role === "user") {
+            agentMsgs.push({
+              id: m.message_id,
+              type: "user",
+              content: m.content,
+              timestamp: ts,
+            });
+          } else if (runId) {
+            // Show text answer first (if non-empty), then chart card
+            if (m.content && m.content !== "Strategy execution completed.") {
+              agentMsgs.push({
+                id: m.message_id + "_ans",
+                type: "answer",
+                content: m.content,
+                timestamp: ts,
+              });
             }
-            if (showCard) {
+            // Fetch once for the run card.
+            let runData: Awaited<ReturnType<typeof api.getRun>> | undefined;
+            try {
+              runData = await api.getRun(runId);
+            } catch {
+              // Preserve the previous run-card fallback when the detail request fails.
+            }
+            if (metrics && Object.keys(metrics).length > 0) {
               agentMsgs.push({
                 id: m.message_id,
                 type: "run_complete",
                 content: "",
                 runId,
-                metrics: fetchedMetrics,
-                equityCurve: fetchedCurve,
+                metrics,
                 timestamp: ts + 1,
               });
+            } else {
+              // Show a card for report-worthy runs, with the existing fetch-failure fallback.
+              let fetchedMetrics: Record<string, number> | undefined;
+              let fetchedCurve:
+                | Array<{ time: string; equity: number }>
+                | undefined;
+              let showCard = false;
+              if (runData) {
+                if (isReportWorthyRun(runData)) {
+                  fetchedMetrics = runData.metrics;
+                  fetchedCurve = runData.equity_curve?.map((e) => ({
+                    time: e.time,
+                    equity: Number(e.equity),
+                  }));
+                  showCard = true;
+                }
+                // succeeded but not report-worthy (plain chat turn) → skip card
+              } else {
+                // fetch failed (auth/404/network) → can't tell, show link as fallback
+                showCard = true;
+              }
+              if (showCard) {
+                agentMsgs.push({
+                  id: m.message_id,
+                  type: "run_complete",
+                  content: "",
+                  runId,
+                  metrics: fetchedMetrics,
+                  equityCurve: fetchedCurve,
+                  timestamp: ts + 1,
+                });
+              }
             }
+          } else {
+            agentMsgs.push({
+              id: m.message_id,
+              type: "answer",
+              content: m.content,
+              timestamp: ts,
+            });
           }
-        } else {
-          agentMsgs.push({ id: m.message_id, type: "answer", content: m.content, timestamp: ts });
         }
+        if (isStale()) return;
+        act().loadHistory(agentMsgs);
+        act().setSessionLoading(false);
+        act().cacheSession(sid, agentMsgs);
+        setTimeout(() => forceScrollToBottom(), 50);
+      } catch {
+        act().setSessionLoading(false);
       }
-      if (isStale()) return;
-      act().loadHistory(agentMsgs);
-      act().setSessionLoading(false);
-      act().cacheSession(sid, agentMsgs);
-      setTimeout(() => forceScrollToBottom(), 50);
-    } catch {
-      act().setSessionLoading(false);
-    }
-  }, [forceScrollToBottom]);
+    },
+    [forceScrollToBottom],
+  );
 
-  const refreshSessionMessages = useCallback(async (sid: string, expectedAttemptGeneration?: number) => {
-    const gen = genRef.current + 1;
-    genRef.current = gen;
-    return loadSessionMessages(sid, gen, expectedAttemptGeneration);
-  }, [loadSessionMessages]);
+  const refreshSessionMessages = useCallback(
+    async (sid: string, expectedAttemptGeneration?: number) => {
+      const gen = genRef.current + 1;
+      genRef.current = gen;
+      return loadSessionMessages(sid, gen, expectedAttemptGeneration);
+    },
+    [loadSessionMessages],
+  );
 
-  const activateAttempt = useCallback((sid: string, attemptId: string): boolean => {
-    if (!attemptId || act().sessionId !== sid) return false;
-    if (activeAttemptRef.current !== attemptId) {
-      activeAttemptRef.current = attemptId;
-      attemptGenerationRef.current += 1;
-    }
-    return true;
-  }, []);
+  const activateAttempt = useCallback(
+    (sid: string, attemptId: string): boolean => {
+      if (!attemptId || act().sessionId !== sid) return false;
+      if (activeAttemptRef.current !== attemptId) {
+        activeAttemptRef.current = attemptId;
+        attemptGenerationRef.current += 1;
+      }
+      return true;
+    },
+    [],
+  );
 
-  const isCurrentAttempt = useCallback((
-    sid: string,
-    attemptId: string,
-    sessionGeneration: number,
-    attemptGeneration: number,
-  ): boolean => (
-    act().sessionId === sid &&
-    genRef.current === sessionGeneration &&
-    activeAttemptRef.current === attemptId &&
-    attemptGenerationRef.current === attemptGeneration
-  ), []);
+  const isCurrentAttempt = useCallback(
+    (
+      sid: string,
+      attemptId: string,
+      sessionGeneration: number,
+      attemptGeneration: number,
+    ): boolean =>
+      act().sessionId === sid &&
+      genRef.current === sessionGeneration &&
+      activeAttemptRef.current === attemptId &&
+      attemptGenerationRef.current === attemptGeneration,
+    [],
+  );
 
-  const syncCompletedAttempt = useCallback(async (sid: string, attemptId?: string) => {
-    if (!attemptId) return false;
-    const sessionGeneration = genRef.current;
-    const attemptGeneration = attemptGenerationRef.current;
-    if (!isCurrentAttempt(sid, attemptId, sessionGeneration, attemptGeneration)) return false;
-    for (let i = 0; i < 3; i += 1) {
-      try {
-        const storedMessages = await api.getSessionMessages(sid);
-        if (!isCurrentAttempt(sid, attemptId, sessionGeneration, attemptGeneration)) return false;
-        const completedMessage = storedMessages.find(
-          (message) => message.role === "assistant" && message.linked_attempt_id === attemptId,
-        );
-        if (completedMessage) {
+  const syncCompletedAttempt = useCallback(
+    async (sid: string, attemptId?: string) => {
+      if (!attemptId) return false;
+      const sessionGeneration = genRef.current;
+      const attemptGeneration = attemptGenerationRef.current;
+      if (
+        !isCurrentAttempt(sid, attemptId, sessionGeneration, attemptGeneration)
+      )
+        return false;
+      for (let i = 0; i < 3; i += 1) {
+        try {
+          const storedMessages = await api.getSessionMessages(sid);
+          if (
+            !isCurrentAttempt(
+              sid,
+              attemptId,
+              sessionGeneration,
+              attemptGeneration,
+            )
+          )
+            return false;
+          const completedMessage = storedMessages.find(
+            (message) =>
+              message.role === "assistant" &&
+              message.linked_attempt_id === attemptId,
+          );
+          if (completedMessage) {
+            setReasoningActive(false);
+            act().clearStreaming();
+            useAgentStore.setState({ toolCalls: [] });
+            await refreshSessionMessages(sid, attemptGeneration);
+            const refreshedSessionGeneration = genRef.current;
+            if (
+              !isCurrentAttempt(
+                sid,
+                attemptId,
+                refreshedSessionGeneration,
+                attemptGeneration,
+              )
+            )
+              return true;
+            activeAttemptRef.current = null;
+            act().setStatus("idle");
+            return true;
+          }
+        } catch {
+          return false;
+        }
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 800));
+        if (
+          !isCurrentAttempt(
+            sid,
+            attemptId,
+            sessionGeneration,
+            attemptGeneration,
+          )
+        )
+          return false;
+      }
+      return false;
+    },
+    [isCurrentAttempt, refreshSessionMessages],
+  );
+
+  const setupSSE = useCallback(
+    (sid: string) => {
+      if (sseSessionRef.current === sid) return;
+      disconnect();
+      sseSessionRef.current = sid;
+
+      const touch = () => {
+        lastEventRef.current = Date.now();
+      };
+
+      connect(api.sseUrl(sid, { replay: "active" }), {
+        text_delta: (d) => {
+          touch();
+          setReasoningActive(false);
+          act().appendDelta(String(d.delta || ""));
+          scrollToBottom();
+        },
+        reasoning_delta: () => {
+          touch();
+          setReasoningActive(true);
+          if (act().status !== "streaming") act().setStatus("streaming");
+          scrollToBottom();
+        },
+        stream_reset: () => {
+          touch();
           setReasoningActive(false);
           act().clearStreaming();
-          useAgentStore.setState({ toolCalls: [] });
-          await refreshSessionMessages(sid, attemptGeneration);
-          const refreshedSessionGeneration = genRef.current;
-          if (!isCurrentAttempt(sid, attemptId, refreshedSessionGeneration, attemptGeneration)) return true;
-          activeAttemptRef.current = null;
-          act().setStatus("idle");
-          return true;
-        }
-      } catch {
-        return false;
-      }
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 800));
-      if (!isCurrentAttempt(sid, attemptId, sessionGeneration, attemptGeneration)) return false;
-    }
-    return false;
-  }, [isCurrentAttempt, refreshSessionMessages]);
+          if (act().status !== "streaming") act().setStatus("streaming");
+          scrollToBottom();
+        },
+        thinking_done: () => {
+          touch(); /* don't flush — keep streaming text visible */
+        },
 
-  const setupSSE = useCallback((sid: string) => {
-    if (sseSessionRef.current === sid) return;
-    disconnect();
-    sseSessionRef.current = sid;
+        tool_call: (d) => {
+          touch();
+          setReasoningActive(false);
+          const toolName = String(d.tool || "");
+          // Only update toolCalls tracker (no message creation during streaming)
+          act().addToolCall({
+            id: toolName,
+            tool: toolName,
+            arguments: (d.arguments as Record<string, string>) ?? {},
+            status: "running",
+            timestamp: Date.now(),
+          });
+          scrollToBottom();
+        },
 
-    const touch = () => { lastEventRef.current = Date.now(); };
-
-    connect(api.sseUrl(sid, { replay: "active" }), {
-      text_delta: (d) => {
-        touch();
-        setReasoningActive(false);
-        act().appendDelta(String(d.delta || ""));
-        scrollToBottom();
-      },
-      reasoning_delta: () => {
-        touch();
-        setReasoningActive(true);
-        if (act().status !== "streaming") act().setStatus("streaming");
-        scrollToBottom();
-      },
-      stream_reset: () => {
-        touch();
-        setReasoningActive(false);
-        act().clearStreaming();
-        if (act().status !== "streaming") act().setStatus("streaming");
-        scrollToBottom();
-      },
-      thinking_done: () => { touch(); /* don't flush — keep streaming text visible */ },
-
-      tool_call: (d) => {
-        touch();
-        setReasoningActive(false);
-        const toolName = String(d.tool || "");
-        // Only update toolCalls tracker (no message creation during streaming)
-        act().addToolCall({
-          id: toolName, tool: toolName,
-          arguments: (d.arguments as Record<string, string>) ?? {},
-          status: "running", timestamp: Date.now(),
-        });
-        scrollToBottom();
-      },
-
-      tool_result: (d) => {
-        touch();
-        const toolName = String(d.tool || "");
-        // Drop any in-flight coalesced progress for this tool.
-        pendingProgressRef.current.delete(toolName);
-        // Only update tracker (no message creation during streaming)
-        act().updateToolCall(toolName, {
-          status: d.status === "ok" ? "ok" : "error",
-          preview: String(d.preview || ""),
-          elapsed_ms: Number(d.elapsed_ms || 0),
-          elapsed_s: undefined,
-          progress: undefined,
-        });
-        if (toolName === "run_swarm") {
-          const fallback = buildSwarmStatusFromToolResultPreview(String(d.preview || ""));
-          if (fallback && !act().messages.some((m) => m.type === "swarm_status" && m.swarmRunId === fallback.runId)) {
-            act().upsertSwarmStatus(fallback);
-          }
-        }
-      },
-
-      tool_heartbeat: (d) => {
-        touch();
-        // Keep streaming state alive during long-running tools (swarm, backtest)
-        if (act().status !== "streaming") act().setStatus("streaming");
-        const toolName = String(d.tool || "");
-        if (!toolName) return;
-        act().updateToolCall(toolName, {
-          elapsed_s: Number(d.elapsed_s || 0),
-        });
-      },
-
-      tool_progress: (d) => {
-        touch();
-        const toolName = String(d.tool || "");
-        if (!toolName) return;
-        const payload: NonNullable<ToolCallEntry["progress"]> = {};
-        if (typeof d.stage === "string" && d.stage) payload.stage = d.stage;
-        if (typeof d.message === "string" && d.message) payload.message = d.message;
-        if (typeof d.current === "number") payload.current = d.current;
-        if (typeof d.total === "number") payload.total = d.total;
-        // Coalesce: keep latest payload per tool, flush once per animation frame.
-        pendingProgressRef.current.set(toolName, payload);
-        if (progressRafRef.current) return;
-        progressRafRef.current = requestAnimationFrame(() => {
-          progressRafRef.current = 0;
-          const pending = pendingProgressRef.current;
-          if (pending.size === 0) return;
-          const store = act();
-          for (const [tool, progress] of pending) {
-            store.updateToolCall(tool, { progress });
-          }
-          pending.clear();
-        });
-      },
-
-      compact: () => { touch(); },
-
-      llm_usage: (_data) => {
-        // The protocol remains subscribed for backward compatibility; Agent chat deliberately ignores usage.
-        touch();
-      },
-
-      "attempt.created": (d) => {
-        const attemptId = typeof d.attempt_id === "string" ? d.attempt_id : "";
-        if (!activateAttempt(sid, attemptId)) return;
-        touch();
-        // Backend has created a new attempt — ensure streaming state is active
-        // even if we connected mid-stream (SSE replay / page reload).
-        if (act().status !== "streaming") act().setStatus("streaming");
-      },
-
-      "attempt.started": () => {
-        touch();
-        // Backend has begun executing the attempt. Re-affirm streaming state
-        // so the UI shows a working indicator for reconnects and fresh loads.
-        if (act().status !== "streaming") act().setStatus("streaming");
-      },
-
-      "attempt.completed": async (d) => {
-        const attemptId = typeof d.attempt_id === "string" ? d.attempt_id : "";
-        const sessionGeneration = genRef.current;
-        const attemptGeneration = attemptGenerationRef.current;
-        if (!isCurrentAttempt(sid, attemptId, sessionGeneration, attemptGeneration)) return;
-        activeAttemptRef.current = null;
-        touch();
-        setReasoningActive(false);
-        const s = act();
-        // Build ThinkingTimeline summary from accumulated toolCalls
-        const completedTools = s.toolCalls;
-        if (completedTools.length > 0) {
-          for (const tc of completedTools) {
-            s.addMessage({ id: tc.id + "_call", type: "tool_call", content: "", tool: tc.tool, args: tc.arguments, status: tc.status || "ok", timestamp: tc.timestamp });
-            if (tc.elapsed_ms != null) {
-              s.addMessage({ id: "", type: "tool_result", content: tc.preview || "", tool: tc.tool, status: tc.status || "ok", elapsed_ms: tc.elapsed_ms, timestamp: tc.timestamp + 1 });
+        tool_result: (d) => {
+          touch();
+          const toolName = String(d.tool || "");
+          // Drop any in-flight coalesced progress for this tool.
+          pendingProgressRef.current.delete(toolName);
+          // Only update tracker (no message creation during streaming)
+          act().updateToolCall(toolName, {
+            status: d.status === "ok" ? "ok" : "error",
+            preview: String(d.preview || ""),
+            elapsed_ms: Number(d.elapsed_ms || 0),
+            elapsed_s: undefined,
+            progress: undefined,
+          });
+          if (toolName === "run_swarm") {
+            const fallback = buildSwarmStatusFromToolResultPreview(
+              String(d.preview || ""),
+            );
+            if (
+              fallback &&
+              !act().messages.some(
+                (m) =>
+                  m.type === "swarm_status" && m.swarmRunId === fallback.runId,
+              )
+            ) {
+              act().upsertSwarmStatus(fallback);
             }
           }
-        }
+        },
 
-        // Clear streaming text (don't create thinking message)
-        s.clearStreaming();
+        tool_heartbeat: (d) => {
+          touch();
+          // Keep streaming state alive during long-running tools (swarm, backtest)
+          if (act().status !== "streaming") act().setStatus("streaming");
+          const toolName = String(d.tool || "");
+          if (!toolName) return;
+          act().updateToolCall(toolName, {
+            elapsed_s: Number(d.elapsed_s || 0),
+          });
+        },
 
-        // Add final answer
-        const runDir = String(d.run_dir || "");
-        const runId = runDir ? runDir.split(/[/\\]/).pop() : undefined;
-        const summary = String(d.summary || "");
-        if (summary) s.addMessage({ id: "", type: "answer", content: summary, timestamp: Date.now() });
-
-        // Detect Shadow Account id if render_shadow_report fired successfully this turn
-        const shadowCall = completedTools.find(
-          (tc) => tc.tool === "render_shadow_report" && (tc.status || "ok") === "ok",
-        );
-        const shadowMatch = shadowCall?.preview?.match(/"shadow_id"\s*:\s*"(shadow_[A-Za-z0-9_]+)"/);
-        const shadowId = shadowMatch?.[1];
-
-        // Show RunCompleteCard when the turn produced backtest metrics or a shadow report
-        if (runId) {
-          let runMetrics: Record<string, number> | undefined;
-          let runCurve: Array<{ time: string; equity: number }> | undefined;
-          let showCard = false;
-          let runData: Awaited<ReturnType<typeof api.getRun>> | undefined;
-          try {
-            runData = await api.getRun(runId);
-            if (isReportWorthyRun(runData)) {
-              runMetrics = runData.metrics;
-              runCurve = runData.equity_curve?.map(e => ({ time: e.time, equity: Number(e.equity) }));
-              showCard = true;
+        tool_progress: (d) => {
+          touch();
+          const toolName = String(d.tool || "");
+          if (!toolName) return;
+          const payload: NonNullable<ToolCallEntry["progress"]> = {};
+          if (typeof d.stage === "string" && d.stage) payload.stage = d.stage;
+          if (typeof d.message === "string" && d.message)
+            payload.message = d.message;
+          if (typeof d.current === "number") payload.current = d.current;
+          if (typeof d.total === "number") payload.total = d.total;
+          // Coalesce: keep latest payload per tool, flush once per animation frame.
+          pendingProgressRef.current.set(toolName, payload);
+          if (progressRafRef.current) return;
+          progressRafRef.current = requestAnimationFrame(() => {
+            progressRafRef.current = 0;
+            const pending = pendingProgressRef.current;
+            if (pending.size === 0) return;
+            const store = act();
+            for (const [tool, progress] of pending) {
+              store.updateToolCall(tool, { progress });
             }
-          } catch {
-            showCard = true; // fetch failed → show link as fallback
-          }
+            pending.clear();
+          });
+        },
+
+        compact: () => {
+          touch();
+        },
+
+        llm_usage: (_data) => {
+          // The protocol remains subscribed for backward compatibility; Agent chat deliberately ignores usage.
+          touch();
+        },
+
+        "attempt.created": (d) => {
+          const attemptId =
+            typeof d.attempt_id === "string" ? d.attempt_id : "";
+          if (!activateAttempt(sid, attemptId)) return;
+          touch();
+          // Backend has created a new attempt — ensure streaming state is active
+          // even if we connected mid-stream (SSE replay / page reload).
+          if (act().status !== "streaming") act().setStatus("streaming");
+        },
+
+        "attempt.started": () => {
+          touch();
+          // Backend has begun executing the attempt. Re-affirm streaming state
+          // so the UI shows a working indicator for reconnects and fresh loads.
+          if (act().status !== "streaming") act().setStatus("streaming");
+        },
+
+        "attempt.completed": async (d) => {
+          const attemptId =
+            typeof d.attempt_id === "string" ? d.attempt_id : "";
+          const sessionGeneration = genRef.current;
+          const attemptGeneration = attemptGenerationRef.current;
           if (
-            act().sessionId !== sid ||
-            genRef.current !== sessionGeneration ||
-            activeAttemptRef.current !== null ||
-            attemptGenerationRef.current !== attemptGeneration
-          ) return;
-          if (showCard || shadowId) {
-            if (showCard && runMetrics) {
-              try { track("feature_use", {}, { name: "backtest_run" }); } catch {}
+            !isCurrentAttempt(
+              sid,
+              attemptId,
+              sessionGeneration,
+              attemptGeneration,
+            )
+          )
+            return;
+          activeAttemptRef.current = null;
+          touch();
+          setReasoningActive(false);
+          const s = act();
+          // Build ThinkingTimeline summary from accumulated toolCalls
+          const completedTools = s.toolCalls;
+          if (completedTools.length > 0) {
+            for (const tc of completedTools) {
+              s.addMessage({
+                id: tc.id + "_call",
+                type: "tool_call",
+                content: "",
+                tool: tc.tool,
+                args: tc.arguments,
+                status: tc.status || "ok",
+                timestamp: tc.timestamp,
+              });
+              if (tc.elapsed_ms != null) {
+                s.addMessage({
+                  id: "",
+                  type: "tool_result",
+                  content: tc.preview || "",
+                  tool: tc.tool,
+                  status: tc.status || "ok",
+                  elapsed_ms: tc.elapsed_ms,
+                  timestamp: tc.timestamp + 1,
+                });
+              }
             }
+          }
+
+          // Clear streaming text (don't create thinking message)
+          s.clearStreaming();
+
+          // Add final answer
+          const runDir = String(d.run_dir || "");
+          const runId = runDir ? runDir.split(/[/\\]/).pop() : undefined;
+          const summary = String(d.summary || "");
+          if (summary)
             s.addMessage({
-              id: "", type: "run_complete", content: "", runId,
-              metrics: showCard ? runMetrics : undefined,
-              equityCurve: showCard ? runCurve : undefined,
+              id: "",
+              type: "answer",
+              content: summary,
+              timestamp: Date.now(),
+            });
+
+          // Detect Shadow Account id if render_shadow_report fired successfully this turn
+          const shadowCall = completedTools.find(
+            (tc) =>
+              tc.tool === "render_shadow_report" &&
+              (tc.status || "ok") === "ok",
+          );
+          const shadowMatch = shadowCall?.preview?.match(
+            /"shadow_id"\s*:\s*"(shadow_[A-Za-z0-9_]+)"/,
+          );
+          const shadowId = shadowMatch?.[1];
+
+          // Show RunCompleteCard when the turn produced backtest metrics or a shadow report
+          if (runId) {
+            let runMetrics: Record<string, number> | undefined;
+            let runCurve: Array<{ time: string; equity: number }> | undefined;
+            let showCard = false;
+            let runData: Awaited<ReturnType<typeof api.getRun>> | undefined;
+            try {
+              runData = await api.getRun(runId);
+              if (isReportWorthyRun(runData)) {
+                runMetrics = runData.metrics;
+                runCurve = runData.equity_curve?.map((e) => ({
+                  time: e.time,
+                  equity: Number(e.equity),
+                }));
+                showCard = true;
+              }
+            } catch {
+              showCard = true; // fetch failed → show link as fallback
+            }
+            if (
+              act().sessionId !== sid ||
+              genRef.current !== sessionGeneration ||
+              activeAttemptRef.current !== null ||
+              attemptGenerationRef.current !== attemptGeneration
+            )
+              return;
+            if (showCard || shadowId) {
+              if (showCard && runMetrics) {
+                try {
+                  track("feature_use", {}, { name: "backtest_run" });
+                } catch {}
+              }
+              s.addMessage({
+                id: "",
+                type: "run_complete",
+                content: "",
+                runId,
+                metrics: showCard ? runMetrics : undefined,
+                equityCurve: showCard ? runCurve : undefined,
+                shadowId,
+                timestamp: Date.now(),
+              });
+            }
+          } else if (shadowId) {
+            s.addMessage({
+              id: "",
+              type: "run_complete",
+              content: "",
               shadowId,
               timestamp: Date.now(),
             });
           }
-        } else if (shadowId) {
-          s.addMessage({ id: "", type: "run_complete", content: "", shadowId, timestamp: Date.now() });
-        }
 
-        // Reset
-        s.setStatus("idle");
-        useAgentStore.setState({ toolCalls: [] });
-        activeAttemptRef.current = null;
-        scrollToBottom();
-      },
+          // Reset
+          s.setStatus("idle");
+          useAgentStore.setState({ toolCalls: [] });
+          activeAttemptRef.current = null;
+          scrollToBottom();
+        },
 
-      "attempt.failed": (d) => {
-        const attemptId = typeof d.attempt_id === "string" ? d.attempt_id : "";
-        const sessionGeneration = genRef.current;
-        const attemptGeneration = attemptGenerationRef.current;
-        if (!isCurrentAttempt(sid, attemptId, sessionGeneration, attemptGeneration)) return;
-        touch();
-        setReasoningActive(false);
-        act().clearStreaming();
-        act().addMessage({ id: "", type: "error", content: String(d.error || "Execution failed"), timestamp: Date.now() });
-        act().setStatus("idle");
-        // Clear stale toolCalls so the next turn's running indicator doesn't
-        // briefly show the previous turn's progress before fresh events land.
-        useAgentStore.setState({ toolCalls: [] });
-        activeAttemptRef.current = null;
-        scrollToBottom();
-      },
+        "attempt.failed": (d) => {
+          const attemptId =
+            typeof d.attempt_id === "string" ? d.attempt_id : "";
+          const sessionGeneration = genRef.current;
+          const attemptGeneration = attemptGenerationRef.current;
+          if (
+            !isCurrentAttempt(
+              sid,
+              attemptId,
+              sessionGeneration,
+              attemptGeneration,
+            )
+          )
+            return;
+          touch();
+          setReasoningActive(false);
+          act().clearStreaming();
+          act().addMessage({
+            id: "",
+            type: "error",
+            content: String(d.error || "Execution failed"),
+            timestamp: Date.now(),
+          });
+          act().setStatus("idle");
+          // Clear stale toolCalls so the next turn's running indicator doesn't
+          // briefly show the previous turn's progress before fresh events land.
+          useAgentStore.setState({ toolCalls: [] });
+          activeAttemptRef.current = null;
+          scrollToBottom();
+        },
 
-      "goal.created": () => {
-        touch();
-        loadGoalSnapshot(sid);
-      },
+        "goal.created": () => {
+          touch();
+          loadGoalSnapshot(sid);
+        },
 
-      "swarm.started": (d) => {
-        touch();
-        const status = buildSwarmStatusFromStarted(d);
-        if (!status) return;
-        act().upsertSwarmStatus(status);
-        scrollToBottom();
-      },
+        "swarm.started": (d) => {
+          touch();
+          const status = buildSwarmStatusFromStarted(d);
+          if (!status) return;
+          act().upsertSwarmStatus(status);
+          scrollToBottom();
+        },
 
-      "swarm.event": (d) => {
-        touch();
-        if (act().status !== "streaming") act().setStatus("streaming");
-        const runId = String(d.run_id || "");
-        const event = d.event;
-        if (!runId || !event) return;
-        act().updateSwarmStatus(runId, (current) => applySwarmEvent(current, event));
-        scrollToBottom();
-      },
+        "swarm.event": (d) => {
+          touch();
+          if (act().status !== "streaming") act().setStatus("streaming");
+          const runId = String(d.run_id || "");
+          const event = d.event;
+          if (!runId || !event) return;
+          act().updateSwarmStatus(runId, (current) =>
+            applySwarmEvent(current, event),
+          );
+          scrollToBottom();
+        },
 
-      "goal.evidence": () => {
-        touch();
-        loadGoalSnapshot(sid);
-      },
+        "goal.evidence": () => {
+          touch();
+          loadGoalSnapshot(sid);
+        },
 
-      "goal.updated": (d) => {
-        touch();
-        const snapshot = d.snapshot as GoalSnapshot | undefined;
-        const goal = (d.goal as GoalSnapshot["goal"] | undefined) ?? snapshot?.goal;
-        if (goal && isTerminalGoalStatus(goal.status)) {
-          setGoalSnapshot(null);
-          setGoalDetailsOpen(false);
-          setGoalEditActive(false);
-          return;
-        }
-        if (snapshot) {
-          setGoalSnapshot(snapshot);
-          return;
-        }
-        loadGoalSnapshot(sid);
-      },
+        "goal.updated": (d) => {
+          touch();
+          const snapshot = d.snapshot as GoalSnapshot | undefined;
+          const goal =
+            (d.goal as GoalSnapshot["goal"] | undefined) ?? snapshot?.goal;
+          if (goal && isTerminalGoalStatus(goal.status)) {
+            setGoalSnapshot(null);
+            setGoalDetailsOpen(false);
+            setGoalEditActive(false);
+            return;
+          }
+          if (snapshot) {
+            setGoalSnapshot(snapshot);
+            return;
+          }
+          loadGoalSnapshot(sid);
+        },
 
-      "mandate.proposal": (d) => {
-        touch();
-        const proposal = d as unknown as MandateProposal;
-        if (!proposal.proposal_id || !Array.isArray(proposal.profiles)) return;
-        setLiveItems((items) => [...items, { kind: "proposal", timestamp: Date.now(), proposal }]);
-        scrollToBottom();
-      },
+        "mandate.proposal": (d) => {
+          touch();
+          const proposal = d as unknown as MandateProposal;
+          if (!proposal.proposal_id || !Array.isArray(proposal.profiles))
+            return;
+          setLiveItems((items) => [
+            ...items,
+            { kind: "proposal", timestamp: Date.now(), proposal },
+          ]);
+          scrollToBottom();
+        },
 
-      "mandate.committed": (d) => {
-        touch();
-        const committed = d as unknown as MandateCommitted;
-        if (!committed.proposal_id) return;
-        setCommittedMandates((prev) => ({ ...prev, [committed.proposal_id as string]: committed }));
-        // A fresh mandate may bring up the runner; refresh the runtime panel now.
-        setLiveStatusRefresh((n) => n + 1);
-        scrollToBottom();
-      },
-
-      "live.halted": (d) => {
-        touch();
-        const halted = d as unknown as LiveHalted;
-        // Preemptive kill switch: the server has cancelled resting orders and may have
-        // flattened positions (SPEC §7.5 #6). Reflect the halted state across surfaces;
-        // the RunnerStatus panel re-polls so its per-broker rows show "halted".
-        setLiveHalted(halted);
-        setLiveStatusRefresh((n) => n + 1);
-        toast.warning(t('agent.connectorHalted'));
-      },
-
-      "live.resumed": (d) => {
-        touch();
-        // Kill switch cleared via a privileged surface action (SPEC Consent §4);
-        // clear the halted banner and re-poll runtime status.
-        void d;
-        setLiveHalted(null);
-        setLiveStatusRefresh((n) => n + 1);
-        toast.success(t('agent.connectionRestored'));
-      },
-
-      "live.action": (d) => {
-        touch();
-        const action = d as unknown as LiveAction;
-        if (!action.kind) return;
-        setLiveItems((items) => [...items, { kind: "live_action", timestamp: Date.now(), action }]);
-        if (action.kind === "halt_tripped") setLiveHalted({ broker: action.broker, reason: action.intent_normalized });
-        if (action.kind === "halt_cleared") setLiveHalted(null);
-        // Mandate-affecting / runner-affecting actions should refresh the runtime panel.
-        if (["mandate_committed", "halt_tripped", "halt_cleared"].includes(action.kind)) {
+        "mandate.committed": (d) => {
+          touch();
+          const committed = d as unknown as MandateCommitted;
+          if (!committed.proposal_id) return;
+          setCommittedMandates((prev) => ({
+            ...prev,
+            [committed.proposal_id as string]: committed,
+          }));
+          // A fresh mandate may bring up the runner; refresh the runtime panel now.
           setLiveStatusRefresh((n) => n + 1);
-        }
-        scrollToBottom();
-      },
+          scrollToBottom();
+        },
 
-      heartbeat: () => {},
-      reconnect: (d) => { act().setSseStatus("reconnecting", Number(d.attempt ?? 0)); },
-    });
-  }, [activateAttempt, connect, disconnect, isCurrentAttempt, loadGoalSnapshot, scrollToBottom]);
+        "live.halted": (d) => {
+          touch();
+          const halted = d as unknown as LiveHalted;
+          // Preemptive kill switch: the server has cancelled resting orders and may have
+          // flattened positions (SPEC §7.5 #6). Reflect the halted state across surfaces;
+          // the RunnerStatus panel re-polls so its per-broker rows show "halted".
+          setLiveHalted(halted);
+          setLiveStatusRefresh((n) => n + 1);
+          toast.warning(t("agent.connectorHalted"));
+        },
+
+        "live.resumed": (d) => {
+          touch();
+          // Kill switch cleared via a privileged surface action (SPEC Consent §4);
+          // clear the halted banner and re-poll runtime status.
+          void d;
+          setLiveHalted(null);
+          setLiveStatusRefresh((n) => n + 1);
+          toast.success(t("agent.connectionRestored"));
+        },
+
+        "live.action": (d) => {
+          touch();
+          const action = d as unknown as LiveAction;
+          if (!action.kind) return;
+          setLiveItems((items) => [
+            ...items,
+            { kind: "live_action", timestamp: Date.now(), action },
+          ]);
+          if (action.kind === "halt_tripped")
+            setLiveHalted({
+              broker: action.broker,
+              reason: action.intent_normalized,
+            });
+          if (action.kind === "halt_cleared") setLiveHalted(null);
+          // Mandate-affecting / runner-affecting actions should refresh the runtime panel.
+          if (
+            ["mandate_committed", "halt_tripped", "halt_cleared"].includes(
+              action.kind,
+            )
+          ) {
+            setLiveStatusRefresh((n) => n + 1);
+          }
+          scrollToBottom();
+        },
+
+        heartbeat: () => {},
+        reconnect: (d) => {
+          act().setSseStatus("reconnecting", Number(d.attempt ?? 0));
+        },
+      });
+    },
+    [
+      activateAttempt,
+      connect,
+      disconnect,
+      isCurrentAttempt,
+      loadGoalSnapshot,
+      scrollToBottom,
+    ],
+  );
 
   useEffect(() => {
-    const { sessionId: curSid, messages: curMsgs, cacheSession, reset, getCachedSession, switchSession } = act();
+    const {
+      sessionId: curSid,
+      messages: curMsgs,
+      cacheSession,
+      reset,
+      getCachedSession,
+      switchSession,
+    } = act();
 
     if (urlSessionId && urlSessionId !== curSid) {
       const gen = genRef.current + 1;
@@ -846,7 +1166,11 @@ export function Agent() {
         loadSessionMessages(urlSessionId, gen);
       }
       setupSSE(urlSessionId);
-    } else if (urlSessionId && urlSessionId === curSid && sseSessionRef.current !== urlSessionId) {
+    } else if (
+      urlSessionId &&
+      urlSessionId === curSid &&
+      sseSessionRef.current !== urlSessionId
+    ) {
       // #229: returning to the SAME session after the page was unmounted (user
       // navigated away and back). The store kept our messages, but the unmount
       // cleanup tore down the SSE stream, so a running attempt stopped updating
@@ -857,7 +1181,8 @@ export function Agent() {
       // (covers an attempt that finished while we were away), then re-subscribe.
       const gen = genRef.current + 1;
       genRef.current = gen;
-      const seed = curMsgs.length > 0 ? curMsgs : getCachedSession(urlSessionId);
+      const seed =
+        curMsgs.length > 0 ? curMsgs : getCachedSession(urlSessionId);
       switchSession(urlSessionId, seed);
       loadSessionMessages(urlSessionId, gen);
       setupSSE(urlSessionId);
@@ -873,7 +1198,13 @@ export function Agent() {
       if (curSid && curMsgs.length > 0) cacheSession(curSid, curMsgs);
       reset();
     }
-  }, [urlSessionId, doDisconnect, loadSessionMessages, setupSSE, forceScrollToBottom]);
+  }, [
+    urlSessionId,
+    doDisconnect,
+    loadSessionMessages,
+    setupSSE,
+    forceScrollToBottom,
+  ]);
 
   /* Single shared poller for `GET /live/status`. RunnerStatus consumes this snapshot
    * as a prop rather than polling independently, and the global kill switch reads it
@@ -882,14 +1213,17 @@ export function Agent() {
     try {
       const next = await api.getLiveStatus();
       setLiveStatus(next);
-      setLiveHalted((current) => (
-        current && !haltScopeStillActive(current, next) ? null : current
-      ));
+      setLiveHalted((current) =>
+        current && !haltScopeStillActive(current, next) ? null : current,
+      );
       setLiveStatusUnavailable(false);
     } catch (error) {
       // A 404/501 means the runtime endpoint is not wired on this backend; treat the
       // status source as unavailable. Any other failure keeps the last snapshot.
-      if (error instanceof ApiError && (error.status === 404 || error.status === 501)) {
+      if (
+        error instanceof ApiError &&
+        (error.status === 404 || error.status === 501)
+      ) {
         setLiveStatus(null);
         setLiveStatusUnavailable(true);
       }
@@ -923,10 +1257,13 @@ export function Agent() {
   useEffect(() => () => doDisconnect(), [doDisconnect]);
 
   useEffect(() => {
-    api.getLLMSettings().then((s) => {
-      sseTimeoutMsRef.current = s.sse_timeout_seconds * 1000;
-      setLLMSettings(s);
-    }).catch(() => {});
+    api
+      .getLLMSettings()
+      .then((s) => {
+        sseTimeoutMsRef.current = s.sse_timeout_seconds * 1000;
+        setLLMSettings(s);
+      })
+      .catch(() => {});
   }, []);
 
   const vipModels = llmSettings?.vip_models ?? [];
@@ -937,6 +1274,12 @@ export function Agent() {
     vipModels.length > 0;
 
   useEffect(() => {
+    if (!showVipModelMenu) return;
+    const selectedIndex = vipModels.indexOf(llmSettings?.model_name ?? "");
+    vipModelOptionRefs.current[selectedIndex >= 0 ? selectedIndex : 0]?.focus();
+  }, [llmSettings?.model_name, showVipModelMenu, vipModels]);
+
+  useEffect(() => {
     if (!vipModelSwitching && focusInputAfterVipSwitchRef.current) {
       focusInputAfterVipSwitchRef.current = false;
       inputRef.current?.focus();
@@ -944,6 +1287,7 @@ export function Agent() {
   }, [vipModelSwitching]);
 
   const handleVIPModelChange = async (modelName: string) => {
+    setShowVipModelMenu(false);
     if (!llmSettings || modelName === llmSettings.model_name) {
       inputRef.current?.focus();
       return;
@@ -954,7 +1298,11 @@ export function Agent() {
       const updated = await api.updateVIPModel(modelName);
       setLLMSettings(updated);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("agent.vipModelSwitchFailed"));
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t("agent.vipModelSwitchFailed"),
+      );
     } finally {
       focusInputAfterVipSwitchRef.current = true;
       setVipModelSwitching(false);
@@ -972,10 +1320,14 @@ export function Agent() {
     // deliberately does not, so a connection that only keep-alives still trips.
     lastEventRef.current = Date.now();
     const timer = setInterval(() => {
-      if (lastEventRef.current && Date.now() - lastEventRef.current > sseTimeoutMsRef.current && act().status === "streaming") {
+      if (
+        lastEventRef.current &&
+        Date.now() - lastEventRef.current > sseTimeoutMsRef.current &&
+        act().status === "streaming"
+      ) {
         setReasoningActive(false);
         act().setStatus("idle");
-        toast.warning(t('agent.executionTimedOut'));
+        toast.warning(t("agent.executionTimedOut"));
       }
     }, 10_000);
     return () => clearInterval(timer);
@@ -993,19 +1345,28 @@ export function Agent() {
         setGoalSnapshot(snapshot);
         setGoalComposerActive(false);
         setGoalDetailsOpen(true);
-        toast.success(t('agent.researchGoalAttached'));
+        toast.success(t("agent.researchGoalAttached"));
         const kickoff = goalKickoffPrompt(prompt);
-        act().addMessage({ id: "", type: "user", content: kickoff, timestamp: Date.now() });
+        act().addMessage({
+          id: "",
+          type: "user",
+          content: kickoff,
+          timestamp: Date.now(),
+        });
         act().setStatus("streaming");
         forceScrollToBottom();
         setupSSE(sid);
         const sent = await api.sendMessage(sid, kickoff);
         if (!activateAttempt(sid, sent.attempt_id)) return;
         void syncCompletedAttempt(sid, sent.attempt_id);
-        try { track("feature_use", {}, { name: "chat_send" }); } catch {}
+        try {
+          track("feature_use", {}, { name: "chat_send" });
+        } catch {}
       } catch (error) {
         act().setStatus("idle");
-        toast.error(error instanceof Error ? error.message : t('agent.failedToStartGoal'));
+        toast.error(
+          error instanceof Error ? error.message : t("agent.failedToStartGoal"),
+        );
       }
       return;
     }
@@ -1023,7 +1384,12 @@ export function Agent() {
       setAttachment(null);
     }
     setInput("");
-    act().addMessage({ id: "", type: "user", content: finalPrompt, timestamp: Date.now() });
+    act().addMessage({
+      id: "",
+      type: "user",
+      content: finalPrompt,
+      timestamp: Date.now(),
+    });
     act().setStatus("streaming");
     forceScrollToBottom();
     inputRef.current?.focus();
@@ -1040,28 +1406,43 @@ export function Agent() {
       const sent = await api.sendMessage(sid, finalPrompt);
       if (!activateAttempt(sid, sent.attempt_id)) return;
       void syncCompletedAttempt(sid, sent.attempt_id);
-      try { track("feature_use", {}, { name: "chat_send" }); } catch {}
+      try {
+        track("feature_use", {}, { name: "chat_send" });
+      } catch {}
     } catch (error) {
       act().setStatus("error");
-      const message = isAuthRequiredError(error) ? AUTH_REQUIRED_MESSAGE : t('agent.failedToSend');
+      const message = isAuthRequiredError(error)
+        ? AUTH_REQUIRED_MESSAGE
+        : t("agent.failedToSend");
       toast.error(message);
-      act().addMessage({ id: "", type: "error", content: message, timestamp: Date.now() });
+      act().addMessage({
+        id: "",
+        type: "error",
+        content: message,
+        timestamp: Date.now(),
+      });
     }
   };
 
-  const ensureGoalSession = useCallback(async (title: string): Promise<string> => {
-    let sid = act().sessionId;
-    if (sid) return sid;
-    const session = await api.createSession(title.slice(0, 50));
-    sid = session.session_id;
-    pendingGoalSessionRef.current = sid;
-    act().setSessionId(sid);
-    setSearchParams({ session: sid }, { replace: true });
-    setupSSE(sid);
-    return sid;
-  }, [setSearchParams, setupSSE]);
+  const ensureGoalSession = useCallback(
+    async (title: string): Promise<string> => {
+      let sid = act().sessionId;
+      if (sid) return sid;
+      const session = await api.createSession(title.slice(0, 50));
+      sid = session.session_id;
+      pendingGoalSessionRef.current = sid;
+      act().setSessionId(sid);
+      setSearchParams({ session: sid }, { replace: true });
+      setupSSE(sid);
+      return sid;
+    },
+    [setSearchParams, setupSSE],
+  );
 
-  const handleSubmit = (e: FormEvent) => { e.preventDefault(); runPrompt(input.trim()); };
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    runPrompt(input.trim());
+  };
 
   const handleCancel = async () => {
     setReasoningActive(false);
@@ -1074,9 +1455,9 @@ export function Agent() {
       act().setStatus("idle");
       act().clearStreaming();
       useAgentStore.setState({ toolCalls: [] });
-      toast.info(t('agent.cancelRequestSent'));
+      toast.info(t("agent.cancelRequestSent"));
     } catch {
-      toast.error(t('agent.cancelFailed'));
+      toast.error(t("agent.cancelFailed"));
     }
   };
 
@@ -1092,11 +1473,22 @@ export function Agent() {
       // Preemptive halt: the server trips the kill switch (cancel resting orders +
       // optional flatten per SPEC §7.5 #6) and broadcasts live.halted. Reflect
       // optimistically and re-poll the runtime panel so the runner shows stopped.
-      setLiveHalted((cur) => cur ?? { broker: null, by: "frontend", tripped_at: new Date().toISOString() });
+      setLiveHalted(
+        (cur) =>
+          cur ?? {
+            broker: null,
+            by: "frontend",
+            tripped_at: new Date().toISOString(),
+          },
+      );
       setLiveStatusRefresh((n) => n + 1);
-      toast.success(t('agent.connectorHalted'));
+      toast.success(t("agent.connectorHalted"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('agent.failedToHaltConnector'));
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t("agent.failedToHaltConnector"),
+      );
     } finally {
       setHalting(false);
     }
@@ -1113,9 +1505,11 @@ export function Agent() {
       });
       setGoalSnapshot(null);
       setGoalDetailsOpen(false);
-      toast.success(t('agent.researchGoalCancelled'));
+      toast.success(t("agent.researchGoalCancelled"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('agent.failedToCancelGoal'));
+      toast.error(
+        error instanceof Error ? error.message : t("agent.failedToCancelGoal"),
+      );
     }
   }, [goalSnapshot, sessionId]);
 
@@ -1136,16 +1530,23 @@ export function Agent() {
       });
       setGoalSnapshot(response.snapshot);
       setGoalEditActive(false);
-      toast.success(t('agent.researchGoalUpdated'));
+      toast.success(t("agent.researchGoalUpdated"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('agent.failedToUpdateGoal'));
+      toast.error(
+        error instanceof Error ? error.message : t("agent.failedToUpdateGoal"),
+      );
     }
   }, [goalEditValue, goalSnapshot, sessionId]);
 
   const handleContinueGoal = useCallback(async () => {
     if (!sessionId || !goalSnapshot || status === "streaming") return;
     const prompt = goalContinuePrompt(goalSnapshot);
-    act().addMessage({ id: "", type: "user", content: prompt, timestamp: Date.now() });
+    act().addMessage({
+      id: "",
+      type: "user",
+      content: prompt,
+      timestamp: Date.now(),
+    });
     act().setStatus("streaming");
     forceScrollToBottom();
     inputRef.current?.focus();
@@ -1156,32 +1557,55 @@ export function Agent() {
       void syncCompletedAttempt(sessionId, sent.attempt_id);
     } catch (error) {
       act().setStatus("error");
-      const message = isAuthRequiredError(error) ? AUTH_REQUIRED_MESSAGE : t('agent.failedToContinue');
+      const message = isAuthRequiredError(error)
+        ? AUTH_REQUIRED_MESSAGE
+        : t("agent.failedToContinue");
       toast.error(message);
-      act().addMessage({ id: "", type: "error", content: message, timestamp: Date.now() });
+      act().addMessage({
+        id: "",
+        type: "error",
+        content: message,
+        timestamp: Date.now(),
+      });
     }
-  }, [activateAttempt, forceScrollToBottom, goalSnapshot, sessionId, setupSSE, status, syncCompletedAttempt]);
+  }, [
+    activateAttempt,
+    forceScrollToBottom,
+    goalSnapshot,
+    sessionId,
+    setupSSE,
+    status,
+    syncCompletedAttempt,
+  ]);
 
-  const handleRetry = useCallback((errorMsg: AgentMessage) => {
-    if (status === "streaming") return;
-    const msgs = act().messages;
-    const errorIdx = msgs.findIndex(m => m.id === errorMsg.id);
-    if (errorIdx === -1) return;
-    // Find the most recent user message before this error
-    let userContent: string | null = null;
-    for (let i = errorIdx - 1; i >= 0; i--) {
-      if (msgs[i].type === "user") {
-        userContent = msgs[i].content;
-        break;
+  const handleRetry = useCallback(
+    (errorMsg: AgentMessage) => {
+      if (status === "streaming") return;
+      const msgs = act().messages;
+      const errorIdx = msgs.findIndex((m) => m.id === errorMsg.id);
+      if (errorIdx === -1) return;
+      // Find the most recent user message before this error
+      let userContent: string | null = null;
+      for (let i = errorIdx - 1; i >= 0; i--) {
+        if (msgs[i].type === "user") {
+          userContent = msgs[i].content;
+          break;
+        }
       }
-    }
-    if (!userContent) return;
-    runPrompt(userContent);
-  }, [status]);
+      if (!userContent) return;
+      runPrompt(userContent);
+    },
+    [status],
+  );
 
   const handleExport = () => {
     if (messages.length === 0) return;
-    const lines: string[] = [`# Chat Export`, ``, `Export time: ${new Date().toLocaleString()}`, ``];
+    const lines: string[] = [
+      `# Chat Export`,
+      ``,
+      `Export time: ${new Date().toLocaleString()}`,
+      ``,
+    ];
     for (const msg of messages) {
       const time = new Date(msg.timestamp).toLocaleString();
       if (msg.type === "user") {
@@ -1193,12 +1617,17 @@ export function Agent() {
       } else if (msg.type === "tool_call") {
         lines.push(`> Tool call: ${msg.tool || "unknown"}`, ``);
       } else if (msg.type === "swarm_status") {
-        lines.push(`> Swarm status: ${msg.swarmStatus?.preset || "swarm"} ${msg.swarmStatus?.status || ""}`, ``);
+        lines.push(
+          `> Swarm status: ${msg.swarmStatus?.preset || "swarm"} ${msg.swarmStatus?.status || ""}`,
+          ``,
+        );
       } else if (msg.type === "run_complete") {
         lines.push(`> Backtest complete: ${msg.runId || ""}`, ``);
       }
     }
-    const blob = new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" });
+    const blob = new Blob([lines.join("\n")], {
+      type: "text/markdown;charset=utf-8",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -1207,51 +1636,100 @@ export function Agent() {
     URL.revokeObjectURL(url);
   };
 
-  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-    const blockedExts = [
-      ".exe", ".msi", ".bat", ".cmd", ".com", ".scr", ".app", ".dmg",
-      ".so", ".dll", ".dylib",
-      ".zip", ".rar", ".7z", ".tar", ".gz", ".tgz", ".bz2", ".xz",
-    ];
-    const lowered = file.name.toLowerCase();
-    if (blockedExts.some((ext) => lowered.endsWith(ext))) {
-      toast.error(t('agent.executablesNotAllowed'));
-      return;
-    }
-    if (file.size > 50 * 1024 * 1024) {
-      toast.error(t('agent.fileSizeExceeds'));
-      return;
-    }
-    setUploading(true);
-    setShowUploadMenu(false);
-    try {
-      const result = await api.uploadFile(file);
-      setAttachment({ filename: result.filename, filePath: result.file_path });
-      toast.success(t('agent.uploaded', { filename: result.filename }));
-    } catch (err) {
-      toast.error(t('agent.uploadFailed', { error: err instanceof Error ? err.message : 'Unknown error' }));
-    } finally {
-      setUploading(false);
-    }
-  }, []);
+  const handleFileSelect = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      e.target.value = "";
+      const blockedExts = [
+        ".exe",
+        ".msi",
+        ".bat",
+        ".cmd",
+        ".com",
+        ".scr",
+        ".app",
+        ".dmg",
+        ".so",
+        ".dll",
+        ".dylib",
+        ".zip",
+        ".rar",
+        ".7z",
+        ".tar",
+        ".gz",
+        ".tgz",
+        ".bz2",
+        ".xz",
+      ];
+      const lowered = file.name.toLowerCase();
+      if (blockedExts.some((ext) => lowered.endsWith(ext))) {
+        toast.error(t("agent.executablesNotAllowed"));
+        return;
+      }
+      if (file.size > 50 * 1024 * 1024) {
+        toast.error(t("agent.fileSizeExceeds"));
+        return;
+      }
+      setUploading(true);
+      setShowUploadMenu(false);
+      try {
+        const result = await api.uploadFile(file);
+        setAttachment({
+          filename: result.filename,
+          filePath: result.file_path,
+        });
+        toast.success(t("agent.uploaded", { filename: result.filename }));
+      } catch (err) {
+        toast.error(
+          t("agent.uploadFailed", {
+            error: err instanceof Error ? err.message : "Unknown error",
+          }),
+        );
+      } finally {
+        setUploading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (uploadMenuRef.current && !uploadMenuRef.current.contains(e.target as Node)) {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        uploadMenuRef.current &&
+        !uploadMenuRef.current.contains(event.target as Node)
+      ) {
         setShowUploadMenu(false);
       }
+      if (
+        vipModelMenuRef.current &&
+        !vipModelMenuRef.current.contains(event.target as Node)
+      ) {
+        setShowVipModelMenu(false);
+      }
     };
-    if (showUploadMenu) {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowVipModelMenu(false);
+      }
+    };
+    if (showUploadMenu || showVipModelMenu) {
       document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [showUploadMenu]);
+    if (showVipModelMenu) {
+      document.addEventListener("keydown", handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showUploadMenu, showVipModelMenu]);
 
   const groups = useMemo(() => groupMessages(messages), [messages]);
-  const goalProgress = useMemo(() => getGoalProgress(goalSnapshot), [goalSnapshot]);
+  const goalProgress = useMemo(
+    () => getGoalProgress(goalSnapshot),
+    [goalSnapshot],
+  );
 
   /* Merge message groups with live-channel items, ordered by timestamp, so a
    * mandate proposal / live-action chip renders inline at the point it arrived. */
@@ -1261,11 +1739,17 @@ export function Agent() {
   const timelineRows = useMemo<TimelineRow[]>(() => {
     const rows: TimelineRow[] = groups.map((g, i) => {
       const ts = g.kind === "timeline" ? g.msgs[0].timestamp : g.msg.timestamp;
-      const key = g.kind === "timeline" ? `g_${g.msgs[0].id || g.msgs[0].timestamp}` : `g_${g.msg.id || g.msg.timestamp}_${i}`;
+      const key =
+        g.kind === "timeline"
+          ? `g_${g.msgs[0].id || g.msgs[0].timestamp}`
+          : `g_${g.msg.id || g.msg.timestamp}_${i}`;
       return { sort: ts, render: "group", group: g, key };
     });
     for (const item of liveItems) {
-      const key = item.kind === "proposal" ? `lp_${item.proposal.proposal_id}` : `la_${item.action.audit_id || item.timestamp}`;
+      const key =
+        item.kind === "proposal"
+          ? `lp_${item.proposal.proposal_id}`
+          : `la_${item.action.audit_id || item.timestamp}`;
       rows.push({ sort: item.timestamp, render: "live", item, key });
     }
     return rows.sort((a, b) => a.sort - b.sort);
@@ -1279,7 +1763,10 @@ export function Agent() {
   const liveStatusActive =
     liveStatus != null &&
     (liveStatus.global_halted ||
-      liveStatus.brokers.some((b) => b.auth.oauth_token_present || b.runner?.alive || b.mandate != null));
+      liveStatus.brokers.some(
+        (b) =>
+          b.auth.oauth_token_present || b.runner?.alive || b.mandate != null,
+      ));
   const liveActive =
     liveItems.length > 0 ||
     Object.keys(committedMandates).length > 0 ||
@@ -1287,15 +1774,19 @@ export function Agent() {
     liveStatusActive;
   /* The global kill switch reflects only a global halt from either an in-session SSE
    * event or the polled status; broker-scoped halts stay on their broker row. */
-  const liveIsHalted = isGlobalLiveHalt(liveHalted) || (liveStatus?.global_halted ?? false);
+  const liveIsHalted =
+    isGlobalLiveHalt(liveHalted) || (liveStatus?.global_halted ?? false);
 
   return (
     <div className="flex flex-col flex-1 min-w-0 overflow-hidden h-full">
-      <div ref={listRef} className="flex-1 overflow-auto p-6 scroll-smooth relative">
+      <div
+        ref={listRef}
+        className="flex-1 overflow-auto p-6 scroll-smooth relative"
+      >
         <div className="max-w-3xl mx-auto space-y-4">
           {sessionLoading && (
             <div className="space-y-4 py-4">
-              {[1, 2, 3].map(i => (
+              {[1, 2, 3].map((i) => (
                 <div key={i} className="flex gap-3 animate-pulse">
                   <div className="h-8 w-8 rounded-full bg-muted shrink-0" />
                   <div className="flex-1 space-y-2">
@@ -1306,7 +1797,9 @@ export function Agent() {
               ))}
             </div>
           )}
-          {!sessionLoading && messages.length === 0 && <WelcomeScreen onExample={runPrompt} />}
+          {!sessionLoading && messages.length === 0 && (
+            <WelcomeScreen onExample={runPrompt} />
+          )}
 
           {timelineRows.map((row, rowIdx) => {
             if (row.render === "live") {
@@ -1315,7 +1808,9 @@ export function Agent() {
                   <MandateProposalCard
                     key={row.key}
                     proposal={row.item.proposal}
-                    committed={committedMandates[row.item.proposal.proposal_id] ?? null}
+                    committed={
+                      committedMandates[row.item.proposal.proposal_id] ?? null
+                    }
                     onAdjust={runPrompt}
                   />
                 );
@@ -1343,31 +1838,44 @@ export function Agent() {
             }
             return (
               <div key={row.key} data-msg-idx={msgIdx}>
-                <MessageBubble msg={g.msg} onRetry={g.msg.type === "error" ? handleRetry : undefined} />
+                <MessageBubble
+                  msg={g.msg}
+                  onRetry={g.msg.type === "error" ? handleRetry : undefined}
+                />
               </div>
             );
           })}
 
           {/* Pre-stream placeholder: visible after Send, before first SSE event */}
-          {status === "streaming" && !reasoningActive && !streamingText && toolCalls.length === 0 && !messages.some((m) => m.type === "swarm_status" && m.swarmStatus?.status === "running") && (
-            <div className="flex gap-3">
-              <AgentAvatar />
-              <div className="flex-1 min-w-0 flex items-center gap-2 text-xs text-muted-foreground pt-1">
-                <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
-                <span>{t('agent.agentWorking')}</span>
+          {status === "streaming" &&
+            !reasoningActive &&
+            !streamingText &&
+            toolCalls.length === 0 &&
+            !messages.some(
+              (m) =>
+                m.type === "swarm_status" &&
+                m.swarmStatus?.status === "running",
+            ) && (
+              <div className="flex gap-3">
+                <AgentAvatar />
+                <div className="flex-1 min-w-0 flex items-center gap-2 text-xs text-muted-foreground pt-1">
+                  <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
+                  <span>{t("agent.agentWorking")}</span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Live streaming area: text + tool status */}
-          {(streamingText || reasoningActive || (status === "streaming" && toolCalls.length > 0)) && (
+          {(streamingText ||
+            reasoningActive ||
+            (status === "streaming" && toolCalls.length > 0)) && (
             <div className="flex gap-3">
               <AgentAvatar />
               <div className="flex-1 min-w-0 space-y-1.5">
                 {reasoningActive && !streamingText && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
-                    <span>{t('agent.reasoning')}</span>
+                    <span>{t("agent.reasoning")}</span>
                   </div>
                 )}
                 {streamingText && (
@@ -1389,10 +1897,11 @@ export function Agent() {
               <div className="h-0.5 flex-1 rounded-full bg-primary/20 overflow-hidden">
                 <div className="h-full w-1/3 bg-primary rounded-full animate-[pulse-slide_2s_ease-in-out_infinite]" />
               </div>
-              <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">{t('agent.running')}</span>
+              <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">
+                {t("agent.running")}
+              </span>
             </div>
           )}
-
         </div>
 
         {/* Scroll to bottom button */}
@@ -1401,13 +1910,16 @@ export function Agent() {
             onClick={forceScrollToBottom}
             className="sticky bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-medium shadow-lg hover:opacity-90 transition-opacity z-10"
           >
-            <ArrowDown className="h-3 w-3" /> {t('agent.newMessages')}
+            <ArrowDown className="h-3 w-3" /> {t("agent.newMessages")}
           </button>
         )}
         <ConversationTimeline messages={messages} containerRef={listRef} />
       </div>
 
-      <form onSubmit={handleSubmit} className="border-t p-4 bg-background/80 backdrop-blur-sm">
+      <form
+        onSubmit={handleSubmit}
+        className="px-4 pb-4 bg-background/80 backdrop-blur-sm"
+      >
         <div className="max-w-3xl mx-auto space-y-2">
           {goalSnapshot && !goalComposerActive && (
             <div className="grid gap-2">
@@ -1420,7 +1932,7 @@ export function Agent() {
                 aria-expanded={goalDetailsOpen}
               >
                 <Target className="h-3 w-3 shrink-0" />
-                <span className="shrink-0">{t('agent.goal')}</span>
+                <span className="shrink-0">{t("agent.goal")}</span>
                 <span className="truncate text-muted-foreground">
                   {goalSnapshot.goal.ui_summary || goalSnapshot.goal.objective}
                 </span>
@@ -1430,8 +1942,13 @@ export function Agent() {
                   </span>
                 )}
                 {goalProgress.evidenceTotal > 0 && (
-                  <span className="shrink-0 rounded bg-background px-1 font-mono text-[10px] text-primary" title={t("agent.evidenceCollectedTitle")}>
-                    {t("agent.evidenceCount", { count: goalProgress.evidenceTotal })}
+                  <span
+                    className="shrink-0 rounded bg-background px-1 font-mono text-[10px] text-primary"
+                    title={t("agent.evidenceCollectedTitle")}
+                  >
+                    {t("agent.evidenceCount", {
+                      count: goalProgress.evidenceTotal,
+                    })}
                   </span>
                 )}
                 <ChevronDown
@@ -1448,7 +1965,9 @@ export function Agent() {
                     <div className="grid gap-2">
                       <textarea
                         value={goalEditValue}
-                        onChange={(event) => setGoalEditValue(event.target.value)}
+                        onChange={(event) =>
+                          setGoalEditValue(event.target.value)
+                        }
                         rows={3}
                         className="w-full rounded-lg border bg-background px-3 py-2 text-xs leading-relaxed text-foreground outline-none focus:ring-2 focus:ring-primary/30"
                       />
@@ -1497,10 +2016,15 @@ export function Agent() {
                   </div>
                   <div className="grid gap-1.5">
                     {goalSnapshot.criteria.map((criterion, index) => {
-                      const evidenceCount = criterionEvidenceCount(goalSnapshot, criterion.criterion_id);
-                      const displayStatus = criterionCovered(goalSnapshot, criterion) && !isCriterionStatusMet(criterion.status)
-                        ? "covered"
-                        : statusLabel(criterion.status);
+                      const evidenceCount = criterionEvidenceCount(
+                        goalSnapshot,
+                        criterion.criterion_id,
+                      );
+                      const displayStatus =
+                        criterionCovered(goalSnapshot, criterion) &&
+                        !isCriterionStatusMet(criterion.status)
+                          ? "covered"
+                          : statusLabel(criterion.status);
                       return (
                         <div
                           key={criterion.criterion_id}
@@ -1510,7 +2034,9 @@ export function Agent() {
                             {criterionIndexLabel(index)}
                           </span>
                           <span className="min-w-0">
-                            <span className="block truncate font-medium text-foreground">{criterion.text}</span>
+                            <span className="block truncate font-medium text-foreground">
+                              {criterion.text}
+                            </span>
                             <span className="block text-[11px] text-muted-foreground">
                               {displayStatus}
                             </span>
@@ -1528,9 +2054,14 @@ export function Agent() {
                         {t("agent.recentEvidence")}
                       </div>
                       {latestGoalEvidence(goalSnapshot).map((item) => (
-                        <div key={item.evidence_id} className="rounded-lg bg-muted/20 px-2 py-1.5">
+                        <div
+                          key={item.evidence_id}
+                          className="rounded-lg bg-muted/20 px-2 py-1.5"
+                        >
                           <div className="mb-0.5 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
-                            <span className="truncate">{item.source_provider || "evidence"}</span>
+                            <span className="truncate">
+                              {item.source_provider || "evidence"}
+                            </span>
                             <span>{statusLabel(item.verification_status)}</span>
                           </div>
                           <div className="line-clamp-2 text-[11px] leading-relaxed text-foreground">
@@ -1604,7 +2135,11 @@ export function Agent() {
                   className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/40 bg-destructive/5 px-2.5 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-40"
                   title={t("agent.haltConnectorTitle")}
                 >
-                  {halting ? <Loader2 className="h-3 w-3 animate-spin" /> : <OctagonX className="h-3 w-3" />}
+                  {halting ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <OctagonX className="h-3 w-3" />
+                  )}
                   {t("agent.haltConnector")}
                 </button>
               )}
@@ -1612,7 +2147,7 @@ export function Agent() {
           )}
           <div
             data-testid="agent-composer"
-            className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-2 shadow-sm transition-[border-color,box-shadow] focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20"
+            className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-2 shadow-lg transition-[border-color,box-shadow] focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20"
           >
             {(swarmPreset || goalComposerActive || attachment) && (
               <div className="order-first flex w-full flex-wrap items-center gap-1.5 px-1 pt-1">
@@ -1620,7 +2155,11 @@ export function Agent() {
                   <span className="inline-flex items-center gap-1.5 rounded-lg bg-violet-500/10 px-2.5 py-1 text-xs font-medium text-violet-600 dark:text-violet-400">
                     <Users className="h-3 w-3" />
                     {swarmPreset.title}
-                    <button type="button" onClick={() => setSwarmPreset(null)} className="hover:text-destructive transition-colors">
+                    <button
+                      type="button"
+                      onClick={() => setSwarmPreset(null)}
+                      className="hover:text-destructive transition-colors"
+                    >
                       <X className="h-3 w-3" />
                     </button>
                   </span>
@@ -1629,7 +2168,11 @@ export function Agent() {
                   <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
                     <Target className="h-3 w-3" />
                     {t("agent.newResearchGoal")}
-                    <button type="button" onClick={() => setGoalComposerActive(false)} className="hover:text-destructive transition-colors">
+                    <button
+                      type="button"
+                      onClick={() => setGoalComposerActive(false)}
+                      className="hover:text-destructive transition-colors"
+                    >
                       <X className="h-3 w-3" />
                     </button>
                   </span>
@@ -1638,7 +2181,11 @@ export function Agent() {
                   <span className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
                     <Paperclip className="h-3 w-3 shrink-0" />
                     <span className="truncate">{attachment.filename}</span>
-                    <button type="button" onClick={() => setAttachment(null)} className="shrink-0 hover:text-destructive transition-colors">
+                    <button
+                      type="button"
+                      onClick={() => setAttachment(null)}
+                      className="shrink-0 hover:text-destructive transition-colors"
+                    >
                       <X className="h-3 w-3" />
                     </button>
                   </span>
@@ -1649,7 +2196,7 @@ export function Agent() {
             <div className="relative" ref={uploadMenuRef}>
               <button
                 type="button"
-                onClick={() => setShowUploadMenu(prev => !prev)}
+                onClick={() => setShowUploadMenu((prev) => !prev)}
                 disabled={status === "streaming" || uploading}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
                 title={t("agent.moreOptions")}
@@ -1660,7 +2207,10 @@ export function Agent() {
                 <div className="absolute bottom-full left-0 mb-2 w-52 rounded-xl border bg-background/95 backdrop-blur-sm shadow-lg py-1 z-50">
                   <button
                     type="button"
-                    onClick={() => { fileInputRef.current?.click(); setShowUploadMenu(false); }}
+                    onClick={() => {
+                      fileInputRef.current?.click();
+                      setShowUploadMenu(false);
+                    }}
                     className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2"
                   >
                     <Paperclip className="h-4 w-4" />
@@ -1719,20 +2269,15 @@ export function Agent() {
                 </div>
               )}
             </div>
-            {/* 模型切换操作按钮 */}
-            {showVipModelSelector && (
-              <select
-                aria-label={t("agent.vipModel")}
-                title={t("agent.vipModel")}
-                value={llmSettings.model_name}
-                onChange={(event) => void handleVIPModelChange(event.target.value)}
-                disabled={status === "streaming" || vipModelSwitching}
-                className="h-9 min-w-0 max-w-40 shrink-0 rounded-lg bg-muted/60 px-2.5 text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+            {messages.length > 0 && (
+              <button
+                type="button"
+                onClick={handleExport}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                title={t("agent.exportChat")}
               >
-                {vipModels.map((model) => (
-                  <option key={model} value={model}>{model}</option>
-                ))}
-              </select>
+                <Download className="h-4 w-4" />
+              </button>
             )}
             <input
               ref={fileInputRef}
@@ -1757,13 +2302,23 @@ export function Agent() {
                 const el = e.target as HTMLTextAreaElement;
                 el.style.height = "auto";
                 el.style.height = `${Math.min(el.scrollHeight, COMPOSER_MAX_INPUT_HEIGHT_PX)}px`;
-                el.style.overflowY = el.scrollHeight > COMPOSER_MAX_INPUT_HEIGHT_PX ? "auto" : "hidden";
+                el.style.overflowY =
+                  el.scrollHeight > COMPOSER_MAX_INPUT_HEIGHT_PX
+                    ? "auto"
+                    : "hidden";
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
-                  const nativeEvent = e.nativeEvent as KeyboardEvent & { isComposing?: boolean };
-                  const justFinishedComposing = Date.now() - lastCompositionEndRef.current < 80;
-                  if (isComposingRef.current || nativeEvent.isComposing || nativeEvent.keyCode === 229) {
+                  const nativeEvent = e.nativeEvent as KeyboardEvent & {
+                    isComposing?: boolean;
+                  };
+                  const justFinishedComposing =
+                    Date.now() - lastCompositionEndRef.current < 80;
+                  if (
+                    isComposingRef.current ||
+                    nativeEvent.isComposing ||
+                    nativeEvent.keyCode === 229
+                  ) {
                     return;
                   }
                   if (justFinishedComposing) {
@@ -1779,34 +2334,121 @@ export function Agent() {
                   ? t("agent.describeGoal")
                   : t("agent.placeholder")
               }
-              className="order-first block w-full max-h-32 resize-none overflow-y-hidden border-0 border-b bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              className="order-first block w-full max-h-32 resize-none overflow-y-hidden border-0 bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
               disabled={status === "streaming" || vipModelSwitching}
             />
-            <div data-testid="agent-composer-actions" className="ml-auto flex items-center gap-2">
-              {messages.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleExport}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  title={t('agent.exportChat')}
-                >
-                  <Download className="h-4 w-4" />
-                </button>
+            <div
+              data-testid="agent-composer-actions"
+              className="ml-auto flex items-center gap-2"
+            >
+              {/* 模型切换操作按钮 */}
+              {showVipModelSelector && (
+                <div ref={vipModelMenuRef} className="relative shrink-0">
+                  <button
+                    ref={vipModelTriggerRef}
+                    type="button"
+                    aria-label={`${t("agent.vipModel")}: ${llmSettings.model_name}`}
+                    aria-haspopup="menu"
+                    aria-expanded={showVipModelMenu}
+                    aria-controls="vip-model-menu"
+                    disabled={status === "streaming" || vipModelSwitching}
+                    onClick={() => setShowVipModelMenu((open) => !open)}
+                    className="flex h-9 max-w-40 items-center gap-1.5 rounded-lg px-2 text-xs text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {vipModelSwitching && (
+                      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                    )}
+                    <span className="truncate">
+                      {llmSettings.model_name.toUpperCase()}
+                    </span>
+                  </button>
+                  {showVipModelMenu && (
+                    <div
+                      id="vip-model-menu"
+                      role="menu"
+                      aria-label={t("agent.vipModel")}
+                      className="absolute right-0 bottom-full z-50 mb-2 max-h-72 w-64 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border bg-background/95 p-1 shadow-lg backdrop-blur-sm"
+                    >
+                      {vipModels.map((model, index) => {
+                        const selected = model === llmSettings.model_name;
+                        return (
+                          <button
+                            ref={(element) => {
+                              vipModelOptionRefs.current[index] = element;
+                            }}
+                            key={model}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={selected}
+                            disabled={
+                              status === "streaming" || vipModelSwitching
+                            }
+                            onClick={() => void handleVIPModelChange(model)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Escape") {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setShowVipModelMenu(false);
+                                vipModelTriggerRef.current?.focus();
+                                return;
+                              }
+
+                              let nextIndex: number | null = null;
+                              if (event.key === "ArrowDown") {
+                                nextIndex = (index + 1) % vipModels.length;
+                              } else if (event.key === "ArrowUp") {
+                                nextIndex =
+                                  (index - 1 + vipModels.length) %
+                                  vipModels.length;
+                              } else if (event.key === "Home") {
+                                nextIndex = 0;
+                              } else if (event.key === "End") {
+                                nextIndex = vipModels.length - 1;
+                              }
+
+                              if (nextIndex !== null) {
+                                event.preventDefault();
+                                vipModelOptionRefs.current[nextIndex]?.focus();
+                              }
+                            }}
+                            className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted focus:bg-muted focus:outline-none disabled:cursor-not-allowed"
+                          >
+                            <span className="truncate">
+                              {model.toUpperCase()}
+                            </span>
+                            {selected && (
+                              <Check
+                                className="h-4 w-4 shrink-0"
+                                aria-hidden="true"
+                              />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               )}
+
               {status === "streaming" ? (
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive text-destructive-foreground transition-opacity hover:opacity-90"
-                  title={t('agent.stopGeneration')}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-destructive text-destructive-foreground transition-opacity hover:opacity-90"
+                  title={t("agent.stopGeneration")}
                 >
                   <Square className="h-4 w-4" />
                 </button>
               ) : (
                 <button
                   type="submit"
-                  disabled={vipModelSwitching || (goalComposerActive ? !input.trim() : (!input.trim() && !attachment))}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+                  disabled={
+                    vipModelSwitching ||
+                    (goalComposerActive
+                      ? !input.trim()
+                      : !input.trim() && !attachment)
+                  }
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
                 >
                   <Send className="h-4 w-4" />
                 </button>
