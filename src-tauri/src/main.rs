@@ -53,6 +53,7 @@ fn main() {
             console::console_login_register,
             console::console_login_set_password,
             console::console_auth_status,
+            console::console_member_usage,
             console::console_logout,
             console::console_fetch_ads,
             console::console_check_update,

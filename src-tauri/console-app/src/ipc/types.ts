@@ -72,6 +72,12 @@ export interface AuthStatusView {
   expireAt?: number | null;
 }
 
+export interface MemberUsageView {
+  total_available: number;
+  total_granted: number;
+  total_used: number;
+}
+
 export interface Captcha {
   captchaId: string;
   data: string; // base64 svg（可能含 data: 前缀）

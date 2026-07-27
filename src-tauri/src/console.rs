@@ -756,6 +756,22 @@ pub async fn console_auth_status(
     .map_err(|message| AuthError::Network { message })?
 }
 
+/// 获取当前会员运行时凭据对应的安全用量计数。
+/// provider URL 和 API key 只保留在阻塞线程的进程内存中，绝不透传 IPC。
+#[tauri::command]
+pub async fn console_member_usage(
+    auth_state: State<'_, AuthState>,
+) -> Result<auth::MemberUsageView, AuthError> {
+    let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
+    let auth_state = auth_state.inner().clone();
+    run_blocking(move || {
+        let session = auth::ensure_vip_credential(&auth_state, &layout)?;
+        auth::with_current_vip_credential(&auth_state, &session, auth::fetch_member_usage)
+    })
+    .await
+    .map_err(|message| AuthError::Network { message })?
+}
+
 /// 停止服务:干净回收 sidecar 进程组。
 #[tauri::command]
 pub async fn console_stop_service(state: State<'_, SharedChild>) -> Result<(), String> {

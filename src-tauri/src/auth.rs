@@ -120,6 +120,14 @@ pub struct VipRuntimeCredential {
     pub models: Vec<String>,
 }
 
+/// 会员 API 可安全展示的用量计数；不包含 provider 地址或 API key。
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MemberUsageView {
+    pub total_available: i64,
+    pub total_granted: i64,
+    pub total_used: i64,
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EncryptedMemberEnvelope {
@@ -451,6 +459,54 @@ fn http_client() -> Result<reqwest::blocking::Client, AuthError> {
         .map_err(|e| AuthError::Network {
             message: format!("build client: {e}"),
         })
+}
+
+#[derive(serde::Deserialize)]
+struct MemberUsageResponse {
+    code: bool,
+    #[serde(default)]
+    data: Option<MemberUsageView>,
+}
+
+pub fn parse_member_usage(text: &str) -> Result<MemberUsageView, AuthError> {
+    let response: MemberUsageResponse =
+        serde_json::from_str(text).map_err(|_| AuthError::Network {
+            message: "会员用量响应无效".into(),
+        })?;
+    if !response.code {
+        return Err(AuthError::Api {
+            code: 0,
+            message: "会员用量请求失败".into(),
+        });
+    }
+    response.data.ok_or_else(|| AuthError::Network {
+        message: "会员用量响应无效".into(),
+    })
+}
+
+fn member_usage_url(base_url: &str) -> String {
+    let base_url = base_url.trim_end_matches('/');
+    let provider_origin = base_url.strip_suffix("/v1").unwrap_or(base_url);
+    format!("{provider_origin}/api/usage/token")
+}
+
+pub fn fetch_member_usage(credential: &VipRuntimeCredential) -> Result<MemberUsageView, AuthError> {
+    let url = member_usage_url(&credential.base_url);
+    let text = http_client()
+        .map_err(|_| AuthError::Network {
+            message: "会员用量请求失败".into(),
+        })?
+        .get(url)
+        .bearer_auth(&credential.api_key)
+        .send()
+        .map_err(|_| AuthError::Network {
+            message: "会员用量请求失败".into(),
+        })?
+        .text()
+        .map_err(|_| AuthError::Network {
+            message: "会员用量响应读取失败".into(),
+        })?;
+    parse_member_usage(&text)
 }
 
 fn endpoint(path: &str) -> String {
@@ -896,29 +952,111 @@ fn commit_refreshed_session(
     }
 }
 
+fn commit_vip_credential(
+    current: &mut Option<UserSession>,
+    previous: &UserSession,
+    credential: VipRuntimeCredential,
+) -> Result<UserSession, AuthError> {
+    match current.as_mut() {
+        Some(active) if active.token == previous.token => {
+            if active.vip.is_none() {
+                active.vip = Some(credential);
+            }
+            Ok(active.clone())
+        }
+        _ => Err(AuthError::NotAuthenticated),
+    }
+}
+
+/// Runs provider work without holding the authentication lock, then verifies the
+/// expected session remains current before returning its result.
+pub fn with_current_vip_credential<T>(
+    state: &AuthState,
+    session: &UserSession,
+    operation: impl FnOnce(&VipRuntimeCredential) -> Result<T, AuthError>,
+) -> Result<T, AuthError> {
+    let credential = match state.0.lock().unwrap().as_ref() {
+        Some(current) if current.token == session.token => current.vip.clone(),
+        _ => None,
+    }
+    .ok_or(AuthError::NotAuthenticated)?;
+    let result = operation(&credential);
+
+    if matches!(state.0.lock().unwrap().as_ref(), Some(current) if current.token == session.token) {
+        result
+    } else {
+        Err(AuthError::NotAuthenticated)
+    }
+}
+
 /// 获取内存中已解密的会员凭据；进程重启后按需重新获取，但绝不写进 .env。
 pub fn ensure_vip_credential(state: &AuthState, layout: &Layout) -> Result<UserSession, AuthError> {
-    let mut sess = ensure_session_valid(state, layout)?;
-    if sess.vip.is_none() {
-        log_vip_runtime_event(
-            layout,
-            "no cached VIP credential; fetching a new runtime credential",
-        );
-        sess.vip = Some(fetch_vip_credential(&sess.token, layout)?);
-        log_vip_runtime_event(
-            layout,
-            "VIP runtime credential cached in memory for this desktop session",
-        );
-    } else {
+    let sess = ensure_session_valid(state, layout)?;
+    if let Some(cached) = {
+        let guard = state.0.lock().unwrap();
+        match guard.as_ref() {
+            Some(active) if active.token == sess.token => {
+                active.vip.as_ref().map(|_| active.clone())
+            }
+            _ => return Err(AuthError::NotAuthenticated),
+        }
+    } {
         log_vip_runtime_event(layout, "using cached VIP runtime credential from memory");
+        return Ok(cached);
     }
-    *state.0.lock().unwrap() = Some(sess.clone());
+
+    log_vip_runtime_event(
+        layout,
+        "no cached VIP credential; fetching a new runtime credential",
+    );
+    let credential = fetch_vip_credential(&sess.token, layout)?;
+    let sess = commit_vip_credential(&mut state.0.lock().unwrap(), &sess, credential)?;
+    log_vip_runtime_event(
+        layout,
+        "VIP runtime credential cached in memory for this desktop session",
+    );
     Ok(sess)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_successful_member_usage_response() {
+        let usage = parse_member_usage(
+            r#"{"code":true,"data":{"total_available":8,"total_granted":10,"total_used":2}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            (usage.total_available, usage.total_granted, usage.total_used),
+            (8, 10, 2)
+        );
+    }
+
+    #[test]
+    fn member_usage_url_uses_provider_origin_not_openai_v1_prefix() {
+        assert_eq!(
+            member_usage_url("https://provider.example/v1"),
+            "https://provider.example/api/usage/token"
+        );
+    }
+
+    #[test]
+    fn member_usage_failure_does_not_expose_provider_message() {
+        let err = parse_member_usage(
+            r#"{"code":false,"message":"https://provider.example/token?api_key=secret"}"#,
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            err,
+            AuthError::Api {
+                code: 0,
+                message
+            } if message == "会员用量请求失败"
+        ));
+    }
 
     fn client_keypair() -> (x25519_dalek::StaticSecret, x25519_dalek::PublicKey) {
         let private_key = x25519_dalek::StaticSecret::from([7_u8; 32]);
@@ -1547,6 +1685,59 @@ mod tests {
         let err = commit_refreshed_session(&state, &layout, &original, refreshed).unwrap_err();
         assert!(matches!(err, AuthError::NotAuthenticated));
         assert!(read_env_token_section(&layout).is_none());
+    }
+
+    #[test]
+    fn vip_credential_is_not_committed_after_logout() {
+        let original = sample_session(1_800_000_000, 1_900_000_000);
+        let state = AuthState(Arc::new(Mutex::new(None)));
+        let credential = VipRuntimeCredential {
+            base_url: "https://provider.example".into(),
+            api_key: "secret".into(),
+            models: vec![],
+        };
+
+        let err =
+            commit_vip_credential(&mut state.0.lock().unwrap(), &original, credential).unwrap_err();
+        assert!(matches!(err, AuthError::NotAuthenticated));
+        assert!(state.0.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn vip_credential_cannot_be_used_after_logout() {
+        let mut session = sample_session(1_800_000_000, 1_900_000_000);
+        session.vip = Some(VipRuntimeCredential {
+            base_url: "https://provider.example".into(),
+            api_key: "secret".into(),
+            models: vec![],
+        });
+        let state = AuthState(Arc::new(Mutex::new(None)));
+
+        let err = with_current_vip_credential(&state, &session, |_| -> Result<(), AuthError> {
+            panic!("logout 后不得发起 provider 请求")
+        })
+        .unwrap_err();
+
+        assert!(matches!(err, AuthError::NotAuthenticated));
+    }
+
+    #[test]
+    fn vip_provider_work_does_not_hold_authentication_lock() {
+        let mut session = sample_session(1_800_000_000, 1_900_000_000);
+        session.vip = Some(VipRuntimeCredential {
+            base_url: "https://provider.example".into(),
+            api_key: "secret".into(),
+            models: vec![],
+        });
+        let state = AuthState(Arc::new(Mutex::new(Some(session.clone()))));
+        let state_during_provider_work = state.clone();
+
+        let result = with_current_vip_credential(&state, &session, move |_| {
+            assert!(state_during_provider_work.0.try_lock().is_ok());
+            Ok(())
+        });
+
+        assert!(result.is_ok());
     }
 
     #[test]

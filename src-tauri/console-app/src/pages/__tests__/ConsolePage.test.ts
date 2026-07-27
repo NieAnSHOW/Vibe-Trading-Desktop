@@ -10,6 +10,11 @@ const mocks = vi.hoisted(() => ({
     userInfo: null,
     expireAt: 9999999999,
   })),
+  consoleMemberUsage: vi.fn(async () => ({
+    total_available: 98025508,
+    total_granted: 113514188,
+    total_used: 15488680,
+  })),
   unlisten: vi.fn(),
 }));
 
@@ -43,6 +48,7 @@ vi.mock("../../ipc/commands", () => ({
   consoleLoginByPassword: vi.fn(),
   consoleLoginRegister: vi.fn(),
   consoleLoginSetPassword: vi.fn(),
+  consoleMemberUsage: mocks.consoleMemberUsage,
 }));
 
 vi.mock("../../ipc/events", () => ({
@@ -101,7 +107,13 @@ describe("ConsolePage", () => {
         gender: 0,
         status: 1,
         loginType: 2,
-        memberLevel: { id: 3, name: "Pro", code: "pro", levelValue: 20 },
+        memberLevel: {
+          id: 3,
+          name: "Pro",
+          code: "pro",
+          levelValue: 20,
+          expireTime: "2026-12-31 23:59:59",
+        },
       },
       expireAt: 9999999999,
     });
@@ -110,6 +122,40 @@ describe("ConsolePage", () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain("Pro 会员");
+    expect(wrapper.text()).toContain("有效期至 2026-12-31 23:59:59");
     expect(wrapper.get(".member-tier").classes()).toContain("member-tier--pro");
+  });
+
+  it("renders member usage and refreshes it manually", async () => {
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("剩余 98,025,508");
+    expect(wrapper.text()).toContain("总量 113,514,188");
+    expect(wrapper.text()).toContain("已用 15,488,680");
+    await wrapper.get('[data-test="member-usage-refresh"]').trigger("click");
+    await flushPromises();
+    expect(mocks.consoleMemberUsage).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps usage refresh available after the initial request fails", async () => {
+    mocks.consoleMemberUsage.mockRejectedValueOnce(new Error("offline"));
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+
+    await wrapper.get('[data-test="member-usage-refresh"]').trigger("click");
+    await flushPromises();
+    expect(mocks.consoleMemberUsage).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears member usage when the usage request reports an expired login", async () => {
+    mocks.consoleMemberUsage.mockRejectedValueOnce({ variant: "LoginExpired" });
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="member-usage-refresh"]').exists()).toBe(false);
   });
 });

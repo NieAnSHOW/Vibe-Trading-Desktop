@@ -19,6 +19,7 @@ import {
   consoleClearVenv,
   consoleLogout,
   consoleFetchAds,
+  consoleMemberUsage,
 } from "../ipc/commands";
 import {
   onBootstrapEvent,
@@ -29,7 +30,7 @@ import {
   onChanneldepExit,
 } from "../ipc/events";
 import type { BootstrapEvent } from "../ipc/types";
-import type { AdItem } from "../ipc/types";
+import type { AdItem, MemberUsageView } from "../ipc/types";
 
 import StatusBadge from "../components/StatusBadge.vue";
 import AppButton from "../components/AppButton.vue";
@@ -59,6 +60,38 @@ const logViewer = ref<InstanceType<typeof LogViewer> | null>(null);
 const updateBanner = ref<InstanceType<typeof UpdateBanner> | null>(null);
 const errorMsg = ref("");
 const loginNotice = ref(typeof route.query.loginMessage === "string" ? route.query.loginMessage : "");
+const memberUsage = ref<MemberUsageView | null>(null);
+const usageRefreshing = ref(false);
+const usageNumberFormatter = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 0,
+});
+
+function formatUsageAmount(value: number) {
+  return usageNumberFormatter.format(value);
+}
+
+const usagePercent = computed(() => {
+  const usage = memberUsage.value;
+  if (!usage || usage.total_granted <= 0) return 0;
+  return Math.min(100, Math.max(0, (usage.total_used / usage.total_granted) * 100));
+});
+
+async function refreshMemberUsage() {
+  if (!authStore.authenticated || usageRefreshing.value) return;
+  usageRefreshing.value = true;
+  try {
+    memberUsage.value = await consoleMemberUsage();
+  } catch (e: any) {
+    if (e?.variant === "LoginExpired") {
+      authStore.clear();
+      clearMemberUsage();
+      return;
+    }
+    // 保留上次成功结果，用量接口不可用不影响控制台其他状态。
+  } finally {
+    usageRefreshing.value = false;
+  }
+}
 
 function log(line: string) {
   logViewer.value?.append(line);
@@ -101,6 +134,11 @@ const memberTier = computed(() => {
     caption: name.includes("会员") ? "" : "会员",
     label: name.includes("会员") ? name : `${name} 会员`,
   };
+});
+
+const memberExpireTime = computed(() => {
+  const expireTime = authStore.userInfo?.memberLevel?.expireTime?.trim();
+  return expireTime || null;
 });
 
 // console_bootstrap 是 fire-and-forget:spawn 后立即返回,真正的结束信号是
@@ -174,6 +212,7 @@ async function onStart() {
     } catch (e: any) {
       if (e?.variant === "LoginExpired") {
         authStore.clear();
+        clearMemberUsage();
         setErr("登录已过期，请重新登录");
         return;
       }
@@ -220,6 +259,7 @@ async function onLogoutDialogClose(v: "ok" | "cancel") {
     try {
       await consoleLogout(); // 清 .env 登录段 + Rust 内存 session
       authStore.clear();
+      clearMemberUsage();
       // 重启服务：清掉旧 token 的进程，新进程以未登录态启动
       if (serviceRunning.value) {
         await service.stop();
@@ -350,6 +390,15 @@ async function refresh() {
 let unlistens: UnlistenFn[] = [];
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let adTimer: ReturnType<typeof setInterval> | null = null;
+let usageTimer: ReturnType<typeof setInterval> | null = null;
+
+function clearMemberUsage() {
+  memberUsage.value = null;
+  if (usageTimer) {
+    clearInterval(usageTimer);
+    usageTimer = null;
+  }
+}
 
 onMounted(async () => {
   if (loginNotice.value) {
@@ -357,6 +406,10 @@ onMounted(async () => {
   }
   // 恢复登录态（静默，不阻塞）
   await authStore.refresh();
+  if (ProdConfig.enableLogin && authStore.authenticated) {
+    void refreshMemberUsage();
+    usageTimer = setInterval(refreshMemberUsage, 300_000);
+  }
   // TODO: 暂时禁用自动更新，启动时静默检查更新（失败不影响主流程）
   if (ProdConfig.checkUpdate) {
     updateBanner.value?.checkUpdate().catch(() => { });
@@ -405,6 +458,7 @@ onUnmounted(() => {
   unlistens.forEach((u) => u());
   if (pollTimer) clearInterval(pollTimer);
   if (adTimer) clearInterval(adTimer);
+  clearMemberUsage();
 });
 </script>
 
@@ -430,6 +484,7 @@ onUnmounted(() => {
                 <span class="member-tier-name">{{ memberTier.name }}</span>
                 <span v-if="memberTier.caption" class="member-tier-caption">{{ memberTier.caption }}</span>
               </span>
+
             </div>
             <span v-if="memberTier" class="sr-only">当前会员等级：{{ memberTier.label }}</span>
             <span v-else class="sr-only">普通用户</span>
@@ -448,8 +503,31 @@ onUnmounted(() => {
     <!-- 广告位 banner:标题 + 多图轮播 / 文字 -->
     <AdSlot :ad="adBanner" variant="banner" />
 
-    <!-- 会员用量展示区域 -->
-    <div></div>
+    <section v-if="ProdConfig.enableLogin && authStore.authenticated" class="member-usage" aria-label="会员用量">
+      <div class="member-usage-head">
+        <div>
+          <span class="member-usage-title">会员用量</span>
+          <span v-if="memberExpireTime" class="member-expire-time" :title="`会员有效期至：${memberExpireTime}`">
+            有效期至 {{ memberExpireTime }}
+          </span>
+        </div>
+
+        <AppButton variant="ghost" :busy="usageRefreshing" busy-label="刷新中" data-test="member-usage-refresh"
+          @click="refreshMemberUsage">
+          刷新
+        </AppButton>
+      </div>
+      <div v-if="memberUsage" class="member-usage-values">
+        <span>剩余 <b>{{ formatUsageAmount(memberUsage.total_available) }}</b> 积分</span>
+        <span>总量 <b>{{ formatUsageAmount(memberUsage.total_granted) }}</b> 积分</span>
+        <span>已用 <b>{{ formatUsageAmount(memberUsage.total_used) }}</b> 积分</span>
+      </div>
+      <div v-else class="member-usage-placeholder">用量暂未加载</div>
+      <div v-if="memberUsage" class="member-usage-track" role="progressbar" aria-label="已用额度"
+        :aria-valuenow="usagePercent" aria-valuemin="0" aria-valuemax="100">
+        <div class="member-usage-fill" :style="{ width: `${usagePercent}%` }"></div>
+      </div>
+    </section>
     <!-- status -->
     <div class="status">
       <div class="status-row">

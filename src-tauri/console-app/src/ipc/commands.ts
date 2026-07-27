@@ -4,6 +4,7 @@ import type {
   Captcha,
   CommandMessage,
   LoginResultView,
+  MemberUsageView,
   StatusReport,
   AdItem,
   UpdateInfo,
@@ -85,6 +86,9 @@ export const consoleLoginSetPassword = (password: string): Promise<void> =>
 
 export const consoleAuthStatus = (): Promise<AuthStatusView> =>
   invoke<AuthStatusView>("console_auth_status");
+
+export const consoleMemberUsage = (): Promise<MemberUsageView> =>
+  invoke<MemberUsageView>("console_member_usage");
 
 export const consoleLogout = (): Promise<void> =>
   invoke<void>("console_logout");
