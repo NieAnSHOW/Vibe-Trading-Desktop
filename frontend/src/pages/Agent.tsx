@@ -1777,7 +1777,7 @@ export function Agent() {
                   ? t("agent.describeGoal")
                   : t("agent.placeholder")
               }
-              className="order-first block min-h-24 w-full max-h-32 resize-none overflow-y-auto border-0 border-b bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              className="order-first block w-full max-h-32 resize-none overflow-y-auto border-0 border-b bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
               disabled={status === "streaming" || vipModelSwitching}
             />
             <div data-testid="agent-composer-actions" className="ml-auto flex items-center gap-2">

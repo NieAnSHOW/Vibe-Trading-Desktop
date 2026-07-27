@@ -102,6 +102,14 @@ describe("Agent attempt completion", () => {
     expect(composer.querySelector("button[type='submit']")).toBeInTheDocument();
   });
 
+  it("starts the composer at a single input row", async () => {
+    renderAgent();
+
+    const input = await screen.findByPlaceholderText("agent.placeholder");
+    expect(input).toHaveAttribute("rows", "1");
+    expect(input).not.toHaveClass("min-h-24");
+  });
+
   it("keeps export and send in one right-side composer action group", async () => {
     apiMock.getSessionMessages.mockResolvedValue([{
       message_id: "assistant-a",
