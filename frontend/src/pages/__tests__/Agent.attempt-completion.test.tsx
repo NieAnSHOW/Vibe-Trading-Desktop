@@ -84,6 +84,24 @@ describe("Agent attempt completion", () => {
     vi.useRealTimers();
   });
 
+  it("groups the prompt controls and VIP model selector in one composer", async () => {
+    apiMock.getLLMSettings.mockResolvedValue({
+      sse_timeout_seconds: 90,
+      desktop_login_provisioned: true,
+      desktop_llm_mode: "vip",
+      desktop_vip_available: true,
+      model_name: "gpt-5.6-terra",
+      vip_models: ["gpt-5.6-terra", "gpt-5.6-sol"],
+    });
+
+    renderAgent();
+
+    const composer = await screen.findByTestId("agent-composer");
+    expect(composer).toContainElement(screen.getByPlaceholderText("agent.placeholder"));
+    expect(composer).toContainElement(screen.getByLabelText("agent.vipModel"));
+    expect(composer.querySelector("button[type='submit']")).toBeInTheDocument();
+  });
+
   it("treats ignored llm_usage events as watchdog activity", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date("2026-07-23T04:00:00Z"));
