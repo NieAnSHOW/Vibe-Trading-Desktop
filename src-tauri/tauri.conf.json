@@ -15,7 +15,8 @@
         "title": "Vibe Trading",
         "width": 650,
         "height": 880,
-        "resizable": false
+        "resizable": false,
+        "maximizable": false
       }
     ],
     "security": {

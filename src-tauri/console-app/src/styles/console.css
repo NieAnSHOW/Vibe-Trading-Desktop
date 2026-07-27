@@ -31,7 +31,7 @@ body {
     "Microsoft YaHei", sans-serif;
   background: hsl(var(--bg));
   color: hsl(var(--ink));
-  min-height: 100vh;
+  min-height: 0;
   display: flex;
   justify-content: center;
   padding: 40px 20px 32px;

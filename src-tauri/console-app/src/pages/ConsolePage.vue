@@ -2,7 +2,6 @@
 import { onMounted, onUnmounted, ref, computed } from "vue";
 import { storeToRefs } from "pinia";
 import type { UnlistenFn } from "@tauri-apps/api/event";
-
 import { useAuthStore } from "../stores/auth";
 import { useRoute, useRouter } from "vue-router";
 
@@ -42,6 +41,7 @@ import AdSlot from "../components/AdSlot.vue";
 import VersionFooter from "../components/VersionFooter.vue";
 import UpdateBanner from "../components/UpdateBanner.vue";
 import { useBusy } from "../composables/useBusy";
+import { resolveConsoleWindowHeight } from "../lib/consoleWindowSize";
 import logoPng from "../assets/128x128@2x.png";
 import ProdConfig from '../config/prod.ts'
 
@@ -58,6 +58,7 @@ const { running } = storeToRefs(service);
 
 const logViewer = ref<InstanceType<typeof LogViewer> | null>(null);
 const updateBanner = ref<InstanceType<typeof UpdateBanner> | null>(null);
+const consoleElement = ref<HTMLElement | null>(null);
 const errorMsg = ref("");
 const loginNotice = ref(typeof route.query.loginMessage === "string" ? route.query.loginMessage : "");
 
@@ -297,6 +298,14 @@ const hintHidden = ref(false);
 const adBanner = ref<AdItem | null>(null);
 const adBottom = ref<AdItem | null>(null);
 
+function hasTauriWindow() {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+
+
+
+
 function pickAd(items: AdItem[]): AdItem | null {
   return items.length > 0 ? items[0] : null;
 }
@@ -327,6 +336,7 @@ async function refresh() {
 let unlistens: UnlistenFn[] = [];
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let adTimer: ReturnType<typeof setInterval> | null = null;
+let consoleResizeObserver: ResizeObserver | null = null;
 
 onMounted(async () => {
   if (loginNotice.value) {
@@ -369,6 +379,7 @@ onMounted(async () => {
   ]);
   refresh();
   pollTimer = setInterval(refresh, 3000);
+
   // 当启用AD时才需要请求此接口
   if (ProdConfig.enableAd) {
     fetchAds();
@@ -385,7 +396,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main class="console">
+  <main ref="consoleElement" class="console">
     <!-- head: logo + 标题 + 打开 WebUI -->
     <div class="head">
       <div style="display: flex; align-items: center; gap: 13px">
@@ -398,8 +409,9 @@ onUnmounted(() => {
       <div style="display:flex;align-items:center;gap:8px">
         <div v-if="ProdConfig.enableLogin">
           <template v-if="authStore.authenticated">
-            <span style="font-size:12px;color:#666">{{ authStore.userInfo?.nickName || authStore.userInfo?.phone || '已登录'
-              }}</span>
+            <span style="font-size:12px;color:#666">{{ authStore.userInfo?.nickName || authStore.userInfo?.phone ||
+              '已登录'
+            }}</span>
             <span v-if="authStore.userInfo?.memberLevel" style="font-size:12px;color:#666">
               {{ authStore.userInfo.memberLevel.name }} 会员
             </span>
@@ -414,8 +426,6 @@ onUnmounted(() => {
     </div>
     <!-- 版本更新通知横幅 -->
     <UpdateBanner ref="updateBanner" />
-
-    <p v-if="loginNotice" class="login-notice" role="status">{{ loginNotice }}</p>
 
     <!-- 广告位 banner:标题 + 多图轮播 / 文字 -->
     <AdSlot :ad="adBanner" variant="banner" />
@@ -491,7 +501,7 @@ onUnmounted(() => {
     </ConfirmDialog>
     <!-- 广告位 bottom:横条 -->
     <AdSlot :ad="adBottom" variant="bottom" />
-    <div id="err">{{ errorMsg  }}</div>
+    <div id="err">{{ errorMsg }}</div>
 
     <LogViewer ref="logViewer" @open-logs="onOpenLogs" @clear-logs="onClearLogs" />
 
