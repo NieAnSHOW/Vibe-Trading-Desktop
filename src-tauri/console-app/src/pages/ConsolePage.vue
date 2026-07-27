@@ -41,7 +41,6 @@ import AdSlot from "../components/AdSlot.vue";
 import VersionFooter from "../components/VersionFooter.vue";
 import UpdateBanner from "../components/UpdateBanner.vue";
 import { useBusy } from "../composables/useBusy";
-import { resolveConsoleWindowHeight } from "../lib/consoleWindowSize";
 import logoPng from "../assets/128x128@2x.png";
 import ProdConfig from '../config/prod.ts'
 
@@ -58,7 +57,6 @@ const { running } = storeToRefs(service);
 
 const logViewer = ref<InstanceType<typeof LogViewer> | null>(null);
 const updateBanner = ref<InstanceType<typeof UpdateBanner> | null>(null);
-const consoleElement = ref<HTMLElement | null>(null);
 const errorMsg = ref("");
 const loginNotice = ref(typeof route.query.loginMessage === "string" ? route.query.loginMessage : "");
 
@@ -79,6 +77,30 @@ const ENV_MAP = {
 const envBadge = computed(() => {
   if (!envState.value) return { txt: "检测中", cls: "warn" };
   return ENV_MAP[envState.value] ?? { txt: "未知", cls: "warn" };
+});
+
+const accountName = computed(
+  () => authStore.userInfo?.nickName || authStore.userInfo?.phone || "已登录",
+);
+
+const memberTier = computed(() => {
+  const level = authStore.userInfo?.memberLevel;
+  if (!level) return null;
+
+  const name = level.name?.trim() || "会员";
+  const identity = `${level.code ?? ""} ${name}`.toLowerCase();
+  const tone = /vip|elite|ultimate|diamond|至尊/.test(identity) || level.levelValue >= 50
+    ? "signature"
+    : /pro|premium|plus|gold|高级/.test(identity) || level.levelValue >= 20
+      ? "pro"
+      : "member";
+
+  return {
+    name,
+    tone,
+    caption: name.includes("会员") ? "" : "会员",
+    label: name.includes("会员") ? name : `${name} 会员`,
+  };
 });
 
 // console_bootstrap 是 fire-and-forget:spawn 后立即返回,真正的结束信号是
@@ -298,14 +320,6 @@ const hintHidden = ref(false);
 const adBanner = ref<AdItem | null>(null);
 const adBottom = ref<AdItem | null>(null);
 
-function hasTauriWindow() {
-  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-}
-
-
-
-
-
 function pickAd(items: AdItem[]): AdItem | null {
   return items.length > 0 ? items[0] : null;
 }
@@ -336,7 +350,6 @@ async function refresh() {
 let unlistens: UnlistenFn[] = [];
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let adTimer: ReturnType<typeof setInterval> | null = null;
-let consoleResizeObserver: ResizeObserver | null = null;
 
 onMounted(async () => {
   if (loginNotice.value) {
@@ -406,15 +419,20 @@ onUnmounted(() => {
           <p class="sub">桌面运行环境控制台</p>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
+      <div class="head-actions">
         <div v-if="ProdConfig.enableLogin">
           <template v-if="authStore.authenticated">
-            <span style="font-size:12px;color:#666">{{ authStore.userInfo?.nickName || authStore.userInfo?.phone ||
-              '已登录'
-            }}</span>
-            <span v-if="authStore.userInfo?.memberLevel" style="font-size:12px;color:#666">
-              {{ authStore.userInfo.memberLevel.name }} 会员
-            </span>
+            <div class="account-identity">
+              <span class="account-name" :title="accountName">{{ accountName }}</span>
+              <span v-if="memberTier" class="member-tier" :class="`member-tier--${memberTier.tone}`"
+                :title="`当前会员等级：${memberTier.label}`" aria-hidden="true">
+                <span class="member-tier-mark" aria-hidden="true">V</span>
+                <span class="member-tier-name">{{ memberTier.name }}</span>
+                <span v-if="memberTier.caption" class="member-tier-caption">{{ memberTier.caption }}</span>
+              </span>
+            </div>
+            <span v-if="memberTier" class="sr-only">当前会员等级：{{ memberTier.label }}</span>
+            <span v-else class="sr-only">普通用户</span>
             <AppButton variant="ghost" :busy="logoutBusy.busy.value" @click="onLogout">退出登录</AppButton>
           </template>
           <AppButton v-else variant="ghost" @click="router.push('/login')">登录</AppButton>

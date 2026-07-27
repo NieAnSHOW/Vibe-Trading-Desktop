@@ -257,8 +257,11 @@ def _vip_runtime_models() -> List[str]:
 
 
 def _public_vip_models(values: Dict[str, str]) -> List[str]:
-    """Return member model names only for the active logged-in VIP session."""
-    if not (_desktop_vip_available(values) and _desktop_login_provisioned(values)):
+    """Return member model names for the active injected VIP runtime."""
+    # The sidecar receives these values only after the desktop authenticated the
+    # current session.  Requiring a persisted "remember me" token here would
+    # incorrectly hide models from an otherwise valid nonpersistent session.
+    if not _desktop_vip_available(values):
         return []
     return _vip_runtime_models()
 

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+import httpx
 
 import api_server
 from src.api import helpers
@@ -268,7 +269,7 @@ def test_vip_mode_reads_only_transient_environment_and_hides_secrets(
     assert body["api_key_configured"] is True
     assert "member-key" not in response.text
     assert "vip.example" not in response.text
-    assert "gpt-5-mini" not in response.text
+    assert body["vip_models"] == ["gpt-5-mini"]
     assert "stale-dotenv-key" not in response.text
     assert "stale.example" not in response.text
     assert "VIP_API_KEY" not in response.text
@@ -297,7 +298,7 @@ def test_vip_runtime_normalizes_a_root_openai_base_url(
     assert os.environ["OPENAI_BASE_URL"] == "https://vip.example/v1"
 
 
-def test_vip_model_list_requires_runtime_and_desktop_login_fingerprint(
+def test_vip_model_list_returns_models_for_active_remembered_desktop_session(
     client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     (tmp_path / ".env").write_text(
@@ -314,6 +315,34 @@ def test_vip_model_list_requires_runtime_and_desktop_login_fingerprint(
     )
 
     response = client.get("/settings/llm")
+
+    assert response.status_code == 200
+    assert response.json()["vip_models"] == ["member-model-a", "member-model-b"]
+    assert "member-key" not in response.text
+    assert "vip.example" not in response.text
+
+
+def test_vip_model_list_allows_active_nonpersistent_desktop_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text("DESKTOP_LLM_MODE=vip\n", encoding="utf-8")
+    monkeypatch.setattr(api_server, "ENV_PATH", env_path)
+    monkeypatch.setattr(api_server, "ENV_EXAMPLE_PATH", tmp_path / ".env.example")
+    monkeypatch.setattr(api_server, "USER_ENV_PATH", tmp_path / "home" / ".vibe-trading" / ".env")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_PROVISIONED", "1")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_API_KEY", "member-key")
+    monkeypatch.setenv("VIBE_DESKTOP_VIP_BASE_URL", "https://vip.example/v1")
+    monkeypatch.setenv(
+        "VIBE_DESKTOP_VIP_MODELS_JSON", '["member-model-a", "member-model-b"]'
+    )
+
+    async def get_settings() -> httpx.Response:
+        transport = httpx.ASGITransport(app=api_server.app, client=("127.0.0.1", 50000))
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            return await client.get("/settings/llm")
+
+    response = asyncio.run(get_settings())
 
     assert response.status_code == 200
     assert response.json()["vip_models"] == ["member-model-a", "member-model-b"]

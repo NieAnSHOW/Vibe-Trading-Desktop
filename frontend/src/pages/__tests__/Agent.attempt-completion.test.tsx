@@ -424,6 +424,23 @@ describe("Agent attempt completion", () => {
     ).toHaveAttribute("aria-checked", "false");
   });
 
+  it("shows the VIP model selector for an active nonpersistent desktop session", async () => {
+    apiMock.getLLMSettings.mockResolvedValue({
+      sse_timeout_seconds: 90,
+      desktop_login_provisioned: false,
+      desktop_llm_mode: "vip",
+      desktop_vip_available: true,
+      vip_models: ["vip-fast", "vip-reasoning"],
+      model_name: "vip-fast",
+    });
+
+    renderAgent();
+
+    expect(
+      await screen.findByRole("button", { name: /agent\.vipModel/ }),
+    ).toHaveTextContent("VIP-FAST");
+  });
+
   it("names the current VIP model and supports keyboard menu navigation", async () => {
     apiMock.getLLMSettings.mockResolvedValue({
       sse_timeout_seconds: 90,

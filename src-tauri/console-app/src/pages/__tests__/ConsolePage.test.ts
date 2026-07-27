@@ -110,5 +110,6 @@ describe("ConsolePage", () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain("Pro 会员");
+    expect(wrapper.get(".member-tier").classes()).toContain("member-tier--pro");
   });
 });

@@ -1268,8 +1268,7 @@ export function Agent() {
 
   const vipModels = llmSettings?.vip_models ?? [];
   const showVipModelSelector =
-    llmSettings?.desktop_login_provisioned === true &&
-    llmSettings.desktop_llm_mode === "vip" &&
+    llmSettings?.desktop_llm_mode === "vip" &&
     llmSettings.desktop_vip_available &&
     vipModels.length > 0;
 
