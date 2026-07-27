@@ -102,6 +102,23 @@ describe("Agent attempt completion", () => {
     expect(composer.querySelector("button[type='submit']")).toBeInTheDocument();
   });
 
+  it("keeps export and send in one right-side composer action group", async () => {
+    apiMock.getSessionMessages.mockResolvedValue([{
+      message_id: "assistant-a",
+      role: "assistant",
+      content: "Completed analysis",
+      created_at: "2026-07-27T01:00:00Z",
+      linked_attempt_id: null,
+      metadata: {},
+    }]);
+
+    renderAgent();
+
+    const actions = await screen.findByTestId("agent-composer-actions");
+    expect(actions).toContainElement(screen.getByTitle("agent.exportChat"));
+    expect(actions.querySelector("button[type='submit']")).toBeInTheDocument();
+  });
+
   it("treats ignored llm_usage events as watchdog activity", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date("2026-07-23T04:00:00Z"));

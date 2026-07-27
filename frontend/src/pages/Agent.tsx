@@ -1408,29 +1408,6 @@ export function Agent() {
 
       <form onSubmit={handleSubmit} className="border-t p-4 bg-background/80 backdrop-blur-sm">
         <div className="max-w-3xl mx-auto space-y-2">
-          {/* Swarm preset badge */}
-          {swarmPreset && (
-            <div className="flex items-center gap-1">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400 text-xs font-medium">
-                <Users className="h-3 w-3" />
-                {swarmPreset.title}
-                <button type="button" onClick={() => setSwarmPreset(null)} className="hover:text-destructive transition-colors">
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            </div>
-          )}
-          {goalComposerActive && (
-            <div className="flex items-center gap-1">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs font-medium">
-                <Target className="h-3 w-3" />
-                {t("agent.newResearchGoal")}
-                <button type="button" onClick={() => setGoalComposerActive(false)} className="hover:text-destructive transition-colors">
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            </div>
-          )}
           {goalSnapshot && !goalComposerActive && (
             <div className="grid gap-2">
               <button
@@ -1602,18 +1579,6 @@ export function Agent() {
             halted={liveIsHalted}
             onRefresh={refreshLiveStatus}
           />
-          {/* Attachment badge */}
-          {attachment && (
-            <div className="flex items-center gap-1">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs font-medium">
-                <Paperclip className="h-3 w-3" />
-                {attachment.filename}
-                <button type="button" onClick={() => setAttachment(null)} className="hover:text-destructive transition-colors">
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            </div>
-          )}
           {/* Uploading indicator */}
           {uploading && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -1644,14 +1609,48 @@ export function Agent() {
               )}
             </div>
           )}
-          <div className="flex gap-2 items-end">
+          <div
+            data-testid="agent-composer"
+            className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-2 shadow-sm transition-[border-color,box-shadow] focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20"
+          >
+            {(swarmPreset || goalComposerActive || attachment) && (
+              <div className="order-first flex w-full flex-wrap items-center gap-1.5 px-1 pt-1">
+                {swarmPreset && (
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-violet-500/10 px-2.5 py-1 text-xs font-medium text-violet-600 dark:text-violet-400">
+                    <Users className="h-3 w-3" />
+                    {swarmPreset.title}
+                    <button type="button" onClick={() => setSwarmPreset(null)} className="hover:text-destructive transition-colors">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+                {goalComposerActive && (
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                    <Target className="h-3 w-3" />
+                    {t("agent.newResearchGoal")}
+                    <button type="button" onClick={() => setGoalComposerActive(false)} className="hover:text-destructive transition-colors">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+                {attachment && (
+                  <span className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                    <Paperclip className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{attachment.filename}</span>
+                    <button type="button" onClick={() => setAttachment(null)} className="shrink-0 hover:text-destructive transition-colors">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+              </div>
+            )}
             {/* "+" menu: PDF upload + Swarm presets */}
             <div className="relative" ref={uploadMenuRef}>
               <button
                 type="button"
                 onClick={() => setShowUploadMenu(prev => !prev)}
                 disabled={status === "streaming" || uploading}
-                className="w-9 h-9 rounded-full border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40 shrink-0"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
                 title={t("agent.moreOptions")}
               >
                 <Plus className="h-4 w-4" />
@@ -1727,7 +1726,7 @@ export function Agent() {
                 value={llmSettings.model_name}
                 onChange={(event) => void handleVIPModelChange(event.target.value)}
                 disabled={status === "streaming" || vipModelSwitching}
-                className="h-9 max-w-40 shrink-0 rounded-lg border bg-background px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-9 min-w-0 max-w-40 shrink-0 rounded-lg bg-muted/60 px-2.5 text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {vipModels.map((model) => (
                   <option key={model} value={model}>{model}</option>
@@ -1778,37 +1777,39 @@ export function Agent() {
                   ? t("agent.describeGoal")
                   : t("agent.placeholder")
               }
-              className="flex-1 px-4 py-2.5 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition-shadow resize-none max-h-32 overflow-y-auto"
+              className="order-first block min-h-24 w-full max-h-32 resize-none overflow-y-auto border-0 border-b bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
               disabled={status === "streaming" || vipModelSwitching}
             />
-            {messages.length > 0 && (
-              <button
-                type="button"
-                onClick={handleExport}
-                className="px-3 py-2.5 rounded-xl border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                title={t('agent.exportChat')}
-              >
-                <Download className="h-4 w-4" />
-              </button>
-            )}
-            {status === "streaming" ? (
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="px-4 py-2.5 rounded-xl bg-destructive text-destructive-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-                title={t('agent.stopGeneration')}
-              >
-                <Square className="h-4 w-4" />
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={vipModelSwitching || (goalComposerActive ? !input.trim() : (!input.trim() && !attachment))}
-                className="px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium disabled:opacity-40 hover:opacity-90 transition-opacity"
-              >
-                <Send className="h-4 w-4" />
-              </button>
-            )}
+            <div data-testid="agent-composer-actions" className="ml-auto flex items-center gap-2">
+              {messages.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  title={t('agent.exportChat')}
+                >
+                  <Download className="h-4 w-4" />
+                </button>
+              )}
+              {status === "streaming" ? (
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive text-destructive-foreground transition-opacity hover:opacity-90"
+                  title={t('agent.stopGeneration')}
+                >
+                  <Square className="h-4 w-4" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={vipModelSwitching || (goalComposerActive ? !input.trim() : (!input.trim() && !attachment))}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </form>
