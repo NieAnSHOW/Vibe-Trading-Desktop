@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAgentStore } from "@/stores/agent";
 
@@ -52,6 +52,16 @@ vi.mock("@/components/chat/RunnerStatus", () => ({ RunnerStatus: () => <div /> }
 vi.mock("@/components/chat/SwarmStatusCard", () => ({ SwarmStatusCard: () => <div /> }));
 
 import { Agent } from "../Agent";
+
+function SessionSwitchingAgent() {
+  const navigate = useNavigate();
+  return (
+    <>
+      <button onClick={() => navigate("/agent?session=session-b")}>switch session</button>
+      <Agent />
+    </>
+  );
+}
 
 const renderAgent = () => render(
   <MemoryRouter initialEntries={["/agent?session=session-a"]}>
@@ -309,6 +319,144 @@ describe("Agent attempt completion", () => {
 
     expect(useAgentStore.getState().messages.some((message) => message.content === "Complete")).toBe(true);
     expect(useAgentStore.getState().messages.some((message) => message.type === "llm_usage")).toBe(false);
+  });
+
+  it("keeps inline think blocks out of streamed answer text across delta boundaries", async () => {
+    renderAgent();
+    await waitFor(() => expect(connectMock).toHaveBeenCalled());
+
+    await act(async () => {
+      handlersRef.current["attempt.created"]({ attempt_id: "attempt-a" });
+      handlersRef.current.text_delta({ delta: "<thi" });
+      handlersRef.current.text_delta({ delta: "nk>Private reasoning" });
+    });
+
+    expect(screen.getByText("agent.reasoning")).toBeInTheDocument();
+    expect(useAgentStore.getState().streamingText).toBe("");
+
+    await act(async () => {
+      handlersRef.current.text_delta({ delta: " continues</thi" });
+      handlersRef.current.text_delta({ delta: "nk>Visible answer" });
+    });
+
+    expect(useAgentStore.getState().streamingText).toBe("Visible answer");
+  });
+
+  it("resets inline think state before replaying another session", async () => {
+    render(
+      <MemoryRouter initialEntries={["/agent?session=session-a"]}>
+        <Routes><Route path="/agent" element={<SessionSwitchingAgent />} /></Routes>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(connectMock).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      handlersRef.current.text_delta({ delta: "<think>Private reasoning" });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "switch session" }));
+    await waitFor(() => expect(connectMock).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      handlersRef.current.text_delta({ delta: "Visible answer" });
+    });
+
+    expect(useAgentStore.getState().streamingText).toBe("Visible answer");
+  });
+
+  it("resets an unclosed think block when the current model turn finishes", async () => {
+    renderAgent();
+    await waitFor(() => expect(connectMock).toHaveBeenCalled());
+
+    await act(async () => {
+      handlersRef.current["attempt.created"]({ attempt_id: "attempt-a" });
+      handlersRef.current.text_delta({ delta: "<think>Private reasoning" });
+      handlersRef.current.thinking_done({});
+      handlersRef.current.tool_call({ tool: "get_market_data", arguments: {} });
+      handlersRef.current.text_delta({ delta: "Visible answer" });
+    });
+
+    expect(useAgentStore.getState().streamingText).toBe("Visible answer");
+  });
+
+  it("removes inline think blocks from a completed answer summary", async () => {
+    renderAgent();
+    await waitFor(() => expect(connectMock).toHaveBeenCalled());
+
+    await act(async () => {
+      handlersRef.current["attempt.created"]({ attempt_id: "attempt-a" });
+      await handlersRef.current["attempt.completed"]({
+        attempt_id: "attempt-a",
+        summary: "<think>Private reasoning</think>Visible answer",
+      });
+    });
+
+    expect(
+      useAgentStore.getState().messages.find((message) => message.type === "answer")
+        ?.content,
+    ).toBe("Visible answer");
+  });
+
+  it("does not render text after an unclosed think marker in a completed answer", async () => {
+    renderAgent();
+    await waitFor(() => expect(connectMock).toHaveBeenCalled());
+
+    await act(async () => {
+      handlersRef.current["attempt.created"]({ attempt_id: "attempt-a" });
+      await handlersRef.current["attempt.completed"]({
+        attempt_id: "attempt-a",
+        summary: "Visible answer<think>Private reasoning",
+      });
+    });
+
+    expect(
+      useAgentStore.getState().messages.find((message) => message.type === "answer")
+        ?.content,
+    ).toBe("Visible answer");
+  });
+
+  it("removes inline think blocks when restoring persisted assistant messages", async () => {
+    apiMock.getSessionMessages.mockResolvedValue([
+      {
+        message_id: "assistant-a",
+        role: "assistant",
+        content: "<think>Private reasoning</think>Visible answer",
+        created_at: "2026-07-27T01:00:00Z",
+        linked_attempt_id: null,
+        metadata: {},
+      },
+    ]);
+
+    renderAgent();
+
+    await waitFor(() =>
+      expect(
+        useAgentStore.getState().messages.find((message) => message.type === "answer")
+          ?.content,
+      ).toBe("Visible answer"),
+    );
+  });
+
+  it("does not restore text after an unclosed think marker from history", async () => {
+    apiMock.getSessionMessages.mockResolvedValue([
+      {
+        message_id: "assistant-a",
+        role: "assistant",
+        content: "Visible answer<think>Private reasoning",
+        created_at: "2026-07-27T01:00:00Z",
+        linked_attempt_id: null,
+        metadata: {},
+      },
+    ]);
+
+    renderAgent();
+
+    await waitFor(() =>
+      expect(
+        useAgentStore.getState().messages.find((message) => message.type === "answer")
+          ?.content,
+      ).toBe("Visible answer"),
+    );
   });
 
   it("applies a terminal attempt exactly once when polling wins the race with SSE", async () => {

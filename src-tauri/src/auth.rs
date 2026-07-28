@@ -126,6 +126,8 @@ pub struct MemberUsageView {
     pub total_available: i64,
     pub total_granted: i64,
     pub total_used: i64,
+    #[serde(default)]
+    pub unlimited_quota: bool,
 }
 
 /// 当前会员可安全展示的权益；不包含模型、供应商或密钥信息。
@@ -1061,12 +1063,16 @@ mod tests {
     #[test]
     fn parses_successful_member_usage_response() {
         let usage = parse_member_usage(
-            r#"{"code":true,"data":{"total_available":8,"total_granted":10,"total_used":2}}"#,
+            r#"{"code":true,"data":{"total_available":8,"total_granted":10,"total_used":2,"unlimited_quota":true}}"#,
         )
         .unwrap();
         assert_eq!(
             (usage.total_available, usage.total_granted, usage.total_used),
             (8, 10, 2)
+        );
+        assert_eq!(
+            serde_json::to_value(usage).unwrap()["unlimited_quota"],
+            true
         );
     }
 

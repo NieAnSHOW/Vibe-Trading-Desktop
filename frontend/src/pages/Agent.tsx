@@ -316,6 +316,62 @@ function goalContinuePrompt(snapshot: GoalSnapshot): string {
   ].join("\n");
 }
 
+type InlineThinkStream = {
+  isThinking: boolean;
+  pendingTag: string;
+};
+
+const INLINE_THINK_TAGS = ["<think>", "</think>"];
+const INLINE_THINK_TAG_PATTERN = /<\/?think>/gi;
+
+function resetInlineThinkStream(stream: InlineThinkStream) {
+  stream.isThinking = false;
+  stream.pendingTag = "";
+}
+
+function consumeInlineThinkDelta(
+  delta: string,
+  stream: InlineThinkStream,
+): string {
+  const input = stream.pendingTag + delta;
+  stream.pendingTag = "";
+  let visibleText = "";
+  let cursor = 0;
+  INLINE_THINK_TAG_PATTERN.lastIndex = 0;
+  let tagMatch: RegExpExecArray | null;
+
+  while ((tagMatch = INLINE_THINK_TAG_PATTERN.exec(input)) !== null) {
+    if (!stream.isThinking) {
+      visibleText += input.slice(cursor, tagMatch.index);
+    }
+    stream.isThinking = tagMatch[0].toLowerCase() === "<think>";
+    cursor = tagMatch.index + tagMatch[0].length;
+  }
+
+  const tail = input.slice(cursor);
+  const pendingTagStart = tail.lastIndexOf("<");
+  if (pendingTagStart >= 0) {
+    const pendingTag = tail.slice(pendingTagStart);
+    if (
+      INLINE_THINK_TAGS.some((tag) =>
+        tag.startsWith(pendingTag.toLowerCase()),
+      )
+    ) {
+      if (!stream.isThinking) visibleText += tail.slice(0, pendingTagStart);
+      stream.pendingTag = pendingTag;
+      return visibleText;
+    }
+  }
+
+  if (!stream.isThinking) visibleText += tail;
+  return visibleText;
+}
+
+function removeInlineThinkBlocks(content: string): string {
+  const stream: InlineThinkStream = { isThinking: false, pendingTag: "" };
+  return consumeInlineThinkDelta(content, stream);
+}
+
 /* ---------- Component ---------- */
 export function Agent() {
   const { t } = useTranslation();
@@ -331,6 +387,10 @@ export function Agent() {
   const activeAttemptRef = useRef<string | null>(null);
   const attemptGenerationRef = useRef(0);
   const pendingGoalSessionRef = useRef<string | null>(null);
+  const inlineThinkStreamRef = useRef<InlineThinkStream>({
+    isThinking: false,
+    pendingTag: "",
+  });
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const lastEventRef = useRef(0);
   const sseTimeoutMsRef = useRef(90_000);
@@ -524,7 +584,7 @@ export function Agent() {
               agentMsgs.push({
                 id: m.message_id + "_ans",
                 type: "answer",
-                content: m.content,
+                content: removeInlineThinkBlocks(m.content),
                 timestamp: ts,
               });
             }
@@ -581,7 +641,7 @@ export function Agent() {
             agentMsgs.push({
               id: m.message_id,
               type: "answer",
-              content: m.content,
+              content: removeInlineThinkBlocks(m.content),
               timestamp: ts,
             });
           }
@@ -702,6 +762,7 @@ export function Agent() {
       if (sseSessionRef.current === sid) return;
       disconnect();
       sseSessionRef.current = sid;
+      resetInlineThinkStream(inlineThinkStreamRef.current);
 
       const touch = () => {
         lastEventRef.current = Date.now();
@@ -710,8 +771,12 @@ export function Agent() {
       connect(api.sseUrl(sid, { replay: "active" }), {
         text_delta: (d) => {
           touch();
-          setReasoningActive(false);
-          act().appendDelta(String(d.delta || ""));
+          const visibleText = consumeInlineThinkDelta(
+            String(d.delta || ""),
+            inlineThinkStreamRef.current,
+          );
+          setReasoningActive(inlineThinkStreamRef.current.isThinking);
+          if (visibleText) act().appendDelta(visibleText);
           scrollToBottom();
         },
         reasoning_delta: () => {
@@ -722,13 +787,16 @@ export function Agent() {
         },
         stream_reset: () => {
           touch();
+          resetInlineThinkStream(inlineThinkStreamRef.current);
           setReasoningActive(false);
           act().clearStreaming();
           if (act().status !== "streaming") act().setStatus("streaming");
           scrollToBottom();
         },
         thinking_done: () => {
-          touch(); /* don't flush — keep streaming text visible */
+          touch();
+          resetInlineThinkStream(inlineThinkStreamRef.current);
+          setReasoningActive(false);
         },
 
         tool_call: (d) => {
@@ -825,6 +893,7 @@ export function Agent() {
             typeof d.attempt_id === "string" ? d.attempt_id : "";
           if (!activateAttempt(sid, attemptId)) return;
           touch();
+          resetInlineThinkStream(inlineThinkStreamRef.current);
           // Backend has created a new attempt — ensure streaming state is active
           // even if we connected mid-stream (SSE replay / page reload).
           if (act().status !== "streaming") act().setStatus("streaming");
@@ -853,6 +922,7 @@ export function Agent() {
             return;
           activeAttemptRef.current = null;
           touch();
+          resetInlineThinkStream(inlineThinkStreamRef.current);
           setReasoningActive(false);
           const s = act();
           // Build ThinkingTimeline summary from accumulated toolCalls
@@ -893,7 +963,7 @@ export function Agent() {
             s.addMessage({
               id: "",
               type: "answer",
-              content: summary,
+              content: removeInlineThinkBlocks(summary),
               timestamp: Date.now(),
             });
 
@@ -983,6 +1053,7 @@ export function Agent() {
           )
             return;
           touch();
+          resetInlineThinkStream(inlineThinkStreamRef.current);
           setReasoningActive(false);
           act().clearStreaming();
           act().addMessage({

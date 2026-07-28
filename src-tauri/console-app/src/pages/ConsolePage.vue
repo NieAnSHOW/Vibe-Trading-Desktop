@@ -446,19 +446,22 @@ onUnmounted(() => {
           <template v-if="authStore.authenticated">
             <button class="account-profile-entry" data-test="account-profile-entry" type="button"
               :aria-label="`打开个人中心，${accountName}`" @click="router.push('/profile')">
-            <span class="account-identity">
-              <span class="account-name" :title="accountName">{{ accountName }}</span>
-              <span v-if="memberTier" class="member-tier" :class="`member-tier--${memberTier.tone}`"
-                :title="`当前会员等级：${memberTier.label}`" aria-hidden="true">
-                <span class="member-tier-mark" aria-hidden="true">V</span>
-                <span class="member-tier-name">{{ memberTier.name }}</span>
-                <span v-if="memberTier.caption" class="member-tier-caption">{{ memberTier.caption }}</span>
-              </span>
+              <span class="account-identity">
+                <span class="account-name" :title="accountName">{{ accountName }}</span>
+                <span v-if="memberTier" class="member-tier" :class="`member-tier--${memberTier.tone}`"
+                  :title="`当前会员等级：${memberTier.label}`" aria-hidden="true">
+                  <span class="member-tier-mark" aria-hidden="true">V</span>
+                  <span class="member-tier-name">{{ memberTier.name }}</span>
+                  <span v-if="memberTier.caption" class="member-tier-caption">{{ memberTier.caption }}</span>
+                </span>
 
-            </span>
+              </span>
             </button>
             <span v-if="memberTier" class="sr-only">当前会员等级：{{ memberTier.label }}</span>
             <span v-else class="sr-only">普通用户</span>
+            <div v-if="memberUsage?.unlimited_quota" class="member-usage-values">
+              <span class="member-usage-unlimited" data-test="member-usage-unlimited">不限量</span>
+            </div>
           </template>
           <AppButton v-else variant="ghost" @click="router.push('/login')">登录</AppButton>
         </div>
@@ -487,14 +490,15 @@ onUnmounted(() => {
           刷新
         </AppButton>
       </div>
-      <div v-if="memberUsage" class="member-usage-values">
+
+      <div v-if="memberUsage && !memberUsage.unlimited_quota" class="member-usage-values">
         <span>剩余 <b>{{ formatUsageAmount(memberUsage.total_available) }}</b> 积分</span>
         <span>总量 <b>{{ formatUsageAmount(memberUsage.total_granted) }}</b> 积分</span>
         <span>已用 <b>{{ formatUsageAmount(memberUsage.total_used) }}</b> 积分</span>
       </div>
-      <div v-else class="member-usage-placeholder">用量暂未加载</div>
-      <div v-if="memberUsage" class="member-usage-track" role="progressbar" aria-label="已用额度"
-        :aria-valuenow="usagePercent" aria-valuemin="0" aria-valuemax="100">
+      <div v-if="!memberUsage" class="member-usage-placeholder">用量暂未加载</div>
+      <div v-if="memberUsage && !memberUsage.unlimited_quota" class="member-usage-track" role="progressbar"
+        aria-label="已用额度" :aria-valuenow="usagePercent" aria-valuemin="0" aria-valuemax="100">
         <div class="member-usage-fill" :style="{ width: `${usagePercent}%` }"></div>
       </div>
     </section>

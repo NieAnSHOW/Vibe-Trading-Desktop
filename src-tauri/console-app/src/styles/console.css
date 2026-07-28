@@ -107,8 +107,18 @@ h1 {
   gap: 7px;
   min-width: 0;
 }
-.account-profile-entry { border: 0; padding: 2px; background: transparent; color: inherit; cursor: pointer; }
-.account-profile-entry:focus-visible { outline: 2px solid hsl(var(--brand)); outline-offset: 3px; border-radius: 6px; }
+.account-profile-entry {
+  border: 0;
+  padding: 2px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.account-profile-entry:focus-visible {
+  outline: 2px solid hsl(var(--brand));
+  outline-offset: 3px;
+  border-radius: 6px;
+}
 .account-name {
   max-width: 112px;
   overflow: hidden;
@@ -174,12 +184,56 @@ h1 {
   --member: 42 92% 52%;
   --member-fg: 44 100% 75%;
 }
-.member-tier--member { --member: 174 62% 45%; --member-fg: 171 82% 70%; }
-.member-tier--normal { --member: var(--line); --member-fg: var(--ink-dim); }
-.profile { position: relative; z-index: 1; width: 580px; }
-.profile-card { margin-top: 18px; padding: 18px; border: 1px solid hsl(var(--line)); border-radius: var(--radius); background: hsl(var(--surface-1)); }
-.profile-title { font-size: 16px; font-weight: 650; }.profile-meta { margin-top: 5px; color: hsl(var(--ink-dim)); font-size: 13px; }
-.benefit-list { display: grid; gap: 8px; margin-top: 14px; list-style: none; }.benefit-item { padding: 11px 12px; border-left: 3px solid hsl(var(--brand)); background: hsl(var(--surface-2)); }.benefit-item p { margin-top: 3px; color: hsl(var(--ink-dim)); font-size: 12px; }.profile-danger-zone { margin-top: 24px; padding-top: 16px; border-top: 1px solid hsl(var(--line)); }
+.member-tier--member {
+  --member: 174 62% 45%;
+  --member-fg: 171 82% 70%;
+}
+.member-tier--normal {
+  --member: var(--line);
+  --member-fg: var(--ink-dim);
+}
+.profile {
+  position: relative;
+  z-index: 1;
+  width: 580px;
+}
+.profile-card {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid hsl(var(--line));
+  border-radius: var(--radius);
+  background: hsl(var(--surface-1));
+}
+.profile-title {
+  font-size: 16px;
+  font-weight: 650;
+}
+.profile-meta {
+  margin-top: 5px;
+  color: hsl(var(--ink-dim));
+  font-size: 13px;
+}
+.benefit-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  list-style: none;
+}
+.benefit-item {
+  padding: 11px 12px;
+  border-left: 3px solid hsl(var(--brand));
+  background: hsl(var(--surface-2));
+}
+.benefit-item p {
+  margin-top: 3px;
+  color: hsl(var(--ink-dim));
+  font-size: 12px;
+}
+.profile-danger-zone {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid hsl(var(--line));
+}
 .sr-only {
   position: absolute;
   width: 1px;
@@ -229,7 +283,6 @@ h1 {
 .member-usage-values {
   display: flex;
   gap: 14px;
-  margin-top: 10px;
   color: hsl(var(--ink-dim));
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
@@ -237,6 +290,17 @@ h1 {
 .member-usage-values b {
   color: hsl(var(--ink));
   font-weight: 650;
+}
+.member-usage-unlimited {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid hsl(var(--brand) / 0.35);
+  border-radius: 4px;
+  color: hsl(var(--brand));
+  font-size: 12px;
+  font-weight: 600;
 }
 .member-usage-track {
   height: 6px;

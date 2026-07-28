@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
     total_available: 98025508,
     total_granted: 113514188,
     total_used: 15488680,
+    unlimited_quota: false,
   })),
   unlisten: vi.fn(),
 }));
@@ -138,6 +139,24 @@ describe("ConsolePage", () => {
     await wrapper.get('[data-test="member-usage-refresh"]').trigger("click");
     await flushPromises();
     expect(mocks.consoleMemberUsage).toHaveBeenCalledTimes(2);
+  });
+
+  it("renders an unlimited badge instead of usage amounts for unlimited quotas", async () => {
+    mocks.consoleMemberUsage.mockResolvedValueOnce({
+      total_available: 98025508,
+      total_granted: 113514188,
+      total_used: 15488680,
+      unlimited_quota: true,
+    });
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+
+    expect(wrapper.get('[data-test="member-usage-unlimited"]').text()).toBe("不限量");
+    expect(wrapper.text()).not.toContain("剩余 98,025,508");
+    expect(wrapper.text()).not.toContain("总量 113,514,188");
+    expect(wrapper.text()).not.toContain("已用 15,488,680");
+    expect(wrapper.find('[role="progressbar"]').exists()).toBe(false);
   });
 
   it("keeps usage refresh available after the initial request fails", async () => {

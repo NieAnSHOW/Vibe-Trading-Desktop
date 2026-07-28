@@ -76,6 +76,7 @@ export interface MemberUsageView {
   total_available: number;
   total_granted: number;
   total_used: number;
+  unlimited_quota: boolean;
 }
 
 export interface MemberBenefit {
