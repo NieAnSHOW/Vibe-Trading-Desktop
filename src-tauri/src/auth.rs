@@ -809,13 +809,14 @@ pub fn fetch_vip_credential(
         &trace_id,
         "requesting encrypted member credential from server",
     );
-    let client_private_key = load_or_create_member_key(layout)?;
+    // v1 协议沿用此持久私钥完成 ECDH；请求中仅携带由它导出的公钥。
+    let member_private_key = load_or_create_member_key(layout)?;
     let text = http_client()?
         .post(endpoint("/app/ai/member/credentials"))
         .header("Authorization", token)
         .header("X-Vibe-Trace-Id", &trace_id)
         .json(&serde_json::json!({
-            "clientPublicKey": public_key_base64(&client_private_key),
+            "clientPublicKey": public_key_base64(&member_private_key),
         }))
         .send()
         .map_err(|e| {
@@ -860,7 +861,7 @@ pub fn fetch_vip_credential(
             envelope.version
         ),
     );
-    decrypt_member_envelope(&client_private_key, &envelope)
+    decrypt_member_envelope(&member_private_key, &envelope)
         .map(|credential| {
             log_vip_credential_event(
                 layout,
@@ -1251,6 +1252,73 @@ mod tests {
         (format!("http://{address}"), request_receiver)
     }
 
+    fn mock_vip_credential_fetch(request_count: usize) -> (String, mpsc::Receiver<String>) {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        let (request_sender, request_receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            for _ in 0..request_count {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut request = Vec::new();
+                let mut buffer = [0_u8; 1024];
+                let header_end = loop {
+                    let bytes_read = stream.read(&mut buffer).unwrap();
+                    assert!(bytes_read > 0);
+                    request.extend_from_slice(&buffer[..bytes_read]);
+                    if let Some(position) =
+                        request.windows(4).position(|window| window == b"\r\n\r\n")
+                    {
+                        break position + 4;
+                    }
+                };
+                let headers = std::str::from_utf8(&request[..header_end]).unwrap();
+                let content_length = headers
+                    .lines()
+                    .find_map(|line| {
+                        let (name, value) = line.split_once(':')?;
+                        name.eq_ignore_ascii_case("content-length")
+                            .then_some(value.trim())
+                    })
+                    .unwrap()
+                    .parse::<usize>()
+                    .unwrap();
+                while request.len() - header_end < content_length {
+                    let bytes_read = stream.read(&mut buffer).unwrap();
+                    assert!(bytes_read > 0);
+                    request.extend_from_slice(&buffer[..bytes_read]);
+                }
+
+                let request = String::from_utf8(request).unwrap();
+                let (_, body) = request.split_once("\r\n\r\n").unwrap();
+                let body: serde_json::Value = serde_json::from_str(body).unwrap();
+                let client_public_key = body["clientPublicKey"].as_str().unwrap();
+                let envelope =
+                    encrypted_fixture_for(&decode_server_public_key(client_public_key).unwrap());
+                let response_body = serde_json::json!({
+                    "code": 1000,
+                    "data": {
+                        "version": envelope.version,
+                        "serverPublicKey": envelope.server_public_key,
+                        "salt": envelope.salt,
+                        "iv": envelope.iv,
+                        "ciphertext": envelope.ciphertext,
+                        "tag": envelope.tag,
+                    }
+                })
+                .to_string();
+                request_sender.send(request).unwrap();
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    response_body.len(),
+                    response_body,
+                )
+                .unwrap();
+            }
+        });
+        (format!("http://{address}"), request_receiver)
+    }
+
     #[test]
     fn parses_successful_member_usage_response() {
         let usage = parse_member_usage(
@@ -1445,6 +1513,71 @@ mod tests {
         assert_eq!(credential.base_url, "https://api.example/v1");
         assert_eq!(credential.api_key, "member-key");
         assert_eq!(credential.models, vec!["model-a"]);
+    }
+
+    #[test]
+    fn fetch_vip_credential_reuses_persisted_public_key_and_decrypts_v1_envelopes() {
+        let _api_url_lock = USER_API_URL_TEST_LOCK.lock().unwrap();
+        let (api_url, request_receiver) = mock_vip_credential_fetch(2);
+        let previous_api_url = std::env::var("VIBE_USER_API_URL").ok();
+        std::env::set_var("VIBE_USER_API_URL", api_url);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        let first = fetch_vip_credential("test-access-token", &layout);
+        let second = fetch_vip_credential("test-access-token", &layout);
+
+        match previous_api_url {
+            Some(value) => std::env::set_var("VIBE_USER_API_URL", value),
+            None => std::env::remove_var("VIBE_USER_API_URL"),
+        }
+
+        let first = first.unwrap();
+        let second = second.unwrap();
+        assert_eq!(first.base_url, "https://api.example/v1");
+        assert_eq!(first.api_key, "member-key");
+        assert_eq!(first.models, vec!["model-a"]);
+        assert_eq!(second.base_url, first.base_url);
+        assert_eq!(second.api_key, first.api_key);
+        assert_eq!(second.models, first.models);
+
+        let requests: Vec<String> = (0..2)
+            .map(|_| {
+                request_receiver
+                    .recv_timeout(std::time::Duration::from_secs(3))
+                    .unwrap()
+            })
+            .collect();
+        let public_keys: Vec<String> = requests
+            .iter()
+            .map(|request| {
+                let (headers, body) = request.split_once("\r\n\r\n").unwrap();
+                assert!(headers.starts_with("POST /app/ai/member/credentials HTTP/1.1\r\n"));
+                let body: serde_json::Value = serde_json::from_str(body).unwrap();
+                let body = body.as_object().unwrap();
+                assert_eq!(body.len(), 1);
+                assert!(body.get("privateKey").is_none());
+                body["clientPublicKey"].as_str().unwrap().to_owned()
+            })
+            .collect();
+        assert_eq!(public_keys[0], public_keys[1]);
+        assert_eq!(
+            public_keys[0],
+            public_key_base64(&load_or_create_member_key(&layout).unwrap())
+        );
+    }
+
+    #[test]
+    fn fetch_vip_credential_rejects_malformed_persisted_private_key_before_request() {
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        fs::create_dir_all(&layout.root).unwrap();
+        fs::write(&layout.member_key, [0_u8; 31]).unwrap();
+
+        assert!(matches!(
+            fetch_vip_credential("test-access-token", &layout),
+            Err(AuthError::Credential { message }) if message == "会员私钥长度无效"
+        ));
     }
 
     #[test]
