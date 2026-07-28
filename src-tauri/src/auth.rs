@@ -586,6 +586,122 @@ pub fn public_key_base64(private_key: &StaticSecret) -> String {
     base64::engine::general_purpose::STANDARD.encode(der)
 }
 
+/// 读取已有的会员 X25519 私钥；首次使用时以原子方式生成并保存到本地。
+/// 私钥仅用于本机解密会员凭据，绝不能写入日志或发送到服务端。
+pub fn load_or_create_member_key(layout: &Layout) -> Result<StaticSecret, AuthError> {
+    match fs::metadata(&layout.member_key) {
+        Ok(_) => read_member_key(&layout.member_key),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let private_key = StaticSecret::random_from_rng(OsRng);
+            write_member_key_atomic(&layout.member_key, &private_key.to_bytes())?;
+            // 发布竞争失败时，读取已由其他调用持久化的密钥，保证所有调用返回同一私钥。
+            read_member_key(&layout.member_key)
+        }
+        Err(_) => Err(credential_error("会员私钥读取失败")),
+    }
+}
+
+fn read_member_key(path: &Path) -> Result<StaticSecret, AuthError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let metadata = fs::metadata(path).map_err(|_| credential_error("会员私钥读取失败"))?;
+        if metadata.permissions().mode() & 0o777 != 0o600 {
+            fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+                .map_err(|_| credential_error("会员私钥权限设置失败"))?;
+        }
+    }
+
+    let bytes = fs::read(path).map_err(|_| credential_error("会员私钥读取失败"))?;
+    let bytes: [u8; 32] = bytes
+        .try_into()
+        .map_err(|_| credential_error("会员私钥长度无效"))?;
+    Ok(StaticSecret::from(bytes))
+}
+
+fn write_member_key_atomic(path: &Path, key: &[u8; 32]) -> Result<(), AuthError> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| credential_error("会员私钥路径无效"))?;
+    fs::create_dir_all(parent).map_err(|_| credential_error("会员私钥目录创建失败"))?;
+
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("member.key");
+    let mut suffix = [0_u8; 12];
+    OsRng.fill_bytes(&mut suffix);
+    let suffix: String = suffix.iter().map(|byte| format!("{byte:02x}")).collect();
+    let tmp = parent.join(format!(
+        ".{file_name}.{}.{}.tmp",
+        std::process::id(),
+        suffix
+    ));
+
+    let result = (|| {
+        #[cfg(unix)]
+        {
+            use std::io::Write;
+            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&tmp)
+                .map_err(|_| credential_error("会员私钥临时文件创建失败"))?;
+            file.set_permissions(fs::Permissions::from_mode(0o600))
+                .map_err(|_| credential_error("会员私钥权限设置失败"))?;
+            file.write_all(key)
+                .map_err(|_| credential_error("会员私钥写入失败"))?;
+            file.sync_all()
+                .map_err(|_| credential_error("会员私钥保存失败"))?;
+        }
+        #[cfg(not(unix))]
+        {
+            use std::io::Write;
+
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&tmp)
+                .map_err(|_| credential_error("会员私钥临时文件创建失败"))?;
+            file.write_all(key)
+                .map_err(|_| credential_error("会员私钥写入失败"))?;
+            file.sync_all()
+                .map_err(|_| credential_error("会员私钥保存失败"))?;
+        }
+
+        match fs::hard_link(&tmp, path) {
+            Ok(()) => {
+                #[cfg(unix)]
+                sync_member_key_parent(parent)?;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(_) => return Err(credential_error("会员私钥保存失败")),
+        }
+        Ok(())
+    })();
+
+    let cleanup = fs::remove_file(&tmp);
+    if result.is_err() || cleanup.is_err() {
+        return Err(credential_error("会员私钥保存失败"));
+    }
+
+    #[cfg(unix)]
+    sync_member_key_parent(parent)?;
+
+    Ok(())
+}
+
+#[cfg(unix)]
+fn sync_member_key_parent(parent: &Path) -> Result<(), AuthError> {
+    fs::File::open(parent)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|_| credential_error("会员私钥保存失败"))
+}
+
 fn decode_server_public_key(value: &str) -> Result<PublicKey, AuthError> {
     let der = base64::engine::general_purpose::STANDARD
         .decode(value)
@@ -662,7 +778,7 @@ pub fn fetch_vip_credential(
         &trace_id,
         "requesting encrypted member credential from server",
     );
-    let client_private_key = StaticSecret::random_from_rng(OsRng);
+    let client_private_key = load_or_create_member_key(layout)?;
     let text = http_client()?
         .post(endpoint("/app/ai/member/credentials"))
         .header("Authorization", token)
@@ -1222,6 +1338,105 @@ mod tests {
         let mut envelope = encrypted_fixture_for(&client_public_key);
         envelope.ciphertext.push('A');
         assert!(decrypt_member_envelope(&client_private_key, &envelope).is_err());
+    }
+
+    #[test]
+    fn load_or_create_member_key_reuses_32_byte_private_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+
+        let first = load_or_create_member_key(&layout).unwrap();
+        let stored = fs::read(&layout.member_key).unwrap();
+        let second = load_or_create_member_key(&layout).unwrap();
+
+        assert_eq!(stored.len(), 32);
+        assert_eq!(first.to_bytes(), stored.as_slice());
+        assert_eq!(second.to_bytes(), stored.as_slice());
+    }
+
+    #[test]
+    fn load_or_create_member_key_concurrent_initialization_reuses_persisted_key() {
+        use std::sync::Barrier;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Arc::new(Layout::new(&tmp.path().join(".vibe-trading")));
+        let barrier = Arc::new(Barrier::new(16));
+        let mut handles = Vec::new();
+
+        for _ in 0..16 {
+            let layout = Arc::clone(&layout);
+            let barrier = Arc::clone(&barrier);
+            handles.push(std::thread::spawn(move || {
+                barrier.wait();
+                load_or_create_member_key(&layout).unwrap().to_bytes()
+            }));
+        }
+
+        let keys: Vec<[u8; 32]> = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect();
+        let stored: [u8; 32] = fs::read(&layout.member_key).unwrap().try_into().unwrap();
+        for key in keys {
+            assert_eq!(key, stored);
+        }
+    }
+
+    #[test]
+    fn load_or_create_member_key_rejects_non_32_byte_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        fs::create_dir_all(&layout.root).unwrap();
+        fs::write(&layout.member_key, [0_u8; 31]).unwrap();
+
+        assert!(matches!(
+            load_or_create_member_key(&layout),
+            Err(AuthError::Credential { message }) if message == "会员私钥长度无效"
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn load_or_create_member_key_sets_0600_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+
+        load_or_create_member_key(&layout).unwrap();
+
+        assert_eq!(
+            fs::metadata(&layout.member_key)
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn load_or_create_member_key_tightens_existing_file_permissions_to_0600() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        fs::create_dir_all(&layout.root).unwrap();
+        fs::write(&layout.member_key, [3_u8; 32]).unwrap();
+        fs::set_permissions(&layout.member_key, fs::Permissions::from_mode(0o644)).unwrap();
+
+        let key = load_or_create_member_key(&layout).unwrap();
+
+        assert_eq!(key.to_bytes(), [3_u8; 32]);
+        assert_eq!(
+            fs::metadata(&layout.member_key)
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
     }
 
     #[test]

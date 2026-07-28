@@ -14,6 +14,7 @@ pub struct Layout {
     pub runtime_libs: PathBuf,  // ~/.vibe-trading/runtime/libs (按需安装的可选依赖)
     pub marker: PathBuf,        // ~/.vibe-trading/runtime/.installed_version
     pub user_env: PathBuf,      // ~/.vibe-trading/.env
+    pub member_key: PathBuf,    // ~/.vibe-trading/member.key
     pub venv_dir: PathBuf,      // ~/.vibe-trading/venv
     pub venv_python: PathBuf,   // venv interpreter executable (platform-dependent)
     pub sessions_dir: PathBuf,  // ~/.vibe-trading/sessions
@@ -34,6 +35,7 @@ impl Layout {
             runtime_libs: home_vibe.join("runtime").join("libs"),
             marker: home_vibe.join("runtime").join(".installed_version"),
             user_env: home_vibe.join(".env"),
+            member_key: home_vibe.join("member.key"),
             venv_dir,
             venv_python,
             sessions_dir: home_vibe.join("sessions"),
