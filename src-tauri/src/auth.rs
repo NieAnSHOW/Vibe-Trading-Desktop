@@ -1413,6 +1413,45 @@ mod tests {
     }
 
     #[test]
+    fn public_key_upload_uses_the_persisted_key_without_sending_private_key_bytes() {
+        use base64::Engine;
+
+        let _api_url_lock = USER_API_URL_TEST_LOCK.lock().unwrap();
+        let (api_url, request_receiver) = mock_member_public_key_upload(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 25\r\nConnection: close\r\n\r\n{\"code\":1000,\"data\":null}",
+        );
+        let previous_api_url = std::env::var("VIBE_USER_API_URL").ok();
+        std::env::set_var("VIBE_USER_API_URL", api_url);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        let persisted_private_key = [42_u8; 32];
+        fs::create_dir_all(&layout.root).unwrap();
+        fs::write(&layout.member_key, persisted_private_key).unwrap();
+        let result = upload_member_public_key("test-access-token", &layout);
+
+        match previous_api_url {
+            Some(value) => std::env::set_var("VIBE_USER_API_URL", value),
+            None => std::env::remove_var("VIBE_USER_API_URL"),
+        }
+        result.unwrap();
+
+        let request = request_receiver.recv().unwrap();
+        let (_, body) = request.split_once("\r\n\r\n").unwrap();
+        let body: serde_json::Value = serde_json::from_str(body).unwrap();
+        let body = body.as_object().unwrap();
+        let client_public_key = body["clientPublicKey"].as_str().unwrap();
+        let persisted_private_key = StaticSecret::from(persisted_private_key);
+
+        assert_eq!(body.len(), 1);
+        assert_eq!(client_public_key, public_key_base64(&persisted_private_key));
+        assert_ne!(
+            client_public_key,
+            base64::engine::general_purpose::STANDARD.encode(persisted_private_key.to_bytes())
+        );
+    }
+
+    #[test]
     fn public_key_upload_maps_non_success_http_status_to_fixed_error() {
         let _api_url_lock = USER_API_URL_TEST_LOCK.lock().unwrap();
         let (api_url, request_receiver) = mock_member_public_key_upload(
