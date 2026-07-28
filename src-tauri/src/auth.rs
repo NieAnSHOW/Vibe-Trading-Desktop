@@ -467,6 +467,10 @@ pub fn parse_cool_response<T: serde::de::DeserializeOwned>(text: &str) -> Result
 // 端点与 frontend/src/lib/apiUser.ts 完全对齐；Authorization 裸 token（无 Bearer）。
 
 const HTTP_TIMEOUT_SECS: u64 = 30;
+const MEMBER_PUBLIC_KEY_UPLOAD_FAILED: &str = "会员公钥上报失败";
+
+#[cfg(test)]
+pub(crate) static USER_API_URL_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn http_client() -> Result<reqwest::blocking::Client, AuthError> {
     reqwest::blocking::Client::builder()
@@ -589,7 +593,7 @@ pub fn public_key_base64(private_key: &StaticSecret) -> String {
 /// 上报本机持久会员公钥。请求体只能包含公钥，私钥始终保留在本机安全目录。
 pub fn upload_member_public_key(token: &str, layout: &Layout) -> Result<(), AuthError> {
     let private_key = load_or_create_member_key(layout)?;
-    let text = http_client()?
+    let response = http_client()?
         .post(endpoint("/app/ai/member"))
         .header("Authorization", token)
         .json(&serde_json::json!({
@@ -597,13 +601,20 @@ pub fn upload_member_public_key(token: &str, layout: &Layout) -> Result<(), Auth
         }))
         .send()
         .map_err(|_| AuthError::Network {
-            message: "会员公钥上报请求失败".into(),
+            message: MEMBER_PUBLIC_KEY_UPLOAD_FAILED.into(),
         })?
-        .text()
+        .error_for_status()
         .map_err(|_| AuthError::Network {
-            message: "会员公钥上报响应读取失败".into(),
+            message: MEMBER_PUBLIC_KEY_UPLOAD_FAILED.into(),
         })?;
+    let text = response.text().map_err(|_| AuthError::Network {
+        message: MEMBER_PUBLIC_KEY_UPLOAD_FAILED.into(),
+    })?;
     parse_cool_response::<()>(&text)
+        .map(|_| ())
+        .map_err(|_| AuthError::Network {
+            message: MEMBER_PUBLIC_KEY_UPLOAD_FAILED.into(),
+        })
 }
 
 /// 读取已有的会员 X25519 私钥；首次使用时以原子方式生成并保存到本地。
@@ -1197,11 +1208,9 @@ mod tests {
     use super::*;
     use std::io::{Read, Write};
     use std::net::TcpListener;
-    use std::sync::{mpsc, Mutex};
+    use std::sync::mpsc;
 
-    static USER_API_URL_TEST_LOCK: Mutex<()> = Mutex::new(());
-
-    fn mock_member_public_key_upload() -> (String, mpsc::Receiver<String>) {
+    fn mock_member_public_key_upload(response: &'static [u8]) -> (String, mpsc::Receiver<String>) {
         let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
         let address = listener.local_addr().unwrap();
         let (request_sender, request_receiver) = mpsc::channel();
@@ -1237,9 +1246,7 @@ mod tests {
             request_sender
                 .send(String::from_utf8(request).unwrap())
                 .unwrap();
-            stream
-                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 25\r\nConnection: close\r\n\r\n{\"code\":1000,\"data\":null}")
-                .unwrap();
+            stream.write_all(response).unwrap();
         });
         (format!("http://{address}"), request_receiver)
     }
@@ -1306,7 +1313,9 @@ mod tests {
     #[test]
     fn public_key_upload_sends_only_client_public_key() {
         let _api_url_lock = USER_API_URL_TEST_LOCK.lock().unwrap();
-        let (api_url, request_receiver) = mock_member_public_key_upload();
+        let (api_url, request_receiver) = mock_member_public_key_upload(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 25\r\nConnection: close\r\n\r\n{\"code\":1000,\"data\":null}",
+        );
         let previous_api_url = std::env::var("VIBE_USER_API_URL").ok();
         std::env::set_var("VIBE_USER_API_URL", api_url);
 
@@ -1333,6 +1342,50 @@ mod tests {
         assert_eq!(body.len(), 1);
         assert!(body.get("clientPublicKey").is_some());
         assert!(body.get("privateKey").is_none());
+    }
+
+    #[test]
+    fn public_key_upload_maps_non_success_http_status_to_fixed_error() {
+        let _api_url_lock = USER_API_URL_TEST_LOCK.lock().unwrap();
+        let (api_url, request_receiver) = mock_member_public_key_upload(
+            b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 50\r\nConnection: close\r\n\r\n{\"message\":\"upstream-detail-should-not-propagate\"}",
+        );
+        let previous_api_url = std::env::var("VIBE_USER_API_URL").ok();
+        std::env::set_var("VIBE_USER_API_URL", api_url);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        let error = upload_member_public_key("test-token", &layout).unwrap_err();
+
+        match previous_api_url {
+            Some(value) => std::env::set_var("VIBE_USER_API_URL", value),
+            None => std::env::remove_var("VIBE_USER_API_URL"),
+        }
+        request_receiver.recv().unwrap();
+
+        assert!(matches!(error, AuthError::Network { message } if message == "会员公钥上报失败"));
+    }
+
+    #[test]
+    fn public_key_upload_maps_cool_failure_to_fixed_error() {
+        let _api_url_lock = USER_API_URL_TEST_LOCK.lock().unwrap();
+        let (api_url, request_receiver) = mock_member_public_key_upload(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 62\r\nConnection: close\r\n\r\n{\"code\":1001,\"message\":\"upstream-detail-should-not-propagate\"}",
+        );
+        let previous_api_url = std::env::var("VIBE_USER_API_URL").ok();
+        std::env::set_var("VIBE_USER_API_URL", api_url);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        let error = upload_member_public_key("test-token", &layout).unwrap_err();
+
+        match previous_api_url {
+            Some(value) => std::env::set_var("VIBE_USER_API_URL", value),
+            None => std::env::remove_var("VIBE_USER_API_URL"),
+        }
+        request_receiver.recv().unwrap();
+
+        assert!(matches!(error, AuthError::Network { message } if message == "会员公钥上报失败"));
     }
 
     fn der_spki_base64(public_key: &x25519_dalek::PublicKey) -> String {

@@ -1139,6 +1139,8 @@ pub fn console_install_update(path: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Read, Write};
+    use std::sync::mpsc;
     use std::sync::{Arc, Mutex};
 
     #[test]
@@ -1152,6 +1154,55 @@ mod tests {
             remember_until(true, 100),
             Some(100 + auth::REMEMBER_LOGIN_SECS)
         );
+    }
+
+    #[test]
+    fn member_public_key_upload_failure_does_not_block_finalize_login() {
+        let _api_url_lock = auth::USER_API_URL_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let api_url = format!("http://{}", listener.local_addr().unwrap());
+        let (upload_finished_sender, upload_finished_receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            for response in [
+                b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    .as_slice(),
+                b"HTTP/1.1 200 OK\r\nContent-Length: 62\r\nConnection: close\r\n\r\n{\"code\":1001,\"message\":\"upstream-detail-should-not-propagate\"}"
+                    .as_slice(),
+            ] {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut request = [0_u8; 1024];
+                stream.read(&mut request).unwrap();
+                stream.write_all(response).unwrap();
+            }
+            upload_finished_sender.send(()).unwrap();
+        });
+        let previous_api_url = std::env::var("VIBE_USER_API_URL").ok();
+        std::env::set_var("VIBE_USER_API_URL", api_url);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        let auth_state = AuthState(Arc::new(Mutex::new(None)));
+        let raw = LoginRaw {
+            token: "test-token".into(),
+            refresh_token: "test-refresh-token".into(),
+            expire: 60,
+            refresh_expire: 120,
+            has_password: true,
+        };
+        let result = finalize_login(raw, true, false, &layout, &auth_state, String::new());
+        upload_finished_receiver
+            .recv_timeout(std::time::Duration::from_secs(1))
+            .unwrap();
+
+        match previous_api_url {
+            Some(value) => std::env::set_var("VIBE_USER_API_URL", value),
+            None => std::env::remove_var("VIBE_USER_API_URL"),
+        }
+
+        assert!(result.is_ok());
+        assert!(auth_state.0.lock().unwrap().is_some());
     }
 
     #[test]
