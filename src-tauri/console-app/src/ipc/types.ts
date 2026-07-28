@@ -78,6 +78,16 @@ export interface MemberUsageView {
   total_used: number;
 }
 
+export interface MemberBenefit {
+  id: string;
+  title: string;
+  description?: string | null;
+}
+
+export interface MemberBenefitsView {
+  benefits: MemberBenefit[];
+}
+
 export interface Captcha {
   captchaId: string;
   data: string; // base64 svg（可能含 data: 前缀）

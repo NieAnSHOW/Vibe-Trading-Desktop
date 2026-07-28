@@ -107,6 +107,8 @@ h1 {
   gap: 7px;
   min-width: 0;
 }
+.account-profile-entry { border: 0; padding: 2px; background: transparent; color: inherit; cursor: pointer; }
+.account-profile-entry:focus-visible { outline: 2px solid hsl(var(--brand)); outline-offset: 3px; border-radius: 6px; }
 .account-name {
   max-width: 112px;
   overflow: hidden;
@@ -165,13 +167,19 @@ h1 {
   white-space: nowrap;
 }
 .member-tier--pro {
+  --member: 207 88% 58%;
+  --member-fg: 204 100% 76%;
+}
+.member-tier--signature {
   --member: 42 92% 52%;
   --member-fg: 44 100% 75%;
 }
-.member-tier--signature {
-  --member: 188 78% 52%;
-  --member-fg: 187 95% 76%;
-}
+.member-tier--member { --member: 174 62% 45%; --member-fg: 171 82% 70%; }
+.member-tier--normal { --member: var(--line); --member-fg: var(--ink-dim); }
+.profile { position: relative; z-index: 1; width: 580px; }
+.profile-card { margin-top: 18px; padding: 18px; border: 1px solid hsl(var(--line)); border-radius: var(--radius); background: hsl(var(--surface-1)); }
+.profile-title { font-size: 16px; font-weight: 650; }.profile-meta { margin-top: 5px; color: hsl(var(--ink-dim)); font-size: 13px; }
+.benefit-list { display: grid; gap: 8px; margin-top: 14px; list-style: none; }.benefit-item { padding: 11px 12px; border-left: 3px solid hsl(var(--brand)); background: hsl(var(--surface-2)); }.benefit-item p { margin-top: 3px; color: hsl(var(--ink-dim)); font-size: 12px; }.profile-danger-zone { margin-top: 24px; padding-top: 16px; border-top: 1px solid hsl(var(--line)); }
 .sr-only {
   position: absolute;
   width: 1px;

@@ -17,7 +17,6 @@ import {
   consoleClearLogs,
   consoleQuit,
   consoleClearVenv,
-  consoleLogout,
   consoleFetchAds,
   consoleMemberUsage,
 } from "../ipc/commands";
@@ -241,37 +240,6 @@ async function onStopDialogClose(v: "ok" | "cancel") {
 }
 
 // ── 退出登录(二次确认 → 清登录信息 → 重启服务) ──────────────────
-const logoutBusy = useBusy();
-const logoutDialogOpen = ref(false);
-const logoutText = computed(() =>
-  serviceRunning.value
-    ? "若您退出登录，当前服务将会重启，正在任务中的智能体也会被强制关闭，确认操作吗？"
-    : "若您退出登录，则需要您手动配置大模型，确认操作吗？",
-);
-function onLogout() {
-  logoutDialogOpen.value = true;
-}
-async function onLogoutDialogClose(v: "ok" | "cancel") {
-  logoutDialogOpen.value = false;
-  if (v !== "ok") return;
-  await logoutBusy.run("退出中", async () => {
-    setErr("");
-    try {
-      await consoleLogout(); // 清 .env 登录段 + Rust 内存 session
-      authStore.clear();
-      clearMemberUsage();
-      // 重启服务：清掉旧 token 的进程，新进程以未登录态启动
-      if (serviceRunning.value) {
-        await service.stop();
-        env.setPort(null);
-        const p = await service.start();
-        env.setPort(p);
-      }
-    } catch (e) {
-      setErr(e);
-    }
-  });
-}
 
 // ── 强制清理 venv(二次确认 → 停服 → 删目录 → 刷新) ────────────────
 const clearVenvBusy = useBusy();
@@ -476,7 +444,9 @@ onUnmounted(() => {
       <div class="head-actions">
         <div v-if="ProdConfig.enableLogin">
           <template v-if="authStore.authenticated">
-            <div class="account-identity">
+            <button class="account-profile-entry" data-test="account-profile-entry" type="button"
+              :aria-label="`打开个人中心，${accountName}`" @click="router.push('/profile')">
+            <span class="account-identity">
               <span class="account-name" :title="accountName">{{ accountName }}</span>
               <span v-if="memberTier" class="member-tier" :class="`member-tier--${memberTier.tone}`"
                 :title="`当前会员等级：${memberTier.label}`" aria-hidden="true">
@@ -485,10 +455,10 @@ onUnmounted(() => {
                 <span v-if="memberTier.caption" class="member-tier-caption">{{ memberTier.caption }}</span>
               </span>
 
-            </div>
+            </span>
+            </button>
             <span v-if="memberTier" class="sr-only">当前会员等级：{{ memberTier.label }}</span>
             <span v-else class="sr-only">普通用户</span>
-            <AppButton variant="ghost" :busy="logoutBusy.busy.value" @click="onLogout">退出登录</AppButton>
           </template>
           <AppButton v-else variant="ghost" @click="router.push('/login')">登录</AppButton>
         </div>
@@ -593,10 +563,6 @@ onUnmounted(() => {
       <template #confirm-text>确认退出</template>
     </ConfirmDialog>
 
-    <ConfirmDialog :open="logoutDialogOpen" title="确认退出登录？" @close="onLogoutDialogClose">
-      {{ logoutText }}
-      <template #confirm-text>确认退出</template>
-    </ConfirmDialog>
     <!-- 广告位 bottom:横条 -->
     <AdSlot :ad="adBottom" variant="bottom" />
     <div id="err">{{ errorMsg }}</div>

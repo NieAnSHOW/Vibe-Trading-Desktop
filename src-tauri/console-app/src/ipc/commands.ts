@@ -5,6 +5,7 @@ import type {
   CommandMessage,
   LoginResultView,
   MemberUsageView,
+  MemberBenefitsView,
   StatusReport,
   AdItem,
   UpdateInfo,
@@ -89,6 +90,9 @@ export const consoleAuthStatus = (): Promise<AuthStatusView> =>
 
 export const consoleMemberUsage = (): Promise<MemberUsageView> =>
   invoke<MemberUsageView>("console_member_usage");
+
+export const consoleMemberBenefits = (): Promise<MemberBenefitsView> =>
+  invoke<MemberBenefitsView>("console_member_benefits");
 
 export const consoleLogout = (): Promise<void> =>
   invoke<void>("console_logout");
