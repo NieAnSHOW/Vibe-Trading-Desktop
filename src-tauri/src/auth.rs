@@ -1397,7 +1397,9 @@ mod tests {
         }
         result.unwrap();
 
-        let request = request_receiver.recv().unwrap();
+        let request = request_receiver
+            .recv_timeout(std::time::Duration::from_secs(3))
+            .unwrap();
         let (headers, body) = request.split_once("\r\n\r\n").unwrap();
         assert!(headers.starts_with("POST /app/ai/member HTTP/1.1\r\n"));
         assert!(headers.lines().any(|line| {
@@ -1426,6 +1428,8 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let layout = Layout::new(&tmp.path().join(".vibe-trading"));
         let persisted_private_key = [42_u8; 32];
+        let persisted_private_key_base64 =
+            base64::engine::general_purpose::STANDARD.encode(persisted_private_key);
         fs::create_dir_all(&layout.root).unwrap();
         fs::write(&layout.member_key, persisted_private_key).unwrap();
         let result = upload_member_public_key("test-access-token", &layout);
@@ -1436,7 +1440,13 @@ mod tests {
         }
         result.unwrap();
 
-        let request = request_receiver.recv().unwrap();
+        let request = request_receiver
+            .recv_timeout(std::time::Duration::from_secs(3))
+            .unwrap();
+        assert!(
+            !request.contains(&persisted_private_key_base64),
+            "完整 HTTP 请求不得包含持久私钥的 Base64 表示"
+        );
         let (_, body) = request.split_once("\r\n\r\n").unwrap();
         let body: serde_json::Value = serde_json::from_str(body).unwrap();
         let body = body.as_object().unwrap();
@@ -1445,10 +1455,7 @@ mod tests {
 
         assert_eq!(body.len(), 1);
         assert_eq!(client_public_key, public_key_base64(&persisted_private_key));
-        assert_ne!(
-            client_public_key,
-            base64::engine::general_purpose::STANDARD.encode(persisted_private_key.to_bytes())
-        );
+        assert_ne!(client_public_key, persisted_private_key_base64);
     }
 
     #[test]
@@ -1468,7 +1475,9 @@ mod tests {
             Some(value) => std::env::set_var("VIBE_USER_API_URL", value),
             None => std::env::remove_var("VIBE_USER_API_URL"),
         }
-        request_receiver.recv().unwrap();
+        request_receiver
+            .recv_timeout(std::time::Duration::from_secs(3))
+            .unwrap();
 
         assert!(matches!(error, AuthError::Network { message } if message == "会员公钥上报失败"));
     }
@@ -1490,7 +1499,9 @@ mod tests {
             Some(value) => std::env::set_var("VIBE_USER_API_URL", value),
             None => std::env::remove_var("VIBE_USER_API_URL"),
         }
-        request_receiver.recv().unwrap();
+        request_receiver
+            .recv_timeout(std::time::Duration::from_secs(3))
+            .unwrap();
 
         assert!(matches!(error, AuthError::Network { message } if message == "会员公钥上报失败"));
     }
