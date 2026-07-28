@@ -541,12 +541,49 @@ fn finalize_login(
         &layout.logs_dir,
         "login succeeded; persisted session tokens only and deferred VIP credential retrieval",
     );
+    upload_member_public_key_best_effort(&sess.token, layout);
     Ok(LoginResultView {
         user_info: info,
         has_password,
         expire_at: sess.expire_at,
         message,
     })
+}
+
+/// 公钥同步属于登录后的附加流程，在后台执行，避免网络超时阻塞登录返回。
+/// 日志只记录阶段，不记录密钥或错误详情。
+fn upload_member_public_key_best_effort(token: &str, layout: &Layout) {
+    crate::sidecar::log_vip_runtime_event(
+        &layout.logs_dir,
+        "member-public-key-upload stage=scheduled",
+    );
+    let token = token.to_string();
+    let layout = layout.clone();
+    let log_layout = layout.clone();
+    let upload = std::thread::Builder::new()
+        .name("member-public-key-upload".into())
+        .spawn(move || {
+            crate::sidecar::log_vip_runtime_event(
+                &layout.logs_dir,
+                "member-public-key-upload stage=started",
+            );
+            match auth::upload_member_public_key(&token, &layout) {
+                Ok(()) => crate::sidecar::log_vip_runtime_event(
+                    &layout.logs_dir,
+                    "member-public-key-upload stage=succeeded",
+                ),
+                Err(_) => crate::sidecar::log_vip_runtime_event(
+                    &layout.logs_dir,
+                    "member-public-key-upload stage=failed login-continues",
+                ),
+            }
+        });
+    if upload.is_err() {
+        crate::sidecar::log_vip_runtime_event(
+            &log_layout.logs_dir,
+            "member-public-key-upload stage=failed thread-start login-continues",
+        );
+    }
 }
 
 /// userInfo 拉取失败时用占位（不阻塞登录主流程，与原 Login.tsx 容错一致）。

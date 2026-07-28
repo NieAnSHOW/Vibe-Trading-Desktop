@@ -586,6 +586,26 @@ pub fn public_key_base64(private_key: &StaticSecret) -> String {
     base64::engine::general_purpose::STANDARD.encode(der)
 }
 
+/// 上报本机持久会员公钥。请求体只能包含公钥，私钥始终保留在本机安全目录。
+pub fn upload_member_public_key(token: &str, layout: &Layout) -> Result<(), AuthError> {
+    let private_key = load_or_create_member_key(layout)?;
+    let text = http_client()?
+        .post(endpoint("/app/ai/member"))
+        .header("Authorization", token)
+        .json(&serde_json::json!({
+            "clientPublicKey": public_key_base64(&private_key),
+        }))
+        .send()
+        .map_err(|_| AuthError::Network {
+            message: "会员公钥上报请求失败".into(),
+        })?
+        .text()
+        .map_err(|_| AuthError::Network {
+            message: "会员公钥上报响应读取失败".into(),
+        })?;
+    parse_cool_response::<()>(&text)
+}
+
 /// 读取已有的会员 X25519 私钥；首次使用时以原子方式生成并保存到本地。
 /// 私钥仅用于本机解密会员凭据，绝不能写入日志或发送到服务端。
 pub fn load_or_create_member_key(layout: &Layout) -> Result<StaticSecret, AuthError> {
@@ -1175,6 +1195,54 @@ pub fn ensure_vip_credential(state: &AuthState, layout: &Layout) -> Result<UserS
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::{mpsc, Mutex};
+
+    static USER_API_URL_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn mock_member_public_key_upload() -> (String, mpsc::Receiver<String>) {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        let (request_sender, request_receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0_u8; 1024];
+            let header_end = loop {
+                let bytes_read = stream.read(&mut buffer).unwrap();
+                assert!(bytes_read > 0);
+                request.extend_from_slice(&buffer[..bytes_read]);
+                if let Some(position) = request.windows(4).position(|window| window == b"\r\n\r\n")
+                {
+                    break position + 4;
+                }
+            };
+            let headers = std::str::from_utf8(&request[..header_end]).unwrap();
+            let content_length = headers
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.eq_ignore_ascii_case("content-length")
+                        .then_some(value.trim())
+                })
+                .unwrap()
+                .parse::<usize>()
+                .unwrap();
+            while request.len() - header_end < content_length {
+                let bytes_read = stream.read(&mut buffer).unwrap();
+                assert!(bytes_read > 0);
+                request.extend_from_slice(&buffer[..bytes_read]);
+            }
+            request_sender
+                .send(String::from_utf8(request).unwrap())
+                .unwrap();
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 25\r\nConnection: close\r\n\r\n{\"code\":1000,\"data\":null}")
+                .unwrap();
+        });
+        (format!("http://{address}"), request_receiver)
+    }
 
     #[test]
     fn parses_successful_member_usage_response() {
@@ -1233,6 +1301,38 @@ mod tests {
         let private_key = x25519_dalek::StaticSecret::from([7_u8; 32]);
         let public_key = x25519_dalek::PublicKey::from(&private_key);
         (private_key, public_key)
+    }
+
+    #[test]
+    fn public_key_upload_sends_only_client_public_key() {
+        let _api_url_lock = USER_API_URL_TEST_LOCK.lock().unwrap();
+        let (api_url, request_receiver) = mock_member_public_key_upload();
+        let previous_api_url = std::env::var("VIBE_USER_API_URL").ok();
+        std::env::set_var("VIBE_USER_API_URL", api_url);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        let result = upload_member_public_key("test-access-token", &layout);
+
+        match previous_api_url {
+            Some(value) => std::env::set_var("VIBE_USER_API_URL", value),
+            None => std::env::remove_var("VIBE_USER_API_URL"),
+        }
+        result.unwrap();
+
+        let request = request_receiver.recv().unwrap();
+        let (headers, body) = request.split_once("\r\n\r\n").unwrap();
+        assert!(headers.starts_with("POST /app/ai/member HTTP/1.1\r\n"));
+        assert!(headers.lines().any(|line| {
+            line.split_once(':').is_some_and(|(name, value)| {
+                name.eq_ignore_ascii_case("authorization") && value.trim() == "test-access-token"
+            })
+        }));
+        let body: serde_json::Value = serde_json::from_str(body).unwrap();
+        let body = body.as_object().unwrap();
+        assert_eq!(body.len(), 1);
+        assert!(body.get("clientPublicKey").is_some());
+        assert!(body.get("privateKey").is_none());
     }
 
     fn der_spki_base64(public_key: &x25519_dalek::PublicKey) -> String {
@@ -1668,8 +1768,14 @@ mod tests {
 
     #[test]
     fn user_api_url_defaults_to_local_server() {
+        let _api_url_lock = USER_API_URL_TEST_LOCK.lock().unwrap();
+        let previous_api_url = std::env::var("VIBE_USER_API_URL").ok();
         std::env::remove_var("VIBE_USER_API_URL");
         assert_eq!(user_api_url(), "http://127.0.0.1:8001");
+        match previous_api_url {
+            Some(value) => std::env::set_var("VIBE_USER_API_URL", value),
+            None => std::env::remove_var("VIBE_USER_API_URL"),
+        }
     }
 
     #[test]
