@@ -95,7 +95,8 @@ describe("ConsolePage", () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain("已登录");
-    expect(wrapper.findAll("button").some((button) => button.text() === "退出登录")).toBe(true);
+    expect(wrapper.get('[data-test="account-profile-entry"]').attributes("aria-label")).toContain("个人中心");
+    expect(wrapper.findAll("button").some((button) => button.text() === "退出登录")).toBe(false);
   });
 
   it("shows the membership level returned with the authenticated profile", async () => {
