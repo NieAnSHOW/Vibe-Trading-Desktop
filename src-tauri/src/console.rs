@@ -772,6 +772,21 @@ pub async fn console_member_usage(
     .map_err(|message| AuthError::Network { message })?
 }
 
+/// 获取当前登录用户的可展示会员权益，不读取或缓存模型供应商凭据。
+#[tauri::command]
+pub async fn console_member_benefits(
+    auth_state: State<'_, AuthState>,
+) -> Result<auth::MemberBenefitsView, AuthError> {
+    let layout = Layout::from_home().map_err(|e| AuthError::EnvWrite { message: e })?;
+    let auth_state = auth_state.inner().clone();
+    run_blocking(move || {
+        let session = auth::ensure_session_valid(&auth_state, &layout)?;
+        auth::fetch_member_benefits(&session.token)
+    })
+    .await
+    .map_err(|message| AuthError::Network { message })?
+}
+
 /// 停止服务:干净回收 sidecar 进程组。
 #[tauri::command]
 pub async fn console_stop_service(state: State<'_, SharedChild>) -> Result<(), String> {

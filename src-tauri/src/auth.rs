@@ -128,6 +128,20 @@ pub struct MemberUsageView {
     pub total_used: i64,
 }
 
+/// 当前会员可安全展示的权益；不包含模型、供应商或密钥信息。
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MemberBenefit {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MemberBenefitsView {
+    pub benefits: Vec<MemberBenefit>,
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EncryptedMemberEnvelope {
@@ -507,6 +521,28 @@ pub fn fetch_member_usage(credential: &VipRuntimeCredential) -> Result<MemberUsa
             message: "会员用量响应读取失败".into(),
         })?;
     parse_member_usage(&text)
+}
+
+pub fn parse_member_benefits(text: &str) -> Result<MemberBenefitsView, AuthError> {
+    parse_cool_response(text)
+}
+
+pub fn fetch_member_benefits(token: &str) -> Result<MemberBenefitsView, AuthError> {
+    let url = endpoint("/app/ai/member/benefits");
+    let response = http_client()?
+        .get(&url)
+        .header("Authorization", token)
+        .send()
+        .map_err(|e| AuthError::Network {
+            message: format!("member benefits: {e}"),
+        })?;
+    if response.status().as_u16() == 401 {
+        return Err(AuthError::NotAuthenticated);
+    }
+    let text = response.text().map_err(|e| AuthError::Network {
+        message: format!("member benefits body: {e}"),
+    })?;
+    parse_member_benefits(&text)
 }
 
 fn endpoint(path: &str) -> String {
@@ -1031,6 +1067,19 @@ mod tests {
         assert_eq!(
             (usage.total_available, usage.total_granted, usage.total_used),
             (8, 10, 2)
+        );
+    }
+
+    #[test]
+    fn parses_member_benefits_response() {
+        let view = parse_member_benefits(
+            r#"{"code":1000,"data":{"benefits":[{"id":"models","title":"VIP 模型"},{"id":"priority","title":"优先响应","description":"高峰期优先排队"}]}}"#,
+        )
+        .unwrap();
+        assert_eq!(view.benefits.len(), 2);
+        assert_eq!(
+            view.benefits[1].description.as_deref(),
+            Some("高峰期优先排队")
         );
     }
 
