@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -34,6 +35,8 @@ pub const ENV_KEY_LLM_MODE: &str = "DESKTOP_LLM_MODE";
 pub const REMEMBER_LOGIN_SECS: i64 = 14 * 24 * 60 * 60;
 
 const MEMBER_CREDENTIAL_INFO: &[u8] = b"vibe-trading/member-credential/v1";
+const MAX_MEMBER_CIPHERTEXT_BYTES: usize = 4096;
+const MAX_MEMBER_CREDENTIAL_RESPONSE_BYTES: usize = 16 * 1024;
 const X25519_SPKI_PREFIX: [u8; 12] = [
     0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x6e, 0x03, 0x21, 0x00,
 ];
@@ -153,6 +156,28 @@ pub struct EncryptedMemberEnvelope {
     pub iv: String,
     pub ciphertext: String,
     pub tag: String,
+}
+
+/// v2 响应只对 API Key 使用密封信封，供应商地址和模型列表保持明文业务字段。
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct V2MemberCredentialResponse {
+    version: u8,
+    #[serde(rename = "baseURL")]
+    base_url: String,
+    models: Vec<String>,
+    api_key_seal: MemberApiKeySeal,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MemberApiKeySeal {
+    version: u8,
+    ephemeral_public_key: String,
+    salt: String,
+    iv: String,
+    ciphertext: String,
+    tag: String,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -734,9 +759,7 @@ fn sync_member_key_parent(parent: &Path) -> Result<(), AuthError> {
 }
 
 fn decode_server_public_key(value: &str) -> Result<PublicKey, AuthError> {
-    let der = base64::engine::general_purpose::STANDARD
-        .decode(value)
-        .map_err(|_| credential_error("serverPublicKey 不是有效 Base64"))?;
+    let der = decode_member_field(value, "serverPublicKey", X25519_SPKI_PREFIX.len() + 32)?;
     if der.len() != X25519_SPKI_PREFIX.len() + 32 || !der.starts_with(&X25519_SPKI_PREFIX) {
         return Err(credential_error(
             "serverPublicKey 不是 X25519 DER-SPKI 密钥",
@@ -748,44 +771,59 @@ fn decode_server_public_key(value: &str) -> Result<PublicKey, AuthError> {
     Ok(PublicKey::from(bytes))
 }
 
-fn decode_member_field(value: &str, name: &str) -> Result<Vec<u8>, AuthError> {
-    base64::engine::general_purpose::STANDARD
+fn decode_member_field(value: &str, name: &str, max_bytes: usize) -> Result<Vec<u8>, AuthError> {
+    // 先按编码上限拒绝，避免畸形服务端响应触发无界内存分配。
+    let max_base64_len = max_bytes.div_ceil(3) * 4;
+    if value.len() > max_base64_len {
+        return Err(credential_error(format!("{name} 长度无效")));
+    }
+    let decoded = base64::engine::general_purpose::STANDARD
         .decode(value)
-        .map_err(|_| credential_error(format!("{name} 不是有效 Base64")))
+        .map_err(|_| credential_error(format!("{name} 不是有效 Base64")))?;
+    if decoded.len() > max_bytes
+        || base64::engine::general_purpose::STANDARD.encode(&decoded) != value
+    {
+        return Err(credential_error(format!("{name} 不是有效 Base64")));
+    }
+    Ok(decoded)
 }
 
-pub fn decrypt_member_envelope(
-    client_private_key: &StaticSecret,
-    envelope: &EncryptedMemberEnvelope,
-) -> Result<VipRuntimeCredential, AuthError> {
-    if envelope.version != 1 {
-        return Err(credential_error("不支持的凭据版本"));
+fn decode_member_fixed_field(
+    value: &str,
+    name: &str,
+    expected_len: usize,
+) -> Result<Vec<u8>, AuthError> {
+    let decoded = decode_member_field(value, name, expected_len)?;
+    if decoded.len() != expected_len {
+        return Err(credential_error("凭据加密字段长度无效"));
     }
-    let server_public_key = decode_server_public_key(&envelope.server_public_key)?;
-    let salt = decode_member_field(&envelope.salt, "salt")?;
-    let iv = decode_member_field(&envelope.iv, "iv")?;
-    let mut ciphertext = decode_member_field(&envelope.ciphertext, "ciphertext")?;
-    let tag = decode_member_field(&envelope.tag, "tag")?;
-    if salt.len() != 32 || iv.len() != 12 || tag.len() != 16 {
+    Ok(decoded)
+}
+
+fn decrypt_member_ciphertext(
+    client_private_key: &StaticSecret,
+    peer_public_key: PublicKey,
+    salt: &[u8],
+    iv: &[u8],
+    ciphertext: &mut [u8],
+    tag: &[u8],
+) -> Result<(), AuthError> {
+    if salt.len() != 32 || iv.len() != 12 || tag.len() != 16 || ciphertext.is_empty() {
         return Err(credential_error("凭据加密字段长度无效"));
     }
 
-    let shared_secret = client_private_key.diffie_hellman(&server_public_key);
+    let shared_secret = client_private_key.diffie_hellman(&peer_public_key);
     let mut key = [0_u8; 32];
-    Hkdf::<Sha256>::new(Some(&salt), shared_secret.as_bytes())
+    Hkdf::<Sha256>::new(Some(salt), shared_secret.as_bytes())
         .expand(MEMBER_CREDENTIAL_INFO, &mut key)
         .map_err(|_| credential_error("凭据密钥派生失败"))?;
     let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| credential_error("凭据密钥无效"))?;
     cipher
-        .decrypt_in_place_detached(
-            Nonce::from_slice(&iv),
-            b"",
-            &mut ciphertext,
-            Tag::from_slice(&tag),
-        )
-        .map_err(|_| credential_error("凭据认证失败"))?;
-    let credential: VipRuntimeCredential =
-        serde_json::from_slice(&ciphertext).map_err(|_| credential_error("凭据内容无效"))?;
+        .decrypt_in_place_detached(Nonce::from_slice(iv), b"", ciphertext, Tag::from_slice(tag))
+        .map_err(|_| credential_error("凭据认证失败"))
+}
+
+fn validate_vip_credential(credential: &VipRuntimeCredential) -> Result<(), AuthError> {
     if credential.base_url.trim().is_empty()
         || credential.api_key.trim().is_empty()
         || credential.models.is_empty()
@@ -796,7 +834,93 @@ pub fn decrypt_member_envelope(
     {
         return Err(credential_error("凭据内容不完整"));
     }
+    Ok(())
+}
+
+pub fn decrypt_member_envelope(
+    client_private_key: &StaticSecret,
+    envelope: &EncryptedMemberEnvelope,
+) -> Result<VipRuntimeCredential, AuthError> {
+    if envelope.version != 1 {
+        return Err(credential_error("不支持的凭据版本"));
+    }
+    let server_public_key = decode_server_public_key(&envelope.server_public_key)?;
+    let salt = decode_member_fixed_field(&envelope.salt, "salt", 32)?;
+    let iv = decode_member_fixed_field(&envelope.iv, "iv", 12)?;
+    let mut ciphertext = decode_member_field(
+        &envelope.ciphertext,
+        "ciphertext",
+        MAX_MEMBER_CIPHERTEXT_BYTES,
+    )?;
+    let tag = decode_member_fixed_field(&envelope.tag, "tag", 16)?;
+    decrypt_member_ciphertext(
+        client_private_key,
+        server_public_key,
+        &salt,
+        &iv,
+        &mut ciphertext,
+        &tag,
+    )?;
+    let credential: VipRuntimeCredential =
+        serde_json::from_slice(&ciphertext).map_err(|_| credential_error("凭据内容无效"))?;
+    validate_vip_credential(&credential)?;
     Ok(credential)
+}
+
+fn decrypt_v2_member_credential(
+    client_private_key: &StaticSecret,
+    response: V2MemberCredentialResponse,
+) -> Result<VipRuntimeCredential, AuthError> {
+    if response.version != 2 || response.api_key_seal.version != 1 {
+        return Err(credential_error("不支持的凭据版本"));
+    }
+
+    let peer_public_key = decode_server_public_key(&response.api_key_seal.ephemeral_public_key)
+        .map_err(|_| credential_error("ephemeralPublicKey 无效"))?;
+    let salt = decode_member_fixed_field(&response.api_key_seal.salt, "salt", 32)?;
+    let iv = decode_member_fixed_field(&response.api_key_seal.iv, "iv", 12)?;
+    let mut ciphertext = decode_member_field(
+        &response.api_key_seal.ciphertext,
+        "ciphertext",
+        MAX_MEMBER_CIPHERTEXT_BYTES,
+    )?;
+    let tag = decode_member_fixed_field(&response.api_key_seal.tag, "tag", 16)?;
+    decrypt_member_ciphertext(
+        client_private_key,
+        peer_public_key,
+        &salt,
+        &iv,
+        &mut ciphertext,
+        &tag,
+    )?;
+    let api_key =
+        String::from_utf8(ciphertext).map_err(|_| credential_error("apiKeySeal 内容无效"))?;
+    let credential = VipRuntimeCredential {
+        base_url: response.base_url,
+        api_key,
+        models: response.models,
+    };
+    validate_vip_credential(&credential)?;
+    Ok(credential)
+}
+
+fn decrypt_member_credential_response(
+    client_private_key: &StaticSecret,
+    response: serde_json::Value,
+) -> Result<VipRuntimeCredential, AuthError> {
+    let version = response
+        .get("version")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| credential_error("凭据版本无效"))?;
+    match version {
+        1 => serde_json::from_value::<EncryptedMemberEnvelope>(response)
+            .map_err(|_| credential_error("凭据响应无效"))
+            .and_then(|envelope| decrypt_member_envelope(client_private_key, &envelope)),
+        2 => serde_json::from_value::<V2MemberCredentialResponse>(response)
+            .map_err(|_| credential_error("凭据响应无效"))
+            .and_then(|response| decrypt_v2_member_credential(client_private_key, response)),
+        _ => Err(credential_error("不支持的凭据版本")),
+    }
 }
 
 pub fn fetch_vip_credential(
@@ -811,7 +935,7 @@ pub fn fetch_vip_credential(
     );
     // v1 协议沿用此持久私钥完成 ECDH；请求中仅携带由它导出的公钥。
     let member_private_key = load_or_create_member_key(layout)?;
-    let text = http_client()?
+    let response = http_client()?
         .post(endpoint("/app/ai/member/credentials"))
         .header("Authorization", token)
         .header("X-Vibe-Trace-Id", &trace_id)
@@ -828,19 +952,30 @@ pub fn fetch_vip_credential(
             AuthError::Network {
                 message: format!("member credentials: {e}"),
             }
-        })?
-        .text()
-        .map_err(|e| {
-            log_vip_credential_event(
-                layout,
-                &trace_id,
-                "encrypted member credential response could not be read",
-            );
-            AuthError::Network {
-                message: format!("member credentials body: {e}"),
-            }
         })?;
-    let envelope: EncryptedMemberEnvelope = parse_cool_response(&text).map_err(|error| {
+    if response
+        .content_length()
+        .is_some_and(|length| length > MAX_MEMBER_CREDENTIAL_RESPONSE_BYTES as u64)
+    {
+        return Err(credential_error("会员凭据响应过大"));
+    }
+    let mut body = response.take(MAX_MEMBER_CREDENTIAL_RESPONSE_BYTES as u64 + 1);
+    let mut bytes = Vec::with_capacity(MAX_MEMBER_CREDENTIAL_RESPONSE_BYTES);
+    body.read_to_end(&mut bytes).map_err(|e| {
+        log_vip_credential_event(
+            layout,
+            &trace_id,
+            "encrypted member credential response could not be read",
+        );
+        AuthError::Network {
+            message: format!("member credentials body: {e}"),
+        }
+    })?;
+    if bytes.len() > MAX_MEMBER_CREDENTIAL_RESPONSE_BYTES {
+        return Err(credential_error("会员凭据响应过大"));
+    }
+    let text = String::from_utf8(bytes).map_err(|_| credential_error("会员凭据响应无效"))?;
+    let response: serde_json::Value = parse_cool_response(&text).map_err(|error| {
         log_vip_credential_event(
             layout,
             &trace_id,
@@ -848,6 +983,10 @@ pub fn fetch_vip_credential(
         );
         error
     })?;
+    let version = response
+        .get("version")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0);
     log_vip_credential_event(
         layout,
         &trace_id,
@@ -856,12 +995,9 @@ pub fn fetch_vip_credential(
     log_vip_credential_event(
         layout,
         &trace_id,
-        &format!(
-            "decrypting encrypted member credential envelope (version={})",
-            envelope.version
-        ),
+        &format!("decrypting encrypted member credential response (version={version})"),
     );
-    decrypt_member_envelope(&member_private_key, &envelope)
+    decrypt_member_credential_response(&member_private_key, response)
         .map(|credential| {
             log_vip_credential_event(
                 layout,
@@ -1552,6 +1688,44 @@ mod tests {
         }
     }
 
+    fn encrypted_v2_fixture_for(
+        client_public_key: &x25519_dalek::PublicKey,
+    ) -> V2MemberCredentialResponse {
+        use aes_gcm::aead::{AeadInPlace, KeyInit};
+        use aes_gcm::Aes256Gcm;
+        use base64::Engine;
+        use hkdf::Hkdf;
+        use sha2::Sha256;
+
+        let ephemeral_private_key = x25519_dalek::StaticSecret::from([11_u8; 32]);
+        let ephemeral_public_key = x25519_dalek::PublicKey::from(&ephemeral_private_key);
+        let shared_secret = ephemeral_private_key.diffie_hellman(client_public_key);
+        let salt = [12_u8; 32];
+        let iv = [13_u8; 12];
+        let mut key = [0_u8; 32];
+        Hkdf::<Sha256>::new(Some(&salt), shared_secret.as_bytes())
+            .expand(MEMBER_CREDENTIAL_INFO, &mut key)
+            .unwrap();
+        let mut ciphertext = b"member-key".to_vec();
+        let tag = Aes256Gcm::new_from_slice(&key)
+            .unwrap()
+            .encrypt_in_place_detached((&iv).into(), b"", &mut ciphertext)
+            .unwrap();
+        V2MemberCredentialResponse {
+            version: 2,
+            base_url: "https://api.example/v1".into(),
+            models: vec!["model-a".into()],
+            api_key_seal: MemberApiKeySeal {
+                version: 1,
+                ephemeral_public_key: der_spki_base64(&ephemeral_public_key),
+                salt: base64::engine::general_purpose::STANDARD.encode(salt),
+                iv: base64::engine::general_purpose::STANDARD.encode(iv),
+                ciphertext: base64::engine::general_purpose::STANDARD.encode(ciphertext),
+                tag: base64::engine::general_purpose::STANDARD.encode(tag),
+            },
+        }
+    }
+
     #[test]
     fn decrypt_member_envelope_decodes_server_format_fixture() {
         let (client_private_key, client_public_key) = client_keypair();
@@ -1563,6 +1737,72 @@ mod tests {
         assert_eq!(credential.base_url, "https://api.example/v1");
         assert_eq!(credential.api_key, "member-key");
         assert_eq!(credential.models, vec!["model-a"]);
+    }
+
+    #[test]
+    fn decrypts_v2_member_credentials_and_rejects_tampering() {
+        use base64::Engine;
+
+        let (client_private_key, client_public_key) = client_keypair();
+        let response = encrypted_v2_fixture_for(&client_public_key);
+        let credential = decrypt_member_credential_response(
+            &client_private_key,
+            serde_json::to_value(&response).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(credential.base_url, "https://api.example/v1");
+        assert_eq!(credential.api_key, "member-key");
+        assert_eq!(credential.models, vec!["model-a"]);
+
+        let mut malformed_base64 = response.clone();
+        malformed_base64.api_key_seal.ciphertext = "%%%".into();
+        assert!(matches!(
+            decrypt_member_credential_response(
+                &client_private_key,
+                serde_json::to_value(malformed_base64).unwrap(),
+            ),
+            Err(AuthError::Credential { message }) if message == "ciphertext 不是有效 Base64"
+        ));
+
+        let mut invalid_salt_length = response.clone();
+        invalid_salt_length.api_key_seal.salt =
+            base64::engine::general_purpose::STANDARD.encode([0_u8; 31]);
+        assert!(matches!(
+            decrypt_member_credential_response(
+                &client_private_key,
+                serde_json::to_value(invalid_salt_length).unwrap(),
+            ),
+            Err(AuthError::Credential { message }) if message == "凭据加密字段长度无效"
+        ));
+
+        let mut modified_tag = response.clone();
+        let mut tag = base64::engine::general_purpose::STANDARD
+            .decode(&modified_tag.api_key_seal.tag)
+            .unwrap();
+        tag[0] ^= 1;
+        modified_tag.api_key_seal.tag = base64::engine::general_purpose::STANDARD.encode(tag);
+        assert!(matches!(
+            decrypt_member_credential_response(
+                &client_private_key,
+                serde_json::to_value(modified_tag).unwrap(),
+            ),
+            Err(AuthError::Credential { message }) if message == "凭据认证失败"
+        ));
+
+        let mut modified_ciphertext = response;
+        let mut ciphertext = base64::engine::general_purpose::STANDARD
+            .decode(&modified_ciphertext.api_key_seal.ciphertext)
+            .unwrap();
+        ciphertext[0] ^= 1;
+        modified_ciphertext.api_key_seal.ciphertext =
+            base64::engine::general_purpose::STANDARD.encode(ciphertext);
+        assert!(matches!(
+            decrypt_member_credential_response(
+                &client_private_key,
+                serde_json::to_value(modified_ciphertext).unwrap(),
+            ),
+            Err(AuthError::Credential { message }) if message == "凭据认证失败"
+        ));
     }
 
     #[test]
