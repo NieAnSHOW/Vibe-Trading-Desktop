@@ -23,7 +23,7 @@ use crate::runtime_dir::Layout;
 // 业务接口（captcha/sms/login/person...），独立于大模型 MaaS 接口。
 // 默认值与 frontend/src/pages/auth/Login.tsx 对齐。 https://trading-server.nieanshow.cn
 pub fn user_api_url() -> String {
-    std::env::var("VIBE_USER_API_URL").unwrap_or_else(|_| "http://127.0.0.1:8001".into())
+    std::env::var("VIBE_USER_API_URL").unwrap_or_else(|_| "https://trading-server.nieanshow.cn".into())
 }
 // ── .env 中由本模块管辖的 key（其余 key 不动）──
 pub const ENV_KEY_ACCESS: &str = "USER_ACCESS_TOKEN";
