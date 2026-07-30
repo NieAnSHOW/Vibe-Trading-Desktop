@@ -161,7 +161,7 @@ pub struct EncryptedMemberEnvelope {
 /// v2 响应只对 API Key 使用密封信封，供应商地址和模型列表保持明文业务字段。
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-struct V2MemberCredentialResponse {
+struct MemberCipherCredentials {
     version: u8,
     #[serde(rename = "baseURL")]
     base_url: String,
@@ -869,9 +869,9 @@ pub fn decrypt_member_envelope(
 
 fn decrypt_v2_member_credential(
     client_private_key: &StaticSecret,
-    response: V2MemberCredentialResponse,
+    response: MemberCipherCredentials,
 ) -> Result<VipRuntimeCredential, AuthError> {
-    if response.version != 2 || response.api_key_seal.version != 1 {
+    if response.version != 2 || response.api_key_seal.version != 2 {
         return Err(credential_error("不支持的凭据版本"));
     }
 
@@ -916,7 +916,7 @@ fn decrypt_member_credential_response(
         1 => serde_json::from_value::<EncryptedMemberEnvelope>(response)
             .map_err(|_| credential_error("凭据响应无效"))
             .and_then(|envelope| decrypt_member_envelope(client_private_key, &envelope)),
-        2 => serde_json::from_value::<V2MemberCredentialResponse>(response)
+        2 => serde_json::from_value::<MemberCipherCredentials>(response)
             .map_err(|_| credential_error("凭据响应无效"))
             .and_then(|response| decrypt_v2_member_credential(client_private_key, response)),
         _ => Err(credential_error("不支持的凭据版本")),
@@ -1690,7 +1690,7 @@ mod tests {
 
     fn encrypted_v2_fixture_for(
         client_public_key: &x25519_dalek::PublicKey,
-    ) -> V2MemberCredentialResponse {
+    ) -> MemberCipherCredentials {
         use aes_gcm::aead::{AeadInPlace, KeyInit};
         use aes_gcm::Aes256Gcm;
         use base64::Engine;
@@ -1711,12 +1711,12 @@ mod tests {
             .unwrap()
             .encrypt_in_place_detached((&iv).into(), b"", &mut ciphertext)
             .unwrap();
-        V2MemberCredentialResponse {
+        MemberCipherCredentials {
             version: 2,
             base_url: "https://api.example/v1".into(),
             models: vec!["model-a".into()],
             api_key_seal: MemberApiKeySeal {
-                version: 1,
+                version: 2,
                 ephemeral_public_key: der_spki_base64(&ephemeral_public_key),
                 salt: base64::engine::general_purpose::STANDARD.encode(salt),
                 iv: base64::engine::general_purpose::STANDARD.encode(iv),
@@ -1737,6 +1737,37 @@ mod tests {
         assert_eq!(credential.base_url, "https://api.example/v1");
         assert_eq!(credential.api_key, "member-key");
         assert_eq!(credential.models, vec!["model-a"]);
+    }
+
+    #[test]
+    fn decrypts_v2_object_member_credentials() {
+        let (client_private_key, client_public_key) = client_keypair();
+        let response = serde_json::to_value(encrypted_v2_fixture_for(&client_public_key)).unwrap();
+
+        assert!(response["apiKeySeal"].is_object());
+        let credential = decrypt_member_credential_response(&client_private_key, response).unwrap();
+
+        assert_eq!(credential.api_key, "member-key");
+    }
+
+    #[test]
+    fn rejects_string_api_key_seal_and_non_v2_internal_version() {
+        let (client_private_key, client_public_key) = client_keypair();
+        let response = encrypted_v2_fixture_for(&client_public_key);
+
+        let mut string_seal_response = serde_json::to_value(&response).unwrap();
+        string_seal_response["apiKeySeal"] = serde_json::json!("not-an-object");
+        assert!(
+            decrypt_member_credential_response(&client_private_key, string_seal_response).is_err()
+        );
+
+        let mut wrong_version_response = response;
+        wrong_version_response.api_key_seal.version = 1;
+        assert!(decrypt_member_credential_response(
+            &client_private_key,
+            serde_json::to_value(wrong_version_response).unwrap(),
+        )
+        .is_err());
     }
 
     #[test]
