@@ -651,59 +651,6 @@ dialog.confirm .confirm-actions {
   word-break: break-word;
 }
 
-/* Log */
-.log-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: 20px 0 8px;
-}
-.log-title {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: hsl(var(--ink-dim));
-}
-.log-clear {
-  font-size: 12px;
-  color: hsl(var(--ink-dim));
-  background: none;
-  border: 0;
-  padding: 2px 4px;
-  cursor: pointer;
-}
-.log-clear:hover {
-  color: hsl(var(--ink));
-}
-#log {
-  height: 80px;
-  overflow: auto;
-  background: hsl(var(--bg));
-  color: hsl(var(--ink-dim));
-  border: 1px solid hsl(var(--line));
-  border-radius: var(--radius);
-  padding: 12px 14px;
-  font:
-    12px/1.65 ui-monospace,
-    "SF Mono",
-    "JetBrains Mono",
-    Menlo,
-    monospace;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-#log:empty::after {
-  content: "等待操作输出…";
-  color: hsl(var(--ink-dim) / 0.55);
-}
-#log::-webkit-scrollbar {
-  width: 8px;
-}
-#log::-webkit-scrollbar-thumb {
-  background: hsl(var(--line));
-  border-radius: 4px;
-}
 .console-version-text {
   position: fixed;
   bottom: 8px;
@@ -866,6 +813,7 @@ dialog.confirm .confirm-actions {
   --brand-strong: 175.1 72.3% 34%;
   --on-brand: 180 30% 7%;
   --radius: 10px;
+  --z-sticky: 20;
 }
 
 body {
@@ -875,21 +823,37 @@ body {
   padding: 18px;
 }
 
+body:has(> #app > .console-page) {
+  display: block;
+  padding: 0;
+}
+
+#app:has(> .console-page) {
+  width: 100%;
+  min-width: 0;
+}
+
 body::before {
   display: none;
+}
+
+.console-page {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 100vh;
+  flex-direction: column;
 }
 
 .console-shell {
   position: relative;
   z-index: 1;
   display: flex;
-  width: min(100%, 1440px);
-  min-height: calc(100vh - 36px);
-  margin: 0 auto;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid hsl(var(--line));
-  border-radius: 12px;
   background: hsl(var(--surface-1));
 }
 
@@ -897,8 +861,8 @@ body::before {
 .brand-lockup,
 .brand-copy,
 .header-actions,
-.primary-action-row,
-.maintenance-row,
+.operation-bar__primary,
+.operation-bar__tools,
 .member-usage-head,
 .usage-detail {
   display: flex;
@@ -906,11 +870,17 @@ body::before {
 }
 
 .app-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  width: 100%;
   min-height: 74px;
   padding: 14px 22px;
+  flex: none;
   justify-content: space-between;
   gap: 18px;
   border-bottom: 1px solid hsl(var(--line));
+  background: hsl(var(--surface-1));
 }
 
 .brand-lockup {
@@ -1010,7 +980,10 @@ body::before {
 
 .console-workspace {
   display: grid;
+  min-height: 0;
+  flex: 1;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  align-items: stretch;
   gap: 14px;
   padding: 14px;
 }
@@ -1064,13 +1037,26 @@ body::before {
   text-wrap: pretty;
 }
 
-.primary-action-row {
+.operation-bar {
+  display: flex;
   margin-top: 30px;
+  align-items: center;
   flex-wrap: wrap;
   gap: 10px;
 }
 
-.primary-action-row .btn-primary {
+.operation-bar__primary,
+.operation-bar__tools {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.operation-bar__tools {
+  margin-inline-start: auto;
+  justify-content: flex-end;
+}
+
+.operation-bar__primary .btn-primary {
   min-height: 46px;
   padding-inline: 20px;
   border-radius: 8px;
@@ -1078,12 +1064,17 @@ body::before {
   font-weight: 650;
 }
 
-.primary-action-row .btn-ghost,
-.maintenance-row .btn-ghost,
+.operation-bar .btn-ghost,
 .header-actions .btn-ghost,
 .member-usage-head .btn-ghost {
   min-height: 34px;
   border-radius: 7px;
+}
+
+.operation-bar__notice {
+  width: 100%;
+  color: hsl(var(--ok-fg));
+  font-size: 12px;
 }
 
 .runtime-strip {
@@ -1141,11 +1132,6 @@ body::before {
 
 .runtime-value--bad {
   color: hsl(var(--bad-fg));
-}
-
-.maintenance-row {
-  padding: 0 46px 26px;
-  justify-content: flex-end;
 }
 
 .service-panel .hint,
@@ -1288,24 +1274,8 @@ body::before {
   margin: 0 18px 12px;
 }
 
-.operations-footer {
-  margin-top: auto;
-  padding: 0 18px 18px;
-  border-top: 1px solid hsl(var(--line));
-  background: hsl(var(--bg) / 0.45);
-}
-
-.operations-footer .log-head {
-  margin-top: 14px;
-}
-
-.operations-footer #log {
-  height: 104px;
-  border-radius: 8px;
-}
-
 .console-version-text {
-  position: static;
+  position: absolute;
   padding: 0 18px 10px;
 }
 
@@ -1315,7 +1285,7 @@ body::before {
   }
 
   .console-shell {
-    min-height: calc(100vh - 24px);
+    margin: 12px;
   }
 
   .app-header,
@@ -1335,10 +1305,6 @@ body::before {
   .service-panel .hint,
   .service-panel #progress {
     margin-inline: 28px;
-  }
-
-  .maintenance-row {
-    padding-inline: 28px;
   }
 }
 
@@ -1381,8 +1347,15 @@ body::before {
     padding-inline: 20px;
   }
 
-  .maintenance-row {
-    padding-inline: 20px;
+  .operation-bar__tools {
+    width: 100%;
+    margin-inline-start: 0;
+    justify-content: flex-start;
+  }
+
+  .operation-bar__tools .btn-ghost {
+    flex: 1 1 auto;
+    justify-content: center;
   }
 }
 

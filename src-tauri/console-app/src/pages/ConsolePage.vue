@@ -25,7 +25,6 @@ import {
   onBootstrapExit,
   onServiceStarted,
   onQuitRequested,
-  onChanneldepProgress,
   onChanneldepExit,
 } from "../ipc/events";
 import type { BootstrapEvent } from "../ipc/types";
@@ -34,7 +33,6 @@ import type { AdItem, MemberUsageView } from "../ipc/types";
 import StatusBadge from "../components/StatusBadge.vue";
 import AppButton from "../components/AppButton.vue";
 import ProgressBar from "../components/ProgressBar.vue";
-import LogViewer from "../components/LogViewer.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import HintBanner from "../components/HintBanner.vue";
 import AdSlot from "../components/AdSlot.vue";
@@ -48,6 +46,7 @@ import {
   CircleUserRound,
   Database,
   ExternalLink,
+  FolderOpen,
   LogIn,
   MessageCircleMore,
   Play,
@@ -55,6 +54,7 @@ import {
   ServerCog,
   Settings,
   Square,
+  Trash2,
   Wrench,
 } from "@lucide/vue";
 
@@ -68,9 +68,9 @@ const route = useRoute();
 
 const { env: envState, port, serviceRunning } = storeToRefs(env);
 
-const logViewer = ref<InstanceType<typeof LogViewer> | null>(null);
 const updateBanner = ref<InstanceType<typeof UpdateBanner> | null>(null);
 const errorMsg = ref("");
+const operationNotice = ref("");
 const loginNotice = ref(typeof route.query.loginMessage === "string" ? route.query.loginMessage : "");
 const memberUsage = ref<MemberUsageView | null>(null);
 const usageRefreshing = ref(false);
@@ -105,11 +105,13 @@ async function refreshMemberUsage() {
   }
 }
 
-function log(line: string) {
-  logViewer.value?.append(line);
-}
 function setErr(m: unknown) {
   errorMsg.value = m ? String(m) : "";
+  if (m) operationNotice.value = "";
+}
+function setOperationNotice(message: string) {
+  errorMsg.value = "";
+  operationNotice.value = message;
 }
 
 // ── ENV/SVC 渲染(搬自 renderEnv/renderSvc) ──────────────────────
@@ -179,6 +181,7 @@ const installStopDialogOpen = ref(false);
 
 async function onInstall() {
   if (installing.value) return; // 防重入:安装期间按钮已被 AppButton 的 busy 禁用
+  operationNotice.value = "";
   // 服务运行中:弹确认框,由 onInstallStopDialogClose 续接后续逻辑
   if (serviceRunning.value) {
     installStopDialogOpen.value = true;
@@ -203,7 +206,7 @@ async function onInstallStopDialogClose(v: "ok" | "cancel") {
 
 async function doInstall() {
   setErr("");
-  log("开始安装依赖…");
+  operationNotice.value = "";
   bootstrap.start();
   installing.value = true;
   try {
@@ -217,6 +220,7 @@ async function doInstall() {
 
 // ── 启动服务 ────────────────────────────────────────────────────
 async function onStart() {
+  operationNotice.value = "";
   await startBusy.run("启动中", async () => {
     setErr("");
     try {
@@ -239,6 +243,7 @@ async function onStart() {
 // ── 停止服务(二次确认) ──────────────────────────────────────────
 const stopDialogOpen = ref(false);
 function onStop() {
+  operationNotice.value = "";
   stopDialogOpen.value = true;
 }
 async function onStopDialogClose(v: "ok" | "cancel") {
@@ -262,6 +267,7 @@ async function onStopDialogClose(v: "ok" | "cancel") {
 const clearVenvBusy = useBusy();
 const clearVenvDialogOpen = ref(false);
 function onClearVenv() {
+  operationNotice.value = "";
   clearVenvDialogOpen.value = true;
 }
 async function onClearVenvDialogClose(v: "ok" | "cancel") {
@@ -277,7 +283,7 @@ async function onClearVenvDialogClose(v: "ok" | "cancel") {
         serviceRunning.value = false;
       }
       await consoleClearVenv();
-      log("已清理虚拟环境,请重新安装依赖");
+      setOperationNotice("运行环境已清理，请重新安装依赖");
       await refresh();
     } catch (e) {
       setErr(e);
@@ -304,6 +310,7 @@ async function onOpenLogs() {
 const clearLogsBusy = useBusy();
 const clearLogsDialogOpen = ref(false);
 function onClearLogs() {
+  operationNotice.value = "";
   clearLogsDialogOpen.value = true;
 }
 async function onClearLogsDialogClose(v: "ok" | "cancel") {
@@ -313,7 +320,7 @@ async function onClearLogsDialogClose(v: "ok" | "cancel") {
     setErr("");
     try {
       const n = await consoleClearLogs();
-      log(`已清理 ${n} 个日志文件`);
+      setOperationNotice(`已清理 ${n} 个日志文件`);
     } catch (e) {
       setErr(e);
     }
@@ -403,12 +410,10 @@ onMounted(async () => {
 
   unlistens = await Promise.all([
     onBootstrapEvent((e: BootstrapEvent) => {
-      if (e.message) log(`[${e.stage}] ${e.message}`);
       bootstrap.advance(e.stage, e.message ?? "");
       if (e.ok === false) setErr(e.message || "依赖安装失败");
     }),
     onBootstrapExit((code: number) => {
-      log("bootstrap 退出码: " + code);
       if (code !== 0 && bootstrap.state !== "done") bootstrap.advance("failed", "");
       installing.value = false; // 权威结束信号:无论成功失败,后台线程退出即释放按钮
       refresh();
@@ -424,9 +429,7 @@ onMounted(async () => {
       quitInstalling.value = !!payload?.installing;
       quitDialogOpen.value = true;
     }),
-    onChanneldepProgress((line: string) => log(line)),
-    onChanneldepExit((code: number) => {
-      log("渠道依赖安装退出码: " + code);
+    onChanneldepExit(() => {
       refresh();
     }),
   ]);
@@ -450,7 +453,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main class="console-shell">
+  <main class="console-page">
     <header class="app-header">
       <div class="brand-lockup">
         <img class="mark" alt="Trading Worker" :src="logoPng" />
@@ -482,131 +485,140 @@ onUnmounted(() => {
       </nav>
     </header>
 
-    <UpdateBanner ref="updateBanner" />
-    <p v-if="loginNotice" class="login-notice" data-test="login-notice" role="status">{{ loginNotice }}</p>
-    <AdSlot :ad="adBanner" variant="banner" />
+    <section class="console-shell" aria-label="控制台内容">
+      <UpdateBanner ref="updateBanner" />
+      <AdSlot :ad="adBanner" variant="banner" />
 
-    <div class="console-workspace"
-      :class="{ 'console-workspace--guest': !ProdConfig.enableLogin || !authStore.authenticated }">
-      <section class="service-panel" aria-labelledby="service-title">
-        <div class="service-hero">
-          <div class="service-state-line">
-            <StatusBadge :cls="isServiceRunning ? 'ok' : envBadge.cls"
-              :text="isServiceRunning ? '服务就绪' : envBadge.txt" :live="isServiceRunning" />
-            <span>{{ isServiceRunning ? `本地端口 ${port ?? '检测中'}` : '本地运行，数据保留在您的设备上' }}</span>
+      <div class="console-workspace"
+        :class="{ 'console-workspace--guest': !ProdConfig.enableLogin || !authStore.authenticated }">
+        <section class="service-panel" aria-labelledby="service-title">
+          <div class="service-hero">
+            <div class="service-state-line">
+              <StatusBadge :cls="isServiceRunning ? 'ok' : envBadge.cls"
+                :text="isServiceRunning ? '服务就绪' : envBadge.txt" :live="isServiceRunning" />
+              <span>{{ isServiceRunning ? `本地端口 ${port ?? '检测中'}` : '本地运行，数据保留在您的设备上' }}</span>
+            </div>
+            <h2 id="service-title">研究服务</h2>
+            <p class="service-description">启动本地 AI 研究服务，在浏览器中进行市场分析、策略回测和投研对话。</p>
+            <div class="operation-bar" aria-label="服务操作">
+              <div class="operation-bar__primary">
+                <AppButton v-if="primaryActionKind === 'install'" variant="primary" :busy="installing" busy-label="安装中"
+                  data-test="primary-service-action" @click="onInstall">
+                  <Wrench :size="19" aria-hidden="true" />安装或修复依赖
+                </AppButton>
+                <AppButton v-else-if="primaryActionKind === 'start'" variant="primary" :disabled="btnStartDisabled"
+                  :busy="startBusy.busy.value" busy-label="启动中" data-test="primary-service-action" @click="onStart">
+                  <Play :size="19" aria-hidden="true" />启动研究服务
+                </AppButton>
+                <AppButton v-else variant="primary" :disabled="port === null" data-test="primary-service-action"
+                  @click="onOpenWebui">
+                  <ExternalLink :size="19" aria-hidden="true" />进入研究工作台
+                </AppButton>
+                <AppButton v-if="isServiceRunning" variant="ghost" :busy="stopBusy.busy.value" busy-label="停止中"
+                  data-test="stop-service-action" @click="onStop">
+                  <Square :size="15" aria-hidden="true" />停止服务
+                </AppButton>
+              </div>
+              <div class="operation-bar__tools" aria-label="维护工具">
+                <AppButton variant="ghost" :busy="clearVenvBusy.busy.value" busy-label="清理中"
+                  data-test="clear-environment-action" @click="onClearVenv">
+                  <Wrench :size="15" aria-hidden="true" />清理运行环境
+                </AppButton>
+                <AppButton variant="ghost" data-test="open-logs-action" @click="onOpenLogs">
+                  <FolderOpen :size="15" aria-hidden="true" />打开日志目录
+                </AppButton>
+                <AppButton variant="ghost" :busy="clearLogsBusy.busy.value" busy-label="清理中"
+                  data-test="clear-logs-action" @click="onClearLogs">
+                  <Trash2 :size="15" aria-hidden="true" />清理日志文件
+                </AppButton>
+              </div>
+              <p v-if="operationNotice" class="operation-bar__notice" role="status">{{ operationNotice }}</p>
+            </div>
           </div>
-          <h2 id="service-title">研究服务</h2>
-          <p class="service-description">启动本地 AI 研究服务，在浏览器中进行市场分析、策略回测和投研对话。</p>
-          <div class="primary-action-row">
-            <AppButton v-if="primaryActionKind === 'install'" variant="primary" :busy="installing" busy-label="安装中"
-              data-test="primary-service-action" @click="onInstall">
-              <Wrench :size="19" aria-hidden="true" />安装或修复依赖
+
+          <div class="runtime-strip" aria-label="运行状态">
+            <div class="runtime-item">
+              <Database :size="21" aria-hidden="true" />
+              <span><small>运行环境</small><b>{{ envBadge.txt }}</b></span>
+            </div>
+            <div class="runtime-item">
+              <ServerCog :size="21" aria-hidden="true" />
+              <span><small>研究服务</small><b>{{ isServiceRunning ? '运行中' : '已停止' }}</b></span>
+            </div>
+            <div class="runtime-item">
+              <MessageCircleMore :size="21" aria-hidden="true" />
+              <span><small>消息渠道</small><b :class="`runtime-value--${channels.cls}`">{{ channels.text }}</b></span>
+            </div>
+          </div>
+
+          <HintBanner :hidden="hintHidden" />
+          <ProgressBar />
+        </section>
+
+        <aside v-if="ProdConfig.enableLogin && authStore.authenticated" class="member-panel" aria-label="会员服务">
+          <button class="member-profile-link" type="button" @click="router.push('/profile')">
+            <CircleUserRound :size="48" stroke-width="1.3" aria-hidden="true" />
+            <span><b>{{ memberTier?.label ?? '会员账户' }}</b><small>{{ accountName }}</small></span>
+            <ArrowUpRight :size="17" aria-hidden="true" />
+          </button>
+          <p v-if="memberExpireTime" class="member-expire-time">有效期至 {{ memberExpireTime }}</p>
+          <div class="member-usage-head">
+            <span class="member-usage-title">剩余用量</span>
+            <AppButton variant="ghost" :busy="usageRefreshing" busy-label="刷新中" data-test="member-usage-refresh"
+              @click="refreshMemberUsage">
+              <RefreshCw :size="14" aria-hidden="true" />刷新
             </AppButton>
-            <AppButton v-else-if="primaryActionKind === 'start'" variant="primary" :disabled="btnStartDisabled"
-              :busy="startBusy.busy.value" busy-label="启动中" data-test="primary-service-action" @click="onStart">
-              <Play :size="19" aria-hidden="true" />启动研究服务
-            </AppButton>
-            <AppButton v-else variant="primary" :disabled="port === null" data-test="primary-service-action"
-              @click="onOpenWebui">
-              <ExternalLink :size="19" aria-hidden="true" />进入研究工作台
-            </AppButton>
-            <AppButton v-if="isServiceRunning" variant="ghost" :busy="stopBusy.busy.value" busy-label="停止中"
-              @click="onStop">
-              <Square :size="15" aria-hidden="true" />停止服务
-            </AppButton>
           </div>
-        </div>
+          <template v-if="memberUsage?.unlimited_quota">
+            <strong class="member-usage-unlimited" data-test="member-usage-unlimited">不限量</strong>
+          </template>
+          <template v-else-if="memberUsage">
+            <div class="usage-summary">
+              <strong>{{ formatUsageAmount(memberUsage.total_available) }}</strong><span>积分</span>
+              <small>{{ Math.round(remainingPercent) }}% 可用</small>
+            </div>
+            <div class="member-usage-track" role="progressbar" aria-label="剩余额度" :aria-valuenow="remainingPercent"
+              aria-valuemin="0" aria-valuemax="100">
+              <div class="member-usage-fill" :style="{ width: `${remainingPercent}%` }"></div>
+            </div>
+            <div class="usage-detail">
+              <span>总量 <b>{{ formatUsageAmount(memberUsage.total_granted) }}</b></span>
+              <span>已用 <b>{{ formatUsageAmount(memberUsage.total_used) }}</b></span>
+            </div>
+          </template>
+          <p v-else class="member-usage-placeholder">用量暂未加载</p>
+        </aside>
+      </div>
 
-        <div class="runtime-strip" aria-label="运行状态">
-          <div class="runtime-item">
-            <Database :size="21" aria-hidden="true" />
-            <span><small>运行环境</small><b>{{ envBadge.txt }}</b></span>
-          </div>
-          <div class="runtime-item">
-            <ServerCog :size="21" aria-hidden="true" />
-            <span><small>研究服务</small><b>{{ isServiceRunning ? '运行中' : '已停止' }}</b></span>
-          </div>
-          <div class="runtime-item">
-            <MessageCircleMore :size="21" aria-hidden="true" />
-            <span><small>消息渠道</small><b :class="`runtime-value--${channels.cls}`">{{ channels.text }}</b></span>
-          </div>
-        </div>
+      <ConfirmDialog :open="installStopDialogOpen" title="服务运行中，确认停止并安装？" @close="onInstallStopDialogClose">
+        检测到后端服务正在运行，安装新版本依赖需要先停止服务。<b>停止将中断正在执行的任务</b>（回测、研究、实盘等），确认停止并继续安装吗？
+        <template #confirm-text>停止并安装</template>
+      </ConfirmDialog>
 
-        <div class="maintenance-row">
-          <AppButton variant="ghost" :busy="clearVenvBusy.busy.value" @click="onClearVenv">
-            <Wrench :size="15" aria-hidden="true" />强制清理环境
-          </AppButton>
-        </div>
-        <HintBanner :hidden="hintHidden" />
-        <ProgressBar />
-      </section>
+      <ConfirmDialog :open="stopDialogOpen" title="确认停止服务？" @close="onStopDialogClose">
+        停止将中断后端进程，<b>请确保当前没有正在执行的任务</b>（回测、研究、实盘等）。
+        <template #confirm-text>确认停止</template>
+      </ConfirmDialog>
 
-      <aside v-if="ProdConfig.enableLogin && authStore.authenticated" class="member-panel" aria-label="会员服务">
-        <button class="member-profile-link" type="button" @click="router.push('/profile')">
-          <CircleUserRound :size="48" stroke-width="1.3" aria-hidden="true" />
-          <span><b>{{ memberTier?.label ?? '会员账户' }}</b><small>{{ accountName }}</small></span>
-          <ArrowUpRight :size="17" aria-hidden="true" />
-        </button>
-        <p v-if="memberExpireTime" class="member-expire-time">有效期至 {{ memberExpireTime }}</p>
-        <div class="member-usage-head">
-          <span class="member-usage-title">剩余用量</span>
-          <AppButton variant="ghost" :busy="usageRefreshing" busy-label="刷新中" data-test="member-usage-refresh"
-            @click="refreshMemberUsage">
-            <RefreshCw :size="14" aria-hidden="true" />刷新
-          </AppButton>
-        </div>
-        <template v-if="memberUsage?.unlimited_quota">
-          <strong class="member-usage-unlimited" data-test="member-usage-unlimited">不限量</strong>
-        </template>
-        <template v-else-if="memberUsage">
-          <div class="usage-summary">
-            <strong>{{ formatUsageAmount(memberUsage.total_available) }}</strong><span>积分</span>
-            <small>{{ Math.round(remainingPercent) }}% 可用</small>
-          </div>
-          <div class="member-usage-track" role="progressbar" aria-label="剩余额度" :aria-valuenow="remainingPercent"
-            aria-valuemin="0" aria-valuemax="100">
-            <div class="member-usage-fill" :style="{ width: `${remainingPercent}%` }"></div>
-          </div>
-          <div class="usage-detail">
-            <span>总量 <b>{{ formatUsageAmount(memberUsage.total_granted) }}</b></span>
-            <span>已用 <b>{{ formatUsageAmount(memberUsage.total_used) }}</b></span>
-          </div>
-        </template>
-        <p v-else class="member-usage-placeholder">用量暂未加载</p>
-      </aside>
-    </div>
+      <ConfirmDialog :open="clearVenvDialogOpen" title="确认强制清理环境？" @close="onClearVenvDialogClose">
+        将删除 <b>~/.vibe-trading/venv</b> 虚拟环境(含已安装依赖)，<b>不会删除您的配置、会话等数据</b>。清理后需重新完整安装依赖，确认操作吗？
+        <template #confirm-text>确认清理</template>
+      </ConfirmDialog>
 
-    <ConfirmDialog :open="installStopDialogOpen" title="服务运行中，确认停止并安装？" @close="onInstallStopDialogClose">
-      检测到后端服务正在运行，安装新版本依赖需要先停止服务。<b>停止将中断正在执行的任务</b>（回测、研究、实盘等），确认停止并继续安装吗？
-      <template #confirm-text>停止并安装</template>
-    </ConfirmDialog>
+      <ConfirmDialog :open="clearLogsDialogOpen" title="确认清理日志文件？" @close="onClearLogsDialogClose">
+        将删除 <b>~/.vibe-trading/logs</b> 下的所有日志文件（sidecar-*.log），<b>不影响配置、会话等数据</b>。服务运行中当天日志可能被占用而跳过，确认操作吗？
+        <template #confirm-text>确认清理</template>
+      </ConfirmDialog>
 
-    <ConfirmDialog :open="stopDialogOpen" title="确认停止服务？" @close="onStopDialogClose">
-      停止将中断后端进程，<b>请确保当前没有正在执行的任务</b>（回测、研究、实盘等）。
-      <template #confirm-text>确认停止</template>
-    </ConfirmDialog>
+      <ConfirmDialog :open="quitDialogOpen" title="确认退出客户端？" @close="onQuitDialogClose">
+        <span v-html="quitText"></span>
+        <template #confirm-text>确认退出</template>
+      </ConfirmDialog>
 
-    <ConfirmDialog :open="clearVenvDialogOpen" title="确认强制清理环境？" @close="onClearVenvDialogClose">
-      将删除 <b>~/.vibe-trading/venv</b> 虚拟环境(含已安装依赖)，<b>不会删除您的配置、会话等数据</b>。清理后需重新完整安装依赖，确认操作吗？
-      <template #confirm-text>确认清理</template>
-    </ConfirmDialog>
-
-    <ConfirmDialog :open="clearLogsDialogOpen" title="确认清理日志文件？" @close="onClearLogsDialogClose">
-      将删除 <b>~/.vibe-trading/logs</b> 下的所有日志文件（sidecar-*.log），<b>不影响配置、会话等数据</b>。服务运行中当天日志可能被占用而跳过，确认操作吗？
-      <template #confirm-text>确认清理</template>
-    </ConfirmDialog>
-
-    <ConfirmDialog :open="quitDialogOpen" title="确认退出客户端？" @close="onQuitDialogClose">
-      <span v-html="quitText"></span>
-      <template #confirm-text>确认退出</template>
-    </ConfirmDialog>
-
-    <AdSlot :ad="adBottom" variant="bottom" />
-    <div id="err">{{ errorMsg }}</div>
-    <section class="operations-footer" aria-label="运行日志">
-      <LogViewer ref="logViewer" @open-logs="onOpenLogs" @clear-logs="onClearLogs" />
+      <AdSlot :ad="adBottom" variant="bottom" />
+      <div id="err">{{ errorMsg }}</div>
+      <VersionFooter />
     </section>
-    <VersionFooter />
   </main>
 </template>
 

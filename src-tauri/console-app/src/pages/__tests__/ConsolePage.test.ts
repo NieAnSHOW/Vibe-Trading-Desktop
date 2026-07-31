@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
     total_used: 15488680,
     unlimited_quota: false,
   })),
+  consoleOpenLogs: vi.fn(),
+  consoleClearLogs: vi.fn(async () => 2),
   unlisten: vi.fn(),
 }));
 
@@ -29,8 +31,8 @@ vi.mock("../../ipc/commands", () => ({
   consoleStatus: mocks.consoleStatus,
   consoleBootstrap: vi.fn(),
   consoleOpenWebui: vi.fn(),
-  consoleOpenLogs: vi.fn(),
-  consoleClearLogs: vi.fn(),
+  consoleOpenLogs: mocks.consoleOpenLogs,
+  consoleClearLogs: mocks.consoleClearLogs,
   consoleQuit: vi.fn(),
   consoleClearVenv: vi.fn(),
   consoleLogout: vi.fn(),
@@ -78,6 +80,24 @@ const router = createRouter({
   ],
 });
 
+beforeAll(() => {
+  Object.defineProperties(HTMLDialogElement.prototype, {
+    showModal: {
+      configurable: true,
+      value(this: HTMLDialogElement) {
+        this.open = true;
+      },
+    },
+    close: {
+      configurable: true,
+      value(this: HTMLDialogElement, returnValue = "") {
+        this.returnValue = returnValue;
+        this.open = false;
+      },
+    },
+  });
+});
+
 beforeEach(async () => {
   vi.clearAllMocks();
   setActivePinia(createPinia());
@@ -86,6 +106,15 @@ beforeEach(async () => {
 });
 
 describe("ConsolePage", () => {
+  it("keeps the application header outside the content shell", () => {
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+
+    const header = wrapper.get(".app-header").element;
+    const shell = wrapper.get(".console-shell").element;
+
+    expect(shell.contains(header)).toBe(false);
+  });
+
   it("displays a restored login notice passed by the login page", async () => {
     await router.push({ path: "/", query: { loginMessage: "欢迎回来" } });
     const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
@@ -123,6 +152,56 @@ describe("ConsolePage", () => {
     await flushPromises();
 
     expect(wrapper.get('[data-test="primary-service-action"]').text()).toContain("进入研究工作台");
+  });
+
+  it("consolidates every service action into one operation bar without an inline log viewer", async () => {
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+
+    const operationBars = wrapper.findAll('[aria-label="服务操作"]');
+    expect(operationBars).toHaveLength(1);
+    expect(operationBars[0].classes()).toContain("operation-bar");
+
+    const servicePanel = wrapper.get(".service-panel");
+    expect(servicePanel.findAll("button").every((button) => operationBars[0].element.contains(button.element))).toBe(true);
+    expect(operationBars[0].find('[data-test="primary-service-action"]').exists()).toBe(true);
+    expect(operationBars[0].find('[data-test="clear-environment-action"]').exists()).toBe(true);
+    expect(operationBars[0].find('[data-test="open-logs-action"]').exists()).toBe(true);
+    expect(operationBars[0].find('[data-test="clear-logs-action"]').exists()).toBe(true);
+    expect(wrapper.find('[role="log"]').exists()).toBe(false);
+    expect(wrapper.find("#log").exists()).toBe(false);
+    expect(wrapper.find(".operations-footer").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("清空");
+  });
+
+  it("opens the persisted log directory from the operation bar", async () => {
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+    await wrapper.get('[data-test="open-logs-action"]').trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleOpenLogs).toHaveBeenCalledOnce();
+  });
+
+  it("clears persisted log files only after confirmation", async () => {
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+    await wrapper.get('[data-test="clear-logs-action"]').trigger("click");
+    expect(mocks.consoleClearLogs).not.toHaveBeenCalled();
+
+    const clearLogsDialog = wrapper.findAll("dialog").find(
+      (dialog) => dialog.find("h3").text() === "确认清理日志文件？",
+    );
+    expect(clearLogsDialog).toBeDefined();
+    (clearLogsDialog!.element as HTMLDialogElement).returnValue = "ok";
+    await clearLogsDialog!.trigger("close");
+    await flushPromises();
+
+    expect(mocks.consoleClearLogs).toHaveBeenCalledOnce();
+    expect(wrapper.get('.operation-bar__notice[role="status"]').text()).toBe("已清理 2 个日志文件");
   });
 
   it("shows a remembered token-only session as logged in", async () => {
