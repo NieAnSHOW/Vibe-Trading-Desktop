@@ -65,11 +65,15 @@ vi.mock("../../ipc/events", () => ({
 import ConsolePage from "../ConsolePage.vue";
 import LoginPage from "../LoginPage.vue";
 
+const EmptyRoute = { template: "<div />" };
+
 const router = createRouter({
   history: createMemoryHistory(),
   routes: [
     { path: "/", component: ConsolePage },
     { path: "/login", component: LoginPage },
+    { path: "/profile", component: EmptyRoute },
+    { path: "/settings", component: EmptyRoute },
   ],
 });
 
@@ -81,13 +85,30 @@ beforeEach(async () => {
 });
 
 describe("ConsolePage", () => {
-  it("displays a login success message passed by the login page", async () => {
+  it("displays a restored login notice passed by the login page", async () => {
     await router.push({ path: "/", query: { loginMessage: "欢迎回来" } });
     const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
 
     await flushPromises();
 
-    expect(wrapper.get('[role="status"]').text()).toBe("欢迎回来");
+    expect(wrapper.get('[data-test="login-notice"]').attributes("role")).toBe("status");
+    expect(wrapper.get('[data-test="login-notice"]').text()).toBe("欢迎回来");
+  });
+
+  it("keeps the local service workspace full width while signed out", async () => {
+    mocks.consoleAuthStatus.mockResolvedValueOnce({
+      authenticated: false,
+      userInfo: null,
+      expireAt: null,
+    });
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+
+    expect(wrapper.get(".console-workspace").classes()).toContain("console-workspace--guest");
+    expect(wrapper.find(".member-panel").exists()).toBe(false);
+    expect(wrapper.text()).toContain("登录使用会员服务");
+    expect(wrapper.get('[data-test="primary-service-action"]').text()).toBe("启动研究服务");
   });
 
   it("shows a remembered token-only session as logged in", async () => {
@@ -97,7 +118,20 @@ describe("ConsolePage", () => {
 
     expect(wrapper.text()).toContain("已登录");
     expect(wrapper.get('[data-test="account-profile-entry"]').attributes("aria-label")).toContain("个人中心");
+    await wrapper.get('[data-test="account-profile-entry"]').trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/profile");
     expect(wrapper.findAll("button").some((button) => button.text() === "退出登录")).toBe(false);
+  });
+
+  it("opens settings from the application header", async () => {
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper.get('[data-test="settings-entry"]').trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/settings");
   });
 
   it("shows the membership level returned with the authenticated profile", async () => {

@@ -198,6 +198,20 @@ mod tests {
     }
 
     #[test]
+    fn tauri_conf_uses_resizable_wide_console_window() {
+        let cfg: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("parse tauri.conf.json");
+        let window = &cfg["app"]["windows"][0];
+
+        assert_eq!(window["width"], 1180);
+        assert_eq!(window["height"], 760);
+        assert_eq!(window["minWidth"], 900);
+        assert_eq!(window["minHeight"], 680);
+        assert_eq!(window["resizable"], true);
+        assert_eq!(window["maximizable"], true);
+    }
+
+    #[test]
     fn tauri_conf_bundles_runtime_version_marker() {
         let cfg: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
             .expect("parse tauri.conf.json");
