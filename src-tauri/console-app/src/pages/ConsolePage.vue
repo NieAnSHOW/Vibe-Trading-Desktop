@@ -67,7 +67,6 @@ const router = useRouter();
 const route = useRoute();
 
 const { env: envState, port, serviceRunning } = storeToRefs(env);
-const { running } = storeToRefs(service);
 
 const logViewer = ref<InstanceType<typeof LogViewer> | null>(null);
 const updateBanner = ref<InstanceType<typeof UpdateBanner> | null>(null);
@@ -164,7 +163,7 @@ const stopBusy = useBusy();
 // busy 期间按钮保留显示，由 AppButton 的 :busy 接管(spinner + disabled)。
 // 服务真正 ready 后 serviceRunning 翻转，按钮才在此切换——否则最长 120s
 // (sidecar await_health)内两个按钮都消失，看起来像假死。
-const isServiceRunning = computed(() => serviceRunning.value || running.value);
+const isServiceRunning = computed(() => serviceRunning.value);
 const btnStartDisabled = computed(
   () => envState.value !== "ready" || isServiceRunning.value || port.value !== null || startBusy.busy.value,
 );
@@ -223,6 +222,7 @@ async function onStart() {
     try {
       const p = await service.start();
       env.setPort(p);
+      serviceRunning.value = true;
       hintHidden.value = true;
     } catch (e: any) {
       if (e?.variant === "LoginExpired") {
@@ -248,6 +248,7 @@ async function onStopDialogClose(v: "ok" | "cancel") {
     try {
       await service.stop();
       env.setPort(null);
+      serviceRunning.value = false;
       await refresh();
     } catch (e) {
       setErr(e);
@@ -273,6 +274,7 @@ async function onClearVenvDialogClose(v: "ok" | "cancel") {
       if (serviceRunning.value) {
         await service.stop();
         env.setPort(null);
+        serviceRunning.value = false;
       }
       await consoleClearVenv();
       log("已清理虚拟环境,请重新安装依赖");
@@ -413,6 +415,7 @@ onMounted(async () => {
     }),
     onServiceStarted((p: number) => {
       env.setPort(p);
+      serviceRunning.value = true;
       service.setRunning(true);
       hintHidden.value = true;
       refresh();

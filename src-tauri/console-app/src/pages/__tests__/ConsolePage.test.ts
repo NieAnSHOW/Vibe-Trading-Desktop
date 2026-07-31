@@ -2,9 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
-import type { AuthStatusView } from "../../ipc/types";
+import type { AuthStatusView, StatusReport } from "../../ipc/types";
 
 const mocks = vi.hoisted(() => ({
+  consoleStatus: vi.fn(async (): Promise<StatusReport> => ({
+    env: "ready" as const,
+    service_running: false,
+    port: null,
+  })),
   consoleAuthStatus: vi.fn(async (): Promise<AuthStatusView> => ({
     authenticated: true,
     userInfo: null,
@@ -21,11 +26,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../../ipc/commands", () => ({
   consoleAuthStatus: mocks.consoleAuthStatus,
-  consoleStatus: vi.fn(async () => ({
-    env: "ready",
-    service_running: false,
-    port: null,
-  })),
+  consoleStatus: mocks.consoleStatus,
   consoleBootstrap: vi.fn(),
   consoleOpenWebui: vi.fn(),
   consoleOpenLogs: vi.fn(),
@@ -109,6 +110,19 @@ describe("ConsolePage", () => {
     expect(wrapper.find(".member-panel").exists()).toBe(false);
     expect(wrapper.text()).toContain("登录使用会员服务");
     expect(wrapper.get('[data-test="primary-service-action"]').text()).toBe("启动研究服务");
+  });
+
+  it("shows the workbench action when the environment reports a running service", async () => {
+    mocks.consoleStatus.mockResolvedValueOnce({
+      env: "ready",
+      service_running: true,
+      port: 8899,
+    });
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+
+    expect(wrapper.get('[data-test="primary-service-action"]').text()).toContain("进入研究工作台");
   });
 
   it("shows a remembered token-only session as logged in", async () => {
