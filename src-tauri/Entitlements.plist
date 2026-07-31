@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Entitlements.plist — Hardened Runtime entitlements for Vibe Trading Desktop.
+  Entitlements.plist — Hardened Runtime entitlements for Trading Worker.
 
   Notarization requires Hardened Runtime. The embedded Python sidecar needs these
   exceptions to load its C extensions and the third-party packages it pip-installs

@@ -4307,6 +4307,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "trading-worker"
+version = "0.1.9"
+dependencies = [
+ "aes-gcm",
+ "base64 0.22.1",
+ "dirs 5.0.1",
+ "hkdf",
+ "libc",
+ "rand_core 0.6.4",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-process",
+ "tauri-plugin-single-instance",
+ "tempfile",
+ "x25519-dalek",
+]
+
+[[package]]
 name = "tray-icon"
 version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4492,28 +4514,6 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
-
-[[package]]
-name = "vibe-trading-desktop"
-version = "0.1.9"
-dependencies = [
- "aes-gcm",
- "base64 0.22.1",
- "dirs 5.0.1",
- "hkdf",
- "libc",
- "rand_core 0.6.4",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sha2",
- "tauri",
- "tauri-build",
- "tauri-plugin-process",
- "tauri-plugin-single-instance",
- "tempfile",
- "x25519-dalek",
-]
 
 [[package]]
 name = "vswhom"

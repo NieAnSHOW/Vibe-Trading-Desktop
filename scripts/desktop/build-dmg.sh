@@ -216,7 +216,7 @@ ok "构建完成，耗时 $((BUILD_END - BUILD_START))s"
 
 # ── 定位产物 ─────────────────────────────────────────────────
 BUNDLE_DIR="$SRC_TAURI/target/release/bundle"
-APP_PATH="$BUNDLE_DIR/macos/Vibe Trading.app"
+APP_PATH="$BUNDLE_DIR/macos/Trading Worker.app"
 DMG_DIR="$BUNDLE_DIR/dmg"
 DMG_PATH="$(ls -1 "$DMG_DIR"/*.dmg 2>/dev/null | head -1 || true)"
 
@@ -232,7 +232,7 @@ if [ "$SKIP_SMOKE" -eq 0 ]; then
     section "冒烟检查"
 
     # 1) .app 主可执行位
-    APP_BIN="$APP_PATH/Contents/MacOS/vibe-trading-desktop"
+    APP_BIN="$APP_PATH/Contents/MacOS/trading-worker"
     if [ -x "$APP_BIN" ]; then
         ok "主可执行文件存在且有执行位"
     else
@@ -284,7 +284,7 @@ if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
 else
     warn "未设置 APPLE_SIGNING_IDENTITY — 产物未签名/未公证（MVP 默认模式）。"
     log "分发提示：用户从浏览器下载 DMG 后双击会报『已损坏』，请在 Release 说明里提供："
-    printf '    xattr -cr "/Applications/Vibe Trading.app"\n'
+    printf '    xattr -cr "/Applications/Trading Worker.app"\n'
     log "完整安装说明见 docs/desktop/README.md；购入 Apple 开发者账号后配置证书即可一键启用签名公证。"
 fi
 

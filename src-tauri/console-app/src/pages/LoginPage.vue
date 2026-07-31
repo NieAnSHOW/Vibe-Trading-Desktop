@@ -229,7 +229,7 @@ onUnmounted(() => {
       <header class="brand">
         <img class="mark" :src="logoPng" alt="" />
         <div class="brand-text">
-          <h1>Vibe Trading</h1>
+          <h1>Trading Worker</h1>
           <p class="sub">登录后启动服务，自动配置 VIP 大模型</p>
         </div>
       </header>

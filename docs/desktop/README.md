@@ -1,6 +1,6 @@
-# Vibe Trading Desktop
+# Trading Worker
 
-Vibe Trading 桌面客户端，基于 Tauri 2.x 封装，双击即用，无需安装 Python。
+Trading Worker 桌面客户端，基于 Tauri 2.x 封装，双击即用，无需安装 Python。
 
 ## 系统要求
 
@@ -11,24 +11,24 @@ Vibe Trading 桌面客户端，基于 Tauri 2.x 封装，双击即用，无需�
 ## 安装
 
 ### macOS
-1. 下载 `Vibe Trading_*.dmg`
-2. 双击挂载 DMG，拖拽 `Vibe Trading.app` 到 `/Applications`
+1. 下载 `Trading Worker_*.dmg`
+2. 双击挂载 DMG，拖拽 `Trading Worker.app` 到 `/Applications`
 3. **清除"已损坏"隔离标记**（当前未签名版本的必做步骤）：
 
    应用目前未做 Apple 代码签名与公证，经浏览器下载后双击会报"已损坏，无法打开"。打开"终端"（Spotlight 搜索 `Terminal` 或 `终端`），粘贴下面命令并回车：
 
    ```bash
-   xattr -cr "/Applications/Vibe Trading.app"
+   xattr -cr "/Applications/Trading Worker.app"
    ```
 
    > 此命令仅清除这一个应用的"从网络下载"隔离标记，**不会**修改任何系统设置、也**不影响**其他应用，可放心执行。
 4. **首次启动**：右键点击应用 → "打开" → 确认弹窗点"打开"
 5. 后续启动直接双击即可
 
-> 提示：若双击 DMG 本身就提示损坏，先对 dmg 执行 `xattr -cr ~/Downloads/Vibe\ Trading-*.dmg` 再挂载。
+> 提示：若双击 DMG 本身就提示损坏，先对 dmg 执行 `xattr -cr ~/Downloads/Trading\ Worker-*.dmg` 再挂载。
 
 ### Windows
-1. 下载 `Vibe Trading_*_x64-setup.exe`
+1. 下载 `Trading Worker_*_x64-setup.exe`
 2. 双击安装
 3. 首次启动可能触发 SmartScreen 警告 → 点击"更多信息" → "仍然运行"
 
@@ -133,7 +133,7 @@ vibe-trading serve --port 8899 --open  # 启动并打开浏览器
 
 ## 自选股盯盘（Watchlist）
 
-**功能概述**：在 WebUI 侧边栏新增「自选股」入口（`/watchlist`），提供 A 股实时涨跌盯盘，将「看盘→分析」工作流闭合在 Vibe Trading 内部。
+**功能概述**：在 WebUI 侧边栏新增「自选股」入口（`/watchlist`），提供 A 股实时涨跌盯盘，将「看盘→分析」工作流闭合在 Trading Worker 内部。
 
 ### 功能列表
 

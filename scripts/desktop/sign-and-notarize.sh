@@ -47,7 +47,7 @@ set -euo pipefail
 # ── 路径与颜色 ───────────────────────────────────────────────
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SRC_TAURI="$ROOT/src-tauri"
-APP_PATH="$SRC_TAURI/target/release/bundle/macos/Vibe Trading.app"
+APP_PATH="$SRC_TAURI/target/release/bundle/macos/Trading Worker.app"
 DMG_DIR="$SRC_TAURI/target/release/bundle/dmg"
 ENT="$SRC_TAURI/Entitlements.plist"
 

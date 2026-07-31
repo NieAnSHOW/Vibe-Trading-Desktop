@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Vibe Trading",
+  "productName": "Trading Worker",
   "version": "0.1.9",
   "identifier": "ai.vibetrading.desktop",
   "build": {
@@ -12,7 +12,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Vibe Trading",
+        "title": "Trading Worker",
         "width": 650,
         "height": 880,
         "resizable": false,

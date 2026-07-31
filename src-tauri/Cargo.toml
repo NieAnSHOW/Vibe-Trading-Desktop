@@ -1,5 +1,5 @@
 [package]
-name = "vibe-trading-desktop"
+name = "trading-worker"
 version = "0.1.9"
 edition = "2021"
 

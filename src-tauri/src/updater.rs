@@ -14,7 +14,7 @@ use tauri::{AppHandle, Emitter};
 
 const GITHUB_API: &str =
     "https://api.github.com/repos/NieAnSHOW/Vibe-Trading-Desktop/releases/latest";
-const USER_AGENT: &str = "vibe-trading-desktop-updater/1.0";
+const USER_AGENT: &str = "trading-worker-updater/1.0";
 
 // ── 类型 ──────────────────────────────────────────────────────────────
 
@@ -30,7 +30,7 @@ pub struct UpdateInfo {
     pub has_update: bool,
     /// 对应当前平台的安装包下载 URL
     pub download_url: String,
-    /// 安装包文件名（如 vibe-trading_0.2.0_aarch64.dmg）
+    /// 安装包文件名（如 Trading Worker_0.2.0_aarch64.dmg）
     pub asset_name: String,
     /// Release 正文摘要（前 500 字符）
     pub release_notes: String,
@@ -330,8 +330,8 @@ mod tests {
     #[test]
     fn pick_asset_selects_macos_dmg() {
         let assets = serde_json::json!([
-            {"name": "vibe-trading_0.2.0_aarch64.dmg", "browser_download_url": "https://example.com/arm.dmg"},
-            {"name": "vibe-trading_0.2.0_x64-setup.exe", "browser_download_url": "https://example.com/win.exe"},
+            {"name": "Trading Worker_0.2.0_aarch64.dmg", "browser_download_url": "https://example.com/arm.dmg"},
+            {"name": "Trading Worker_0.2.0_x64-setup.exe", "browser_download_url": "https://example.com/win.exe"},
         ]);
         let arr = assets.as_array().unwrap();
         let (name, url) = pick_asset(arr).unwrap();

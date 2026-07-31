@@ -25,10 +25,10 @@ test("syncs a tag version into desktop, package, and visible UI metadata", () =>
   writeFixture(
     root,
     "src-tauri/tauri.conf.json",
-    JSON.stringify({ productName: "Vibe Trading", version: "0.1.0" }, null, 2) + "\n"
+    JSON.stringify({ productName: "Trading Worker", version: "0.1.0" }, null, 2) + "\n"
   );
-  writeFixture(root, "src-tauri/Cargo.toml", '[package]\nname = "vibe-trading-desktop"\nversion = "0.1.0"\n');
-  writeFixture(root, "src-tauri/Cargo.lock", '[[package]]\nname = "vibe-trading-desktop"\nversion = "0.1.0"\n');
+  writeFixture(root, "src-tauri/Cargo.toml", '[package]\nname = "trading-worker"\nversion = "0.1.0"\n');
+  writeFixture(root, "src-tauri/Cargo.lock", '[[package]]\nname = "trading-worker"\nversion = "0.1.0"\n');
   writeFixture(root, "pyproject.toml", '[project]\nname = "vibe-trading-ai"\nversion = "0.1.9"\n');
   writeFixture(
     root,
@@ -53,8 +53,8 @@ test("check mode fails when any version surface drifts", () => {
   const root = mkdtempSync(join(tmpdir(), "vibe-version-check-"));
 
   writeFixture(root, "src-tauri/tauri.conf.json", JSON.stringify({ version: "1.2.3" }, null, 2) + "\n");
-  writeFixture(root, "src-tauri/Cargo.toml", '[package]\nname = "vibe-trading-desktop"\nversion = "1.2.3"\n');
-  writeFixture(root, "src-tauri/Cargo.lock", '[[package]]\nname = "vibe-trading-desktop"\nversion = "1.2.3"\n');
+  writeFixture(root, "src-tauri/Cargo.toml", '[package]\nname = "trading-worker"\nversion = "1.2.3"\n');
+  writeFixture(root, "src-tauri/Cargo.lock", '[[package]]\nname = "trading-worker"\nversion = "1.2.3"\n');
   writeFixture(root, "pyproject.toml", '[project]\nname = "vibe-trading-ai"\nversion = "9.9.9"\n');
   writeFixture(root, "frontend/src/components/layout/Layout.tsx", 'const APP_VERSION = "v1.2.3";\n');
   writeFixture(root, "frontend/src/i18n/locales/en.json", JSON.stringify({ app: { version: "v1.2.3" } }, null, 2) + "\n");

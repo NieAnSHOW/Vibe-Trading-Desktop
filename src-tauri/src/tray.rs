@@ -72,7 +72,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
     let menu = Menu::with_items(app, &[&open_i, &quit_i])?;
 
     let mut builder = TrayIconBuilder::with_id("main-tray")
-        .tooltip("Vibe Trading")
+        .tooltip("Trading Worker")
         .menu(&menu)
         // 左键留给「唤回窗口」(on_tray_icon_event),右键才出菜单——契合“右击后台图标退出”。
         .show_menu_on_left_click(false)

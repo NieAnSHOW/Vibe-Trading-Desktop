@@ -435,10 +435,10 @@ onUnmounted(() => {
     <!-- head: logo + 标题 + 打开 WebUI -->
     <div class="head">
       <div style="display: flex; align-items: center; gap: 13px">
-        <img class="mark" alt="Vibe Trading" :src="logoPng" />
+        <img class="mark" alt="Trading Worker" :src="logoPng" />
         <div>
-          <h1>Vibe Trading</h1>
-          <p class="sub">桌面运行环境控制台</p>
+          <h1>Trading Worker</h1>
+          <p class="sub">专属与你的 AI 理财专家</p>
         </div>
       </div>
       <div class="head-actions">

@@ -1,15 +1,32 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach } from "vitest";
+import i18n from "@/i18n";
 import { WelcomeScreen } from "../WelcomeScreen";
 
 describe("WelcomeScreen", () => {
   const onExample = vi.fn();
 
-  beforeEach(() => onExample.mockClear());
+  beforeEach(async () => {
+    onExample.mockClear();
+    await i18n.changeLanguage("en");
+  });
+
+  afterEach(async () => {
+    await i18n.changeLanguage("zh-CN");
+  });
 
   it("renders the title", () => {
     render(<WelcomeScreen onExample={onExample} />);
-    expect(screen.getByText("Vibe-Trading")).toBeInTheDocument();
+    expect(screen.getByText("Trading Worker")).toBeInTheDocument();
+  });
+
+  it("renders the Trading Worker logo", () => {
+    render(<WelcomeScreen onExample={onExample} />);
+    expect(screen.getByRole("img", { name: "Trading Worker" })).toHaveAttribute(
+      "src",
+      "/trading-worker-logo.png",
+    );
   });
 
   it("renders capability chips", () => {

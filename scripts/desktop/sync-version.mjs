@@ -96,7 +96,7 @@ function plannedUpdates(root, version, displayVersion) {
       path: "src-tauri/Cargo.lock",
       next: replaceRequired(
         readText(root, "src-tauri/Cargo.lock"),
-        /(\[\[package\]\]\nname = "vibe-trading-desktop"\nversion = ")[^"]+(")/,
+        /(\[\[package\]\]\nname = "trading-worker"\nversion = ")[^"]+(")/,
         `$1${version}$2`,
         "src-tauri/Cargo.lock"
       ),

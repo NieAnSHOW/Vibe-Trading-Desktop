@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Deliver explicit password registration and normal-member-backed model configuration from cool-admin to the Vibe Trading desktop console.
+**Goal:** Deliver explicit password registration and normal-member-backed model configuration from cool-admin to the Trading Worker desktop console.
 
 **Architecture:** cool-admin owns account, SMS, membership, supplier, and Key-pool decisions. It returns one member-enriched login contract for registration and sign-in. Tauri stores credentials in its existing owner-only `.env`; Vue only receives the existing user-safe login view.
 
