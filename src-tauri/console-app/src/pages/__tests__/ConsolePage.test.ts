@@ -167,7 +167,7 @@ describe("ConsolePage", () => {
 
     await flushPromises();
 
-    expect(wrapper.text()).toContain("剩余 98,025,508");
+    expect(wrapper.get(".member-panel").text()).toContain("98,025,508积分");
     expect(wrapper.text()).toContain("总量 113,514,188");
     expect(wrapper.text()).toContain("已用 15,488,680");
     await wrapper.get('[data-test="member-usage-refresh"]').trigger("click");

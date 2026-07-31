@@ -13,10 +13,12 @@
     "windows": [
       {
         "title": "Trading Worker",
-        "width": 650,
-        "height": 880,
-        "resizable": false,
-        "maximizable": false
+        "width": 1180,
+        "height": 760,
+        "minWidth": 900,
+        "minHeight": 680,
+        "resizable": true,
+        "maximizable": true
       }
     ],
     "security": {

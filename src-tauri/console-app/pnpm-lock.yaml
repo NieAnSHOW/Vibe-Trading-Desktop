@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@lucide/vue':
+        specifier: ^1.28.0
+        version: 1.28.0(vue@3.5.39(typescript@5.9.3))
       '@tauri-apps/api':
         specifier: ^2.1.1
         version: 2.11.1
@@ -237,6 +240,11 @@ packages:
 
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
+
+  '@lucide/vue@1.28.0':
+    resolution: {integrity: sha512-cO89UyNM/0i2Srdi04nFWeEOQkqzDZlM2ehtWyBhcMpRTJDKpMZPCGAVlmVBgBgr5HaeL5L6FsU8RHsOdwXtKw==}
+    peerDependencies:
+      vue: '>=3.0.1'
 
   '@one-ini/wasm@0.1.1':
     resolution: {integrity: sha512-XuySG1E38YScSJoMlqovLru4KTUNSjgVTIjyh7qMX6aNN5HY5Ct5LhRJdxO79JtTzKfzV/bnWpz+zquYrISsvw==}
@@ -1234,6 +1242,10 @@ snapshots:
       wrap-ansi-cjs: wrap-ansi@7.0.0
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
+
+  '@lucide/vue@1.28.0(vue@3.5.39(typescript@5.9.3))':
+    dependencies:
+      vue: 3.5.39(typescript@5.9.3)
 
   '@one-ini/wasm@0.1.1': {}
 

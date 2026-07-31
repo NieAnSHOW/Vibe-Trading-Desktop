@@ -852,3 +852,547 @@ dialog.confirm .confirm-actions {
 .ad-dot.active {
   background: hsl(0 0% 100% / 0.9);
 }
+
+/* ── Wide desktop console ───────────────────────────────────── */
+:root {
+  --bg: 210 24% 5%;
+  --surface-1: 207 22% 8%;
+  --surface-2: 205 19% 12%;
+  --surface-3: 204 17% 15%;
+  --line: 201 14% 23%;
+  --ink: 190 18% 94%;
+  --ink-dim: 194 10% 67%;
+  --brand: 175.1 72.3% 39.6%;
+  --brand-strong: 175.1 72.3% 34%;
+  --on-brand: 180 30% 7%;
+  --radius: 10px;
+}
+
+body {
+  min-width: 0;
+  min-height: 100vh;
+  align-items: stretch;
+  padding: 18px;
+}
+
+body::before {
+  display: none;
+}
+
+.console-shell {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(100%, 1440px);
+  min-height: calc(100vh - 36px);
+  margin: 0 auto;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid hsl(var(--line));
+  border-radius: 12px;
+  background: hsl(var(--surface-1));
+}
+
+.app-header,
+.brand-lockup,
+.brand-copy,
+.header-actions,
+.primary-action-row,
+.maintenance-row,
+.member-usage-head,
+.usage-detail {
+  display: flex;
+  align-items: center;
+}
+
+.app-header {
+  min-height: 74px;
+  padding: 14px 22px;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid hsl(var(--line));
+}
+
+.brand-lockup {
+  min-width: 0;
+  gap: 13px;
+}
+
+.brand-copy {
+  min-width: 0;
+  gap: 14px;
+}
+
+.mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  filter: none;
+}
+
+.brand-copy h1 {
+  flex: none;
+  font-size: 21px;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+}
+
+.brand-divider {
+  width: 1px;
+  height: 22px;
+  background: hsl(var(--line));
+}
+
+.sub {
+  margin: 0;
+  color: hsl(var(--ink-dim));
+  font-size: 14px;
+}
+
+.header-actions {
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.account-profile-entry {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 34px;
+  padding: 5px 8px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: hsl(var(--ink));
+}
+
+.account-profile-entry:hover {
+  border-color: hsl(var(--line));
+  background: hsl(var(--surface-2));
+}
+
+.account-name {
+  max-width: 122px;
+  overflow: hidden;
+  color: hsl(var(--ink));
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-button {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid hsl(var(--line));
+  border-radius: 7px;
+  background: hsl(var(--surface-2));
+  color: hsl(var(--ink-dim));
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  color: hsl(var(--ink));
+  background: hsl(var(--surface-3));
+}
+
+.login-notice {
+  margin: 14px 14px 0;
+}
+
+.console-shell > .ad-banner,
+.console-shell > .ad-bottom {
+  margin-inline: 14px;
+}
+
+.console-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  gap: 14px;
+  padding: 14px;
+}
+
+.console-workspace--guest {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.service-panel,
+.member-panel {
+  min-width: 0;
+  border: 1px solid hsl(var(--line));
+  border-radius: var(--radius);
+  background: hsl(var(--surface-2));
+}
+
+.service-panel {
+  overflow: hidden;
+}
+
+.service-hero {
+  padding: 40px 46px 28px;
+}
+
+.service-state-line {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  color: hsl(var(--ink-dim));
+  font-size: 13px;
+}
+
+.service-state-line .badge {
+  flex: none;
+}
+
+.service-hero h2 {
+  margin-top: 20px;
+  font-size: 34px;
+  font-weight: 680;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.service-description {
+  max-width: 62ch;
+  margin-top: 14px;
+  color: hsl(var(--ink-dim));
+  font-size: 14px;
+  text-wrap: pretty;
+}
+
+.primary-action-row {
+  margin-top: 30px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.primary-action-row .btn-primary {
+  min-height: 46px;
+  padding-inline: 20px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.primary-action-row .btn-ghost,
+.maintenance-row .btn-ghost,
+.header-actions .btn-ghost,
+.member-usage-head .btn-ghost {
+  min-height: 34px;
+  border-radius: 7px;
+}
+
+.runtime-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 46px 20px;
+  border: 1px solid hsl(var(--line));
+  border-radius: 8px;
+}
+
+.runtime-item {
+  display: flex;
+  min-width: 0;
+  min-height: 76px;
+  padding: 14px 18px;
+  align-items: center;
+  gap: 12px;
+}
+
+.runtime-item + .runtime-item {
+  border-left: 1px solid hsl(var(--line));
+}
+
+.runtime-item > svg {
+  flex: none;
+  color: #1caea2;
+}
+
+.runtime-item span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.runtime-item small {
+  color: hsl(var(--ink-dim));
+  font-size: 11px;
+}
+
+.runtime-item b {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runtime-value--ok {
+  color: hsl(var(--ok-fg));
+}
+
+.runtime-value--warn {
+  color: hsl(var(--warn-fg));
+}
+
+.runtime-value--bad {
+  color: hsl(var(--bad-fg));
+}
+
+.maintenance-row {
+  padding: 0 46px 26px;
+  justify-content: flex-end;
+}
+
+.service-panel .hint,
+.service-panel #progress {
+  margin-inline: 46px;
+  margin-bottom: 22px;
+}
+
+.member-panel {
+  padding: 24px 22px;
+}
+
+.member-profile-link {
+  display: grid;
+  width: 100%;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 0 0 20px;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  border-bottom: 1px solid hsl(var(--line));
+  border-radius: 0;
+  background: transparent;
+  color: hsl(var(--ink));
+  text-align: left;
+  cursor: pointer;
+}
+
+.member-profile-link > svg:first-child {
+  color: hsl(var(--ink-dim));
+}
+
+.member-profile-link > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.member-profile-link b,
+.member-profile-link small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-profile-link b {
+  font-size: 16px;
+}
+
+.member-profile-link small,
+.member-expire-time,
+.member-usage-placeholder {
+  color: hsl(var(--ink-dim));
+  font-size: 12px;
+}
+
+.member-expire-time {
+  margin-top: 10px;
+}
+
+.member-usage-head {
+  margin-top: 30px;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.member-usage-title {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.usage-summary {
+  display: grid;
+  margin-top: 17px;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  column-gap: 6px;
+}
+
+.usage-summary strong {
+  max-width: 100%;
+  overflow: hidden;
+  color: #1caea2;
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-summary span,
+.usage-summary small {
+  color: hsl(var(--ink-dim));
+  font-size: 12px;
+}
+
+.usage-summary small {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+}
+
+.member-usage-track {
+  height: 7px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: hsl(var(--line));
+}
+
+.member-usage-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #1caea2;
+  transition: width 0.2s var(--ease);
+}
+
+.usage-detail {
+  margin-top: 14px;
+  justify-content: space-between;
+  gap: 12px;
+  color: hsl(var(--ink-dim));
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-detail b {
+  color: hsl(var(--ink));
+  font-weight: 600;
+}
+
+.member-panel .member-usage-unlimited {
+  margin-top: 18px;
+}
+
+.member-panel .member-usage-placeholder {
+  margin-top: 18px;
+}
+
+.console-shell > #err:not(:empty) {
+  margin: 0 18px 12px;
+}
+
+.operations-footer {
+  margin-top: auto;
+  padding: 0 18px 18px;
+  border-top: 1px solid hsl(var(--line));
+  background: hsl(var(--bg) / 0.45);
+}
+
+.operations-footer .log-head {
+  margin-top: 14px;
+}
+
+.operations-footer #log {
+  height: 104px;
+  border-radius: 8px;
+}
+
+.console-version-text {
+  position: static;
+  padding: 0 18px 10px;
+}
+
+@media (max-width: 899px) {
+  body {
+    padding: 12px;
+  }
+
+  .console-shell {
+    min-height: calc(100vh - 24px);
+  }
+
+  .app-header,
+  .header-actions {
+    flex-wrap: wrap;
+  }
+
+  .console-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .service-hero {
+    padding: 30px 28px 24px;
+  }
+
+  .runtime-strip,
+  .service-panel .hint,
+  .service-panel #progress {
+    margin-inline: 28px;
+  }
+
+  .maintenance-row {
+    padding-inline: 28px;
+  }
+}
+
+@media (max-width: 620px) {
+  .app-header,
+  .brand-copy {
+    align-items: flex-start;
+  }
+
+  .brand-copy {
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+
+  .brand-divider {
+    display: none;
+  }
+
+  .runtime-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .runtime-item + .runtime-item {
+    border-top: 1px solid hsl(var(--line));
+    border-left: 0;
+  }
+
+  .service-state-line {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .runtime-strip,
+  .service-panel .hint,
+  .service-panel #progress {
+    margin-inline: 20px;
+  }
+
+  .service-hero {
+    padding-inline: 20px;
+  }
+
+  .maintenance-row {
+    padding-inline: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

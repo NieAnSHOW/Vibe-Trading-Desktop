@@ -43,6 +43,20 @@ import UpdateBanner from "../components/UpdateBanner.vue";
 import { useBusy } from "../composables/useBusy";
 import logoPng from "../assets/128x128@2x.png";
 import ProdConfig from '../config/prod.ts'
+import {
+  ArrowUpRight,
+  CircleUserRound,
+  Database,
+  ExternalLink,
+  LogIn,
+  MessageCircleMore,
+  Play,
+  RefreshCw,
+  ServerCog,
+  Settings,
+  Square,
+  Wrench,
+} from "@lucide/vue";
 
 const env = useEnvStore();
 const service = useServiceStore();
@@ -69,10 +83,10 @@ function formatUsageAmount(value: number) {
   return usageNumberFormatter.format(value);
 }
 
-const usagePercent = computed(() => {
+const remainingPercent = computed(() => {
   const usage = memberUsage.value;
   if (!usage || usage.total_granted <= 0) return 0;
-  return Math.min(100, Math.max(0, (usage.total_used / usage.total_granted) * 100));
+  return Math.min(100, Math.max(0, (usage.total_available / usage.total_granted) * 100));
 });
 
 async function refreshMemberUsage() {
@@ -150,12 +164,14 @@ const stopBusy = useBusy();
 // busy 期间按钮保留显示，由 AppButton 的 :busy 接管(spinner + disabled)。
 // 服务真正 ready 后 serviceRunning 翻转，按钮才在此切换——否则最长 120s
 // (sidecar await_health)内两个按钮都消失，看起来像假死。
-const showInstallBtn = computed(() => envState.value !== "ready");
-const showStartBtn = computed(() => serviceRunning.value === false);
-const showStopBtn = computed(() => serviceRunning.value === true);
+const isServiceRunning = computed(() => serviceRunning.value || running.value);
 const btnStartDisabled = computed(
-  () => envState.value !== "ready" || port.value !== null || startBusy.busy.value,
+  () => envState.value !== "ready" || isServiceRunning.value || port.value !== null || startBusy.busy.value,
 );
+const primaryActionKind = computed<"install" | "start" | "open">(() => {
+  if (envState.value !== "ready") return "install";
+  return isServiceRunning.value ? "open" : "start";
+});
 
 // ── 安装 ────────────────────────────────────────────────────────
 // 安装前「服务运行中」确认对话框:安装新版本依赖会影响正在运行的服务,
@@ -431,116 +447,131 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main ref="consoleElement" class="console">
-    <!-- head: logo + 标题 + 打开 WebUI -->
-    <div class="head">
-      <div style="display: flex; align-items: center; gap: 13px">
+  <main class="console-shell">
+    <header class="app-header">
+      <div class="brand-lockup">
         <img class="mark" alt="Trading Worker" :src="logoPng" />
-        <div>
+        <div class="brand-copy">
           <h1>Trading Worker</h1>
+          <span class="brand-divider" aria-hidden="true"></span>
           <p class="sub">您的专属 AI 理财专家</p>
         </div>
       </div>
-      <div class="head-actions">
-        <div v-if="ProdConfig.enableLogin">
-          <template v-if="authStore.authenticated">
-            <button class="account-profile-entry" data-test="account-profile-entry" type="button"
-              :aria-label="`打开个人中心，${accountName}`" @click="router.push('/profile')">
-              <span class="account-identity">
-                <span class="account-name" :title="accountName">{{ accountName }}</span>
-                <span v-if="memberTier" class="member-tier" :class="`member-tier--${memberTier.tone}`"
-                  :title="`当前会员等级：${memberTier.label}`" aria-hidden="true">
-                  <span class="member-tier-mark" aria-hidden="true">V</span>
-                  <span class="member-tier-name">{{ memberTier.name }}</span>
-                  <span v-if="memberTier.caption" class="member-tier-caption">{{ memberTier.caption }}</span>
-                </span>
-
-              </span>
-            </button>
-            <span v-if="memberTier" class="sr-only">当前会员等级：{{ memberTier.label }}</span>
-            <span v-else class="sr-only">普通用户</span>
-            <div v-if="memberUsage?.unlimited_quota" class="member-usage-values">
-              <span class="member-usage-unlimited" data-test="member-usage-unlimited">不限量</span>
-            </div>
-          </template>
-          <AppButton v-else variant="ghost" @click="router.push('/login')">登录</AppButton>
-        </div>
-        <AppButton variant="ghost" :disabled="!running" @click="onOpenWebui">
-          在浏览器打开 WebUI
+      <nav class="header-actions" aria-label="控制台快捷操作">
+        <button v-if="ProdConfig.enableLogin && authStore.authenticated" class="account-profile-entry"
+          data-test="account-profile-entry" type="button" :aria-label="`打开个人中心，${accountName}`"
+          @click="router.push('/profile')">
+          <CircleUserRound :size="18" aria-hidden="true" />
+          <span class="account-name" :title="accountName">{{ accountName }}</span>
+          <span v-if="memberTier" class="member-tier" :class="`member-tier--${memberTier.tone}`"
+            :title="`当前会员等级：${memberTier.label}`">
+            <span class="member-tier-mark" aria-hidden="true">V</span>
+            <span class="member-tier-name">{{ memberTier.name }}</span>
+          </span>
+        </button>
+        <AppButton v-else-if="ProdConfig.enableLogin" variant="ghost" @click="router.push('/login')">
+          <LogIn :size="16" aria-hidden="true" />登录使用会员服务
         </AppButton>
-      </div>
-    </div>
-    <!-- 版本更新通知横幅 -->
-    <UpdateBanner ref="updateBanner" />
+        <button class="icon-button" data-test="settings-entry" type="button" aria-label="打开设置" title="设置"
+          @click="router.push('/settings')">
+          <Settings :size="19" aria-hidden="true" />
+        </button>
+      </nav>
+    </header>
 
-    <!-- 广告位 banner:标题 + 多图轮播 / 文字 -->
+    <UpdateBanner ref="updateBanner" />
+    <p v-if="loginNotice" class="login-notice" data-test="login-notice" role="status">{{ loginNotice }}</p>
     <AdSlot :ad="adBanner" variant="banner" />
 
-    <section v-if="ProdConfig.enableLogin && authStore.authenticated" class="member-usage" aria-label="会员用量">
-      <div class="member-usage-head">
-        <div>
-          <span class="member-usage-title">会员用量</span>
-          <span v-if="memberExpireTime" class="member-expire-time" :title="`会员有效期至：${memberExpireTime}`">
-            有效期至 {{ memberExpireTime }}
-          </span>
-        </div>
-
-        <AppButton variant="ghost" :busy="usageRefreshing" busy-label="刷新中" data-test="member-usage-refresh"
-          @click="refreshMemberUsage">
-          刷新
-        </AppButton>
-      </div>
-
-      <div v-if="memberUsage && !memberUsage.unlimited_quota" class="member-usage-values">
-        <span>剩余 <b>{{ formatUsageAmount(memberUsage.total_available) }}</b> 积分</span>
-        <span>总量 <b>{{ formatUsageAmount(memberUsage.total_granted) }}</b> 积分</span>
-        <span>已用 <b>{{ formatUsageAmount(memberUsage.total_used) }}</b> 积分</span>
-      </div>
-      <div v-if="!memberUsage" class="member-usage-placeholder">用量暂未加载</div>
-      <div v-if="memberUsage && !memberUsage.unlimited_quota" class="member-usage-track" role="progressbar"
-        aria-label="已用额度" :aria-valuenow="usagePercent" aria-valuemin="0" aria-valuemax="100">
-        <div class="member-usage-fill" :style="{ width: `${usagePercent}%` }"></div>
-      </div>
-    </section>
-    <!-- status -->
-    <div class="status">
-      <div class="status-row">
-        <span class="status-label">运行环境</span>
-        <div style="display: flex; gap: 8px">
-          <StatusBadge :cls="envBadge.cls" :text="envBadge.txt" />
-          <AppButton v-if="showInstallBtn" :variant="envState === 'ready' ? 'ghost' : 'primary'" :busy="installing"
-            busy-label="安装中" @click="onInstall">
-            安装/修复依赖
-          </AppButton>
-          <AppButton variant="ghost" :busy="clearVenvBusy.busy.value" @click="onClearVenv">
-            强制清理环境
-          </AppButton>
-        </div>
-      </div>
-      <div class="status-row">
-        <span class="status-label">研究服务</span>
-        <div style="display: flex; gap: 8px">
-          <StatusBadge :cls="running ? 'ok' : 'warn'" :text="running ? '运行中' : '已停止'" :live="running" />
-          <div class="action-group">
-            <AppButton v-if="showStartBtn" variant="primary" :disabled="btnStartDisabled" :busy="startBusy.busy.value"
-              busy-label="启动中" @click="onStart">
-              启动服务
+    <div class="console-workspace"
+      :class="{ 'console-workspace--guest': !ProdConfig.enableLogin || !authStore.authenticated }">
+      <section class="service-panel" aria-labelledby="service-title">
+        <div class="service-hero">
+          <div class="service-state-line">
+            <StatusBadge :cls="isServiceRunning ? 'ok' : envBadge.cls"
+              :text="isServiceRunning ? '服务就绪' : envBadge.txt" :live="isServiceRunning" />
+            <span>{{ isServiceRunning ? `本地端口 ${port ?? '检测中'}` : '本地运行，数据保留在您的设备上' }}</span>
+          </div>
+          <h2 id="service-title">研究服务</h2>
+          <p class="service-description">启动本地 AI 研究服务，在浏览器中进行市场分析、策略回测和投研对话。</p>
+          <div class="primary-action-row">
+            <AppButton v-if="primaryActionKind === 'install'" variant="primary" :busy="installing" busy-label="安装中"
+              data-test="primary-service-action" @click="onInstall">
+              <Wrench :size="19" aria-hidden="true" />安装或修复依赖
             </AppButton>
-            <AppButton v-if="showStopBtn" variant="danger" :busy="stopBusy.busy.value" busy-label="停止中" @click="onStop">
-              停止服务
+            <AppButton v-else-if="primaryActionKind === 'start'" variant="primary" :disabled="btnStartDisabled"
+              :busy="startBusy.busy.value" busy-label="启动中" data-test="primary-service-action" @click="onStart">
+              <Play :size="19" aria-hidden="true" />启动研究服务
+            </AppButton>
+            <AppButton v-else variant="primary" :disabled="port === null" data-test="primary-service-action"
+              @click="onOpenWebui">
+              <ExternalLink :size="19" aria-hidden="true" />进入研究工作台
+            </AppButton>
+            <AppButton v-if="isServiceRunning" variant="ghost" :busy="stopBusy.busy.value" busy-label="停止中"
+              @click="onStop">
+              <Square :size="15" aria-hidden="true" />停止服务
             </AppButton>
           </div>
         </div>
-      </div>
-      <div class="status-row">
-        <span class="status-label">消息渠道</span>
-        <StatusBadge :cls="channels.cls" :text="channels.text" :live="channels.live" />
-      </div>
+
+        <div class="runtime-strip" aria-label="运行状态">
+          <div class="runtime-item">
+            <Database :size="21" aria-hidden="true" />
+            <span><small>运行环境</small><b>{{ envBadge.txt }}</b></span>
+          </div>
+          <div class="runtime-item">
+            <ServerCog :size="21" aria-hidden="true" />
+            <span><small>研究服务</small><b>{{ isServiceRunning ? '运行中' : '已停止' }}</b></span>
+          </div>
+          <div class="runtime-item">
+            <MessageCircleMore :size="21" aria-hidden="true" />
+            <span><small>消息渠道</small><b :class="`runtime-value--${channels.cls}`">{{ channels.text }}</b></span>
+          </div>
+        </div>
+
+        <div class="maintenance-row">
+          <AppButton variant="ghost" :busy="clearVenvBusy.busy.value" @click="onClearVenv">
+            <Wrench :size="15" aria-hidden="true" />强制清理环境
+          </AppButton>
+        </div>
+        <HintBanner :hidden="hintHidden" />
+        <ProgressBar />
+      </section>
+
+      <aside v-if="ProdConfig.enableLogin && authStore.authenticated" class="member-panel" aria-label="会员服务">
+        <button class="member-profile-link" type="button" @click="router.push('/profile')">
+          <CircleUserRound :size="48" stroke-width="1.3" aria-hidden="true" />
+          <span><b>{{ memberTier?.label ?? '会员账户' }}</b><small>{{ accountName }}</small></span>
+          <ArrowUpRight :size="17" aria-hidden="true" />
+        </button>
+        <p v-if="memberExpireTime" class="member-expire-time">有效期至 {{ memberExpireTime }}</p>
+        <div class="member-usage-head">
+          <span class="member-usage-title">剩余用量</span>
+          <AppButton variant="ghost" :busy="usageRefreshing" busy-label="刷新中" data-test="member-usage-refresh"
+            @click="refreshMemberUsage">
+            <RefreshCw :size="14" aria-hidden="true" />刷新
+          </AppButton>
+        </div>
+        <template v-if="memberUsage?.unlimited_quota">
+          <strong class="member-usage-unlimited" data-test="member-usage-unlimited">不限量</strong>
+        </template>
+        <template v-else-if="memberUsage">
+          <div class="usage-summary">
+            <strong>{{ formatUsageAmount(memberUsage.total_available) }}</strong><span>积分</span>
+            <small>{{ Math.round(remainingPercent) }}% 可用</small>
+          </div>
+          <div class="member-usage-track" role="progressbar" aria-label="剩余额度" :aria-valuenow="remainingPercent"
+            aria-valuemin="0" aria-valuemax="100">
+            <div class="member-usage-fill" :style="{ width: `${remainingPercent}%` }"></div>
+          </div>
+          <div class="usage-detail">
+            <span>总量 <b>{{ formatUsageAmount(memberUsage.total_granted) }}</b></span>
+            <span>已用 <b>{{ formatUsageAmount(memberUsage.total_used) }}</b></span>
+          </div>
+        </template>
+        <p v-else class="member-usage-placeholder">用量暂未加载</p>
+      </aside>
     </div>
-
-    <HintBanner :hidden="hintHidden" />
-
-    <ProgressBar />
 
     <ConfirmDialog :open="installStopDialogOpen" title="服务运行中，确认停止并安装？" @close="onInstallStopDialogClose">
       检测到后端服务正在运行，安装新版本依赖需要先停止服务。<b>停止将中断正在执行的任务</b>（回测、研究、实盘等），确认停止并继续安装吗？
@@ -567,14 +598,11 @@ onUnmounted(() => {
       <template #confirm-text>确认退出</template>
     </ConfirmDialog>
 
-    <!-- 广告位 bottom:横条 -->
     <AdSlot :ad="adBottom" variant="bottom" />
     <div id="err">{{ errorMsg }}</div>
-
-    <LogViewer ref="logViewer" @open-logs="onOpenLogs" @clear-logs="onClearLogs" />
-
-
-    <!-- 版本号展示 -->
+    <section class="operations-footer" aria-label="运行日志">
+      <LogViewer ref="logViewer" @open-logs="onOpenLogs" @clear-logs="onClearLogs" />
+    </section>
     <VersionFooter />
   </main>
 </template>
