@@ -1,5 +1,14 @@
 import { useTranslation } from "react-i18next";
-import { TrendingUp, Globe, Sparkles, Users, UserCircle2, NotebookPen, Landmark, Gem } from "lucide-react";
+import {
+  TrendingUp,
+  Globe,
+  Sparkles,
+  Users,
+  UserCircle2,
+  NotebookPen,
+  Landmark,
+  Gem,
+} from "lucide-react";
 
 interface Example {
   titleKey: string;
@@ -18,7 +27,8 @@ const CATEGORIES: Category[] = [
   {
     labelKey: "welcome.categories.multiMarketBacktest",
     icon: <TrendingUp className="h-4 w-4" />,
-    color: "text-red-400 border-red-500/30 hover:border-red-500/60 hover:bg-red-500/5",
+    color:
+      "text-red-400 border-red-500/30 hover:border-red-500/60 hover:bg-red-500/5",
     examples: [
       {
         titleKey: "welcome.examples.crossMarketPortfolio",
@@ -40,7 +50,8 @@ const CATEGORIES: Category[] = [
   {
     labelKey: "welcome.categories.researchAnalysis",
     icon: <Sparkles className="h-4 w-4" />,
-    color: "text-amber-400 border-amber-500/30 hover:border-amber-500/60 hover:bg-amber-500/5",
+    color:
+      "text-amber-400 border-amber-500/30 hover:border-amber-500/60 hover:bg-amber-500/5",
     examples: [
       {
         titleKey: "welcome.examples.multiFactorAlpha",
@@ -57,7 +68,8 @@ const CATEGORIES: Category[] = [
   {
     labelKey: "welcome.categories.valueInvesting",
     icon: <Gem className="h-4 w-4" />,
-    color: "text-yellow-400 border-yellow-500/30 hover:border-yellow-500/60 hover:bg-yellow-500/5",
+    color:
+      "text-yellow-400 border-yellow-500/30 hover:border-yellow-500/60 hover:bg-yellow-500/5",
     examples: [
       {
         titleKey: "welcome.examples.valueCommittee",
@@ -84,7 +96,8 @@ const CATEGORIES: Category[] = [
   {
     labelKey: "welcome.categories.swarmTeams",
     icon: <Users className="h-4 w-4" />,
-    color: "text-violet-400 border-violet-500/30 hover:border-violet-500/60 hover:bg-violet-500/5",
+    color:
+      "text-violet-400 border-violet-500/30 hover:border-violet-500/60 hover:bg-violet-500/5",
     examples: [
       {
         titleKey: "welcome.examples.investmentCommittee",
@@ -101,7 +114,8 @@ const CATEGORIES: Category[] = [
   {
     labelKey: "welcome.categories.docWebResearch",
     icon: <Globe className="h-4 w-4" />,
-    color: "text-blue-400 border-blue-500/30 hover:border-blue-500/60 hover:bg-blue-500/5",
+    color:
+      "text-blue-400 border-blue-500/30 hover:border-blue-500/60 hover:bg-blue-500/5",
     examples: [
       {
         titleKey: "welcome.examples.earningsReport",
@@ -118,7 +132,8 @@ const CATEGORIES: Category[] = [
   {
     labelKey: "welcome.categories.tradeJournal",
     icon: <NotebookPen className="h-4 w-4" />,
-    color: "text-orange-400 border-orange-500/30 hover:border-orange-500/60 hover:bg-orange-500/5",
+    color:
+      "text-orange-400 border-orange-500/30 hover:border-orange-500/60 hover:bg-orange-500/5",
     examples: [
       {
         titleKey: "welcome.examples.analyzeBrokerExport",
@@ -135,7 +150,8 @@ const CATEGORIES: Category[] = [
   {
     labelKey: "welcome.categories.tradingConnectors",
     icon: <Landmark className="h-4 w-4" />,
-    color: "text-cyan-400 border-cyan-500/30 hover:border-cyan-500/60 hover:bg-cyan-500/5",
+    color:
+      "text-cyan-400 border-cyan-500/30 hover:border-cyan-500/60 hover:bg-cyan-500/5",
     examples: [
       {
         titleKey: "welcome.examples.checkConnector",
@@ -157,7 +173,8 @@ const CATEGORIES: Category[] = [
   {
     labelKey: "welcome.categories.shadowAccount",
     icon: <UserCircle2 className="h-4 w-4" />,
-    color: "text-emerald-400 border-emerald-500/30 hover:border-emerald-500/60 hover:bg-emerald-500/5",
+    color:
+      "text-emerald-400 border-emerald-500/30 hover:border-emerald-500/60 hover:bg-emerald-500/5",
     examples: [
       {
         titleKey: "welcome.examples.trainShadow",
@@ -212,12 +229,11 @@ export function WelcomeScreen({ onExample }: Props) {
           className="h-16 w-16 mx-auto drop-shadow-lg"
         />
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">{t('welcome.title')}</h2>
-          <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto leading-relaxed">
-            {t('welcome.subtitle')}
-          </p>
+          <h2 className="text-2xl font-bold tracking-tight">
+            {t("welcome.title")}
+          </h2>
           <p className="text-sm text-muted-foreground mt-2 max-w-md leading-relaxed mx-auto">
-            {t('welcome.describePrompt')}
+            {t("welcome.describePrompt")}
           </p>
         </div>
       </div>
@@ -236,11 +252,18 @@ export function WelcomeScreen({ onExample }: Props) {
 
       {/* Example categories grid */}
       <div className="w-full max-w-2xl text-left space-y-4">
-        <p className="text-xs text-muted-foreground px-1">{t('welcome.tryExample')}</p>
+        <p className="text-xs text-muted-foreground px-1">
+          {t("welcome.tryExample")}
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {CATEGORIES.map((cat) => (
             <div key={cat.labelKey} className="space-y-2">
-              <div className={`flex items-center gap-1.5 text-xs font-medium px-1 ${cat.color.split(" ").filter(c => c.startsWith("text-")).join(" ")}`}>
+              <div
+                className={`flex items-center gap-1.5 text-xs font-medium px-1 ${cat.color
+                  .split(" ")
+                  .filter((c) => c.startsWith("text-"))
+                  .join(" ")}`}
+              >
                 {cat.icon}
                 <span>{t(cat.labelKey as any)}</span>
               </div>

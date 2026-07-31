@@ -438,7 +438,7 @@ onUnmounted(() => {
         <img class="mark" alt="Trading Worker" :src="logoPng" />
         <div>
           <h1>Trading Worker</h1>
-          <p class="sub">专属与你的 AI 理财专家</p>
+          <p class="sub">您的专属 AI 理财专家</p>
         </div>
       </div>
       <div class="head-actions">
