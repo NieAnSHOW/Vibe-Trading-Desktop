@@ -3,7 +3,7 @@ import { onMounted, onUnmounted, ref, computed } from "vue";
 import { storeToRefs } from "pinia";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { useAuthStore } from "../stores/auth";
-import { useRoute, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
 
 import { useEnvStore } from "../stores/env";
 import { useServiceStore } from "../stores/service";
