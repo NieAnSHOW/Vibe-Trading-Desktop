@@ -305,7 +305,27 @@ export function Layout() {
           collapsed ? "w-12" : "w-60",
         )}
       >
-        {/* ── top: user + primary nav ── */}
+        {/* ── top: logo + primary nav ── */}
+        <div
+          className={cn(
+            "flex justify-center border-b",
+            collapsed ? " px-1 py-3" : "px-4 py-3.5",
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <img
+              src="/favicon.png"
+              alt="Trading Worker"
+              className="h-6 w-6 shrink-0 rounded"
+            />
+            {!collapsed && (
+              <span className="truncate font-semibold tracking-tight">
+                Trading Worker
+              </span>
+            )}
+          </div>
+        </div>
+
         <nav className={cn("space-y-0.5", collapsed ? "p-1" : "p-2")}>
           {!collapsed && (
             <SectionLabel>{t("layout.section.workspace")}</SectionLabel>

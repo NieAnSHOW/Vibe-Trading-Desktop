@@ -56,7 +56,6 @@ import {
   Square,
   MessageSquareText,
   ChartCandlestick,
-  LockKeyhole,
   Trash2,
   Wrench,
 } from "@lucide/vue";
@@ -491,7 +490,6 @@ onUnmounted(() => {
     <section class="console-shell" aria-label="控制台内容">
       <UpdateBanner ref="updateBanner" />
       <AdSlot :ad="adBanner" variant="banner" />
-      <p v-if="loginNotice" class="login-notice" data-test="login-notice" role="status">{{ loginNotice }}</p>
 
       <div class="console-workspace"
         :class="{ 'console-workspace--guest': !ProdConfig.enableLogin || !authStore.authenticated }">
