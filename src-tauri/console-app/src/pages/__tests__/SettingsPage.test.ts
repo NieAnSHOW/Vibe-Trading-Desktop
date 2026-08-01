@@ -9,11 +9,12 @@ const mocks = vi.hoisted(() => ({
   consoleStatus: vi.fn(async () => ({
     env: "ready" as const,
     service_running: false,
-    port: null,
+    port: null as number | null,
   })),
   consoleOpenLogs: vi.fn(),
   consoleClearLogs: vi.fn(async () => 2),
   consoleClearVenv: vi.fn(async () => undefined),
+  consoleUninstallLegacyApp: vi.fn(async () => undefined),
   consoleStopService: vi.fn(async () => undefined),
 }));
 
@@ -24,6 +25,7 @@ vi.mock("../../ipc/commands", () => ({
   consoleOpenLogs: mocks.consoleOpenLogs,
   consoleClearLogs: mocks.consoleClearLogs,
   consoleClearVenv: mocks.consoleClearVenv,
+  consoleUninstallLegacyApp: mocks.consoleUninstallLegacyApp,
   consoleStopService: mocks.consoleStopService,
 }));
 
@@ -99,6 +101,52 @@ describe("SettingsPage", () => {
     expect(wrapper.get('[data-test="clear-environment-action"]').text()).toBe("清理");
     expect(wrapper.get('[data-test="open-logs-action"]').text()).toBe("打开");
     expect(wrapper.get('[data-test="clear-logs-action"]').text()).toBe("清理");
+    expect(wrapper.get('[data-test="uninstall-legacy-action"]').text()).toBe("Vibe Trading");
+  });
+
+  it("uninstalls the legacy app only after confirmation and stops the service first", async () => {
+    mocks.consoleStatus.mockResolvedValueOnce({
+      env: "ready" as const,
+      service_running: true,
+      port: 4173,
+    });
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper.get('[data-test="uninstall-legacy-action"]').trigger("click");
+    expect(mocks.consoleUninstallLegacyApp).not.toHaveBeenCalled();
+
+    const dialog = wrapper.findAll("dialog").find(
+      (candidate) => candidate.find("h3").text().includes("Vibe Trading"),
+    );
+    expect(dialog).toBeDefined();
+    (dialog!.element as HTMLDialogElement).returnValue = "ok";
+    await dialog!.trigger("close");
+    await flushPromises();
+
+    expect(mocks.consoleStopService).toHaveBeenCalledOnce();
+    expect(mocks.consoleUninstallLegacyApp).toHaveBeenCalledOnce();
+    expect(mocks.consoleStopService.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.consoleUninstallLegacyApp.mock.invocationCallOrder[0],
+    );
+    expect(wrapper.text()).toContain("用户数据");
+  });
+
+  it("renders a legacy uninstall error", async () => {
+    mocks.consoleUninstallLegacyApp.mockRejectedValueOnce(new Error("legacy app missing"));
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper.get('[data-test="uninstall-legacy-action"]').trigger("click");
+    const dialog = wrapper.findAll("dialog").find(
+      (candidate) => candidate.find("h3").text().includes("Vibe Trading"),
+    );
+    expect(dialog).toBeDefined();
+    (dialog!.element as HTMLDialogElement).returnValue = "ok";
+    await dialog!.trigger("close");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("legacy app missing");
   });
 
   it("opens the persisted log directory from the maintenance card", async () => {

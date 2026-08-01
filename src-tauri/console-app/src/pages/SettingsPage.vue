@@ -13,6 +13,7 @@ import {
   consoleOpenLogs,
   consoleClearLogs,
   consoleClearVenv,
+  consoleUninstallLegacyApp,
 } from "../ipc/commands";
 import tauriConf from "../../../tauri.conf.json";
 
@@ -60,8 +61,10 @@ const maintenanceNotice = ref("");
 const maintenanceError = ref("");
 const clearVenvBusy = useBusy();
 const clearLogsBusy = useBusy();
+const uninstallLegacyBusy = useBusy();
 const clearVenvDialogOpen = ref(false);
 const clearLogsDialogOpen = ref(false);
+const uninstallLegacyDialogOpen = ref(false);
 
 function setMaintenanceError(m: unknown) {
   maintenanceError.value = m ? String(m) : "";
@@ -113,6 +116,31 @@ async function onClearLogsDialogClose(v: "ok" | "cancel") {
     try {
       const n = await consoleClearLogs();
       maintenanceNotice.value = `已清理 ${n} 个日志文件`;
+    } catch (e) {
+      setMaintenanceError(e);
+    }
+  });
+}
+
+function onUninstallLegacy() {
+  maintenanceNotice.value = "";
+  maintenanceError.value = "";
+  uninstallLegacyDialogOpen.value = true;
+}
+
+async function onUninstallLegacyDialogClose(v: "ok" | "cancel") {
+  uninstallLegacyDialogOpen.value = false;
+  if (v !== "ok") return;
+  await uninstallLegacyBusy.run("卸载中", async () => {
+    maintenanceError.value = "";
+    try {
+      if (serviceRunning.value) {
+        await service.stop();
+        env.setPort(null);
+        serviceRunning.value = false;
+      }
+      await consoleUninstallLegacyApp();
+      maintenanceNotice.value = "旧版 Vibe Trading 卸载操作已完成或已启动，用户数据已保留。";
     } catch (e) {
       setMaintenanceError(e);
     }
@@ -184,6 +212,21 @@ onMounted(async () => {
         <AppButton variant="danger" :busy="clearLogsBusy.busy.value" busy-label="清理中"
           data-test="clear-logs-action" @click="onClearLogs">清理</AppButton>
       </div>
+      <div class="settings-row">
+        <div class="settings-row__text">
+          <p class="settings-row__name">Vibe Trading</p>
+          <p class="settings-row__desc">卸载老版本应用程序，不会删除 ~/.vibe-trading 中的用户数据。</p>
+        </div>
+        <AppButton
+          variant="danger"
+          :busy="uninstallLegacyBusy.busy.value"
+          busy-label="卸载中"
+          data-test="uninstall-legacy-action"
+          @click="onUninstallLegacy"
+        >
+          Vibe Trading
+        </AppButton>
+      </div>
       <p v-if="maintenanceError" class="settings-notice settings-notice--bad">{{ maintenanceError }}</p>
       <p v-else-if="maintenanceNotice" class="settings-notice">{{ maintenanceNotice }}</p>
     </section>
@@ -207,6 +250,11 @@ onMounted(async () => {
     <ConfirmDialog :open="clearLogsDialogOpen" title="确认清理日志文件？" @close="onClearLogsDialogClose">
       将删除 <b>~/.vibe-trading/logs</b> 下的所有日志文件（sidecar-*.log），<b>不影响配置、会话等数据</b>。服务运行中当天日志可能被占用而跳过，确认操作吗？
       <template #confirm-text>确认清理</template>
+    </ConfirmDialog>
+
+    <ConfirmDialog :open="uninstallLegacyDialogOpen" title="确认卸载旧版 Vibe Trading？" @close="onUninstallLegacyDialogClose">
+      仅移除旧版 <b>Vibe Trading</b> 应用程序，不会删除 <b>~/.vibe-trading</b> 中的配置、会话等用户数据，确认操作吗？
+      <template #confirm-text>确认卸载</template>
     </ConfirmDialog>
   </main>
 </template>

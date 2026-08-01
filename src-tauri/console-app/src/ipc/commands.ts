@@ -39,6 +39,9 @@ export const consoleClearLogs = (): Promise<number> =>
 export const consoleClearVenv = (): Promise<void> =>
   invoke<void>("console_clear_venv");
 
+export const consoleUninstallLegacyApp = (): Promise<void> =>
+  invoke<void>("console_uninstall_legacy_app");
+
 export const consoleGetSettings = (): Promise<Settings> =>
   invoke<Settings>("console_get_settings");
 

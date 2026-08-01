@@ -13,6 +13,7 @@ import {
   consoleOpenWebui,
   consoleChannelsStatus,
   consoleInstallChannelDep,
+  consoleUninstallLegacyApp,
 } from "../commands";
 
 describe("ipc/commands", () => {
@@ -53,5 +54,11 @@ describe("ipc/commands", () => {
     invokeMock.mockResolvedValue(8899);
     const port = await consoleStartService();
     expect(port).toBe(8899);
+  });
+
+  it("consoleUninstallLegacyApp invokes the fixed Tauri command", async () => {
+    invokeMock.mockResolvedValue(undefined);
+    await consoleUninstallLegacyApp();
+    expect(invokeMock).toHaveBeenCalledWith("console_uninstall_legacy_app");
   });
 });
