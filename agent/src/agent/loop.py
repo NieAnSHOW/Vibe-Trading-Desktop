@@ -54,6 +54,7 @@ TOOL_RESULT_LIMIT = 10_000
 HEARTBEAT_INTERVAL_S = float(os.getenv("VT_HEARTBEAT_INTERVAL_S", "3.0"))
 REASONING_DELTA_MIN_INTERVAL_S = float(os.getenv("VT_REASONING_DELTA_MIN_INTERVAL_S", "1.0"))
 STREAM_RETRY_DELAY_S = float(os.getenv("VT_STREAM_RETRY_DELAY_S", "1.0"))
+EMPTY_RESPONSE_RETRY_COUNT = int(os.getenv("VT_EMPTY_RESPONSE_RETRY_COUNT", "1"))
 TOOL_TIMEOUT_SECONDS = float(os.getenv("VIBE_TRADING_TOOL_TIMEOUT_SECONDS", "1800"))
 GOAL_MAX_CONTINUATIONS = int(os.getenv("VIBE_TRADING_GOAL_MAX_CONTINUATIONS", "3"))
 LLM_USAGE_ARTIFACT = "llm_usage.json"
@@ -628,6 +629,7 @@ class AgentLoop:
         consecutive_content_filter_count = 0
         content_filter_circuit_breaker = False
         empty_model_response_iter: int | None = None
+        empty_response_retries = 0
         llm_usage_summary = _new_llm_usage_summary(self.llm)
         goal_continuations = 0
         goal_last_progress: tuple[int, int] | None = None
@@ -857,15 +859,49 @@ class AgentLoop:
                 if not response.has_tool_calls:
                     final_content = response.content or ""
                     if not final_content:
-                        empty_model_response_iter = iteration
+                        provider = os.getenv("LANGCHAIN_PROVIDER", "openai").strip().lower() or "openai"
+                        diagnostics = getattr(response, "diagnostics", None) or {}
                         trace.write(
                             {
                                 "type": "empty_model_response",
                                 "iter": current_iter,
-                                "provider": os.getenv("LANGCHAIN_PROVIDER", "openai"),
-                                "model": getattr(self.llm, "model_name", None) or os.getenv("LANGCHAIN_MODEL_NAME", ""),
+                                "provider": provider,
+                                "model": getattr(self.llm, "model_name", None)
+                                or os.getenv("LANGCHAIN_MODEL_NAME", ""),
+                                "retry": empty_response_retries < EMPTY_RESPONSE_RETRY_COUNT,
+                                "diagnostics": diagnostics,
                             }
                         )
+                        # Empty responses have no executable tool calls, so a
+                        # single retry is safe and covers relay hiccups or
+                        # provider responses lost during stream aggregation.
+                        if (
+                            provider == "vip_server"
+                            and diagnostics
+                            and empty_response_retries < EMPTY_RESPONSE_RETRY_COUNT
+                        ):
+                            empty_response_retries += 1
+                            trace.write(
+                                {
+                                    "type": "empty_model_response_retry",
+                                    "iter": current_iter,
+                                    "attempt": empty_response_retries,
+                                    "diagnostics": diagnostics,
+                                }
+                            )
+                            self._emit(
+                                "stream_reset",
+                                {
+                                    "iter": current_iter,
+                                    "reason": "empty_model_response_retry",
+                                    "provider": provider,
+                                    "model": getattr(self.llm, "model_name", None)
+                                    or os.getenv("LANGCHAIN_MODEL_NAME", ""),
+                                },
+                            )
+                            _time.sleep(STREAM_RETRY_DELAY_S)
+                            continue
+                        empty_model_response_iter = iteration
                         break
                     should_continue_goal = False
                     continuation_snapshot = None

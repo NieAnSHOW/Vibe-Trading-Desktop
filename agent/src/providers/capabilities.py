@@ -75,9 +75,20 @@ _ZHIPU_CAPABILITIES = ProviderCapabilities("zhipu", "ZHIPU_API_KEY", "ZHIPU_BASE
 _OPENAI_CODEX_CAPABILITIES = ProviderCapabilities("openai-codex", None, "OPENAI_CODEX_BASE_URL")
 
 
+_VIP_CAPABILITIES = ProviderCapabilities(
+    "vip_server",
+    "VIP_API_KEY",
+    "VIP_BASE_URL",
+    # The membership relay may emit reasoning-only deltas before its final
+    # answer. Preserve them for diagnostics/UI instead of silently dropping
+    # the only generated signal.
+    capture_reasoning=True,
+)
+
+
 _PROVIDERS: dict[str, ProviderCapabilities] = {
-    "vip_server": ProviderCapabilities("vip_server", "VIP_API_KEY", "VIP_BASE_URL"),
-    "vip-server": ProviderCapabilities("vip_server", "VIP_API_KEY", "VIP_BASE_URL"),
+    "vip_server": _VIP_CAPABILITIES,
+    "vip-server": _VIP_CAPABILITIES,
     "openai": ProviderCapabilities("openai", "OPENAI_API_KEY", "OPENAI_BASE_URL"),
     "openrouter": ProviderCapabilities(
         "openrouter",

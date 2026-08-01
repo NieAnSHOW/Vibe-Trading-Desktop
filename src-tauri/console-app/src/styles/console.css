@@ -652,21 +652,16 @@ dialog.confirm .confirm-actions {
 }
 
 /* ── Ad slots ── */
+/* 公告条:逐条轮播,单条时静态;带链接则整条可点击,常驻品牌色 + 末尾跳转箭头 */
 .ad-banner {
   margin-top: 16px;
-  padding: 10px 14px;
+  padding: 0px 2px;
   background: hsl(var(--surface-1));
-  border: 1px solid hsl(var(--line));
-  border-radius: var(--radius);
   font-size: 13px;
   text-align: center;
-}
-.ad-banner p {
-  margin: 0 0 4px;
-  color: hsl(var(--ink-dim));
-}
-.ad-banner img {
-  border-radius: 8px;
+  transition:
+    background 0.18s var(--ease),
+    border-color 0.18s var(--ease);
 }
 .ad-bottom {
   margin-top: 12px;
@@ -677,116 +672,69 @@ dialog.confirm .confirm-actions {
   font-size: 12px;
   text-align: center;
   color: hsl(var(--ink-dim));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  flex-flow: column;
+  transition:
+    background 0.18s var(--ease),
+    border-color 0.18s var(--ease);
 }
-.ad-bottom img {
-  max-height: 200px;
-  width: auto;
-  flex: none;
-  object-fit: contain;
-  border-radius: 6px;
-}
-.ad-link {
-  color: hsl(var(--brand));
-  text-decoration: none;
-  font-weight: 550;
-}
-.ad-link:hover {
-  color: hsl(var(--brand-strong));
-  text-decoration: underline;
-}
-
-/* 广告标题(banner):退为次要信息,不抢功能区 */
-.ad-title {
-  margin: 0 0 8px;
-  font-size: 12.5px;
-  font-weight: 550;
-  color: hsl(var(--ink-dim));
-}
-
-/* ── 轮播窗:固定高度 + contain,完整展示成品 banner(不裁切文案/Logo) ── */
-.ad-carousel {
+.ad-viewport {
   position: relative;
-  width: 100%;
-  max-width: 480px;
-  margin-inline: auto;
-  height: 150px;
-  border-radius: 8px;
+  height: 1.6em;
   overflow: hidden;
-  background: hsl(var(--bg));
 }
-.ad-slide {
+.ad-row {
   position: absolute;
   inset: 0;
-  opacity: 0;
-  transition: opacity 0.4s ease;
-  will-change: opacity;
-}
-.ad-slide.active {
-  opacity: 1;
-}
-.ad-slide.clickable {
-  cursor: pointer;
-}
-.ad-slide img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-}
-.ad-nav {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 22px;
-  height: 28px;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: hsl(0 0% 0% / 0.5);
-  color: #fff;
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: center;
-  transition: background 0.16s var(--ease);
-}
-.ad-nav:hover {
-  background: hsl(0 0% 0% / 0.7);
-}
-.ad-nav.prev {
-  left: 6px;
-}
-.ad-nav.next {
-  right: 6px;
-}
-.ad-dots {
-  position: absolute;
-  bottom: 6px;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
+  justify-content: start;
   gap: 6px;
+  margin: 0;
+  height: 1.6em;
+  line-height: 1.6;
+  overflow: hidden;
+  white-space: nowrap;
 }
-.ad-dot {
-  width: 6px;
-  height: 6px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: hsl(0 0% 100% / 0.4);
+.ad-mark {
+  flex: none;
+}
+.ad-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 带链接:文字常驻品牌色,末尾跳转箭头;hover 整条变"可按下"卡片 */
+.ad--link {
   cursor: pointer;
-  transition: background 0.16s var(--ease);
 }
-.ad-dot.active {
-  background: hsl(0 0% 100% / 0.9);
+.ad--link:focus-visible {
+  outline: 2px solid hsl(var(--brand));
+  outline-offset: 2px;
+}
+.ad--link:hover {
+  border-color: hsl(var(--brand) / 0.55);
+}
+.ad-row--link {
+  color: hsl(var(--brand));
+  font-weight: 550;
+}
+.ad-link-icon {
+  flex: none;
+  transition: transform 0.18s var(--ease);
+}
+.ad--link:hover .ad-link-icon {
+  transform: translate(1px, -1px);
+}
+/* 上下轮播:新条目从下滑入,旧条目向上滑出 */
+.ad-slide-enter-active,
+.ad-slide-leave-active {
+  transition: transform 0.45s var(--ease);
+}
+.ad-slide-enter-from {
+  transform: translateY(100%);
+}
+.ad-slide-leave-to {
+  transform: translateY(-100%);
 }
 
 /* ── Wide desktop console ───────────────────────────────────── */
@@ -856,7 +804,6 @@ body::before {
 .brand-copy,
 .header-actions,
 .operation-bar__primary,
-.operation-bar__tools,
 .member-usage-head,
 .usage-detail {
   display: flex;
@@ -1011,7 +958,7 @@ body::before {
 
 .service-hero {
   display: flex;
-  padding: 40px 46px 28px;
+  padding: 0 30px;
   flex-direction: column;
   justify-content: center;
 }
@@ -1053,15 +1000,9 @@ body::before {
   gap: 10px;
 }
 
-.operation-bar__primary,
-.operation-bar__tools {
+.operation-bar__primary {
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.operation-bar__tools {
-  margin-inline-start: auto;
-  justify-content: flex-end;
 }
 
 .operation-bar__primary .btn-primary {
@@ -1077,12 +1018,6 @@ body::before {
 .member-usage-head .btn-ghost {
   min-height: 34px;
   border-radius: 7px;
-}
-
-.operation-bar__notice {
-  width: 100%;
-  color: hsl(var(--ok-fg));
-  font-size: 12px;
 }
 
 .service-local-note {
@@ -1156,7 +1091,7 @@ body::before {
 .runtime-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin: 0 46px 22px;
+  margin: 0 30px 22px;
   border: 1px solid hsl(var(--line));
   border-radius: 8px;
 }
@@ -1424,16 +1359,6 @@ body::before {
     padding-inline: 20px;
   }
 
-  .operation-bar__tools {
-    width: 100%;
-    margin-inline-start: 0;
-    justify-content: flex-start;
-  }
-
-  .operation-bar__tools .btn-ghost {
-    flex: 1 1 auto;
-    justify-content: center;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

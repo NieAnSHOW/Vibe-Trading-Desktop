@@ -21,8 +21,6 @@ const mocks = vi.hoisted(() => ({
     total_used: 15488680,
     unlimited_quota: false,
   })),
-  consoleOpenLogs: vi.fn(),
-  consoleClearLogs: vi.fn(async () => 2),
   unlisten: vi.fn(),
 }));
 
@@ -31,10 +29,7 @@ vi.mock("../../ipc/commands", () => ({
   consoleStatus: mocks.consoleStatus,
   consoleBootstrap: vi.fn(),
   consoleOpenWebui: vi.fn(),
-  consoleOpenLogs: mocks.consoleOpenLogs,
-  consoleClearLogs: mocks.consoleClearLogs,
   consoleQuit: vi.fn(),
-  consoleClearVenv: vi.fn(),
   consoleLogout: vi.fn(),
   consoleFetchAds: vi.fn(async () => []),
   consoleStartService: vi.fn(),
@@ -166,42 +161,10 @@ describe("ConsolePage", () => {
     const servicePanel = wrapper.get(".service-panel");
     expect(servicePanel.findAll("button").every((button) => operationBars[0].element.contains(button.element))).toBe(true);
     expect(operationBars[0].find('[data-test="primary-service-action"]').exists()).toBe(true);
-    expect(operationBars[0].find('[data-test="clear-environment-action"]').exists()).toBe(true);
-    expect(operationBars[0].find('[data-test="open-logs-action"]').exists()).toBe(true);
-    expect(operationBars[0].find('[data-test="clear-logs-action"]').exists()).toBe(true);
     expect(wrapper.find('[role="log"]').exists()).toBe(false);
     expect(wrapper.find("#log").exists()).toBe(false);
     expect(wrapper.find(".operations-footer").exists()).toBe(false);
     expect(wrapper.text()).not.toContain("清空");
-  });
-
-  it("opens the persisted log directory from the operation bar", async () => {
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
-
-    await flushPromises();
-    await wrapper.get('[data-test="open-logs-action"]').trigger("click");
-    await flushPromises();
-
-    expect(mocks.consoleOpenLogs).toHaveBeenCalledOnce();
-  });
-
-  it("clears persisted log files only after confirmation", async () => {
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
-
-    await flushPromises();
-    await wrapper.get('[data-test="clear-logs-action"]').trigger("click");
-    expect(mocks.consoleClearLogs).not.toHaveBeenCalled();
-
-    const clearLogsDialog = wrapper.findAll("dialog").find(
-      (dialog) => dialog.find("h3").text() === "确认清理日志文件？",
-    );
-    expect(clearLogsDialog).toBeDefined();
-    (clearLogsDialog!.element as HTMLDialogElement).returnValue = "ok";
-    await clearLogsDialog!.trigger("close");
-    await flushPromises();
-
-    expect(mocks.consoleClearLogs).toHaveBeenCalledOnce();
-    expect(wrapper.get('.operation-bar__notice[role="status"]').text()).toBe("已清理 2 个日志文件");
   });
 
   it("shows a remembered token-only session as logged in", async () => {

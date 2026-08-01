@@ -1,14 +1,25 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { storeToRefs } from "pinia";
 import { useRouter } from "vue-router";
 import AppButton from "../components/AppButton.vue";
+import ConfirmDialog from "../components/ConfirmDialog.vue";
+import { useEnvStore } from "../stores/env";
+import { useServiceStore } from "../stores/service";
+import { useBusy } from "../composables/useBusy";
 import {
   consoleGetSettings,
   consoleSetAutostart,
+  consoleOpenLogs,
+  consoleClearLogs,
+  consoleClearVenv,
 } from "../ipc/commands";
 import tauriConf from "../../../tauri.conf.json";
 
 const router = useRouter();
+const env = useEnvStore();
+const service = useServiceStore();
+const { serviceRunning } = storeToRefs(env);
 
 const autostart = ref(false);
 const saving = ref(false);
@@ -44,7 +55,75 @@ async function onAutostartChange() {
   }
 }
 
-onMounted(load);
+// ── 维护工具(自控制台迁入) ───────────────────────────────────────
+const maintenanceNotice = ref("");
+const maintenanceError = ref("");
+const clearVenvBusy = useBusy();
+const clearLogsBusy = useBusy();
+const clearVenvDialogOpen = ref(false);
+const clearLogsDialogOpen = ref(false);
+
+function setMaintenanceError(m: unknown) {
+  maintenanceError.value = m ? String(m) : "";
+  if (m) maintenanceNotice.value = "";
+}
+
+function onClearVenv() {
+  maintenanceNotice.value = "";
+  clearVenvDialogOpen.value = true;
+}
+async function onClearVenvDialogClose(v: "ok" | "cancel") {
+  clearVenvDialogOpen.value = false;
+  if (v !== "ok") return;
+  await clearVenvBusy.run("清理中", async () => {
+    maintenanceError.value = "";
+    try {
+      // venv 被占用时(Win)删除会失败,先停服务释放进程
+      if (serviceRunning.value) {
+        await service.stop();
+        env.setPort(null);
+        serviceRunning.value = false;
+      }
+      await consoleClearVenv();
+      maintenanceNotice.value = "运行环境已清理，请重新安装依赖";
+      await env.refresh();
+    } catch (e) {
+      setMaintenanceError(e);
+    }
+  });
+}
+
+async function onOpenLogs() {
+  try {
+    await consoleOpenLogs();
+  } catch (e) {
+    setMaintenanceError(e);
+  }
+}
+
+function onClearLogs() {
+  maintenanceNotice.value = "";
+  clearLogsDialogOpen.value = true;
+}
+async function onClearLogsDialogClose(v: "ok" | "cancel") {
+  clearLogsDialogOpen.value = false;
+  if (v !== "ok") return;
+  await clearLogsBusy.run("清理中", async () => {
+    maintenanceError.value = "";
+    try {
+      const n = await consoleClearLogs();
+      maintenanceNotice.value = `已清理 ${n} 个日志文件`;
+    } catch (e) {
+      setMaintenanceError(e);
+    }
+  });
+}
+
+onMounted(async () => {
+  await load();
+  // 取真实服务状态:清理运行环境时若服务在跑需先停,venv 占用删除会失败
+  await env.refresh();
+});
 </script>
 
 <template>
@@ -78,6 +157,37 @@ onMounted(load);
       <p v-else-if="notice" class="settings-notice">{{ notice }}</p>
     </section>
 
+    <section class="settings-card" aria-label="维护">
+      <h1 class="settings-title">维护</h1>
+      <div class="settings-row">
+        <div class="settings-row__text">
+          <p class="settings-row__name">清理运行环境</p>
+          <p class="settings-row__desc">
+            删除 ~/.vibe-trading/venv 虚拟环境（含已安装依赖），不影响配置与会话数据。清理后需重新安装依赖。
+          </p>
+        </div>
+        <AppButton variant="danger" :busy="clearVenvBusy.busy.value" busy-label="清理中"
+          data-test="clear-environment-action" @click="onClearVenv">清理</AppButton>
+      </div>
+      <div class="settings-row">
+        <div class="settings-row__text">
+          <p class="settings-row__name">打开日志目录</p>
+          <p class="settings-row__desc">在系统文件管理器中打开 ~/.vibe-trading/logs。</p>
+        </div>
+        <AppButton variant="ghost" data-test="open-logs-action" @click="onOpenLogs">打开</AppButton>
+      </div>
+      <div class="settings-row">
+        <div class="settings-row__text">
+          <p class="settings-row__name">清理日志文件</p>
+          <p class="settings-row__desc">删除 ~/.vibe-trading/logs 下的日志文件，不影响配置与会话数据。</p>
+        </div>
+        <AppButton variant="danger" :busy="clearLogsBusy.busy.value" busy-label="清理中"
+          data-test="clear-logs-action" @click="onClearLogs">清理</AppButton>
+      </div>
+      <p v-if="maintenanceError" class="settings-notice settings-notice--bad">{{ maintenanceError }}</p>
+      <p v-else-if="maintenanceNotice" class="settings-notice">{{ maintenanceNotice }}</p>
+    </section>
+
     <section class="settings-card" aria-label="关于">
       <h1 class="settings-title">关于</h1>
       <div class="settings-row">
@@ -88,6 +198,16 @@ onMounted(load);
         <span class="settings-version">v{{ version }}</span>
       </div>
     </section>
+
+    <ConfirmDialog :open="clearVenvDialogOpen" title="确认强制清理环境？" @close="onClearVenvDialogClose">
+      将删除 <b>~/.vibe-trading/venv</b> 虚拟环境(含已安装依赖)，<b>不会删除您的配置、会话等数据</b>。清理后需重新完整安装依赖，确认操作吗？
+      <template #confirm-text>确认清理</template>
+    </ConfirmDialog>
+
+    <ConfirmDialog :open="clearLogsDialogOpen" title="确认清理日志文件？" @close="onClearLogsDialogClose">
+      将删除 <b>~/.vibe-trading/logs</b> 下的所有日志文件（sidecar-*.log），<b>不影响配置、会话等数据</b>。服务运行中当天日志可能被占用而跳过，确认操作吗？
+      <template #confirm-text>确认清理</template>
+    </ConfirmDialog>
   </main>
 </template>
 
@@ -120,6 +240,12 @@ onMounted(load);
   justify-content: space-between;
   gap: 16px;
   padding: 10px 0 2px;
+}
+
+.settings-card .settings-row + .settings-row {
+  border-top: 1px solid hsl(var(--line) / 0.6);
+  margin-top: 6px;
+  padding-top: 12px;
 }
 
 .settings-row__name {
@@ -156,6 +282,26 @@ onMounted(load);
   color: hsl(var(--bad-fg));
   background: hsl(var(--bad) / 0.1);
   border-color: hsl(var(--bad) / 0.3);
+}
+
+/* 行内操作按钮不参与压缩,避免长描述把按钮挤变形 */
+.settings-row .btn-danger,
+.settings-row .btn-ghost {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* 破坏性操作弱化为描边款,与 settings-notice--bad 同系;避免实心红在列表里过于刺眼。
+   仅作用于 settings-row 内,不影响 ConfirmDialog 里的实心确认按钮。 */
+.settings-row .btn-danger {
+  background: hsl(var(--bad) / 0.1);
+  color: hsl(var(--bad-fg));
+  border-color: hsl(var(--bad) / 0.4);
+}
+
+.settings-row .btn-danger:hover:not(:disabled) {
+  background: hsl(var(--bad) / 0.18);
+  border-color: hsl(var(--bad) / 0.6);
 }
 
 /* Switch — role="switch" 的原生 button,视觉与键盘可达。 */

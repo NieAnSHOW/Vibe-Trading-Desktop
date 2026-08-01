@@ -82,6 +82,10 @@ def test_reasoning_only_chunks_emit_progress_without_final_answer_text() -> None
     assert reasoning_chunks == ["thinking ", "more"]
     assert response.content == "final"
     assert response.reasoning_content == "thinking more"
+    assert response.diagnostics["chunk_count"] == 3
+    assert response.diagnostics["content_chars"] == len("final")
+    assert response.diagnostics["reasoning_chars"] == len("thinking more")
+    assert response.diagnostics["finish_reason"] == "stop"
 
 
 def test_parse_dsml_tool_call_content_as_structured_tool_call() -> None:

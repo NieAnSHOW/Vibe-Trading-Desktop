@@ -13,10 +13,7 @@ import { useChannelsStore } from "../stores/channels";
 import {
   consoleBootstrap,
   consoleOpenWebui,
-  consoleOpenLogs,
-  consoleClearLogs,
   consoleQuit,
-  consoleClearVenv,
   consoleFetchAds,
   consoleMemberUsage,
 } from "../ipc/commands";
@@ -45,7 +42,6 @@ import {
   CircleUserRound,
   Database,
   ExternalLink,
-  FolderOpen,
   LogIn,
   MessageCircleMore,
   Play,
@@ -56,7 +52,6 @@ import {
   Square,
   MessageSquareText,
   ChartCandlestick,
-  Trash2,
   Wrench,
 } from "@lucide/vue";
 
@@ -66,14 +61,11 @@ const bootstrap = useBootstrapStore();
 const channels = useChannelsStore();
 const authStore = useAuthStore();
 const router = useRouter();
-const route = useRoute();
 
 const { env: envState, port, serviceRunning } = storeToRefs(env);
 
 const updateBanner = ref<InstanceType<typeof UpdateBanner> | null>(null);
 const errorMsg = ref("");
-const operationNotice = ref("");
-const loginNotice = ref(typeof route.query.loginMessage === "string" ? route.query.loginMessage : "");
 const memberUsage = ref<MemberUsageView | null>(null);
 const usageRefreshing = ref(false);
 const usageNumberFormatter = new Intl.NumberFormat("en-US", {
@@ -109,11 +101,6 @@ async function refreshMemberUsage() {
 
 function setErr(m: unknown) {
   errorMsg.value = m ? String(m) : "";
-  if (m) operationNotice.value = "";
-}
-function setOperationNotice(message: string) {
-  errorMsg.value = "";
-  operationNotice.value = message;
 }
 
 // ── ENV/SVC 渲染(搬自 renderEnv/renderSvc) ──────────────────────
@@ -183,7 +170,6 @@ const installStopDialogOpen = ref(false);
 
 async function onInstall() {
   if (installing.value) return; // 防重入:安装期间按钮已被 AppButton 的 busy 禁用
-  operationNotice.value = "";
   // 服务运行中:弹确认框,由 onInstallStopDialogClose 续接后续逻辑
   if (serviceRunning.value) {
     installStopDialogOpen.value = true;
@@ -208,7 +194,6 @@ async function onInstallStopDialogClose(v: "ok" | "cancel") {
 
 async function doInstall() {
   setErr("");
-  operationNotice.value = "";
   bootstrap.start();
   installing.value = true;
   try {
@@ -222,7 +207,6 @@ async function doInstall() {
 
 // ── 启动服务 ────────────────────────────────────────────────────
 async function onStart() {
-  operationNotice.value = "";
   await startBusy.run("启动中", async () => {
     setErr("");
     try {
@@ -245,7 +229,6 @@ async function onStart() {
 // ── 停止服务(二次确认) ──────────────────────────────────────────
 const stopDialogOpen = ref(false);
 function onStop() {
-  operationNotice.value = "";
   stopDialogOpen.value = true;
 }
 async function onStopDialogClose(v: "ok" | "cancel") {
@@ -265,33 +248,6 @@ async function onStopDialogClose(v: "ok" | "cancel") {
 
 // ── 退出登录(二次确认 → 清登录信息 → 重启服务) ──────────────────
 
-// ── 强制清理 venv(二次确认 → 停服 → 删目录 → 刷新) ────────────────
-const clearVenvBusy = useBusy();
-const clearVenvDialogOpen = ref(false);
-function onClearVenv() {
-  operationNotice.value = "";
-  clearVenvDialogOpen.value = true;
-}
-async function onClearVenvDialogClose(v: "ok" | "cancel") {
-  clearVenvDialogOpen.value = false;
-  if (v !== "ok") return;
-  await clearVenvBusy.run("清理中", async () => {
-    setErr("");
-    try {
-      // venv 被占用时(Win)删除会失败,先停服务释放进程。
-      if (serviceRunning.value) {
-        await service.stop();
-        env.setPort(null);
-        serviceRunning.value = false;
-      }
-      await consoleClearVenv();
-      setOperationNotice("运行环境已清理，请重新安装依赖");
-      await refresh();
-    } catch (e) {
-      setErr(e);
-    }
-  });
-}
 async function onOpenWebui() {
   if (port.value == null) return;
   try {
@@ -300,35 +256,6 @@ async function onOpenWebui() {
     setErr(e);
   }
 }
-async function onOpenLogs() {
-  try {
-    await consoleOpenLogs();
-  } catch (e) {
-    setErr(e);
-  }
-}
-
-// ── 清理日志文件(二次确认 → 删 logs/*.log → 反馈数量) ─────────────
-const clearLogsBusy = useBusy();
-const clearLogsDialogOpen = ref(false);
-function onClearLogs() {
-  operationNotice.value = "";
-  clearLogsDialogOpen.value = true;
-}
-async function onClearLogsDialogClose(v: "ok" | "cancel") {
-  clearLogsDialogOpen.value = false;
-  if (v !== "ok") return;
-  await clearLogsBusy.run("清理中", async () => {
-    setErr("");
-    try {
-      const n = await consoleClearLogs();
-      setOperationNotice(`已清理 ${n} 个日志文件`);
-    } catch (e) {
-      setErr(e);
-    }
-  });
-}
-
 // ── 退出二次确认(由托盘「退出」在服务运行中 / 安装中时触发) ──────────
 // 窗口关闭按钮 X 一律静默收纳后台,不经此确认;只有托盘「退出」有活跃工作时才弹。
 const quitDialogOpen = ref(false);
@@ -352,18 +279,14 @@ async function onQuitDialogClose(v: "ok" | "cancel") {
 const hintHidden = ref(false);
 
 // ── 广告 ─────────────────────────────────────────────────────────
-const adBanner = ref<AdItem | null>(null);
-const adBottom = ref<AdItem | null>(null);
-
-function pickAd(items: AdItem[]): AdItem | null {
-  return items.length > 0 ? items[0] : null;
-}
+const adBanner = ref<AdItem[]>([]);
+const adBottom = ref<AdItem[]>([]);
 
 async function fetchAds() {
   try {
     const [banner, bottom] = await Promise.all([
-      consoleFetchAds("banner").then((r) => pickAd(r), () => null),
-      consoleFetchAds("bottom").then((r) => pickAd(r), () => null),
+      consoleFetchAds("banner").then((r) => r, () => [] as AdItem[]),
+      consoleFetchAds("bottom").then((r) => r, () => [] as AdItem[]),
     ]);
     adBanner.value = banner;
     adBottom.value = bottom;
@@ -396,9 +319,6 @@ function clearMemberUsage() {
 }
 
 onMounted(async () => {
-  if (loginNotice.value) {
-    void router.replace({ query: { ...route.query, loginMessage: undefined } });
-  }
   // 恢复登录态（静默，不阻塞）
   await authStore.refresh();
   if (ProdConfig.enableLogin && authStore.authenticated) {
@@ -489,7 +409,7 @@ onUnmounted(() => {
 
     <section class="console-shell" aria-label="控制台内容">
       <UpdateBanner ref="updateBanner" />
-      <AdSlot :ad="adBanner" variant="banner" />
+      <AdSlot :ads="adBanner" variant="banner" />
 
       <div class="console-workspace"
         :class="{ 'console-workspace--guest': !ProdConfig.enableLogin || !authStore.authenticated }">
@@ -521,19 +441,6 @@ onUnmounted(() => {
                   <Square :size="15" aria-hidden="true" />停止服务
                 </AppButton>
               </div>
-              <div class="operation-bar__tools" aria-label="维护工具">
-                <AppButton variant="ghost" :busy="clearVenvBusy.busy.value" busy-label="清理中"
-                  data-test="clear-environment-action" @click="onClearVenv">
-                  <Wrench :size="15" aria-hidden="true" />清理运行环境
-                </AppButton>
-                <AppButton variant="ghost" data-test="open-logs-action" @click="onOpenLogs">
-                  <FolderOpen :size="15" aria-hidden="true" />打开日志目录
-                </AppButton>
-                <AppButton variant="ghost" :busy="clearLogsBusy.busy.value" busy-label="清理中"
-                  data-test="clear-logs-action" @click="onClearLogs">
-                  <Trash2 :size="15" aria-hidden="true" />清理日志文件
-                </AppButton>
-              </div>
             </div>
             <div class="service-intro">
               <p class="service-intro-title">关于本项目</p>
@@ -548,7 +455,7 @@ onUnmounted(() => {
                   <ChartCandlestick :size="14" aria-hidden="true" />策略回测与分析
                 </li>
                 <li>
-                  <ShieldCheck :size="14" aria-hidden="true" />本地运行 · 数据私密
+                  <ShieldCheck :size="14" aria-hidden="true" />数据私密
                 </li>
               </ul>
             </div>
@@ -618,22 +525,12 @@ onUnmounted(() => {
         <template #confirm-text>确认停止</template>
       </ConfirmDialog>
 
-      <ConfirmDialog :open="clearVenvDialogOpen" title="确认强制清理环境？" @close="onClearVenvDialogClose">
-        将删除 <b>~/.vibe-trading/venv</b> 虚拟环境(含已安装依赖)，<b>不会删除您的配置、会话等数据</b>。清理后需重新完整安装依赖，确认操作吗？
-        <template #confirm-text>确认清理</template>
-      </ConfirmDialog>
-
-      <ConfirmDialog :open="clearLogsDialogOpen" title="确认清理日志文件？" @close="onClearLogsDialogClose">
-        将删除 <b>~/.vibe-trading/logs</b> 下的所有日志文件（sidecar-*.log），<b>不影响配置、会话等数据</b>。服务运行中当天日志可能被占用而跳过，确认操作吗？
-        <template #confirm-text>确认清理</template>
-      </ConfirmDialog>
-
       <ConfirmDialog :open="quitDialogOpen" title="确认退出客户端？" @close="onQuitDialogClose">
         <span v-html="quitText"></span>
         <template #confirm-text>确认退出</template>
       </ConfirmDialog>
 
-      <AdSlot :ad="adBottom" variant="bottom" />
+      <AdSlot :ads="adBottom" variant="bottom" />
       <div id="err">{{ errorMsg }}</div>
     </section>
   </main>

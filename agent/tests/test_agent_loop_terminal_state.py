@@ -53,6 +53,35 @@ class _StubLLMNoFinal:
         return _StubLLMResponse()
 
 
+class _StubLLMEmptyThenFinal:
+    """VIP-like provider that emits one empty response before recovering."""
+
+    model_name = "auto"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def stream_chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[Any] | None = None,
+        on_text_chunk: Callable[[str], None] | None = None,
+        on_reasoning_chunk: Callable[[str], None] | None = None,
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> _StubLLMResponse:
+        self.calls += 1
+        response = _StubLLMResponse()
+        if self.calls == 1:
+            response.usage_metadata = {"input_tokens": 10, "output_tokens": 8, "total_tokens": 18}
+            response.diagnostics = {"chunk_count": 1, "empty_stream": False}
+            return response
+        response.content = "Recovered answer."
+        return response
+
+    def chat(self, messages: list[dict[str, Any]], **_: Any) -> _StubLLMResponse:
+        return _StubLLMResponse()
+
+
 class _StubLLMWithUsage:
     model_name = "stub-model"
 
@@ -177,6 +206,21 @@ def test_empty_model_response_returns_specific_reason(
     assert "iteration 1" in result["reason"]
     assert result["iterations"] >= 1
     assert result["max_iterations"] == 3
+
+
+def test_vip_empty_model_response_is_retried_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A transient VIP empty response should recover without re-running tools."""
+    monkeypatch.setenv("LANGCHAIN_PROVIDER", "vip_server")
+    llm = _StubLLMEmptyThenFinal()
+    agent = _build_agent(llm, max_iter=3, tmp_run_dir=tmp_path / "run")
+
+    result = agent.run(user_message="anything")
+
+    assert result["status"] == "success"
+    assert result["content"] == "Recovered answer."
+    assert llm.calls == 2
 
 
 def test_cancelled_terminal_returns_reason(tmp_path: Path) -> None:

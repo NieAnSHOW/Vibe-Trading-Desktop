@@ -64,6 +64,8 @@ class LLMResponse:
         content_filter_triggered: ``True`` when the provider blocked the
             response via content moderation (e.g. DashScope/Qwen content
             moderation filter, ``finish_reason == "content_filter"``).
+        diagnostics: Redacted stream-shape counters for run traces; never
+            contains prompt or response text.
     """
 
     content: Optional[str] = None
@@ -72,6 +74,7 @@ class LLMResponse:
     finish_reason: str = "stop"
     usage_metadata: Optional[Dict[str, int]] = None
     content_filter_triggered: bool = False
+    diagnostics: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def has_tool_calls(self) -> bool:
@@ -289,11 +292,17 @@ class ChatLLM:
             llm = self._llm.bind_tools(tools) if tools else self._llm
             config = {"timeout": timeout} if timeout else {}
             accumulated = None
+            chunk_count = 0
+            content_chars = 0
+            reasoning_chars = 0
             pending_text = ""
             possible_dsml_text = True
             for chunk in llm.stream(messages, config=config):
+                chunk_count += 1
                 if should_cancel and should_cancel():
                     break
+                if chunk.content:
+                    content_chars += len(chunk.content)
                 if chunk.content and on_text_chunk:
                     if possible_dsml_text:
                         pending_text += chunk.content
@@ -306,12 +315,43 @@ class ChatLLM:
                     else:
                         on_text_chunk(chunk.content)
                 reasoning = getattr(chunk, "additional_kwargs", {}).get("reasoning_content")
+                if reasoning:
+                    reasoning_chars += len(reasoning)
                 if reasoning and not chunk.content and on_reasoning_chunk:
                     on_reasoning_chunk(reasoning)
                 accumulated = chunk if accumulated is None else accumulated + chunk
             if accumulated is None:
-                return LLMResponse(content="", tool_calls=[], finish_reason="stop")
+                return LLMResponse(
+                    content="",
+                    tool_calls=[],
+                    finish_reason="stop",
+                    diagnostics={
+                        "chunk_count": 0,
+                        "content_chars": 0,
+                        "reasoning_chars": 0,
+                        "empty_stream": True,
+                    },
+                )
             response = self._parse_response(accumulated)
+            raw_tool_calls = getattr(accumulated, "tool_calls", None) or []
+            invalid_tool_calls = getattr(accumulated, "invalid_tool_calls", None) or []
+            raw_tool_call_chunks = getattr(accumulated, "tool_call_chunks", None) or []
+            response.diagnostics = {
+                "chunk_count": chunk_count,
+                "content_chars": content_chars,
+                "reasoning_chars": reasoning_chars,
+                "empty_stream": False,
+                "finish_reason": response.finish_reason,
+                "native_tool_calls": len(response.tool_calls),
+                "raw_tool_calls": len(raw_tool_calls),
+                "invalid_tool_calls": len(invalid_tool_calls),
+                "raw_tool_call_chunks": len(raw_tool_call_chunks),
+                "content_type": type(getattr(accumulated, "content", None)).__name__,
+                "response_metadata_keys": sorted(
+                    str(key) for key in (getattr(accumulated, "response_metadata", {}) or {})
+                ),
+                "usage_available": bool(response.usage_metadata),
+            }
             if pending_text and not (response.has_tool_calls and response.content == ""):
                 on_text_chunk(pending_text)
             return response

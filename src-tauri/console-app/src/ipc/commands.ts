@@ -107,6 +107,9 @@ export const consoleLogout = (): Promise<void> =>
 export const consoleFetchAds = (position: string): Promise<AdItem[]> =>
   invoke<AdItem[]>("console_fetch_ads", { position });
 
+export const consoleOpenExternalUrl = (url: string): Promise<void> =>
+  invoke<void>("open_external_url", { url });
+
 // ── 版本检查与更新 ──────────────────────────────────────────────────
 export const consoleCheckUpdate = (): Promise<UpdateInfo> =>
   invoke<UpdateInfo>("console_check_update");
