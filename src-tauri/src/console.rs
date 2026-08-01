@@ -1079,9 +1079,7 @@ fn uninstall_legacy_macos() -> Result<(), String> {
         .ok_or("未找到旧版 Vibe Trading 应用")?;
 
     if app == Path::new("/Applications/Vibe Trading.app") {
-        let app_path = app
-            .to_str()
-            .ok_or("legacy app path is not valid UTF-8")?;
+        let app_path = app.to_str().ok_or("legacy app path is not valid UTF-8")?;
         let script = r#"on run argv
   set targetPath to quoted form of (item 1 of argv)
   do shell script "/bin/rm -rf -- " & targetPath with administrator privileges

@@ -40,7 +40,7 @@ Expected: FAIL because the helper and command do not exist yet.
 
 - [ ] **Step 3: Implement minimal platform-gated behavior**
 
-Add a private path helper with `#[cfg(windows)]` and `#[cfg(target_os = "macos")]` branches. Windows resolves `dirs::data_local_dir()`, verifies `uninstall.exe` is a file, then spawns it with `std::process::Command`; macOS checks the two fixed app bundle candidates and calls `fs::remove_dir_all` on the first existing directory. Return a clear missing-installation error, and return an unsupported-platform error for other targets. Register `console::console_uninstall_legacy_app` in `tauri::generate_handler!`.
+Add a private path helper with `#[cfg(windows)]` and `#[cfg(target_os = "macos")]` branches. Windows resolves `dirs::data_local_dir()`, verifies `uninstall.exe` is a file, then spawns it with `std::process::Command`; macOS checks the two fixed app bundle candidates, removes a user-level app directly, and launches a fixed `osascript` administrator prompt for `/Applications/Vibe Trading.app`. Return a clear missing-installation error, and return an unsupported-platform error for other targets. Register `console::console_uninstall_legacy_app` in `tauri::generate_handler!`.
 
 - [ ] **Step 4: Run the focused Rust tests and verify success**
 
