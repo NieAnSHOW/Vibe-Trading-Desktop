@@ -36,7 +36,6 @@ import ProgressBar from "../components/ProgressBar.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import HintBanner from "../components/HintBanner.vue";
 import AdSlot from "../components/AdSlot.vue";
-import VersionFooter from "../components/VersionFooter.vue";
 import UpdateBanner from "../components/UpdateBanner.vue";
 import { useBusy } from "../composables/useBusy";
 import logoPng from "../assets/128x128@2x.png";
@@ -53,7 +52,11 @@ import {
   RefreshCw,
   ServerCog,
   Settings,
+  ShieldCheck,
   Square,
+  MessageSquareText,
+  ChartCandlestick,
+  LockKeyhole,
   Trash2,
   Wrench,
 } from "@lucide/vue";
@@ -488,6 +491,7 @@ onUnmounted(() => {
     <section class="console-shell" aria-label="控制台内容">
       <UpdateBanner ref="updateBanner" />
       <AdSlot :ad="adBanner" variant="banner" />
+      <p v-if="loginNotice" class="login-notice" data-test="login-notice" role="status">{{ loginNotice }}</p>
 
       <div class="console-workspace"
         :class="{ 'console-workspace--guest': !ProdConfig.enableLogin || !authStore.authenticated }">
@@ -532,7 +536,23 @@ onUnmounted(() => {
                   <Trash2 :size="15" aria-hidden="true" />清理日志文件
                 </AppButton>
               </div>
-              <p v-if="operationNotice" class="operation-bar__notice" role="status">{{ operationNotice }}</p>
+            </div>
+            <div class="service-intro">
+              <p class="service-intro-title">关于本项目</p>
+              <p class="service-intro-text">
+                Trading Worker 是一款自然语言驱动的金融研究 AI 智能体桌面应用，内置 70+ 金融技能与回测引擎，覆盖投研对话、策略研究与回测分析。
+              </p>
+              <ul class="service-intro-points">
+                <li>
+                  <MessageSquareText :size="14" aria-hidden="true" />自然语言投研对话
+                </li>
+                <li>
+                  <ChartCandlestick :size="14" aria-hidden="true" />策略回测与分析
+                </li>
+                <li>
+                  <ShieldCheck :size="14" aria-hidden="true" />本地运行 · 数据私密
+                </li>
+              </ul>
             </div>
           </div>
 
@@ -617,7 +637,6 @@ onUnmounted(() => {
 
       <AdSlot :ad="adBottom" variant="bottom" />
       <div id="err">{{ errorMsg }}</div>
-      <VersionFooter />
     </section>
   </main>
 </template>

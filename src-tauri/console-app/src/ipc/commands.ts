@@ -9,6 +9,7 @@ import type {
   StatusReport,
   AdItem,
   UpdateInfo,
+  Settings,
 } from "./types";
 
 // 与 src-tauri/src/console.rs 的 #[tauri::command] 一一对应。
@@ -37,6 +38,12 @@ export const consoleClearLogs = (): Promise<number> =>
 
 export const consoleClearVenv = (): Promise<void> =>
   invoke<void>("console_clear_venv");
+
+export const consoleGetSettings = (): Promise<Settings> =>
+  invoke<Settings>("console_get_settings");
+
+export const consoleSetAutostart = (enabled: boolean): Promise<void> =>
+  invoke<void>("console_set_autostart", { enabled });
 
 export const consoleStartChannels = (port: number): Promise<string> =>
   invoke<string>("console_start_channels", { port });

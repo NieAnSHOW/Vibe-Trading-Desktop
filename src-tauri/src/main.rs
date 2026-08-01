@@ -4,6 +4,7 @@ mod console;
 mod port;
 mod resources;
 mod runtime_dir;
+mod settings;
 mod sidecar;
 mod tray;
 mod updater;
@@ -11,7 +12,7 @@ mod version;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
-use tauri::{Manager, RunEvent, WindowEvent};
+use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 
 type SharedChild = console::SharedChild;
 
@@ -46,6 +47,8 @@ fn main() {
             console::console_open_logs,
             console::console_clear_logs,
             console::console_clear_venv,
+            console::console_get_settings,
+            console::console_set_autostart,
             console::console_login_captcha,
             console::console_login_send_sms,
             console::console_login_by_phone,
@@ -62,7 +65,7 @@ fn main() {
             console::console_install_update,
         ])
         .manage(console::InstallingFlag(installing))
-        .manage(auth_state)
+        .manage(auth_state.clone())
         .on_window_event(move |window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 // 后台挂载:点关闭按钮 X 一律静默隐藏窗口(收纳后台),不退出应用。
@@ -82,8 +85,9 @@ fn main() {
                 .expect("main window (defined in tauri.conf.json)");
 
             let shared = shared_setup.clone();
+            let auth_state = auth_state.clone();
             std::thread::spawn(move || {
-                if let Err(msg) = boot(&handle, &win, &res, &shared) {
+                if let Err(msg) = boot(&handle, &win, &res, &shared, &auth_state) {
                     let safe_json = serde_json::to_string(&msg)
                         .unwrap_or_else(|_| "\"unknown error\"".to_string());
                     let _ = win.eval(&format!(
@@ -149,11 +153,13 @@ pub fn open_url_with_system(url: &str) -> Result<(), String> {
 /// 准备可写运行目录(会话/日志/venv 父目录就绪;runtime/ 代码刷新)。
 /// 不再自动 spawn serve、不导航业务 SPA——窗口停在控制台页(console.html),
 /// 由用户经控制台按钮触发 bootstrap / 启停 / 打开浏览器(desktop-control-console)。
+/// 唯一例外:设置里开启了「启动即启动服务」且环境就绪时,在此自动拉起后端。
 fn boot(
-    _handle: &tauri::AppHandle,
-    _win: &tauri::WebviewWindow,
+    app: &tauri::AppHandle,
+    win: &tauri::WebviewWindow,
     res: &resources::Resources,
-    _shared: &SharedChild,
+    shared: &SharedChild,
+    auth_state: &auth::AuthState,
 ) -> Result<(), String> {
     let layout = runtime_dir::Layout::from_home()?;
     runtime_dir::prepare(
@@ -163,6 +169,36 @@ fn boot(
         Some(&res.frontend_dist),
         &layout,
     )?;
+    if console::compute_env_status(&layout) == console::EnvStatus::Ready
+        && crate::settings::load(&layout.root).autostart_service
+        && shared.lock().unwrap().is_none()
+    {
+        let app = app.clone();
+        let win = win.clone();
+        let shared = shared.clone();
+        let auth_state = auth_state.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = win.eval(
+                "var e=document.getElementById('err');if(e)e.textContent='正在自动启动服务...';",
+            );
+            match console::start_service_inner(&app, &shared, &auth_state).await {
+                Ok(port) => {
+                    let _ = app.emit("service://started", port);
+                    let _ = win.eval(
+                        "var e=document.getElementById('err');if(e)e.textContent='';",
+                    );
+                }
+                Err(error) => {
+                    // 失败不阻塞控制台:保留错误信息在 err 栏,用户仍可手动启动。
+                    let safe_json = serde_json::to_string(&format!("自动启动服务失败: {error}"))
+                        .unwrap_or_else(|_| "\"自动启动服务失败\"".to_string());
+                    let _ = win.eval(&format!(
+                        "var e=document.getElementById('err');if(e)e.textContent={safe_json};"
+                    ));
+                }
+            }
+        });
+    }
     Ok(())
 }
 

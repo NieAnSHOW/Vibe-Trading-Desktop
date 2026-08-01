@@ -8,6 +8,11 @@ export interface StatusReport {
   port: number | null;
 }
 
+// 镜像 src-tauri/src/settings.rs 的 Settings。
+export interface Settings {
+  autostart_service: boolean;
+}
+
 export type BootstrapStage =
   | "venv"
   | "installing"

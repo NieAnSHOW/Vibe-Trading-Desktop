@@ -651,17 +651,6 @@ dialog.confirm .confirm-actions {
   word-break: break-word;
 }
 
-.console-version-text {
-  position: fixed;
-  bottom: 8px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  color: hsl(0 0% 60% / 0.6);
-}
-
 /* ── Ad slots ── */
 .ad-banner {
   margin-top: 16px;
@@ -826,6 +815,11 @@ body {
 body:has(> #app > .console-page) {
   display: block;
   padding: 0;
+}
+
+/* 登录页同样全屏展开(左右双栏门面),但保留自身 18px 呼吸边距 */
+body:has(> #app > .login-page) {
+  display: block;
 }
 
 #app:has(> .console-page) {
@@ -1001,11 +995,25 @@ body::before {
 }
 
 .service-panel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
   overflow: hidden;
 }
 
+.service-panel > .service-hero {
+  flex: 1;
+}
+
+.service-panel > .runtime-strip {
+  flex: none;
+}
+
 .service-hero {
+  display: flex;
   padding: 40px 46px 28px;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .service-state-line {
@@ -1077,10 +1085,78 @@ body::before {
   font-size: 12px;
 }
 
+.service-local-note {
+  display: inline-flex;
+  margin-top: 26px;
+  align-items: center;
+  gap: 7px;
+  color: hsl(var(--ink-dim));
+  font-size: 12px;
+}
+
+.service-local-note svg {
+  flex: none;
+  color: hsl(var(--brand));
+}
+
+.service-local-note code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: hsl(var(--surface-1));
+  border: 1px solid hsl(var(--line));
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+/* 项目简介:填充主面板的次要信息区,退让于操作栏 */
+.service-intro {
+  margin-top: 22px;
+  padding: 16px 18px;
+  border: 1px solid hsl(var(--line));
+  border-radius: var(--radius);
+  background: hsl(var(--surface-1) / 0.55);
+}
+
+.service-intro-title {
+  color: hsl(var(--ink-dim));
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.service-intro-text {
+  margin-top: 8px;
+  color: hsl(var(--ink));
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.service-intro-points {
+  display: flex;
+  margin-top: 12px;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  list-style: none;
+}
+
+.service-intro-points li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: hsl(var(--ink-dim));
+  font-size: 12px;
+}
+
+.service-intro-points svg {
+  flex: none;
+  color: hsl(var(--brand));
+}
+
 .runtime-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin: 0 46px 20px;
+  margin: 0 46px 22px;
   border: 1px solid hsl(var(--line));
   border-radius: 8px;
 }
@@ -1134,10 +1210,12 @@ body::before {
   color: hsl(var(--bad-fg));
 }
 
+/* hero 内的 hint/progress 现在是 flex 子项:缩进对齐 + 底部留白即可 */
 .service-panel .hint,
 .service-panel #progress {
   margin-inline: 46px;
   margin-bottom: 22px;
+  flex: none;
 }
 
 .member-panel {
@@ -1274,11 +1352,6 @@ body::before {
   margin: 0 18px 12px;
 }
 
-.console-version-text {
-  position: absolute;
-  padding: 0 18px 10px;
-}
-
 @media (max-width: 899px) {
   body {
     padding: 12px;
@@ -1299,6 +1372,10 @@ body::before {
 
   .service-hero {
     padding: 30px 28px 24px;
+  }
+
+  .service-local-note {
+    margin-top: 22px;
   }
 
   .runtime-strip,

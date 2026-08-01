@@ -366,6 +366,15 @@ pub async fn console_start_service(
     state: State<'_, SharedChild>,
     auth_state: State<'_, AuthState>,
 ) -> Result<u16, ServiceStartError> {
+    start_service_inner(&app, &state, &auth_state).await
+}
+
+/// 启动服务的纯逻辑（IPC 与启动自动启动共用）。成功后在 shared 中挂载子进程。
+pub async fn start_service_inner(
+    app: &AppHandle,
+    state: &SharedChild,
+    auth_state: &AuthState,
+) -> Result<u16, ServiceStartError> {
     let layout = Layout::from_home().map_err(|e| ServiceStartError::Other { message: e })?;
     crate::sidecar::log_vip_runtime_event(&layout.logs_dir, "service start requested");
     if compute_env_status(&layout) != EnvStatus::Ready {
@@ -390,7 +399,7 @@ pub async fn console_start_service(
                 "selected LLM mode=vip; preparing runtime credential",
             );
             match run_blocking({
-                let auth_state = auth_state.inner().clone();
+                let auth_state = auth_state.clone();
                 let layout = layout.clone();
                 move || auth::ensure_vip_credential(&auth_state, &layout)
             })
@@ -459,7 +468,7 @@ pub async fn console_start_service(
         &layout.logs_dir,
         &format!("waiting for sidecar health check (port={port})"),
     );
-    let shared = state.inner().clone();
+    let shared = state.clone();
     let (ready, mut child) = tauri::async_runtime::spawn_blocking(move || {
         let ready = crate::sidecar::await_health(&mut child, port);
         (ready, child)
@@ -501,6 +510,50 @@ pub async fn console_start_service(
             Err(ServiceStartError::HealthTimeout)
         }
     }
+}
+
+// ── 设置(桌面壳偏好,~/.vibe-trading/settings.json) ──────────────
+
+/// 读取桌面端设置。纯本地文件读取,失败回退默认值。
+#[tauri::command]
+pub fn console_get_settings() -> Result<crate::settings::Settings, String> {
+    let layout = Layout::from_home()?;
+    Ok(crate::settings::load(&layout.root))
+}
+
+/// 更新桌面端设置。目前只暴露「启动应用时自动启动服务」开关。
+#[tauri::command]
+pub fn console_set_autostart(
+    app: AppHandle,
+    state: State<'_, SharedChild>,
+    auth_state: State<'_, AuthState>,
+    enabled: bool,
+) -> Result<(), String> {
+    let layout = Layout::from_home()?;
+    let mut settings = crate::settings::load(&layout.root);
+    settings.autostart_service = enabled;
+    crate::settings::save(&layout.root, &settings)?;
+    // 打开开关时若环境就绪且服务未在运行,立即生效,无需重启应用。
+    if enabled && compute_env_status(&layout) == EnvStatus::Ready && state.lock().unwrap().is_none()
+    {
+        let app = app.clone();
+        let auth_state = auth_state.inner().clone();
+        let shared = state.inner().clone();
+        tauri::async_runtime::spawn(async move {
+            match start_service_inner(&app, &shared, &auth_state).await {
+                Ok(port) => {
+                    let _ = app.emit("service://started", port);
+                }
+                Err(error) => {
+                    crate::sidecar::log_vip_runtime_event(
+                        &layout.logs_dir,
+                        &format!("autostart-on-toggle failed; service not started ({error})"),
+                    );
+                }
+            }
+        });
+    }
+    Ok(())
 }
 
 #[tauri::command]
