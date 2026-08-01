@@ -3,7 +3,7 @@
 
 use std::fs;
 use std::io::{BufRead, BufReader};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -1030,6 +1030,89 @@ pub fn console_clear_venv() -> Result<(), String> {
     clear_venv_dir(&layout)
 }
 
+#[allow(dead_code)]
+fn legacy_windows_uninstaller_path(local_app_data: &Path) -> PathBuf {
+    local_app_data.join("Vibe Trading").join("uninstall.exe")
+}
+
+#[allow(dead_code)]
+fn legacy_macos_app_paths(home: &Path) -> [PathBuf; 2] {
+    [
+        home.join("Applications").join("Vibe Trading.app"),
+        PathBuf::from("/Applications/Vibe Trading.app"),
+    ]
+}
+
+#[allow(dead_code)]
+fn find_existing_legacy_path<I>(paths: I) -> Option<PathBuf>
+where
+    I: IntoIterator<Item = PathBuf>,
+{
+    paths.into_iter().find(|path| path.exists())
+}
+
+#[cfg(windows)]
+fn uninstall_legacy_windows() -> Result<(), String> {
+    let local_app_data = dirs::data_local_dir().ok_or("local app data directory unavailable")?;
+    let uninstaller = legacy_windows_uninstaller_path(&local_app_data);
+    if !uninstaller.is_file() {
+        return Err(format!(
+            "未找到旧版 Vibe Trading: {}",
+            uninstaller.display()
+        ));
+    }
+    let install_dir = uninstaller
+        .parent()
+        .ok_or("legacy install directory unavailable")?;
+    std::process::Command::new(&uninstaller)
+        .current_dir(install_dir)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("启动旧版 Vibe Trading 卸载程序失败: {e}"))
+}
+
+#[cfg(target_os = "macos")]
+fn uninstall_legacy_macos() -> Result<(), String> {
+    let home = dirs::home_dir().ok_or("home directory unavailable")?;
+    let app = find_existing_legacy_path(legacy_macos_app_paths(&home))
+        .filter(|path| path.is_dir())
+        .ok_or("未找到旧版 Vibe Trading 应用")?;
+
+    if app == Path::new("/Applications/Vibe Trading.app") {
+        let app_path = app
+            .to_str()
+            .ok_or("legacy app path is not valid UTF-8")?;
+        let script = r#"on run argv
+  set targetPath to quoted form of (item 1 of argv)
+  do shell script "/bin/rm -rf -- " & targetPath with administrator privileges
+end run"#;
+        return std::process::Command::new("/usr/bin/osascript")
+            .args(["-e", script, app_path])
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| format!("启动旧版 Vibe Trading 管理员卸载失败: {e}"));
+    }
+
+    fs::remove_dir_all(&app).map_err(|e| format!("删除旧版 Vibe Trading 失败: {e}"))
+}
+
+/// 启动或移除旧版 Vibe Trading 应用本体，保留 ~/.vibe-trading 用户数据。
+#[tauri::command]
+pub fn console_uninstall_legacy_app() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        return uninstall_legacy_windows();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return uninstall_legacy_macos();
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        Err("旧版 Vibe Trading 卸载仅支持 Windows 和 macOS".into())
+    }
+}
+
 /// 在文件管理器打开 ~/.vibe-trading/logs/。
 #[tauri::command]
 pub fn console_open_logs() -> Result<(), String> {
@@ -1553,6 +1636,41 @@ mod tests {
         assert!(!layout.venv_dir.exists());
         clear_venv_dir(&layout).expect("缺失时应幂等成功");
         assert!(!layout.venv_dir.exists());
+    }
+
+    #[test]
+    fn legacy_uninstall_uses_fixed_platform_install_paths() {
+        let home = Path::new("C:/Users/tester");
+        assert_eq!(
+            legacy_windows_uninstaller_path(Path::new("C:/Users/tester/AppData/Local")),
+            Path::new("C:/Users/tester/AppData/Local/Vibe Trading/uninstall.exe")
+        );
+
+        let mac_candidates = legacy_macos_app_paths(home);
+        assert_eq!(
+            mac_candidates[0],
+            Path::new("C:/Users/tester/Applications/Vibe Trading.app")
+        );
+        assert_eq!(
+            mac_candidates[1],
+            Path::new("/Applications/Vibe Trading.app")
+        );
+    }
+
+    #[test]
+    fn legacy_uninstall_reports_missing_installation_without_touching_user_data() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("home");
+        let user_data = home.join(".vibe-trading");
+        fs::create_dir_all(&user_data).unwrap();
+        fs::write(user_data.join("sessions.json"), "keep").unwrap();
+
+        assert!(find_existing_legacy_path([
+            home.join("AppData/Local/Vibe Trading/uninstall.exe"),
+            home.join("Applications/Vibe Trading.app"),
+        ])
+        .is_none());
+        assert!(user_data.join("sessions.json").exists());
     }
 
     #[test]
