@@ -4325,6 +4325,7 @@ dependencies = [
  "tauri-plugin-process",
  "tauri-plugin-single-instance",
  "tempfile",
+ "windows-sys 0.61.2",
  "x25519-dalek",
 ]
 

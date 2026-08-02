@@ -2,15 +2,17 @@
 
 ## Scope
 
-Update only the Windows native window's launch background and the Windows
-application icon embedded in the Tauri bundle. The console application's CSS
-theme and non-Windows icon assets remain unchanged.
+Update the Windows native title bar (the area containing minimize, maximize,
+and close controls) and the Windows application icon embedded in the Tauri
+bundle. Keep the console application's CSS theme and non-Windows icon assets
+unchanged.
 
-## Native Window Background
+## Native Title Bar
 
-Set the Tauri main window `backgroundColor` to `#323d43`. This color is shown
-by Windows while the webview initializes, preventing the current dark launch
-flash. It does not override the rendered console page background after load.
+Use the Windows DWM `DWMWA_CAPTION_COLOR` attribute to set the native title
+bar to `#323d43`, and set its title text to white for contrast. Apply this
+only to the main window on Windows; the console page and other platforms are
+unchanged. Keep the Tauri `backgroundColor` startup fallback as well.
 
 ## Windows Icon
 

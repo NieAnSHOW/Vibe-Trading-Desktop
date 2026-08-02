@@ -224,7 +224,7 @@ onMounted(async () => {
           data-test="uninstall-legacy-action"
           @click="onUninstallLegacy"
         >
-          Vibe Trading
+          卸载老版本
         </AppButton>
       </div>
       <p v-if="maintenanceError" class="settings-notice settings-notice--bad">{{ maintenanceError }}</p>

@@ -9,6 +9,7 @@ mod sidecar;
 mod tray;
 mod updater;
 mod version;
+mod window_style;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
@@ -84,6 +85,14 @@ fn main() {
             let win = app
                 .get_webview_window("main")
                 .expect("main window (defined in tauri.conf.json)");
+            #[cfg(target_os = "windows")]
+            if let Err(error) = win
+                .hwnd()
+                .map_err(|error| error.to_string())
+                .and_then(|hwnd| window_style::apply_windows_titlebar_color(hwnd.0 as isize))
+            {
+                eprintln!("failed to set Windows title bar color: {error}");
+            }
 
             let shared = shared_setup.clone();
             let auth_state = auth_state.clone();
