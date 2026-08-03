@@ -1,47 +1,55 @@
-# Task 3 Report: VIP and Custom LLM Settings API
+# Task 3 Report: Member Panel CSS Polish
 
 ## Outcome
 
-Implemented explicit desktop LLM modes in the settings API. The persisted
-`DESKTOP_LLM_MODE` value selects either `vip` or `custom`; desktop VIP
-credentials, URL, and model list remain transient process environment values.
+Updated only `src-tauri/console-app/src/styles/console.css` for the member panel.
 
-- `GET /settings/llm` returns `desktop_llm_mode` and `desktop_vip_available`.
-- VIP mode selects the effective `vip_server` runtime provider without
-  serializing injected credentials, URL, or model list to the WebUI.
-- `PUT /settings/llm` with `mode: "vip"` persists only
-  `DESKTOP_LLM_MODE=vip` and maps the already-injected values into the active
-  Python runtime environment.
-- `PUT /settings/llm` with `mode: "custom"` preserves the existing custom
-  provider persistence flow and writes `DESKTOP_LLM_MODE=custom`.
-- Removed the deprecated `/settings/llm/vip-models` API and frontend types.
+- Added a compact grid treatment for `member-profile-copy`, retaining the tier/name hierarchy.
+- Added the contained `member-usage-section` using existing neutral surface and line tokens, a compact 8px radius, and a 14px inset.
+- Replaced the obsolete unlimited-quota badge treatment with a primary 28px teal `不限量` value and a subdued `当前套餐权益` note.
+- Scoped metered-state spacing to the new usage section: 16px for the summary and 12px for both the track and detail row.
+- Preserved secondary expiry and customer-service spacing; made no markup, state, layout-JavaScript, dependency, staging, or commit changes.
 
-## Security Boundaries
+## Self-review
 
-- `VIBE_DESKTOP_VIP_API_KEY`, `VIBE_DESKTOP_VIP_BASE_URL`, and
-  `VIBE_DESKTOP_VIP_MODELS_JSON` are never passed to a dotenv writer.
-- Legacy `VIP_API_KEY` and `VIP_BASE_URL` are excluded from the settings
-  dotenv-key set, and custom mode rejects `vip_server` as a persisted provider.
-- The settings response omits the VIP provider metadata and clears normal
-  `base_url` / `api_key_env` response values while VIP is active.
+- There is one intentional `.member-usage-unlimited` definition, associated with the new unlimited state; the earlier badge rule was removed.
+- The profile copy keeps `min-width: 0`, and existing truncation and responsive rules remain in effect at narrow widths.
+- No animation was introduced. Existing global reduced-motion behavior remains unchanged.
 
 ## Verification
 
 ```text
-./.venv/bin/pytest agent/tests/test_settings_api.py -q
-21 passed
+npm run build
+PASS — vue-tsc --noEmit and Vite production build completed successfully.
 
-../.venv/bin/python (from agent/)
-vip endpoint absent; transient keys excluded from dotenv writers
+git diff --check -- src-tauri/console-app/src/styles/console.css
+PASS — no whitespace errors in the stylesheet.
 ```
 
-`frontend/npm run build` currently fails only because the parallel Settings UI
-task has not yet replaced its obsolete `getVipModels` call or supplied the new
-required `mode` field. The API types were intentionally updated to make those
-call sites fail until that task lands.
+```text
+npm test -- --run src/pages/__tests__/ConsolePage.test.ts
+FAIL — 15 passed, 1 failed.
+Failing existing test: "displays a restored login notice passed by the login page"
+Reason: `[data-test="login-notice"]` was absent from the rendered page. This is unrelated to this CSS-only change and the member-usage tests passed.
+```
 
-## Files
+The known unrelated trailing-whitespace issue in `src-tauri/src/auth.rs` was neither modified nor included in the stylesheet-only whitespace check.
 
-- `agent/src/api/settings_routes.py`
-- `agent/tests/test_settings_api.py`
-- `frontend/src/lib/api.ts`
+## Reviewer Follow-up
+
+- Changed the profile-copy selector to `.member-profile-link > .member-profile-copy`, which matches the specificity of the existing generic direct-span rule and appears later in the cascade. Its 4px gap now applies effectively.
+- Added a `max-width: 620px` rule that turns `.member-usage-section .usage-detail` into a single-column grid with a 6px gap, so long total/used values do not compete for the same compact row.
+
+### Follow-up verification
+
+```text
+npm run build
+PASS — vue-tsc --noEmit and Vite production build completed successfully.
+
+git diff --check -- src-tauri/console-app/src/styles/console.css
+PASS — no whitespace errors in the stylesheet.
+
+npm test -- --run src/pages/__tests__/ConsolePage.test.ts
+FAIL — 15 passed, 1 failed.
+Same unrelated pre-existing failure: "displays a restored login notice passed by the login page" cannot find `[data-test="login-notice"]`.
+```

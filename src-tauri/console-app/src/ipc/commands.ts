@@ -10,6 +10,7 @@ import type {
   AdItem,
   UpdateInfo,
   Settings,
+  PublicConfig,
 } from "./types";
 
 // 与 src-tauri/src/console.rs 的 #[tauri::command] 一一对应。
@@ -109,6 +110,9 @@ export const consoleLogout = (): Promise<void> =>
 
 export const consoleFetchAds = (position: string): Promise<AdItem[]> =>
   invoke<AdItem[]>("console_fetch_ads", { position });
+
+export const consoleGetPublicConfig = (): Promise<PublicConfig> =>
+  invoke<PublicConfig>("console_get_public_config");
 
 export const consoleOpenExternalUrl = (url: string): Promise<void> =>
   invoke<void>("open_external_url", { url });

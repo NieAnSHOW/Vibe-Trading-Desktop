@@ -14,6 +14,7 @@ import {
   consoleChannelsStatus,
   consoleInstallChannelDep,
   consoleUninstallLegacyApp,
+  consoleGetPublicConfig,
 } from "../commands";
 
 describe("ipc/commands", () => {
@@ -60,5 +61,13 @@ describe("ipc/commands", () => {
     invokeMock.mockResolvedValue(undefined);
     await consoleUninstallLegacyApp();
     expect(invokeMock).toHaveBeenCalledWith("console_uninstall_legacy_app");
+  });
+
+  it("consoleGetPublicConfig 调用命令名并返回配置", async () => {
+    const cfg = { officialUrl: "", enableLogin: true, checkUpdate: false, enableService: false, serviceQrCode: "", kefuQrCode: "", rewardQrCode: "", enableAd: true };
+    invokeMock.mockResolvedValue(cfg);
+    const r = await consoleGetPublicConfig();
+    expect(invokeMock).toHaveBeenCalledWith("console_get_public_config");
+    expect(r.enableLogin).toBe(true);
   });
 });

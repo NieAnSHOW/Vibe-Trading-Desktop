@@ -14,7 +14,10 @@ import {
   consoleClearLogs,
   consoleClearVenv,
   consoleUninstallLegacyApp,
+  consoleOpenExternalUrl,
 } from "../ipc/commands";
+import { config as ProdConfig } from "../config/prod";
+import douyinPng from "../assets/douyin.png";
 import tauriConf from "../../../tauri.conf.json";
 
 const router = useRouter();
@@ -28,6 +31,8 @@ const notice = ref("");
 const loadError = ref("");
 
 const version = computed(() => tauriConf.version);
+// 官网链接：App.vue 启动时 loadPublicConfig() 拉取，空则隐藏入口
+const officialUrl = computed(() => ProdConfig.officialUrl.trim());
 
 async function load() {
   loadError.value = "";
@@ -167,14 +172,8 @@ onMounted(async () => {
             打开应用时若依赖已就绪，自动在后台拉起后端服务，免去手动点击「启动服务」。
           </p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          :aria-checked="autostart"
-          :class="['switch', { on: autostart }]"
-          :disabled="saving"
-          @click="onAutostartChange"
-        >
+        <button type="button" role="switch" :aria-checked="autostart" :class="['switch', { on: autostart }]"
+          :disabled="saving" @click="onAutostartChange">
           <span class="switch__thumb" aria-hidden="true"></span>
           <span class="switch__label">{{ autostart ? "已开启" : "已关闭" }}</span>
         </button>
@@ -209,21 +208,16 @@ onMounted(async () => {
           <p class="settings-row__name">清理日志文件</p>
           <p class="settings-row__desc">删除 ~/.vibe-trading/logs 下的日志文件，不影响配置与会话数据。</p>
         </div>
-        <AppButton variant="danger" :busy="clearLogsBusy.busy.value" busy-label="清理中"
-          data-test="clear-logs-action" @click="onClearLogs">清理</AppButton>
+        <AppButton variant="danger" :busy="clearLogsBusy.busy.value" busy-label="清理中" data-test="clear-logs-action"
+          @click="onClearLogs">清理</AppButton>
       </div>
       <div class="settings-row">
         <div class="settings-row__text">
           <p class="settings-row__name">Vibe Trading</p>
           <p class="settings-row__desc">卸载老版本应用程序，不会删除 ~/.vibe-trading 中的用户数据。</p>
         </div>
-        <AppButton
-          variant="danger"
-          :busy="uninstallLegacyBusy.busy.value"
-          busy-label="卸载中"
-          data-test="uninstall-legacy-action"
-          @click="onUninstallLegacy"
-        >
+        <AppButton variant="danger" :busy="uninstallLegacyBusy.busy.value" busy-label="卸载中"
+          data-test="uninstall-legacy-action" @click="onUninstallLegacy">
           卸载老版本
         </AppButton>
       </div>
@@ -239,6 +233,20 @@ onMounted(async () => {
           <p class="settings-row__desc">Trading Worker 桌面版</p>
         </div>
         <span class="settings-version">v{{ version }}</span>
+      </div>
+      <div v-if="officialUrl" class="settings-row">
+        <div class="settings-row__text">
+          <p class="settings-row__name">官方网站</p>
+          <p class="settings-row__desc">查看产品介绍与最新动态。</p>
+        </div>
+        <AppButton variant="ghost" @click="consoleOpenExternalUrl(officialUrl)">点击前往官网</AppButton>
+      </div>
+      <div class="settings-row">
+        <div class="settings-row__text">
+          <p class="settings-row__name">关于作者</p>
+          <p class="settings-row__desc">扫码关注抖音号，获取更多使用技巧与动态。</p>
+        </div>
+        <img class="author-qr" :src="douyinPng" alt="作者抖音号二维码" />
       </div>
     </section>
 
@@ -290,7 +298,7 @@ onMounted(async () => {
   padding: 10px 0 2px;
 }
 
-.settings-card .settings-row + .settings-row {
+.settings-card .settings-row+.settings-row {
   border-top: 1px solid hsl(var(--line) / 0.6);
   margin-top: 6px;
   padding-top: 12px;
@@ -314,6 +322,16 @@ onMounted(async () => {
   font-weight: 550;
   color: hsl(var(--ink-dim));
   font-variant-numeric: tabular-nums;
+}
+
+/* 作者抖音号二维码：限宽防过大，靠右与版本号/按钮对齐 */
+.author-qr {
+  flex: none;
+  width: 104px;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid hsl(var(--line));
+  background: hsl(var(--surface-2));
 }
 
 .settings-notice {

@@ -1173,6 +1173,58 @@ fn open_path_in_file_manager(p: &Path) -> Result<(), String> {
         .map_err(|e| format!("open logs: {e}"))
 }
 
+// ── 公共配置 ──
+
+/// 服务端公共配置（镜像 cool-admin /app/base/comm/publicConfig）。
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicConfig {
+    #[serde(default)]
+    pub official_url: String,
+    #[serde(default = "default_true")]
+    pub enable_login: bool,
+    #[serde(default)]
+    pub check_update: bool,
+    #[serde(default)]
+    pub enable_service: bool,
+    #[serde(default)]
+    pub service_qr_code: String,
+    /// 客服微信二维码（登录用户「联系客服」弹窗展示）
+    #[serde(default)]
+    pub kefu_qr_code: String,
+    /// 支持作者二维码（登录用户「支持作者领中级会员」弹窗展示）
+    #[serde(default)]
+    pub reward_qr_code: String,
+    #[serde(default = "default_true")]
+    pub enable_ad: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// 拉取服务端公共配置，替代前端硬编码的 prod.ts。
+/// GET /app/base/comm/publicConfig（IGNORE_TOKEN）。
+/// 失败时静默降级为默认值，不阻塞启动流程。
+#[tauri::command]
+pub async fn console_get_public_config() -> Result<PublicConfig, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let url = format!("{}/app/base/comm/publicConfig", auth::user_api_url());
+        let text = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .map_err(|e| format!("build client: {e}"))?
+            .get(&url)
+            .send()
+            .map_err(|e| format!("public config request: {e}"))?
+            .text()
+            .map_err(|e| format!("public config body: {e}"))?;
+        auth::parse_cool_response(&text).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking join: {e}"))?
+}
+
 // ── 广告 ──
 
 /// 广告项（镜像 cool-admin MarketingAdEntity select 字段）。

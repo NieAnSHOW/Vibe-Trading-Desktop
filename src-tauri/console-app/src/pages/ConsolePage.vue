@@ -16,6 +16,7 @@ import {
   consoleQuit,
   consoleFetchAds,
   consoleMemberUsage,
+  consoleOpenExternalUrl,
 } from "../ipc/commands";
 import {
   onBootstrapEvent,
@@ -36,12 +37,14 @@ import AdSlot from "../components/AdSlot.vue";
 import UpdateBanner from "../components/UpdateBanner.vue";
 import { useBusy } from "../composables/useBusy";
 import logoPng from "../assets/128x128@2x.png";
-import ProdConfig from '../config/prod.ts'
+import { config as ProdConfig } from '../config/prod'
 import {
   ArrowUpRight,
   CircleUserRound,
   Database,
   ExternalLink,
+  Gift,
+  Headset,
   LogIn,
   MessageCircleMore,
   Play,
@@ -66,6 +69,18 @@ const { env: envState, port, serviceRunning } = storeToRefs(env);
 
 const updateBanner = ref<InstanceType<typeof UpdateBanner> | null>(null);
 const errorMsg = ref("");
+const pageReady = ref(false);
+const pageEntering = ref(false);
+const kefuDialogOpen = ref(false);
+const kefuQrCode = computed(() => ProdConfig.kefuQrCode.trim());
+function onKefuDialogClose() {
+  kefuDialogOpen.value = false;
+}
+const rewardDialogOpen = ref(false);
+const rewardQrCode = computed(() => ProdConfig.rewardQrCode.trim());
+function onRewardDialogClose() {
+  rewardDialogOpen.value = false;
+}
 const memberUsage = ref<MemberUsageView | null>(null);
 const usageRefreshing = ref(false);
 const usageNumberFormatter = new Intl.NumberFormat("en-US", {
@@ -319,6 +334,8 @@ function clearMemberUsage() {
 }
 
 onMounted(async () => {
+  pageReady.value = true;
+  pageEntering.value = true;
   // 恢复登录态（静默，不阻塞）
   await authStore.refresh();
   if (ProdConfig.enableLogin && authStore.authenticated) {
@@ -372,12 +389,18 @@ onUnmounted(() => {
   if (adTimer) clearInterval(adTimer);
   clearMemberUsage();
 });
+
+function onStartupAnimationEnd() {
+  pageEntering.value = false;
+}
 </script>
 
 <template>
-  <main class="console-page">
-    <header class="app-header">
-      <div class="brand-lockup">
+  <main class="console-page" :class="{ 'console-page--ready': pageReady, 'console-page--entering': pageEntering }">
+    <header class="app-header console-page__header">
+      <div class="brand-lockup" role="link" tabindex="0" aria-label="访问官网"
+        @click="ProdConfig.officialUrl && consoleOpenExternalUrl(ProdConfig.officialUrl)"
+        @keydown.enter="ProdConfig.officialUrl && consoleOpenExternalUrl(ProdConfig.officialUrl)">
         <img class="mark" alt="Trading Worker" :src="logoPng" />
         <div class="brand-copy">
           <h1>Trading Worker</h1>
@@ -407,7 +430,7 @@ onUnmounted(() => {
       </nav>
     </header>
 
-    <section class="console-shell" aria-label="控制台内容">
+    <section class="console-shell console-page__shell" aria-label="控制台内容" @animationend.self="onStartupAnimationEnd">
       <UpdateBanner ref="updateBanner" />
       <AdSlot :ads="adBanner" variant="banner" />
 
@@ -483,37 +506,68 @@ onUnmounted(() => {
         <aside v-if="ProdConfig.enableLogin && authStore.authenticated" class="member-panel" aria-label="会员服务">
           <button class="member-profile-link" type="button" @click="router.push('/profile')">
             <CircleUserRound :size="48" stroke-width="1.3" aria-hidden="true" />
-            <span><b>{{ memberTier?.label ?? '会员账户' }}</b><small>{{ accountName }}</small></span>
+            <span class="member-profile-copy">
+              <b>{{ memberTier?.label ?? '会员账户' }}</b>
+              <small>{{ accountName }}</small>
+            </span>
             <ArrowUpRight :size="17" aria-hidden="true" />
           </button>
           <p v-if="memberExpireTime" class="member-expire-time">有效期至 {{ memberExpireTime }}</p>
-          <div class="member-usage-head">
-            <span class="member-usage-title">剩余用量</span>
-            <AppButton variant="ghost" :busy="usageRefreshing" busy-label="刷新中" data-test="member-usage-refresh"
-              @click="refreshMemberUsage">
-              <RefreshCw :size="14" aria-hidden="true" />刷新
+          <section class="member-usage-section" data-test="member-usage-section" aria-label="会员用量">
+            <div class="member-usage-head">
+              <span class="member-usage-title">剩余用量</span>
+              <AppButton variant="ghost" :busy="usageRefreshing" busy-label="刷新中" data-test="member-usage-refresh"
+                @click="refreshMemberUsage">
+                <RefreshCw :size="14" aria-hidden="true" />刷新
+              </AppButton>
+            </div>
+            <template v-if="memberUsage?.unlimited_quota">
+              <div class="member-usage-unlimited-state">
+                <strong class="member-usage-unlimited" data-test="member-usage-unlimited">不限量</strong>
+                <span data-test="member-usage-unlimited-note">当前套餐权益</span>
+              </div>
+            </template>
+            <template v-else-if="memberUsage">
+              <div class="usage-summary">
+                <strong>{{ formatUsageAmount(memberUsage.total_available) }}</strong><span>积分</span>
+                <small>{{ Math.round(remainingPercent) }}% 可用</small>
+              </div>
+              <div class="member-usage-track" role="progressbar" aria-label="剩余额度" :aria-valuenow="remainingPercent"
+                aria-valuemin="0" aria-valuemax="100">
+                <div class="member-usage-fill" :style="{ width: `${remainingPercent}%` }"></div>
+              </div>
+              <div class="usage-detail">
+                <span>总量 <b>{{ formatUsageAmount(memberUsage.total_granted) }}</b></span>
+                <span>已用 <b>{{ formatUsageAmount(memberUsage.total_used) }}</b></span>
+              </div>
+            </template>
+            <p v-else class="member-usage-placeholder">用量暂未加载</p>
+          </section>
+          <div style="display: flex;justify-content:space-between">
+            <AppButton v-if="kefuQrCode" variant="ghost" class="member-kefu-entry" data-test="member-kefu-entry"
+              @click="kefuDialogOpen = true">
+              <Headset :size="15" aria-hidden="true" />联系客服
+            </AppButton>
+            <AppButton v-if="rewardQrCode" variant="ghost" class="member-kefu-entry" data-test="member-reward-entry"
+              @click="rewardDialogOpen = true">
+              <Gift :size="15" aria-hidden="true" />支持作者领中级会员
             </AppButton>
           </div>
-          <template v-if="memberUsage?.unlimited_quota">
-            <strong class="member-usage-unlimited" data-test="member-usage-unlimited">不限量</strong>
-          </template>
-          <template v-else-if="memberUsage">
-            <div class="usage-summary">
-              <strong>{{ formatUsageAmount(memberUsage.total_available) }}</strong><span>积分</span>
-              <small>{{ Math.round(remainingPercent) }}% 可用</small>
-            </div>
-            <div class="member-usage-track" role="progressbar" aria-label="剩余额度" :aria-valuenow="remainingPercent"
-              aria-valuemin="0" aria-valuemax="100">
-              <div class="member-usage-fill" :style="{ width: `${remainingPercent}%` }"></div>
-            </div>
-            <div class="usage-detail">
-              <span>总量 <b>{{ formatUsageAmount(memberUsage.total_granted) }}</b></span>
-              <span>已用 <b>{{ formatUsageAmount(memberUsage.total_used) }}</b></span>
-            </div>
-          </template>
-          <p v-else class="member-usage-placeholder">用量暂未加载</p>
+
         </aside>
       </div>
+
+      <ConfirmDialog data-test="kefu-dialog" :open="kefuDialogOpen" title="联系客服"
+        :image="ProdConfig.imgBase + kefuQrCode" image-alt="客服微信二维码" hide-cancel @close="onKefuDialogClose">
+        <p style="margin-top: 8px;">请使用微信扫描上方二维码添加专属客服</p>
+        <template #confirm-text>我知道了</template>
+      </ConfirmDialog>
+
+      <ConfirmDialog data-test="reward-dialog" :open="rewardDialogOpen" title="支持作者领中级会员"
+        :image="ProdConfig.imgBase + rewardQrCode" image-alt="支持作者二维码" hide-cancel @close="onRewardDialogClose">
+        <p style="margin-top: 8px;">将打赏后的截图私发客服领取会员</p>
+        <template #confirm-text>我知道了</template>
+      </ConfirmDialog>
 
       <ConfirmDialog :open="installStopDialogOpen" title="服务运行中，确认停止并安装？" @close="onInstallStopDialogClose">
         检测到后端服务正在运行，安装新版本依赖需要先停止服务。<b>停止将中断正在执行的任务</b>（回测、研究、实盘等），确认停止并继续安装吗？
@@ -547,5 +601,35 @@ onUnmounted(() => {
   background: hsl(var(--ok) / 0.1);
   color: hsl(var(--ok-fg));
   font-size: 13px;
+}
+
+.console-page__header,
+.console-page__shell {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.console-page--ready .console-page__header,
+.console-page--ready .console-page__shell {
+  animation: console-enter 260ms ease-out both;
+}
+
+.console-page--ready .console-page__shell {
+  animation-delay: 60ms;
+}
+
+@keyframes console-enter {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .console-page--ready .console-page__header,
+  .console-page--ready .console-page__shell {
+    animation-duration: 0.01ms;
+  }
 }
 </style>

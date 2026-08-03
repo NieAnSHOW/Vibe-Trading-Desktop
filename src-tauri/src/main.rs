@@ -62,6 +62,7 @@ fn main() {
             console::console_member_benefits,
             console::console_logout,
             console::console_fetch_ads,
+            console::console_get_public_config,
             console::console_check_update,
             console::console_download_update,
             console::console_install_update,

@@ -1,4 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { nextTick } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
@@ -32,6 +33,16 @@ vi.mock("../../ipc/commands", () => ({
   consoleQuit: vi.fn(),
   consoleLogout: vi.fn(),
   consoleFetchAds: vi.fn(async () => []),
+  consoleGetPublicConfig: vi.fn(async () => ({
+    officialUrl: "",
+    enableLogin: true,
+    checkUpdate: false,
+    enableService: false,
+    serviceQrCode: "",
+    kefuQrCode: "",
+    rewardQrCode: "",
+    enableAd: true,
+  })),
   consoleStartService: vi.fn(),
   consoleStopService: vi.fn(),
   consoleChannelsStatus: vi.fn(),
@@ -101,6 +112,23 @@ beforeEach(async () => {
 });
 
 describe("ConsolePage", () => {
+  it("marks the console page ready after mounting", async () => {
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+
+    await nextTick();
+    expect(wrapper.classes()).toContain("console-page--ready");
+  });
+
+  it("keeps the page in its startup state until the content animation ends", async () => {
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+
+    await nextTick();
+    expect(wrapper.classes()).toContain("console-page--entering");
+
+    await wrapper.get(".console-page__shell").trigger("animationend");
+    expect(wrapper.classes()).not.toContain("console-page--entering");
+  });
+
   it("keeps the application header outside the content shell", () => {
     const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
 
@@ -224,6 +252,10 @@ describe("ConsolePage", () => {
     await flushPromises();
 
     expect(wrapper.get(".member-panel").text()).toContain("98,025,508积分");
+    const usageSection = wrapper.get('[data-test="member-usage-section"]');
+    expect(usageSection.text()).toContain("剩余用量");
+    expect(usageSection.text()).toContain("98,025,508积分");
+    expect(usageSection.get('[role="progressbar"]').attributes("aria-label")).toBe("剩余额度");
     expect(wrapper.text()).toContain("总量 113,514,188");
     expect(wrapper.text()).toContain("已用 15,488,680");
     await wrapper.get('[data-test="member-usage-refresh"]').trigger("click");
@@ -243,10 +275,11 @@ describe("ConsolePage", () => {
     await flushPromises();
 
     expect(wrapper.get('[data-test="member-usage-unlimited"]').text()).toBe("不限量");
+    expect(wrapper.get('[data-test="member-usage-unlimited-note"]').text()).toBe("当前套餐权益");
     expect(wrapper.text()).not.toContain("剩余 98,025,508");
     expect(wrapper.text()).not.toContain("总量 113,514,188");
     expect(wrapper.text()).not.toContain("已用 15,488,680");
-    expect(wrapper.find('[role="progressbar"]').exists()).toBe(false);
+    expect(wrapper.get('[data-test="member-usage-section"]').find('[role="progressbar"]').exists()).toBe(false);
   });
 
   it("keeps usage refresh available after the initial request fails", async () => {
@@ -267,5 +300,32 @@ describe("ConsolePage", () => {
     await flushPromises();
 
     expect(wrapper.find('[data-test="member-usage-refresh"]').exists()).toBe(false);
+  });
+
+  it("shows the kefu entry with a QR code dialog when kefuQrCode is configured", async () => {
+    const { config } = await import("../../config/prod");
+    config.kefuQrCode = "/kefu-qr.png";
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+
+    expect(wrapper.get('[data-test="member-kefu-entry"]').text()).toContain("联系客服");
+    await wrapper.get('[data-test="member-kefu-entry"]').trigger("click");
+    await nextTick();
+
+    const dialog = wrapper.get('[data-test="kefu-dialog"]');
+    expect(dialog.attributes("open")).toBeDefined();
+    expect(dialog.get("img").attributes("src")).toBe("http://127.0.0.1:8001/kefu-qr.png");
+    expect(dialog.get("img").attributes("alt")).toBe("客服微信二维码");
+  });
+
+  it("hides the kefu entry when no kefu QR code is configured", async () => {
+    const { config } = await import("../../config/prod");
+    config.kefuQrCode = "";
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="member-kefu-entry"]').exists()).toBe(false);
   });
 });

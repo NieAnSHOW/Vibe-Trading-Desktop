@@ -291,17 +291,6 @@ h1 {
   color: hsl(var(--ink));
   font-weight: 650;
 }
-.member-usage-unlimited {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  padding: 0 8px;
-  border: 1px solid hsl(var(--brand) / 0.35);
-  border-radius: 4px;
-  color: hsl(var(--brand));
-  font-size: 12px;
-  font-weight: 600;
-}
 .member-usage-track {
   height: 6px;
   margin-top: 10px;
@@ -637,6 +626,20 @@ dialog.confirm .confirm-actions {
   gap: 8px;
   margin-top: 18px;
 }
+dialog.confirm .confirm-image {
+  display: block;
+  width: 240px;
+  height: 240px;
+  margin: 14px auto 0;
+  border-radius: 10px;
+  object-fit: contain;
+}
+dialog.confirm--info {
+  text-align: center;
+}
+dialog.confirm--info .confirm-actions {
+  justify-content: center;
+}
 
 /* Error */
 #err:not(:empty) {
@@ -827,6 +830,7 @@ body::before {
 .brand-lockup {
   min-width: 0;
   gap: 13px;
+  cursor: pointer; /* 点击跳转官网（officialUrl 为空时无动作） */
 }
 
 .brand-copy {
@@ -1183,6 +1187,12 @@ body::before {
   gap: 3px;
 }
 
+.member-profile-link > .member-profile-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
 .member-profile-link b,
 .member-profile-link small {
   overflow: hidden;
@@ -1205,8 +1215,15 @@ body::before {
   margin-top: 10px;
 }
 
+.member-usage-section {
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid hsl(var(--line));
+  border-radius: 8px;
+  background: hsl(var(--surface-1) / 0.58);
+}
+
 .member-usage-head {
-  margin-top: 30px;
   justify-content: space-between;
   gap: 12px;
 }
@@ -1214,6 +1231,54 @@ body::before {
 .member-usage-title {
   font-size: 14px;
   font-weight: 650;
+}
+
+.member-usage-unlimited-state {
+  display: grid;
+  margin-top: 16px;
+  gap: 6px;
+}
+
+.member-usage-unlimited {
+  color: #1caea2;
+  font-size: 28px;
+  font-weight: 680;
+  line-height: 1;
+}
+
+.member-usage-unlimited-state span {
+  color: hsl(var(--ink-dim));
+  font-size: 12px;
+}
+
+.member-usage-section .usage-summary {
+  margin-top: 16px;
+}
+
+.member-usage-section .member-usage-track {
+  margin-top: 12px;
+}
+
+.member-usage-section .usage-detail {
+  display: grid;
+  margin-top: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.member-usage-section .usage-detail span {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.member-usage-section .usage-detail b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .usage-summary {
@@ -1275,13 +1340,18 @@ body::before {
   font-weight: 600;
 }
 
-.member-panel .member-usage-unlimited {
-  margin-top: 18px;
-}
-
 .member-panel .member-usage-placeholder {
   margin-top: 18px;
 }
+
+.member-kefu-entry {
+  margin-top: 22px;
+  padding-inline: 14px;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+/* 联系客服弹窗 — 复用 ConfirmDialog(hide-cancel), 见 dialog.confirm--image/info */
 
 .console-shell > #err:not(:empty) {
   margin: 0 18px 12px;

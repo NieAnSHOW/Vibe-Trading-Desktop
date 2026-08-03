@@ -159,3 +159,19 @@ export interface AdItem {
   link?: string | null;
   sort: number;
 }
+
+// === 公共配置 ===
+
+/** 服务端公共配置（/app/base/comm/publicConfig），Rust 侧解析后原样返回 */
+export interface PublicConfig {
+  officialUrl: string;
+  enableLogin: boolean;
+  checkUpdate: boolean;
+  enableService: boolean;
+  serviceQrCode: string;
+  /** 客服微信二维码（登录用户「联系客服」弹窗展示） */
+  kefuQrCode: string;
+  /** 支持作者二维码（登录用户「支持作者领中级会员」弹窗展示） */
+  rewardQrCode: string;
+  enableAd: boolean;
+}
