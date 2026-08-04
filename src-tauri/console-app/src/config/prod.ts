@@ -9,7 +9,7 @@ import { consoleGetPublicConfig } from "../ipc/commands";
  */
 export const config = reactive({
     // 静态资源 baseURL
-    imgBase: "http://127.0.0.1:8001",
+    imgBase: "https://trading-server.nieanshow.cn",
     // 是否启用 login
     enableLogin: true,
     // 是否启用广告 【服务端 comm.ts 统一管理，见 loadPublicConfig】
