@@ -207,6 +207,15 @@ pub struct AuthStatusView {
     pub authenticated: bool,
     pub user_info: Option<UserInfo>,
     pub expire_at: Option<i64>,
+    #[serde(default)]
+    pub membership_changed: bool,
+}
+
+fn membership_level_changed(
+    previous: Option<&auth::MemberLevel>,
+    current: Option<&auth::MemberLevel>,
+) -> bool {
+    previous.is_some() && previous != current
 }
 
 fn unauthenticated_status() -> AuthStatusView {
@@ -214,6 +223,7 @@ fn unauthenticated_status() -> AuthStatusView {
         authenticated: false,
         user_info: None,
         expire_at: None,
+        membership_changed: false,
     }
 }
 
@@ -795,12 +805,27 @@ pub async fn console_auth_status(
             return Ok(unauthenticated_status());
         }
 
+        let previous_member_level = session
+            .user_info
+            .as_ref()
+            .and_then(|info| info.member_level.clone());
+        let mut membership_changed = false;
         match auth::refresh_user_info(&mut session, auth::fetch_user_info) {
             Ok(()) => {
+                membership_changed = membership_level_changed(
+                    previous_member_level.as_ref(),
+                    session
+                        .user_info
+                        .as_ref()
+                        .and_then(|info| info.member_level.as_ref()),
+                );
                 let mut guard = auth_state.0.lock().unwrap();
                 match guard.as_mut() {
                     Some(current) if current.token == session.token => {
                         current.user_info = session.user_info.clone();
+                        if membership_changed {
+                            current.vip = None;
+                        }
                     }
                     _ => {
                         return Ok(unauthenticated_status());
@@ -840,6 +865,7 @@ pub async fn console_auth_status(
             authenticated: true,
             user_info: session.user_info,
             expire_at: Some(session.expire_at),
+            membership_changed,
         })
     })
     .await
@@ -1340,6 +1366,28 @@ mod tests {
             remember_until(true, 100),
             Some(100 + auth::REMEMBER_LOGIN_SECS)
         );
+    }
+
+    #[test]
+    fn membership_level_change_invalidates_cached_credential() {
+        let previous = auth::MemberLevel {
+            id: 1,
+            name: "普通会员".into(),
+            code: Some("normal".into()),
+            level_value: 1,
+            expire_time: None,
+        };
+        let current = auth::MemberLevel {
+            id: 2,
+            name: "Pro".into(),
+            code: Some("pro".into()),
+            level_value: 20,
+            expire_time: Some("2026-12-31 23:59:59".into()),
+        };
+
+        assert!(membership_level_changed(Some(&previous), Some(&current)));
+        assert!(!membership_level_changed(Some(&previous), Some(&previous)));
+        assert!(!membership_level_changed(None, Some(&current)));
     }
 
     #[test]

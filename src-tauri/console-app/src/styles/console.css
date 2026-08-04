@@ -914,10 +914,6 @@ body::before {
   background: hsl(var(--surface-3));
 }
 
-.login-notice {
-  margin: 14px 14px 0;
-}
-
 .console-shell > .ad-banner,
 .console-shell > .ad-bottom {
   margin-inline: 14px;
@@ -1428,7 +1424,6 @@ body::before {
   .service-hero {
     padding-inline: 20px;
   }
-
 }
 
 @media (prefers-reduced-motion: reduce) {

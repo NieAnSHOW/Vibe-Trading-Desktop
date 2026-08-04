@@ -246,6 +246,23 @@ describe("ConsolePage", () => {
     expect(wrapper.get(".member-tier").classes()).toContain("member-tier--pro");
   });
 
+  it("提示会员权益变化并允许刷新用量", async () => {
+    mocks.consoleAuthStatus.mockResolvedValueOnce({
+      authenticated: true,
+      userInfo: { id: 1, nickName: "Tester", gender: 0, status: 1, loginType: 2 },
+      expireAt: 9999999999,
+      membershipChanged: true,
+    });
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+
+    expect(wrapper.get('[data-test="membership-refresh-usage"]').text()).toContain("刷新会员用量");
+    await wrapper.get('[data-test="membership-refresh-usage"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.find('[data-test="membership-refresh-usage"]').exists()).toBe(false);
+  });
+
   it("renders member usage and refreshes it manually", async () => {
     const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
 

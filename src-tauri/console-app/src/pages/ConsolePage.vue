@@ -83,6 +83,9 @@ function onRewardDialogClose() {
 }
 const memberUsage = ref<MemberUsageView | null>(null);
 const usageRefreshing = ref(false);
+const membershipUpdateNotice = ref(false);
+const membershipRefreshBusy = useBusy();
+const membershipRestartDialogOpen = ref(false);
 const usageNumberFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
@@ -112,6 +115,51 @@ async function refreshMemberUsage() {
   } finally {
     usageRefreshing.value = false;
   }
+}
+
+async function refreshAuthForMembership() {
+  await authStore.refresh();
+  if (!authStore.authenticated) {
+    clearMemberUsage();
+    return false;
+  }
+  if (authStore.membershipChanged) {
+    membershipUpdateNotice.value = true;
+    memberUsage.value = null;
+  }
+  return true;
+}
+
+async function refreshMembershipUsageManually() {
+  if (!await refreshAuthForMembership()) return;
+  await refreshMemberUsage();
+  if (!serviceRunning.value && authStore.authenticated) {
+    membershipUpdateNotice.value = false;
+    authStore.acknowledgeMembershipChange();
+  }
+}
+
+async function doRestartForMembershipUpdate() {
+  await membershipRefreshBusy.run("刷新中", async () => {
+    try {
+      await service.stop();
+      env.setPort(null);
+      serviceRunning.value = false;
+      const p = await service.start();
+      env.setPort(p);
+      serviceRunning.value = true;
+      membershipUpdateNotice.value = false;
+      authStore.acknowledgeMembershipChange();
+      await refreshMemberUsage();
+    } catch (e) {
+      setErr(e);
+    }
+  });
+}
+
+async function onMembershipRestartDialogClose(value: "ok" | "cancel") {
+  membershipRestartDialogOpen.value = false;
+  if (value === "ok") await doRestartForMembershipUpdate();
 }
 
 function setErr(m: unknown) {
@@ -339,8 +387,14 @@ onMounted(async () => {
   // 恢复登录态（静默，不阻塞）
   await authStore.refresh();
   if (ProdConfig.enableLogin && authStore.authenticated) {
+    if (authStore.membershipChanged) {
+      membershipUpdateNotice.value = true;
+      memberUsage.value = null;
+    }
     void refreshMemberUsage();
-    usageTimer = setInterval(refreshMemberUsage, 300_000);
+    usageTimer = setInterval(async () => {
+      if (await refreshAuthForMembership()) void refreshMemberUsage();
+    }, 300_000);
   }
   // TODO: 暂时禁用自动更新，启动时静默检查更新（失败不影响主流程）
   if (ProdConfig.checkUpdate) {
@@ -434,6 +488,7 @@ function onStartupAnimationEnd() {
       <UpdateBanner ref="updateBanner" />
       <AdSlot :ads="adBanner" variant="banner" />
 
+
       <div class="console-workspace"
         :class="{ 'console-workspace--guest': !ProdConfig.enableLogin || !authStore.authenticated }">
         <section class="service-panel" aria-labelledby="service-title">
@@ -504,6 +559,17 @@ function onStartupAnimationEnd() {
         </section>
 
         <aside v-if="ProdConfig.enableLogin && authStore.authenticated" class="member-panel" aria-label="会员服务">
+          <div v-if="membershipUpdateNotice" class="login-notice" role="status">
+            会员权益已更新，当前服务仍在使用旧配置。
+            <AppButton v-if="isServiceRunning" variant="ghost" :busy="membershipRefreshBusy.busy.value"
+              data-test="membership-refresh-service" @click="membershipRestartDialogOpen = true">
+              重启服务并刷新
+            </AppButton>
+            <AppButton v-else variant="ghost" data-test="membership-refresh-usage"
+              @click="refreshMembershipUsageManually">
+              刷新会员用量
+            </AppButton>
+          </div>
           <button class="member-profile-link" type="button" @click="router.push('/profile')">
             <CircleUserRound :size="48" stroke-width="1.3" aria-hidden="true" />
             <span class="member-profile-copy">
@@ -517,7 +583,7 @@ function onStartupAnimationEnd() {
             <div class="member-usage-head">
               <span class="member-usage-title">剩余用量</span>
               <AppButton variant="ghost" :busy="usageRefreshing" busy-label="刷新中" data-test="member-usage-refresh"
-                @click="refreshMemberUsage">
+                @click="refreshMembershipUsageManually">
                 <RefreshCw :size="14" aria-hidden="true" />刷新
               </AppButton>
             </div>
@@ -579,6 +645,11 @@ function onStartupAnimationEnd() {
         <template #confirm-text>确认停止</template>
       </ConfirmDialog>
 
+      <ConfirmDialog :open="membershipRestartDialogOpen" title="确认刷新会员服务？" @close="onMembershipRestartDialogClose">
+        会员权益已更新，需要重启本地服务才能使用新的会员配置。<b>重启会中断正在执行的任务</b>，确认继续吗？
+        <template #confirm-text>重启并刷新</template>
+      </ConfirmDialog>
+
       <ConfirmDialog :open="quitDialogOpen" title="确认退出客户端？" @close="onQuitDialogClose">
         <span v-html="quitText"></span>
         <template #confirm-text>确认退出</template>
@@ -594,13 +665,13 @@ function onStartupAnimationEnd() {
 @import "../styles/console.css";
 
 .login-notice {
-  margin: 12px 0 0;
-  padding: 10px 12px;
+  padding: 4px 10px;
   border: 1px solid hsl(var(--ok) / 0.3);
   border-radius: 8px;
   background: hsl(var(--ok) / 0.1);
   color: hsl(var(--ok-fg));
   font-size: 13px;
+  margin-bottom: 15px;
 }
 
 .console-page__header,

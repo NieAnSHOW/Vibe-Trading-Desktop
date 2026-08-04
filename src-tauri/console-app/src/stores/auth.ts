@@ -8,17 +8,20 @@ export const useAuthStore = defineStore("auth", () => {
   const authenticated = ref(false);
   const userInfo = ref<UserInfo | null>(null);
   const expireAt = ref<number | null>(null);
+  const membershipChanged = ref(false);
 
   function setFromLogin(view: { userInfo: UserInfo; expireAt: number }) {
     authenticated.value = true;
     userInfo.value = view.userInfo;
     expireAt.value = view.expireAt;
+    membershipChanged.value = false;
   }
 
   function clear() {
     authenticated.value = false;
     userInfo.value = null;
     expireAt.value = null;
+    membershipChanged.value = false;
   }
 
   /** console 启动时从 Rust 恢复登录态（Rust 内存或 .env）。 */
@@ -28,10 +31,24 @@ export const useAuthStore = defineStore("auth", () => {
       authenticated.value = s.authenticated;
       userInfo.value = s.userInfo ?? null;
       expireAt.value = s.expireAt ?? null;
+      membershipChanged.value = membershipChanged.value || s.membershipChanged === true;
     } catch {
       clear();
     }
   }
 
-  return { authenticated, userInfo, expireAt, setFromLogin, clear, refresh };
+  function acknowledgeMembershipChange() {
+    membershipChanged.value = false;
+  }
+
+  return {
+    authenticated,
+    userInfo,
+    expireAt,
+    membershipChanged,
+    setFromLogin,
+    clear,
+    refresh,
+    acknowledgeMembershipChange,
+  };
 });

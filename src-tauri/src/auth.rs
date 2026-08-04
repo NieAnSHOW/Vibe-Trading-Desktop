@@ -21,7 +21,7 @@ use crate::runtime_dir::Layout;
 
 // ── 可覆盖配置 ──
 // 业务接口（captcha/sms/login/person...），独立于大模型 MaaS 接口。
-// 默认值与 frontend/src/pages/auth/Login.tsx 对齐。 https://trading-server.nieanshow.cn 
+// 默认值与 frontend/src/pages/auth/Login.tsx 对齐。 https://trading-server.nieanshow.cn
 pub fn user_api_url() -> String {
     std::env::var("VIBE_USER_API_URL").unwrap_or_else(|_| "http://127.0.0.1:8001".into())
 }
@@ -67,7 +67,7 @@ impl std::fmt::Display for AuthError {
 }
 
 // ── 类型：与 cool-admin JSON 对齐（camelCase）──
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MemberLevel {
     pub id: i64,

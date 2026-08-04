@@ -75,6 +75,7 @@ export interface AuthStatusView {
   authenticated: boolean;
   userInfo?: UserInfo | null;
   expireAt?: number | null;
+  membershipChanged?: boolean;
 }
 
 export interface MemberUsageView {
