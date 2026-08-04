@@ -1,3 +1,6 @@
+// 仅 Windows 需要:为原生标题栏着色,使其与应用深色主题一致。
+#![cfg(target_os = "windows")]
+
 const WINDOWS_TITLEBAR_RGB: (u8, u8, u8) = (0x32, 0x3d, 0x43);
 
 /// Convert the CSS-style RGB tuple to the Win32 COLORREF byte order (0x00BBGGRR).
@@ -7,7 +10,6 @@ pub const fn windows_titlebar_colorref() -> u32 {
         | ((WINDOWS_TITLEBAR_RGB.2 as u32) << 16)
 }
 
-#[cfg(target_os = "windows")]
 pub fn apply_windows_titlebar_color(hwnd: isize) -> Result<(), String> {
     use std::mem::size_of;
     use windows_sys::Win32::Foundation::HWND;
@@ -36,11 +38,6 @@ pub fn apply_windows_titlebar_color(hwnd: isize) -> Result<(), String> {
         }
     }
 
-    Ok(())
-}
-
-#[cfg(not(target_os = "windows"))]
-pub fn apply_windows_titlebar_color(_hwnd: isize) -> Result<(), String> {
     Ok(())
 }
 
