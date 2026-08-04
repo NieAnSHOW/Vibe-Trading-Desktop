@@ -99,6 +99,9 @@ src-tauri/target/
 
 # Tauri console 产物(console-app 构建生成)
 src-tauri/console-dist/
+src-tauri/console-app/*.tsbuildinfo
+src-tauri/console-app/vite.config.js
+src-tauri/console-app/vite.config.d.ts
 
 # Tauri generated artifacts
 # Regenerated on every build by tauri_build::build() (see src-tauri/build.rs).
