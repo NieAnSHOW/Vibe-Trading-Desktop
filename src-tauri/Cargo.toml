@@ -23,7 +23,7 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Dwm"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_System_Registry"] }
 
 [dev-dependencies]
 tempfile = "3"

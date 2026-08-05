@@ -232,7 +232,6 @@ function onPwdModalClose() {
 
 function showRegister() {
   resetTouched();
-  rememberLogin.value = false;
   tab.value = "register";
 }
 

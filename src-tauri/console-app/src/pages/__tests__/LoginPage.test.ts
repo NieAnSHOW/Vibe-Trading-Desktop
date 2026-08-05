@@ -107,6 +107,19 @@ describe("LoginPage", () => {
     expect(w.findAll('[data-test="back-to-login"]')).toHaveLength(1);
   });
 
+  it("从注册页切回登录后记住登录保持默认勾选", async () => {
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    // 默认勾选记住登录
+    expect((w.get('[data-test="remember-login"]').element as HTMLInputElement).checked).toBe(true);
+
+    await w.get('[data-test="register-entry"]').trigger("click");
+    await w.get('[data-test="back-to-login"]').trigger("click");
+
+    expect(
+      (w.get('[data-test="remember-login"]').element as HTMLInputElement).checked,
+    ).toBe(true);
+  });
+
   it("切换到密码 tab 后提交调 consoleLoginByPassword", async () => {
     const w = mount(LoginPage, { global: { plugins: [router] } });
     // 点"密码登录" tab 切换

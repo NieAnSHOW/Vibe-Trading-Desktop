@@ -9,6 +9,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[cfg(windows)]
+use windows_sys::Win32::{
+    Foundation::ERROR_MORE_DATA,
+    System::Registry::{
+        RegCloseKey, RegEnumKeyExW, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_CURRENT_USER,
+        HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_32KEY, KEY_WOW64_64KEY, REG_EXPAND_SZ, REG_SAM_FLAGS,
+        REG_SZ,
+    },
+};
+
 use tauri::{AppHandle, Emitter, State};
 
 use crate::auth::{self, AuthError, AuthState, Captcha, LoginRaw, UserInfo};
@@ -1078,7 +1088,207 @@ where
 }
 
 #[cfg(windows)]
+/// 注册表中"添加或删除程序"记录的旧版安装信息。
+/// NSIS 安装器(含 Tauri 默认)无论装到哪个目录，都会写入 Uninstall 键。
+#[derive(Clone, Debug, PartialEq)]
+struct RegistryUninstallInfo {
+    /// 卸载程序可执行文件(UninstallString 解析出的首个程序)。
+    executable: PathBuf,
+    /// UninstallString 中除程序外的参数，随程序一起传给卸载器。
+    args: Vec<String>,
+    /// 注册表子键名(DisplayName 所在子键)，仅用于错误信息。
+    subkey: String,
+}
+
+#[cfg(windows)]
+fn to_wide(s: &str) -> Vec<u16> {
+    s.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+#[cfg(windows)]
+/// Windows 卸载字符串解析: `"C:\path\uninstall.exe" /S` → (exe, ["/S"])。
+/// 遵循 CommandLineToArgvW 规则(双引号可含空格，内部 `""` 转义为字面引号)。
+fn parse_uninstall_string(s: &str) -> Option<(PathBuf, Vec<String>)> {
+    let bytes = s.as_bytes();
+    let mut args: Vec<String> = Vec::new();
+    let mut i = 0;
+    let n = bytes.len();
+    while i < n {
+        while i < n && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i >= n {
+            break;
+        }
+        let mut cur = String::new();
+        let mut in_quotes = false;
+        while i < n {
+            let c = bytes[i];
+            if c == b'"' {
+                if in_quotes && i + 1 < n && bytes[i + 1] == b'"' {
+                    cur.push('"');
+                    i += 2;
+                    continue;
+                }
+                in_quotes = !in_quotes;
+                i += 1;
+            } else if c.is_ascii_whitespace() && !in_quotes {
+                i += 1;
+                break;
+            } else {
+                cur.push(c as char);
+                i += 1;
+            }
+        }
+        if !cur.is_empty() {
+            args.push(cur);
+        }
+    }
+    let mut it = args.into_iter();
+    let exe = it.next()?;
+    Some((PathBuf::from(exe), it.collect()))
+}
+
+#[cfg(windows)]
+/// 读取注册表字符串值。仅处理 REG_SZ/REG_EXPAND_SZ(按字符串读，不做环境变量展开)。
+fn read_registry_string(hkey: HKEY, value_name: &str) -> Option<String> {
+    let name = to_wide(value_name);
+    let mut size: u32 = 0;
+    let mut kind: u32 = 0;
+    let status = unsafe {
+        RegQueryValueExW(hkey, name.as_ptr(), std::ptr::null(), &mut kind, std::ptr::null_mut(), &mut size)
+    };
+    if status != 0 && status != ERROR_MORE_DATA {
+        return None;
+    }
+    let mut buf = vec![0u8; size as usize];
+    let status = unsafe {
+        RegQueryValueExW(hkey, name.as_ptr(), std::ptr::null(), &mut kind, buf.as_mut_ptr(), &mut size)
+    };
+    if status != 0 || (kind != REG_SZ && kind != REG_EXPAND_SZ) {
+        return None;
+    }
+    let nul = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+    let bytes = &buf[..nul];
+    if !bytes.len().is_multiple_of(2) {
+        return None;
+    }
+    let wide: Vec<u16> = bytes
+        .chunks_exact(2)
+        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .collect();
+    String::from_utf16(&wide).ok()
+}
+
+#[cfg(windows)]
+/// 在指定根键(含视图位)下枚举 Uninstall 子键，按 DisplayName 精确匹配旧版应用名。
+fn find_registry_legacy_entry(
+    root: HKEY,
+    view: REG_SAM_FLAGS,
+    display_name: &str,
+) -> Option<RegistryUninstallInfo> {
+    const UNINSTALL_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
+    let subkey = to_wide(UNINSTALL_KEY);
+    let mut handle: HKEY = std::ptr::null_mut();
+    let result = unsafe { RegOpenKeyExW(root, subkey.as_ptr(), 0, KEY_READ | view, &mut handle) };
+    if result != 0 || handle.is_null() {
+        return None;
+    }
+    let mut entry: Option<RegistryUninstallInfo> = None;
+    let mut index: u32 = 0;
+    loop {
+        let mut name_buf = [0u16; 512];
+        let mut name_len = name_buf.len() as u32;
+        let status = unsafe {
+            RegEnumKeyExW(
+                handle,
+                index,
+                name_buf.as_mut_ptr(),
+                &mut name_len,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
+        };
+        if status != 0 {
+            break;
+        }
+        let key_name = String::from_utf16_lossy(&name_buf[..name_len as usize]);
+        let child_path = to_wide(&format!("{}\\{}", UNINSTALL_KEY, key_name));
+        let mut child: HKEY = std::ptr::null_mut();
+        if unsafe { RegOpenKeyExW(root, child_path.as_ptr(), 0, KEY_READ | view, &mut child) } == 0
+            && !child.is_null()
+        {
+            let display = read_registry_string(child, "DisplayName");
+            if display.as_deref() == Some(display_name) {
+                let uninstall_string = read_registry_string(child, "UninstallString");
+                if let Some((executable, args)) = uninstall_string.as_deref().and_then(parse_uninstall_string) {
+                    entry = Some(RegistryUninstallInfo {
+                        executable,
+                        args,
+                        subkey: key_name.clone(),
+                    });
+                }
+            }
+            unsafe { RegCloseKey(child) };
+        }
+        if entry.is_some() {
+            break;
+        }
+        index += 1;
+    }
+    unsafe { RegCloseKey(handle) };
+    entry
+}
+
+#[cfg(windows)]
+/// 遍历 HKLM/HKCU × 32/64 视图，在注册表中查找旧版应用的卸载信息。
+fn find_registry_legacy_uninstaller(display_name: &str) -> Option<RegistryUninstallInfo> {
+    let views = [KEY_WOW64_64KEY, KEY_WOW64_32KEY];
+    views
+        .iter()
+        .find_map(|&view| {
+            find_registry_legacy_entry(HKEY_LOCAL_MACHINE, view, display_name)
+                .or_else(|| find_registry_legacy_entry(HKEY_CURRENT_USER, view, display_name))
+        })
+}
+
+#[cfg(windows)]
 fn uninstall_legacy_windows() -> Result<(), String> {
+    let registry = find_registry_legacy_uninstaller("Vibe Trading");
+    uninstall_legacy_windows_inner(registry, spawn_uninstaller)
+}
+
+#[cfg(windows)]
+/// 启动一个卸载程序(以所在目录为工作目录)。
+fn spawn_uninstaller(executable: &Path, args: &[String]) -> Result<(), String> {
+    let install_dir = executable
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
+    std::process::Command::new(executable)
+        .args(args)
+        .current_dir(install_dir)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("启动旧版 Vibe Trading 卸载程序失败: {e}"))
+}
+
+#[cfg(windows)]
+/// 按注册表优先、固定路径回退的顺序发现并启动旧版卸载程序。
+/// `registry_entry` 为注册表查询结果、`launcher` 为启动函数，测试时可注入。
+fn uninstall_legacy_windows_inner(
+    registry_entry: Option<RegistryUninstallInfo>,
+    launcher: impl Fn(&Path, &[String]) -> Result<(), String>,
+) -> Result<(), String> {
+    if let Some(entry) = registry_entry {
+        if entry.executable.is_file() {
+            return launcher(&entry.executable, &entry.args);
+        }
+    }
+
+    // 回退:老安装器在固定位置留下的 uninstall.exe
     let local_app_data = dirs::data_local_dir().ok_or("local app data directory unavailable")?;
     let uninstaller = legacy_windows_uninstaller_path(&local_app_data);
     if !uninstaller.is_file() {
@@ -1087,14 +1297,7 @@ fn uninstall_legacy_windows() -> Result<(), String> {
             uninstaller.display()
         ));
     }
-    let install_dir = uninstaller
-        .parent()
-        .ok_or("legacy install directory unavailable")?;
-    std::process::Command::new(&uninstaller)
-        .current_dir(install_dir)
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| format!("启动旧版 Vibe Trading 卸载程序失败: {e}"))
+    launcher(&uninstaller, &[])
 }
 
 #[cfg(target_os = "macos")]
@@ -1125,11 +1328,11 @@ end run"#;
 pub fn console_uninstall_legacy_app() -> Result<(), String> {
     #[cfg(windows)]
     {
-        return uninstall_legacy_windows();
+        uninstall_legacy_windows()
     }
     #[cfg(target_os = "macos")]
     {
-        return uninstall_legacy_macos();
+        uninstall_legacy_macos()
     }
     #[cfg(not(any(windows, target_os = "macos")))]
     {
@@ -1734,6 +1937,89 @@ mod tests {
         assert!(!layout.venv_dir.exists());
         clear_venv_dir(&layout).expect("缺失时应幂等成功");
         assert!(!layout.venv_dir.exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn legacy_uninstall_prefers_registry_discovered_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        // 模拟用户装到 D 盘:uninstall.exe 不在 %LOCALAPPDATA%\Vibe Trading
+        let install_dir = tmp.path().join("Custom Install Dir");
+        fs::create_dir_all(&install_dir).unwrap();
+        let uninstaller = install_dir.join("uninstall.exe");
+        fs::write(&uninstaller, b"MZ").unwrap();
+
+        let entry = RegistryUninstallInfo {
+            executable: uninstaller.clone(),
+            args: vec!["/S".into()],
+            subkey: "{GUID}".into(),
+        };
+        let launched = Arc::new(Mutex::new(None));
+        let capture = Arc::clone(&launched);
+        // 注册表入口存在 → 应启动注册表发现的卸载器(非固定路径、非"未找到")
+        let result = uninstall_legacy_windows_inner(Some(entry), move |exe, args| {
+            *capture.lock().unwrap() = Some((exe.to_path_buf(), args.to_vec()));
+            Ok(())
+        });
+        assert!(result.is_ok(), "注册表发现的卸载器应被启动: {result:?}");
+        let (exe, args) = launched.lock().unwrap().clone().expect("launcher 应被调用");
+        assert_eq!(exe, uninstaller, "应启动注册表发现的卸载器");
+        assert_eq!(args, vec!["/S".to_string()], "参数应原样传递");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn legacy_uninstall_falls_back_to_fixed_path_when_registry_empty() {
+        let tmp = tempfile::tempdir().unwrap();
+        // 注册表无记录 → 回退到固定路径;固定路径也不存在 → 报"未找到"
+        let result = uninstall_legacy_windows_inner(None, |_, _| Ok(()));
+        assert!(result.is_err(), "注册表与固定路径都缺失时不应静默成功");
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("未找到旧版 Vibe Trading"),
+            "错误应提示未找到: {err}"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn legacy_uninstall_skips_registry_entry_whose_exe_is_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        // 注册表指向的 exe 已不存在(残留注册表项) → 应继续回退固定路径,而不是尝试启动
+        let ghost = tmp.path().join("ghost").join("uninstall.exe"); // 不创建文件
+        let entry = RegistryUninstallInfo {
+            executable: ghost.clone(),
+            args: vec![],
+            subkey: "{GHOST}".into(),
+        };
+        let result = uninstall_legacy_windows_inner(Some(entry), |_, _| {
+            panic!("launcher 不应在 exe 缺失时被调用");
+        });
+        assert!(result.is_err(), "exe 缺失时不应成功");
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("未找到旧版 Vibe Trading"),
+            "应报未找到: {err}"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn parse_uninstall_string_handles_quoted_paths_and_args() {
+        assert_eq!(
+            parse_uninstall_string(r#""C:\Program Files\Vibe Trading\uninstall.exe" /S"#),
+            Some((
+                PathBuf::from(r"C:\Program Files\Vibe Trading\uninstall.exe"),
+                vec!["/S".to_string()]
+            ))
+        );
+        assert_eq!(
+            parse_uninstall_string(r#"C:\Tools\uninst.exe"#),
+            Some((PathBuf::from(r"C:\Tools\uninst.exe"), vec![]))
+        );
+        // 空字符串 → None
+        assert_eq!(parse_uninstall_string(""), None);
+        assert_eq!(parse_uninstall_string("   "), None);
     }
 
     #[test]
