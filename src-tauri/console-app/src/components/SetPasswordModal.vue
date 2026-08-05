@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { consoleLoginSetPassword } from "../ipc/commands";
 
 const props = defineProps<{ open: boolean }>();
@@ -7,19 +7,31 @@ const emit = defineEmits<{
   (e: "close"): void;
 }>();
 
+const PASSWORD_RE = /^(?=.{6,10}$)(?=.*[A-Z])(?=.*\d).+$/;
+
 const pwd = ref("");
 const confirm = ref("");
+const pwdTouched = ref(false);
+const confirmTouched = ref(false);
 const submitting = ref(false);
 const err = ref("");
 
+const pwdValid = computed(() => PASSWORD_RE.test(pwd.value));
+const pwdError = computed(() => pwdTouched.value && pwd.value !== "" && !pwdValid.value);
+const confirmError = computed(
+  () => confirmTouched.value && confirm.value !== "" && confirm.value !== pwd.value,
+);
+
 async function submit() {
   err.value = "";
-  if (pwd.value.length < 6) {
-    err.value = "密码至少 6 位";
+  pwdTouched.value = true;
+  confirmTouched.value = true;
+  if (!pwdValid.value) {
+    err.value = "密码格式不正确，需 6-10 位且同时包含大写字母和数字";
     return;
   }
   if (pwd.value !== confirm.value) {
-    err.value = "两次输入不一致";
+    err.value = "两次输入的密码不一致";
     return;
   }
   if (submitting.value) return;
@@ -42,23 +54,39 @@ async function submit() {
     <div class="modal-card" role="dialog" aria-modal="true" aria-label="设置登录密码">
       <h2>设置登录密码</h2>
       <p class="hint">首次登录请设置密码，之后可用密码登录。</p>
-      <input
-        class="field"
-        type="password"
-        v-model="pwd"
-        placeholder="新密码（至少 6 位）"
-        autocomplete="new-password"
-        :disabled="submitting"
-      />
-      <input
-        class="field"
-        type="password"
-        v-model="confirm"
-        placeholder="确认密码"
-        autocomplete="new-password"
-        :disabled="submitting"
-      />
-      <div class="row">
+      <label class="row">
+        <span class="lbl">新密码</span>
+        <input
+          class="field"
+          :class="{ invalid: pwdError }"
+          type="password"
+          v-model="pwd"
+          placeholder="6-10 位，含大写字母和数字"
+          autocomplete="new-password"
+          :disabled="submitting"
+          @input="pwdTouched = false"
+          @blur="pwdTouched = true"
+        />
+        <span v-if="pwdError" class="field-error" role="alert">
+          密码格式不正确，需 6-10 位且同时包含大写字母和数字，示例：Exa123
+        </span>
+      </label>
+      <label class="row">
+        <span class="lbl">确认密码</span>
+        <input
+          class="field"
+          :class="{ invalid: confirmError }"
+          type="password"
+          v-model="confirm"
+          placeholder="请再次输入新密码"
+          autocomplete="new-password"
+          :disabled="submitting"
+          @input="confirmTouched = false"
+          @blur="confirmTouched = true"
+        />
+        <span v-if="confirmError" class="field-error" role="alert">两次输入的密码不一致</span>
+      </label>
+      <div class="btns">
         <button class="btn primary" :disabled="submitting" @click="submit">
           {{ submitting ? "提交中…" : "确认" }}
         </button>
@@ -115,6 +143,29 @@ h2 {
 .field::placeholder {
   color: hsl(var(--ink-dim) / 0.7);
 }
+.field.invalid {
+  border-color: hsl(var(--bad) / 0.75);
+  box-shadow: 0 0 0 3px hsl(var(--bad) / 0.16);
+}
+.field.invalid:focus {
+  border-color: hsl(var(--bad));
+  box-shadow: 0 0 0 3px hsl(var(--bad) / 0.2);
+}
+.field-error {
+  font-size: 12px;
+  line-height: 1.5;
+  color: hsl(var(--bad-fg));
+}
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lbl {
+  font-size: 12.5px;
+  font-weight: 550;
+  color: hsl(var(--ink-dim));
+}
 .field:focus {
   outline: none;
   border-color: hsl(var(--brand) / 0.7);
@@ -123,7 +174,7 @@ h2 {
 .field:disabled {
   opacity: 0.55;
 }
-.row {
+.btns {
   display: flex;
   gap: 8px;
   margin-top: 4px;

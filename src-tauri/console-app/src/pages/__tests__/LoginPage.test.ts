@@ -127,7 +127,7 @@ describe("LoginPage", () => {
     expect(mocks.consoleLoginByPassword).toHaveBeenCalledWith(
       "13800000000",
       "secret1",
-      false,
+      true,
     );
   });
 
@@ -183,7 +183,7 @@ describe("LoginPage", () => {
     expect(mocks.consoleLoginByPhone).toHaveBeenCalledWith(
       "13800000000",
       "1234",
-      false,
+      true,
     );
   });
 
@@ -223,12 +223,12 @@ describe("LoginPage", () => {
     expect(w.get('[data-test="register-send-code"]').attributes("disabled")).toBeDefined();
   });
 
-  it("注册仅接受服务端规则的可打印 ASCII 密码", async () => {
+  it("注册页拒绝不含大写字母的密码", async () => {
     const w = mount(LoginPage, { global: { plugins: [router] } });
     await w.get('[data-test="register-entry"]').trigger("click");
     await w.get('[data-test="register-phone"]').setValue("13800000000");
     await w.get('[data-test="register-captcha"]').setValue("abcd");
-    await w.get('[data-test="register-password"]').setValue("Passw0rd! ");
+    await w.get('[data-test="register-password"]').setValue("passw0rd");
 
     expect(w.get('[data-test="register-send-code"]').attributes("disabled")).toBeDefined();
   });

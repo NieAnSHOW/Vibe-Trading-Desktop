@@ -21,14 +21,22 @@ const auth = useAuthStore();
 const tab = ref<"sms" | "password" | "register">("sms");
 const captcha = ref<Captcha | null>(null);
 const phone = ref("");
+const phoneTouched = ref(false);
 const captchaCode = ref("");
+const captchaTouched = ref(false);
 const smsCode = ref("");
+const smsTouched = ref(false);
 const password = ref("");
+const passwordTouched = ref(false);
 const registerPhone = ref("");
+const registerPhoneTouched = ref(false);
 const registerPassword = ref("");
+const registerPwdTouched = ref(false);
 const registerCaptchaCode = ref("");
+const registerCaptchaTouched = ref(false);
 const registerSmsCode = ref("");
-const rememberLogin = ref(false);
+const registerSmsTouched = ref(false);
+const rememberLogin = ref(true);
 const countdown = ref(0);
 const err = ref("");
 const notice = ref("");
@@ -37,7 +45,7 @@ let timer: ReturnType<typeof setInterval> | null = null;
 
 const PHONE_RE = /^1\d{10}$/;
 const isCode4 = (s: string) => /^\d{4}$/.test(s) || /^[0-9a-zA-Z]{4}$/.test(s);
-const PASSWORD_RE = /^(?=.{6,10}$)(?=.*[A-Z])(?=.*\d)(?=.*[!-/:-@[-`{-~])[!-~]+$/;
+const PASSWORD_RE = /^(?=.{6,10}$)(?=.*[A-Z])(?=.*\d).+$/;
 const phoneValid = computed(() => PHONE_RE.test(phone.value));
 const captchaValid = computed(() => isCode4(captchaCode.value));
 const smsValid = computed(() => isCode4(smsCode.value));
@@ -48,6 +56,25 @@ const registerCaptchaValid = computed(() => isCode4(registerCaptchaCode.value));
 const registerSmsValid = computed(() => isCode4(registerSmsCode.value));
 const registerValid = computed(
   () => registerPhoneValid.value && registerPasswordValid.value && registerCaptchaValid.value && registerSmsValid.value,
+);
+
+// 失焦校验:输入框有内容且格式不合法时,显示对应错误提示
+const touched = (t: boolean, filled: boolean) => t && filled;
+const phoneError = computed(() => touched(phoneTouched.value, phone.value !== "") && !phoneValid.value);
+const captchaError = computed(() => touched(captchaTouched.value, captchaCode.value !== "") && !captchaValid.value);
+const smsError = computed(() => touched(smsTouched.value, smsCode.value !== "") && !smsValid.value);
+const passwordError = computed(() => touched(passwordTouched.value, password.value !== "") && !passwordValid.value);
+const registerPhoneError = computed(
+  () => touched(registerPhoneTouched.value, registerPhone.value !== "") && !registerPhoneValid.value,
+);
+const registerPwdError = computed(
+  () => touched(registerPwdTouched.value, registerPassword.value !== "") && !registerPasswordValid.value,
+);
+const registerCaptchaError = computed(
+  () => touched(registerCaptchaTouched.value, registerCaptchaCode.value !== "") && !registerCaptchaValid.value,
+);
+const registerSmsError = computed(
+  () => touched(registerSmsTouched.value, registerSmsCode.value !== "") && !registerSmsValid.value,
 );
 
 function responseMessage(error: unknown, fallback: string) {
@@ -204,12 +231,30 @@ function onPwdModalClose() {
 }
 
 function showRegister() {
+  resetTouched();
   rememberLogin.value = false;
   tab.value = "register";
 }
 
 function showLogin() {
+  resetTouched();
   tab.value = "sms";
+}
+
+function switchTab(next: "sms" | "password" | "register") {
+  resetTouched();
+  tab.value = next;
+}
+
+function resetTouched() {
+  phoneTouched.value = false;
+  captchaTouched.value = false;
+  smsTouched.value = false;
+  passwordTouched.value = false;
+  registerPhoneTouched.value = false;
+  registerPwdTouched.value = false;
+  registerCaptchaTouched.value = false;
+  registerSmsTouched.value = false;
 }
 
 onMounted(async () => {
@@ -262,11 +307,11 @@ onUnmounted(() => {
       <section class="card">
         <nav v-if="tab !== 'register'" class="tabs" role="tablist" aria-label="登录方式">
           <button :class="['tab', tab === 'sms' && 'active']" role="tab" :aria-selected="tab === 'sms'"
-            @click="tab = 'sms'">
+            @click="switchTab('sms')">
             短信登录
           </button>
           <button :class="['tab', tab === 'password' && 'active']" role="tab" :aria-selected="tab === 'password'"
-            @click="tab = 'password'">
+            @click="switchTab('password')">
             密码登录
           </button>
         </nav>
@@ -274,8 +319,11 @@ onUnmounted(() => {
         <form v-if="tab === 'sms'" class="form" @submit.prevent="submitSms">
           <label class="row">
             <span class="lbl">手机号</span>
-            <input class="field" v-model="phone" inputmode="numeric" placeholder="13800000000" autocomplete="tel"
-              @input="phone = phone.replace(/\D/g, '').slice(0, 11)" />
+            <input class="field" :class="{ invalid: phoneError }" v-model="phone" inputmode="numeric"
+              placeholder="请输入 11 位手机号" autocomplete="tel"
+              @input="phone = phone.replace(/\D/g, '').slice(0, 11); phoneTouched = false"
+              @blur="phoneTouched = true" />
+            <span v-if="phoneError" class="field-error" role="alert">请输入正确的手机号,如 13800000000</span>
           </label>
 
           <label class="remember-row">
@@ -286,8 +334,9 @@ onUnmounted(() => {
           <label class="row">
             <span class="lbl">图形验证码</span>
             <div class="inline">
-              <input class="field" v-model="captchaCode" placeholder="abcd" autocomplete="off"
-                @input="captchaCode = captchaCode.trim().slice(0, 4)" />
+              <input class="field" :class="{ invalid: captchaError }" v-model="captchaCode" placeholder="请输入 4 位验证码"
+                autocomplete="off" @input="captchaCode = captchaCode.trim().slice(0, 4); captchaTouched = false"
+                @blur="captchaTouched = true" />
               <button type="button" class="captcha-btn" title="刷新验证码" aria-label="刷新验证码" @click="refreshCaptcha">
                 <img v-if="captcha" :src="captcha.data.startsWith('data:')
                   ? captcha.data
@@ -296,18 +345,21 @@ onUnmounted(() => {
                 <span v-else class="captcha-loading">…</span>
               </button>
             </div>
+            <span v-if="captchaError" class="field-error" role="alert">请输入 4 位图形验证码,如 abcd</span>
           </label>
 
           <label class="row">
             <span class="lbl">短信验证码</span>
             <div class="inline">
-              <input class="field" v-model="smsCode" inputmode="numeric" placeholder="1234" autocomplete="one-time-code"
-                @input="smsCode = smsCode.trim().slice(0, 4)" />
+              <input class="field" :class="{ invalid: smsError }" v-model="smsCode" inputmode="numeric"
+                placeholder="请输入 4 位短信验证码" autocomplete="one-time-code"
+                @input="smsCode = smsCode.trim().slice(0, 4); smsTouched = false" @blur="smsTouched = true" />
               <button type="button" class="code-btn" :disabled="!phoneValid || !captchaValid || countdown > 0"
                 @click="sendCode">
                 {{ countdown > 0 ? `${countdown}s` : "获取" }}
               </button>
             </div>
+            <span v-if="smsError" class="field-error" role="alert">请输入 4 位短信验证码,如 1234</span>
           </label>
 
           <button type="button" class="submit" :disabled="!phoneValid || !smsValid || submitBusy.busy.value"
@@ -325,8 +377,11 @@ onUnmounted(() => {
         <form v-else-if="tab === 'password'" class="form" @submit.prevent="submitPassword">
           <label class="row">
             <span class="lbl">手机号</span>
-            <input class="field" v-model="phone" inputmode="numeric" placeholder="13800000000" autocomplete="tel"
-              @input="phone = phone.replace(/\D/g, '').slice(0, 11)" />
+            <input class="field" :class="{ invalid: phoneError }" v-model="phone" inputmode="numeric"
+              placeholder="请输入 11 位手机号" autocomplete="tel"
+              @input="phone = phone.replace(/\D/g, '').slice(0, 11); phoneTouched = false"
+              @blur="phoneTouched = true" />
+            <span v-if="phoneError" class="field-error" role="alert">请输入正确的手机号,如 13800000000</span>
           </label>
           <label class="remember-row">
             <input data-test="remember-login" v-model="rememberLogin" type="checkbox" />
@@ -334,8 +389,10 @@ onUnmounted(() => {
           </label>
           <label class="row">
             <span class="lbl">密码</span>
-            <input class="field" type="password" v-model="password" placeholder="请输入密码"
-              autocomplete="current-password" />
+            <input class="field" :class="{ invalid: passwordError }" type="password" v-model="password"
+              placeholder="请输入登录密码" autocomplete="current-password"
+              @input="passwordTouched = false" @blur="passwordTouched = true" />
+            <span v-if="passwordError" class="field-error" role="alert">密码长度至少 6 位</span>
           </label>
           <button type="button" class="submit" :disabled="!phoneValid || !passwordValid || submitBusy.busy.value"
             @click="submitPassword">
@@ -352,20 +409,28 @@ onUnmounted(() => {
         <form v-else class="form" @submit.prevent="submitRegister">
           <label class="row">
             <span class="lbl">手机号</span>
-            <input data-test="register-phone" class="field" v-model="registerPhone" inputmode="numeric"
-              placeholder="13800000000" autocomplete="tel"
-              @input="registerPhone = registerPhone.replace(/\D/g, '').slice(0, 11)" />
+            <input data-test="register-phone" class="field" :class="{ invalid: registerPhoneError }" v-model="registerPhone"
+              inputmode="numeric" placeholder="请输入 11 位手机号" autocomplete="tel"
+              @input="registerPhone = registerPhone.replace(/\D/g, '').slice(0, 11); registerPhoneTouched = false"
+              @blur="registerPhoneTouched = true" />
+            <span v-if="registerPhoneError" class="field-error" role="alert">请输入正确的手机号,如 13800000000</span>
           </label>
           <label class="row">
             <span class="lbl">密码</span>
-            <input data-test="register-password" class="field" type="password" v-model="registerPassword"
-              placeholder="6-10 位，含大写、数字和符号" autocomplete="new-password" />
+            <input data-test="register-password" class="field" :class="{ invalid: registerPwdError }" type="password"
+              v-model="registerPassword" placeholder="6-10 位，含大写字母和数字" autocomplete="new-password"
+              @input="registerPwdTouched = false" @blur="registerPwdTouched = true" />
+            <span v-if="registerPwdError" class="field-error" role="alert">
+              密码格式不正确，需 6-10 位且同时包含大写字母和数字，示例：Exa123
+            </span>
           </label>
           <label class="row">
             <span class="lbl">图形验证码</span>
             <div class="inline">
-              <input data-test="register-captcha" class="field" v-model="registerCaptchaCode" placeholder="abcd"
-                autocomplete="off" @input="registerCaptchaCode = registerCaptchaCode.trim().slice(0, 4)" />
+              <input data-test="register-captcha" class="field" :class="{ invalid: registerCaptchaError }"
+                v-model="registerCaptchaCode" placeholder="请输入 4 位验证码" autocomplete="off"
+                @input="registerCaptchaCode = registerCaptchaCode.trim().slice(0, 4); registerCaptchaTouched = false"
+                @blur="registerCaptchaTouched = true" />
               <button type="button" class="captcha-btn" title="刷新验证码" aria-label="刷新验证码" @click="refreshCaptcha">
                 <img v-if="captcha" :src="captcha.data.startsWith('data:')
                   ? captcha.data
@@ -373,19 +438,23 @@ onUnmounted(() => {
                 <span v-else class="captcha-loading">…</span>
               </button>
             </div>
+            <span v-if="registerCaptchaError" class="field-error" role="alert">请输入 4 位图形验证码,如 abcd</span>
           </label>
           <label class="row">
             <span class="lbl">短信验证码</span>
             <div class="inline">
-              <input data-test="register-sms" class="field" v-model="registerSmsCode" inputmode="numeric"
-                placeholder="1234" autocomplete="one-time-code"
-                @input="registerSmsCode = registerSmsCode.trim().slice(0, 4)" />
+              <input data-test="register-sms" class="field" :class="{ invalid: registerSmsError }"
+                v-model="registerSmsCode" inputmode="numeric" placeholder="请输入 4 位短信验证码"
+                autocomplete="one-time-code"
+                @input="registerSmsCode = registerSmsCode.trim().slice(0, 4); registerSmsTouched = false"
+                @blur="registerSmsTouched = true" />
               <button data-test="register-send-code" type="button" class="code-btn"
                 :disabled="!registerPhoneValid || !registerPasswordValid || !registerCaptchaValid || countdown > 0"
                 @click="sendRegisterCode">
                 {{ countdown > 0 ? `${countdown}s` : "获取" }}
               </button>
             </div>
+            <span v-if="registerSmsError" class="field-error" role="alert">请输入 4 位短信验证码,如 1234</span>
           </label>
           <button data-test="register-submit" type="button" class="submit"
             :disabled="!registerValid || submitBusy.busy.value" @click="submitRegister">
@@ -673,6 +742,27 @@ onUnmounted(() => {
   box-shadow:
     0 0 0 4px hsl(var(--brand) / 0.14),
     0 1px 2px hsl(220 40% 2% / 0.5) inset;
+}
+
+/* 注册密码失焦校验失败:醒目红色边框 + 提示文字 */
+.field.invalid {
+  border-color: hsl(var(--bad) / 0.75);
+  box-shadow:
+    0 0 0 4px hsl(var(--bad) / 0.16),
+    0 1px 2px hsl(220 40% 2% / 0.5) inset;
+}
+
+.field.invalid:focus {
+  border-color: hsl(var(--bad));
+  box-shadow:
+    0 0 0 4px hsl(var(--bad) / 0.2),
+    0 1px 2px hsl(220 40% 2% / 0.5) inset;
+}
+
+.field-error {
+  font-size: 12px;
+  line-height: 1.5;
+  color: hsl(var(--bad-fg));
 }
 
 .inline {
