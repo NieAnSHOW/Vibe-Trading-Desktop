@@ -183,8 +183,7 @@ class NorthboundFlowTool(BaseTool):
         "channels (units: 10k CNY), as the latest realtime figure plus a recent "
         "daily history. This is a market-level total, NOT per-stock flow (for a "
         "given symbol's order-bucket inflow use get_fund_flow). Read-only; China "
-        "A-share market only. Example: get_northbound_flow(lookback_days=10)."
-    )
+                "A-share market only. Example: get_northbound_flow(lookback_days=10).  Eastmoney backend (IP rate-limited — batch symbols, avoid concurrent calls with other Eastmoney tools)."    )
     parameters = {
         "type": "object",
         "properties": {

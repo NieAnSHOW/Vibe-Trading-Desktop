@@ -64,8 +64,7 @@ class ResearchReportsTool(BaseTool):
         "each broker's per-year EPS and PE forecasts from Eastmoney, plus the "
         "market consensus (mean) EPS forecast per forward fiscal year from THS "
         "(同花顺). Markets: China A-shares only (.SH / .SZ / .BJ). "
-        'Example: {"code": "600519.SH", "limit": 10}.'
-    )
+                'Example: {"code": "600519.SH", "limit": 10}.  Eastmoney backend (IP rate-limited — batch symbols, avoid concurrent calls with other Eastmoney tools).'    )
     parameters = {
         "type": "object",
         "properties": {

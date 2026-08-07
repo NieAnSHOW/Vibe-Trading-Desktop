@@ -248,8 +248,7 @@ class StockNewsTool(BaseTool):
         "returned under 'matches' (result_type='matches'), not 'articles'. Use "
         "scope 'stock' with a 'code', or scope 'global' (no code) for broad "
         "China-market finance articles. "
-        'Example: {"code": "600519.SH", "scope": "stock", "limit": 10}.'
-    )
+                'Example: {"code": "600519.SH", "scope": "stock", "limit": 10}.  Eastmoney backend (IP rate-limited — batch symbols, avoid concurrent calls with other Eastmoney tools).'    )
     parameters = {
         "type": "object",
         "properties": {

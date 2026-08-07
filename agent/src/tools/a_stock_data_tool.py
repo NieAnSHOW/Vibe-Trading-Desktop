@@ -16,8 +16,7 @@ class AStockDataTool(BaseTool):
     description = (
         "Fetch A-share non-OHLC data through the a-stock-data adapter. "
         "Use get_market_data for price bars; use this for research reports, "
-        "stock news, basic stock data, announcements, or 7x24 global finance news."
-    )
+                "stock news, basic stock data, announcements, or 7x24 global finance news.  Eastmoney backend (IP rate-limited — batch symbols, avoid concurrent calls with other Eastmoney tools)."    )
     parameters = {
         "type": "object",
         "properties": {

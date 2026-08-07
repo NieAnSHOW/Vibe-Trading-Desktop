@@ -45,8 +45,7 @@ class ShareholderCountTool(BaseTool):
         "Eastmoney datacenter: holder count per report period, quarter-over-quarter "
         "change (absolute and percent), and average holding (shares and market value) "
         "per account. Markets: China A-shares only (.SH / .SZ / .BJ). "
-        'Example: {"code": "600519.SH"}.'
-    )
+                'Example: {"code": "600519.SH"}.  Eastmoney backend (IP rate-limited — batch symbols, avoid concurrent calls with other Eastmoney tools).'    )
     parameters = {
         "type": "object",
         "properties": {

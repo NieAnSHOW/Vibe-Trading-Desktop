@@ -410,8 +410,7 @@ class FinancialStatementsTool(BaseTool):
         "Hong Kong (.HK). US uses SEC EDGAR companyfacts; A-share and HK use "
         "Eastmoney. Reports come back newest-first as flat per-period rows. Use "
         'this to read fundamentals before building a valuation or screen. Example: '
-        '{"code": "600519.SH", "statement": "income", "period": "annual"}.'
-    )
+                '{"code": "600519.SH", "statement": "income", "period": "annual"}.  Eastmoney backend (IP rate-limited — batch symbols, avoid concurrent calls with other Eastmoney tools).'    )
     parameters = {
         "type": "object",
         "properties": {

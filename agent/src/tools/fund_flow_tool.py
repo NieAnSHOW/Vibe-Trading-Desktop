@@ -150,7 +150,9 @@ class FundFlowTool(BaseTool):
         "is flowing into or out of that specific symbol. NOT market-wide aggregate "
         "flow (for Stock-Connect 北向 use get_northbound_flow). Markets: A-share "
         "(.SH/.SZ/.BJ), Hong Kong (.HK) and US (.US). Example: "
-        '{"codes": ["600519.SH", "00700.HK"], "period": "daily", "days": 30}.'
+        '{"codes": ["600519.SH", "00700.HK"], "period": "daily", "days": 30}. '
+        "Eastmoney backend (IP rate-limited — batch symbols, avoid concurrent "
+        "calls with other Eastmoney tools)."
     )
     parameters = {
         "type": "object",

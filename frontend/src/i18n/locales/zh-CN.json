@@ -23,6 +23,7 @@
       "workspace": "工作区",
       "tools": "工具"
     },
+    "researchTools": "投研工具",
     "agent": "智能体",
     "usage": "LLM 用量",
     "runtime": "运行时",

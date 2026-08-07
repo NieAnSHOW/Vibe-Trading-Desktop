@@ -135,8 +135,7 @@ class MarginTradingTool(BaseTool):
         "buy amount, securities-lending balance, and combined RZRQ balance, one "
         "row per trading day (most recent first). Read-only, no credentials, "
         "Mainland China A-shares only (SH/SZ). "
-        'Example: get_margin_trading(code="600519.SH", days=30).'
-    )
+                'Example: get_margin_trading(code="600519.SH", days=30).  Eastmoney backend (IP rate-limited — batch symbols, avoid concurrent calls with other Eastmoney tools).'    )
     parameters = {
         "type": "object",
         "properties": {

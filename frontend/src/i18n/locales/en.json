@@ -28,6 +28,7 @@
       "workspace": "Workspace",
       "tools": "Tools"
     },
+    "researchTools": "Research Tools",
     "agent": "Agent",
     "usage": "LLM Usage",
     "runtime": "Runtime",

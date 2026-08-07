@@ -77,8 +77,7 @@ class SymbolSearchTool(BaseTool):
         "Yahoo). Searches Eastmoney (China/HK/US names and tickers) and Yahoo "
         "(global) and, for U.S. equities, attaches the SEC CIK. Use this to turn "
         "an ambiguous name into a concrete symbol before calling get_market_data "
-        'or get_sec_filings. Example: search_symbol(query="apple", limit=5).'
-    )
+                'or get_sec_filings. Example: search_symbol(query="apple", limit=5).  Eastmoney backend (IP rate-limited — batch symbols, avoid concurrent calls with other Eastmoney tools).'    )
     parameters = {
         "type": "object",
         "properties": {

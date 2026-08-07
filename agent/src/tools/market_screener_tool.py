@@ -174,8 +174,7 @@ class MarketScreenerTool(BaseTool):
         "value (amount) or turnover rate. Use this to find today's biggest "
         "movers or most-actively-traded names without fetching every symbol. "
         "Markets: A-share ('a'), US ('us'), Hong Kong ('hk'). "
-        'Example: {"market": "a", "sort_by": "change_pct", "top_n": 20}.'
-    )
+                'Example: {"market": "a", "sort_by": "change_pct", "top_n": 20}.  Eastmoney backend (IP rate-limited — batch symbols, avoid concurrent calls with other Eastmoney tools).'    )
     parameters = {
         "type": "object",
         "properties": {

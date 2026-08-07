@@ -176,8 +176,7 @@ class BlockTradesTool(BaseTool):
         "Eastmoney datacenter: per-deal price, volume, amount, the "
         "premium/discount versus that day's close, and the buyer/seller broker "
         "seats (营业部). Markets: China A-share only (.SH/.SZ/.BJ). Read-only. "
-        'Example: get_block_trades(code="600519.SH", days=30).'
-    )
+                'Example: get_block_trades(code="600519.SH", days=30).  Eastmoney backend (IP rate-limited — batch symbols, avoid concurrent calls with other Eastmoney tools).'    )
     parameters = {
         "type": "object",
         "properties": {

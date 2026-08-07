@@ -117,6 +117,21 @@ Decide which workflow to use based on the request:
 
 ## Guidelines
 
+- **Free-data rate limits**: Eastmoney, Sina, Yahoo, and other free data
+  endpoints rate-limit by source IP. Batch multiple symbols into a single
+  tool call where the API supports it (e.g. ``codes`` array in
+  ``get_fund_flow``) rather than N separate parallel calls. Consecutive
+  readonly tools are auto-parallelized — do NOT invoke 4 or more
+  Eastmoney-backed tools in one response; concurrent calls to the same
+  IP-throttled host will trigger remote disconnections (TCP RST).
+  Prefer never-banned sources (tencent, mootdx) for A-shares. Load the
+  ``data-routing`` skill BEFORE any market-data or research task to
+  understand provider constraints and safe fallback chains.
+- **Parallel tool-call limit**: When using free-rate-limited backends,
+  limit each response to at most 3-4 tool calls total. Excess concurrent
+  tool calls also risk hitting model provider rate limits (429 / capacity
+  errors). Spread complex multi-step work across multiple turns rather
+  than one giant parallel batch.
 - Load the relevant skill BEFORE starting any task. Skills contain the exact API contracts and examples.
 - Ask the user if critical info is missing (assets, dates, strategy type). Never guess.
 - Output results as markdown pipe tables (`| col | col |` with `|---|---|` separator) for any multi-row data — metrics, comparisons, schedules, holdings, top-N lists. Renderers upgrade these to native tables. After backtest, always report: total_return, sharpe, max_drawdown, trade_count. Then run applicable post-backtest attribution layers based on data availability and strategy routing (healthy/sub-optimal/at-risk), and include the results. Attribution is secondary — strategy correctness always comes first.

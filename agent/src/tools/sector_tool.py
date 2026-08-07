@@ -254,8 +254,7 @@ class SectorInfoTool(BaseTool):
         "industry boards by today's percent change (with up/down constituent "
         "counts and the leading stock). Use this to map a stock to its sectors "
         "or to see which sectors are hot today. Market: A-share stocks. "
-        'Example: {"code": "600519.SH"} or {"mode": "ranking", "limit": 20}.'
-    )
+                'Example: {"code": "600519.SH"} or {"mode": "ranking", "limit": 20}.  Eastmoney backend (IP rate-limited — batch symbols, avoid concurrent calls with other Eastmoney tools).'    )
     parameters = {
         "type": "object",
         "properties": {

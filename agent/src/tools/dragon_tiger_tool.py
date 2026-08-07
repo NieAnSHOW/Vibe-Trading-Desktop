@@ -160,8 +160,7 @@ class DragonTigerTool(BaseTool):
         "'code' for the full-market list of every security that appeared on the "
         "board that day; supply 'code' to also get that security's ranked top "
         "buy/sell brokerage seats. Read-only, no auth. "
-        'Example: {"date": "2024-01-02", "code": "600519.SH"}.'
-    )
+                'Example: {"date": "2024-01-02", "code": "600519.SH"}.  Eastmoney backend (IP rate-limited — batch symbols, avoid concurrent calls with other Eastmoney tools).'    )
     parameters = {
         "type": "object",
         "properties": {

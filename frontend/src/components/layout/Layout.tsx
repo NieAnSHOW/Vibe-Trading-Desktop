@@ -26,6 +26,7 @@ import {
   BookOpen,
   LayoutDashboard,
   ChartNoAxesCombined,
+  FlaskConical,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -126,6 +127,7 @@ function NavLink({
   collapsed,
   isActive,
   external,
+  indent,
 }: {
   to: string;
   icon: LucideIcon;
@@ -133,6 +135,7 @@ function NavLink({
   collapsed: boolean;
   isActive: boolean;
   external?: boolean;
+  indent?: boolean;
 }) {
   const base =
     "flex items-center rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary";
@@ -145,7 +148,7 @@ function NavLink({
         rel="noopener noreferrer"
         className={cn(
           base,
-          collapsed ? "justify-center p-2" : "gap-3 px-3 py-2",
+          collapsed ? "justify-center p-2" : indent ? "gap-3 pl-8 pr-3 py-1.5" : "gap-3 px-3 py-2",
           "text-muted-foreground hover:bg-muted hover:text-foreground",
         )}
         title={collapsed ? label : undefined}
@@ -230,6 +233,7 @@ export function Layout() {
     () => localStorage.getItem("qa-sidebar") === "collapsed",
   );
   const [showExternal, setShowExternal] = useState(false);
+  const [showResearch, setShowResearch] = useState(false);
 
   const activeSessionId = searchParams.get("session");
   const streamingSessionId = useAgentStore((s) => s.streamingSessionId);
@@ -308,7 +312,7 @@ export function Layout() {
         {/* ── top: logo + primary nav ── */}
         <div
           className={cn(
-            "flex justify-center border-b",
+            "flex shrink-0 justify-center border-b",
             collapsed ? " px-1 py-3" : "px-4 py-3.5",
           )}
         >
@@ -326,7 +330,12 @@ export function Layout() {
           </div>
         </div>
 
-        <nav className={cn("space-y-0.5", collapsed ? "p-1" : "p-2")}>
+        <nav
+          className={cn(
+            "min-h-0 overflow-y-auto space-y-0.5",
+            collapsed ? "p-1" : "p-2",
+          )}
+        >
           {!collapsed && (
             <SectionLabel>{t("layout.section.workspace")}</SectionLabel>
           )}
@@ -380,30 +389,9 @@ export function Layout() {
             collapsed={collapsed}
             isActive={isActive("/usage")}
           />
-          <NavLink
-            to="/reports"
-            icon={FileText}
-            label={t("layout.reports")}
-            collapsed={collapsed}
-            isActive={isActive("/reports")}
-          />
-          <NavLink
-            to="/alpha-zoo"
-            icon={Layers}
-            label={t("layout.alphaZoo")}
-            collapsed={collapsed}
-            isActive={isActive("/alpha-zoo")}
-          />
           {!collapsed && (
             <SectionLabel>{t("layout.section.tools")}</SectionLabel>
           )}
-          <NavLink
-            to="/correlation"
-            icon={BarChart3}
-            label={t("layout.correlation")}
-            collapsed={collapsed}
-            isActive={isActive("/correlation")}
-          />
           <NavLink
             to="/settings"
             icon={Settings}
@@ -412,15 +400,66 @@ export function Layout() {
             isActive={isActive("/settings")}
           />
 
-          {/* docs */}
-          <NavLink
-            to="https://agent.nieanshow.cn/column/04-ai-trading/"
-            icon={BookOpen}
-            label={t("layout.docs")}
-            collapsed={collapsed}
-            isActive={false}
-            external
-          />
+          {/* research — collapsible group */}
+          {!collapsed && (
+            <button
+              type="button"
+              onClick={() => setShowResearch((v) => !v)}
+              className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <FlaskConical className="h-4 w-4 shrink-0" />
+              <span className="flex-1 text-left">
+                {t("layout.researchTools")}
+              </span>
+              <span
+                className={cn(
+                  "text-[10px] text-muted-foreground/50 transition-transform",
+                  showResearch && "rotate-90",
+                )}
+              >
+                ▶
+              </span>
+            </button>
+          )}
+          {!collapsed ? (
+            showResearch && (
+              <div className="space-y-0.5">
+                <NavLink
+                  to="/reports"
+                  icon={FileText}
+                  label={t("layout.reports")}
+                  collapsed={collapsed}
+                  isActive={isActive("/reports")}
+                  indent
+                />
+                <NavLink
+                  to="/alpha-zoo"
+                  icon={Layers}
+                  label={t("layout.alphaZoo")}
+                  collapsed={collapsed}
+                  isActive={isActive("/alpha-zoo")}
+                  indent
+                />
+                <NavLink
+                  to="/correlation"
+                  icon={BarChart3}
+                  label={t("layout.correlation")}
+                  collapsed={collapsed}
+                  isActive={isActive("/correlation")}
+                  indent
+                />
+              </div>
+            )
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowResearch((v) => !v)}
+              className="flex items-center justify-center p-2 w-full rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              title={t("layout.researchTools")}
+            >
+              <FlaskConical className="h-4 w-4 shrink-0" />
+            </button>
+          )}
 
           {/* external — collapsible group */}
           {!collapsed && (
@@ -488,11 +527,21 @@ export function Layout() {
                 <s.icon className="h-4 w-4 shrink-0" />
               </button>
             ))}
+
+          {/* docs */}
+          <NavLink
+            to="https://agent.nieanshow.cn/column/04-ai-trading/"
+            icon={BookOpen}
+            label={t("layout.docs")}
+            collapsed={collapsed}
+            isActive={false}
+            external
+          />
         </nav>
 
         {/* ── middle: sessions ── */}
         {!collapsed && (
-          <div className="flex-1 overflow-hidden border-t mt-2 flex flex-col min-h-0">
+          <div className="flex-1 overflow-hidden border-t mt-2 flex flex-col min-h-[160px]">
             <div className="flex items-center justify-between py-2 px-4">
               <span className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider select-none">
                 {t("layout.sessions")}

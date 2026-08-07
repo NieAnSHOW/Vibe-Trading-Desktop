@@ -289,8 +289,7 @@ class LockupExpiryTool(BaseTool):
         "omit the code to get a market-wide calendar of upcoming unlocks within "
         "the next horizon_days. A large near-term unlock adds tradable supply "
         "and often pressures the stock. Example: "
-        '{"code": "600519.SH"} or {"horizon_days": 30}.'
-    )
+                '{"code": "600519.SH"} or {"horizon_days": 30}.  Eastmoney backend (IP rate-limited — batch symbols, avoid concurrent calls with other Eastmoney tools).'    )
     parameters = {
         "type": "object",
         "properties": {

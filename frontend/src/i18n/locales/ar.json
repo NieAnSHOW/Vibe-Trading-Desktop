@@ -5,6 +5,7 @@
   "layout": {
     "news": "أخبار الاستثمار",
     "section": { "workspace": "Workspace", "tools": "Tools" },
+    "researchTools": "أدوات البحث",
     "agent": "الوكيل",
     "usage": "استخدام LLM",
     "runtime": "وقت التشغيل",

@@ -11,9 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
-import random
 import re
-import time
 import urllib.request
 import uuid
 from datetime import datetime
@@ -22,6 +20,7 @@ from typing import Any, Callable, Dict, List, Optional
 import pandas as pd
 import requests
 
+from backtest.loaders._http import resolve_min_interval, throttled_get
 from backtest.loaders.base import cached_loader_fetch, validate_date_range
 from backtest.loaders.registry import register
 
@@ -34,11 +33,6 @@ EASTMONEY_SEARCH_API = "https://search-api-web.eastmoney.com/search/jsonp"
 EASTMONEY_FAST_NEWS_API = "https://np-weblist.eastmoney.com/comm/web/getFastNewsList"
 CNINFO_ORGID_API = "http://www.cninfo.com.cn/new/data/szse_stock.json"
 CNINFO_ANNOUNCEMENT_API = "https://www.cninfo.com.cn/new/hisAnnouncement/query"
-
-EM_MIN_INTERVAL = 1.0
-_EM_SESSION = requests.Session()
-_EM_SESSION.headers.update({"User-Agent": UA})
-_EM_LAST_CALL = [0.0]
 
 
 def _normalise_code(code: str) -> str:
@@ -90,25 +84,24 @@ def em_get(
     params: dict[str, Any] | None = None,
     headers: dict[str, str] | None = None,
     timeout: int = 15,
-    **kwargs: Any,
 ) -> requests.Response:
-    """Eastmoney request helper with serial throttling and session reuse."""
-    last_exc: Exception | None = None
-    for attempt in range(2):
-        wait = EM_MIN_INTERVAL - (time.time() - _EM_LAST_CALL[0])
-        if wait > 0:
-            time.sleep(wait + random.uniform(0.1, 0.5))
-        try:
-            return _EM_SESSION.get(url, params=params, headers=headers, timeout=timeout, **kwargs)
-        except requests.RequestException as exc:
-            last_exc = exc
-            if attempt == 0:
-                time.sleep(1.0 + random.uniform(0.1, 0.5))
-                continue
-            raise
-        finally:
-            _EM_LAST_CALL[0] = time.time()
-    raise AssertionError(f"unreachable Eastmoney retry state: {last_exc}")
+    """Eastmoney GET via the shared per-host throttle and session pool.
+
+    All Eastmoney traffic across the project routes through the same
+    HostThrottle (host_key="eastmoney") so concurrent tool calls serialize
+    instead of tripping Eastmoney's IP-level rate limiter.
+    """
+    merged = {"User-Agent": UA}
+    if headers:
+        merged.update(headers)
+    return throttled_get(
+        url,
+        host_key="eastmoney",
+        min_interval=resolve_min_interval("VIBE_TRADING_EASTMONEY_MIN_INTERVAL", 1.0),
+        params=params,
+        headers=merged,
+        timeout=timeout,
+    )
 
 
 def tencent_quote(codes: list[str]) -> dict[str, dict[str, Any]]:
