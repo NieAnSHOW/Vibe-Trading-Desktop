@@ -1,12 +1,12 @@
-"""Web search tool: free multi-engine search via ddgs (no API key).
+"""Web search tool: CN-first free engines, overseas engines opt-in.
 
-`ddgs` (the successor to `duckduckgo_search`) is a metasearch aggregator: it can
-query DuckDuckGo, Google, Bing, Brave, Mojeek, Yahoo and more behind one API,
-none of which need an API key.  DuckDuckGo alone rate-limits aggressively from
-cloud / shared IPs (issue #231: ``web_search`` showed ❌ while the run still
-succeeded via ``read_url``), so we pass an explicit ordered backend list and let
-ddgs fall through a throttled engine to the next one, with a short retry/backoff
-on top for transient failures.
+Default path uses free, key-less, CN-direct engines (360 Search → Sogou →
+cn.bing) so users in mainland China get results without a proxy. The overseas
+ddgs engines (DuckDuckGo/Google/Bing/Brave/Mojeek/Yahoo) are opt-in via
+``VIBE_TRADING_SEARCH_BACKENDS`` — they are unreachable from typical CN egress
+(sidecar logs 2026-08-07: ``search.brave.com`` timed out, Yahoo 403), so
+contacting them by default only burned ~20-30s before falling back. A key-gated
+Aliyun IQS fast-path stays first when configured.
 """
 
 from __future__ import annotations
@@ -22,9 +22,8 @@ from src.security.scanner import with_security_warnings
 
 logger = logging.getLogger(__name__)
 
-# Free, no-key engines aggregated by ddgs, tried in order. A single engine
-# returning nothing or being rate-limited no longer fails the whole search.
-# Override (or pin to one engine) via VIBE_TRADING_SEARCH_BACKENDS.
+# Overseas engines aggregated by ddgs. Opt-in only via VIBE_TRADING_SEARCH_BACKENDS
+# (default empty = skip ddgs entirely; CN users get the CN chain directly).
 _DEFAULT_BACKENDS = "duckduckgo, google, bing, brave, mojeek, yahoo"
 _MAX_ATTEMPTS = 3
 _BACKOFF_BASE_SECONDS = 0.8
@@ -131,8 +130,45 @@ def _sogou_search(query: str, max_results: int = 5) -> list[dict]:
     return out
 
 
+def _qihu_search(query: str, max_results: int = 5) -> list[dict]:
+    """Scrape so.com (360 Search) organic results — no API key, CN-direct, stable.
+
+    Among free CN engines 360 returns the most precise financial-entity hits
+    (company sites, stock forum, announcements, news) and stays stable across
+    repeated calls, unlike shenma/quark which punish scripted access. Result
+    hrefs are ``so.com/link?m=...`` redirect wrappers (the real URL is not in
+    the HTML), kept as-is so a downstream ``read_url`` can follow them — same
+    shape as :func:`_sogou_search`'s sogou jump links. Pure stdlib.
+    """
+    import re as _re
+    import urllib.parse
+    import urllib.request
+
+    url = "https://www.so.com/s?" + urllib.parse.urlencode({"q": query})
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    )
+    html = urllib.request.urlopen(req, timeout=10).read().decode("utf-8", "ignore")
+    pairs = _re.findall(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', html, _re.S)
+    out: list[dict] = []
+    for href, inner in pairs:
+        title = _re.sub(r"<[^>]+>", "", inner).strip()
+        if not (8 <= len(title) <= 80):
+            continue
+        if any(x in title for x in ("搜索", "首页", "登录", "注册", "360", "安全", "导航", "下载")):
+            continue
+        if href.startswith("//"):
+            href = "https:" + href
+        elif not href.startswith("http"):
+            continue
+        out.append({"title": title, "href": href, "body": ""})
+        if len(out) >= max_results:
+            break
+    return out
+
+
 class WebSearchTool(BaseTool):
-    """Search the web via ddgs across several free engines and return top results."""
+    """Search the web via free CN engines by default; overseas engines opt-in."""
 
     name = "web_search"
 
@@ -148,9 +184,11 @@ class WebSearchTool(BaseTool):
         except ImportError:
             return False
     description = (
-        "Search the web across free engines (DuckDuckGo, Google, Bing, Brave, "
-        "Mojeek, Yahoo). Returns top results with title, URL, and snippet. Use "
-        "this to find information, news, or URLs before reading them with read_url."
+        "Search the web via free CN engines (360, Sogou, cn.bing) by default; "
+        "overseas engines (DuckDuckGo/Google/Bing/Brave/...) are opt-in via "
+        "VIBE_TRADING_SEARCH_BACKENDS. Returns top results with title, URL, "
+        "and snippet. Use this to find information, news, or URLs before "
+        "reading them with read_url."
     )
     parameters = {
         "type": "object",
@@ -170,7 +208,13 @@ class WebSearchTool(BaseTool):
     repeatable = True
 
     def execute(self, **kwargs: Any) -> str:
-        """Run a web search across free engines with retry and backend fallback.
+        """Run a web search, CN-first by default, overseas engines opt-in.
+
+        Engine selection: the overseas ddgs engines are contacted only when
+        ``VIBE_TRADING_SEARCH_BACKENDS`` is set (proxy / overseas egress). The
+        default CN chain (360 → sogou → cn.bing) is free, key-less, CN-direct —
+        CN users without a proxy get results immediately instead of burning
+        ~20-30s on brave/yahoo/duckduckgo timeouts.
 
         Args:
             **kwargs: Must include query; optionally max_results.
@@ -181,11 +225,12 @@ class WebSearchTool(BaseTool):
         """
         query = kwargs["query"]
         max_results = min(int(kwargs.get("max_results", 5)), 10)
-        backends = os.getenv("VIBE_TRADING_SEARCH_BACKENDS", _DEFAULT_BACKENDS).strip() or "auto"
+        backends_env = os.getenv("VIBE_TRADING_SEARCH_BACKENDS", "").strip()
+        overseas_enabled = bool(backends_env)
+        backends = backends_env or _DEFAULT_BACKENDS
 
         # Fast path: Alibaba Cloud IQS if configured (official API, CN-direct,
-        # ~1s, structured + snippet, best quality). Skip ddgs entirely when IQS
-        # is available — ddgs engines are unreachable from typical CN egress.
+        # ~1s, structured + snippet, best quality). Skips every other engine.
         if os.getenv("ALIYUN_IQS_API_KEY", "").strip():
             try:
                 raw = _aliyun_iqs_search(query, max_results=max_results)
@@ -203,92 +248,96 @@ class WebSearchTool(BaseTool):
                         payload, fields=("results.*.title", "results.*.snippet")
                     )
                     return json.dumps(payload, ensure_ascii=False)
-                logger.warning("aliyun_iqs returned no results, falling through to ddgs")
+                logger.warning("aliyun_iqs returned no results, falling through")
             except Exception as exc:  # noqa: BLE001
-                logger.warning("aliyun_iqs failed: %s, falling through to ddgs", exc)
+                logger.warning("aliyun_iqs failed: %s, falling through", exc)
 
-        try:
-            from ddgs import DDGS
-
-            supports_backend = True
-        except ImportError:
+        # Overseas ddgs engines are opt-in. CN users without a proxy would otherwise
+        # burn ~20-30s on timeouts (brave/yahoo/duckduckgo unreachable from typical
+        # CN egress) before reaching the CN chain, so we only contact them when the
+        # user explicitly sets VIBE_TRADING_SEARCH_BACKENDS (proxy / overseas egress).
+        if overseas_enabled:
             try:
-                from duckduckgo_search import DDGS  # legacy package, no engine selection
+                from ddgs import DDGS
+
+                supports_backend = True
             except ImportError:
-                return json.dumps(
-                    {
-                        "status": "error",
-                        "error": "Web search package not installed. Run: pip install ddgs",
-                    },
-                    ensure_ascii=False,
-                )
-            supports_backend = False
-
-        last_error: Exception | None = None
-        for attempt in range(1, _MAX_ATTEMPTS + 1):
-            try:
-                with DDGS() as client:
-                    if supports_backend:
-                        raw = list(client.text(query, max_results=max_results, backend=backends))
-                    else:
-                        raw = list(client.text(query, max_results=max_results))
-            except TypeError:
-                # Older ddgs/duckduckgo_search without the backend kwarg.
-                supports_backend = False
-                continue
-            except Exception as exc:  # noqa: BLE001 — surface a clean error to the agent
-                last_error = exc
-                # "No results found" is a definitive empty answer, not a transient
-                # failure — retrying or switching engines won't change it.
-                if "no results" in str(exc).lower():
+                try:
+                    from duckduckgo_search import DDGS  # legacy package, no engine selection
+                except ImportError:
                     return json.dumps(
                         {
-                            "status": "ok",
-                            "query": query,
-                            "backends": backends if supports_backend else "duckduckgo",
-                            "results": [],
-                            "note": "No results found for this query across the search engines.",
+                            "status": "error",
+                            "error": "Web search package not installed. Run: pip install ddgs",
                         },
                         ensure_ascii=False,
                     )
-                logger.warning("web_search attempt %d/%d failed: %s", attempt, _MAX_ATTEMPTS, exc)
-                # Network/egress errors (timeout, connection refused, unreachable)
-                # won't recover on retry — stop retrying ddgs and fall through to
-                # the cn.bing fallback instead of wasting ~20-30s on more timeouts.
-                err_msg = str(exc).lower()
-                if any(s in err_msg for s in ("timeout", "timed out", "unreachable", "connection", "max retries")):
-                    break
-                if attempt < _MAX_ATTEMPTS:
-                    time.sleep(_BACKOFF_BASE_SECONDS * attempt)
-                continue
+                supports_backend = False
 
-            results = [
-                {
-                    "title": r.get("title", ""),
-                    "url": r.get("href", ""),
-                    "snippet": r.get("body", ""),
+            last_error: Exception | None = None
+            for attempt in range(1, _MAX_ATTEMPTS + 1):
+                try:
+                    with DDGS() as client:
+                        if supports_backend:
+                            raw = list(client.text(query, max_results=max_results, backend=backends))
+                        else:
+                            raw = list(client.text(query, max_results=max_results))
+                except TypeError:
+                    # Older ddgs/duckduckgo_search without the backend kwarg.
+                    supports_backend = False
+                    continue
+                except Exception as exc:  # noqa: BLE001 — surface a clean error to the agent
+                    last_error = exc
+                    # "No results found" is a definitive empty answer, not a transient
+                    # failure — retrying or switching engines won't change it.
+                    if "no results" in str(exc).lower():
+                        return json.dumps(
+                            {
+                                "status": "ok",
+                                "query": query,
+                                "backends": backends if supports_backend else "duckduckgo",
+                                "results": [],
+                                "note": "No results found for this query across the search engines.",
+                            },
+                            ensure_ascii=False,
+                        )
+                    logger.warning("web_search attempt %d/%d failed: %s", attempt, _MAX_ATTEMPTS, exc)
+                    # Network/egress errors (timeout, connection refused, unreachable)
+                    # won't recover on retry — stop retrying ddgs and fall through to
+                    # the CN chain instead of wasting ~20-30s on more timeouts.
+                    err_msg = str(exc).lower()
+                    if any(s in err_msg for s in ("timeout", "timed out", "unreachable", "connection", "max retries")):
+                        break
+                    if attempt < _MAX_ATTEMPTS:
+                        time.sleep(_BACKOFF_BASE_SECONDS * attempt)
+                    continue
+
+                results = [
+                    {
+                        "title": r.get("title", ""),
+                        "url": r.get("href", ""),
+                        "snippet": r.get("body", ""),
+                    }
+                    for r in raw
+                ]
+                payload = {
+                    "status": "ok",
+                    "query": query,
+                    "backends": backends if supports_backend else "duckduckgo",
+                    "results": results,
                 }
-                for r in raw
-            ]
-            payload = {
-                "status": "ok",
-                "query": query,
-                "backends": backends if supports_backend else "duckduckgo",
-                "results": results,
-            }
-            payload = with_security_warnings(
-                payload,
-                fields=("results.*.title", "results.*.snippet"),
-            )
-            return json.dumps(payload, ensure_ascii=False)
+                payload = with_security_warnings(
+                    payload,
+                    fields=("results.*.title", "results.*.snippet"),
+                )
+                return json.dumps(payload, ensure_ascii=False)
 
-        # Fallback chain when every ddgs backend is blocked (common behind
-        # restricted egress, e.g. CN hosts without VPN): sogou first (best CN
-        # query quality), then cn.bing (real URLs, broader). Toggle via
-        # VIBE_TRADING_SEARCH_BING_FALLBACK (default on).
+        # CN chain: 360 → sogou → cn.bing. All free, key-less, CN-direct. Reached
+        # by default (no overseas opt-in) or after overseas engines fail. Toggle
+        # the whole chain via VIBE_TRADING_SEARCH_BING_FALLBACK (default on).
         fb_err = "disabled"
         if os.getenv("VIBE_TRADING_SEARCH_BING_FALLBACK", "1").strip().lower() in ("1", "true", "yes"):
-            for fb_name, fb_fn in (("sogou", _sogou_search), ("bing_cn", _bing_cn_search)):
+            for fb_name, fb_fn in (("qihu", _qihu_search), ("sogou", _sogou_search), ("bing_cn", _bing_cn_search)):
                 try:
                     raw = fb_fn(query, max_results=max_results)
                     if raw:
@@ -314,12 +363,11 @@ class WebSearchTool(BaseTool):
             {
                 "status": "error",
                 "error": (
-                    f"Web search failed after {_MAX_ATTEMPTS} attempts "
-                    f"(backends: {backends if supports_backend else 'duckduckgo'}): {last_error}. "
-                    f"CN fallbacks (sogou, bing_cn): {fb_err}. "
-                    "Retry shortly, set VIBE_TRADING_SEARCH_BACKENDS to a different engine list, "
-                    "set VIBE_TRADING_SEARCH_BING_FALLBACK=0 to disable CN fallback, or read a "
-                    "known URL directly with read_url."
+                    "Web search failed: CN chain (360/sogou/cn.bing) exhausted "
+                    f"({fb_err}). Overseas engines are opt-in — set "
+                    "VIBE_TRADING_SEARCH_BACKENDS (e.g. 'duckduckgo,google,bing,brave,"
+                    "mojeek,yahoo') to enable them, set VIBE_TRADING_SEARCH_BING_FALLBACK=0 "
+                    "to disable CN fallback, or read a known URL directly with read_url."
                 ),
             },
             ensure_ascii=False,
