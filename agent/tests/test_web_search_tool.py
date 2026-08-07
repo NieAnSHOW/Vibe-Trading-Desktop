@@ -246,6 +246,30 @@ def test_bing_fallback_disabled_skips_cn_chain(monkeypatch):
     assert "disabled" in out["error"]
 
 
+# --- Aliyun IQS fast-path ---
+
+
+def test_iqs_fast_path_when_key_set(monkeypatch):
+    """ALIYUN_IQS_API_KEY set → web_search calls IQS first, skips every other engine."""
+    monkeypatch.setenv("ALIYUN_IQS_API_KEY", "test-key")
+    calls = {"iqs": 0, "qihu": 0}
+
+    def fake_iqs(query, max_results=5):
+        calls["iqs"] += 1
+        return [{"title": "iqs hit", "href": "https://cloud-iqs.example/x", "body": "snippet"}]
+
+    monkeypatch.setattr("src.tools.web_search_tool._aliyun_iqs_search", fake_iqs)
+    monkeypatch.setattr("src.tools.web_search_tool._qihu_search", lambda *_a, **_k: (calls.__setitem__("qihu", 1) or []))
+
+    out = json.loads(WebSearchTool().execute(query="测试"))
+
+    assert out["status"] == "ok"
+    assert out["backends"] == "aliyun_iqs"
+    assert out["results"][0]["url"] == "https://cloud-iqs.example/x"
+    assert calls["iqs"] == 1
+    assert calls["qihu"] == 0  # IQS hit → CN chain not contacted
+
+
 # --- _qihu_search parser unit test (no network) ---
 
 
