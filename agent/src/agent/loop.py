@@ -44,7 +44,7 @@ from src.providers.content_filter import (
     compute_content_filter_warnings,
 )
 from src.tools.background_tools import get_background_manager
-from src.tools.redaction import redact_payload
+from src.tools.redaction import redact_log_text, redact_payload
 
 RUNS_DIR = Path(__file__).resolve().parents[2] / "runs"
 SESSIONS_DIR = Path(__file__).resolve().parents[2] / "sessions"
@@ -485,6 +485,20 @@ def _is_tool_success(result: str) -> bool:
     except (json.JSONDecodeError, TypeError):
         pass
     return True
+
+
+def _tool_exception_result(tool_name: str, exc: Exception) -> str:
+    """Normalize an unexpected tool exception into the standard envelope."""
+    return json.dumps(
+        {
+            "status": "error",
+            "tool": tool_name,
+            "error_code": "tool_execution_exception",
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+        },
+        ensure_ascii=False,
+    )
 
 
 def _normalize_tool_run_dir(args: dict[str, Any], memory_run_dir: str | None) -> dict[str, Any]:
@@ -1256,7 +1270,7 @@ class AgentLoop:
                     results.append(f.result())
                 except Exception as exc:
                     tc = runnable[i][0]
-                    results.append((tc, json.dumps({"status": "error", "error": str(exc)}), 0))
+                    results.append((tc, _tool_exception_result(tc.name, exc), 0))
 
         # Process results in order
         for tc, result, elapsed_ms in results:
@@ -1289,7 +1303,12 @@ class AgentLoop:
         trace.write({"type": "tool_call", "iter": iteration, "tool": tc.name, "call_id": tc.id, "args": redacted_args})
         logger.info(f"Tool call: {tc.name}({list(args.keys())})")
 
-        result, elapsed_ms = self._invoke_tool(tc.name, args)
+        started_at = _time.perf_counter()
+        try:
+            result, elapsed_ms = self._invoke_tool(tc.name, args)
+        except Exception as exc:  # noqa: BLE001 - preserve the tool failure as an agent result
+            result = _tool_exception_result(tc.name, exc)
+            elapsed_ms = int((_time.perf_counter() - started_at) * 1000)
 
         # ponytail: best-effort telemetry — failure must not affect agent
         try:
@@ -1496,6 +1515,15 @@ class AgentLoop:
             self._called_ok.add(tc.name)
 
         status = "ok" if success else "error"
+        if not success:
+            logger.error(
+                "Tool execution failed: tool=%s call_id=%s iter=%s elapsed_ms=%s result=%s",
+                tc.name,
+                tc.id,
+                iteration,
+                elapsed_ms,
+                redact_log_text(result),
+            )
         truncated = result[:TOOL_RESULT_LIMIT]
         messages.append(context.format_tool_result(tc.id, tc.name, truncated))
 

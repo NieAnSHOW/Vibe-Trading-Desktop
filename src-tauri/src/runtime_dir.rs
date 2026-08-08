@@ -72,6 +72,57 @@ fn replace_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
     copy_dir_recursive(src, dst)
 }
 
+/// Older desktop builds wrote a few user-owned directories inside runtime/agent.
+/// Keep them while synchronizing the bundled code tree so an upgrade can remove
+/// obsolete Python modules without discarding historical user data.
+const PRESERVED_RUNTIME_AGENT_ENTRIES: &[&str] = &["runs", "sessions", "uploads", ".swarm"];
+
+fn remove_path(path: &Path) -> Result<(), String> {
+    if path.is_dir() {
+        fs::remove_dir_all(path).map_err(|e| format!("remove_dir_all {path:?}: {e}"))
+    } else {
+        fs::remove_file(path).map_err(|e| format!("remove_file {path:?}: {e}"))
+    }
+}
+
+/// Synchronize the immutable bundled agent tree into its writable runtime copy.
+/// Unlike a merge copy, this removes deleted or renamed code files so Python
+/// cannot import modules that no longer exist in the installed bundle.
+fn sync_agent_code(src: &Path, dst: &Path, at_agent_root: bool) -> Result<(), String> {
+    fs::create_dir_all(dst).map_err(|e| format!("mkdir {dst:?}: {e}"))?;
+
+    for entry in fs::read_dir(dst).map_err(|e| format!("read_dir {dst:?}: {e}"))? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let name = entry.file_name();
+        if at_agent_root
+            && PRESERVED_RUNTIME_AGENT_ENTRIES
+                .iter()
+                .any(|preserved| name == *preserved)
+        {
+            continue;
+        }
+
+        let current = entry.path();
+        let bundled = src.join(&name);
+        if !bundled.exists() || current.is_dir() != bundled.is_dir() {
+            remove_path(&current)?;
+        }
+    }
+
+    for entry in fs::read_dir(src).map_err(|e| format!("read_dir {src:?}: {e}"))? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if from.is_dir() {
+            sync_agent_code(&from, &to, false)?;
+        } else {
+            fs::copy(&from, &to).map_err(|e| format!("copy {from:?}: {e}"))?;
+        }
+    }
+
+    Ok(())
+}
+
 fn merge_missing_env_keys(existing: &str, seed: &str) -> String {
     let mut known_keys: HashSet<String> = crate::auth::parse_env_to_map(existing)
         .into_keys()
@@ -147,7 +198,7 @@ pub fn prepare(
     match action {
         crate::version::Action::Reuse => {}
         crate::version::Action::FirstRun | crate::version::Action::Upgrade => {
-            copy_dir_recursive(bundle_agent, &layout.runtime_agent)?;
+            sync_agent_code(bundle_agent, &layout.runtime_agent, true)?;
             if bundle_env_seed.exists() {
                 if layout.user_env.exists() {
                     let existing = fs::read_to_string(&layout.user_env)
@@ -288,6 +339,43 @@ mod tests {
             "user data preserved"
         );
         assert_eq!(fs::read_to_string(layout.marker).unwrap().trim(), "2.0.0");
+    }
+
+    #[test]
+    fn upgrade_removes_code_files_deleted_from_the_bundle() {
+        let tmp = tempdir().unwrap();
+        let bundle = tmp.path().join("bundle");
+        let home = tmp.path().join("home");
+        make_bundle(&bundle, "1.0.0");
+        fs::write(bundle.join("agent/src/legacy_module.py"), "# old code").unwrap();
+        let layout = Layout::new(&home);
+
+        prepare(
+            &bundle.join("agent"),
+            &bundle.join("agent/.env"),
+            &bundle.join("VERSION"),
+            None,
+            &layout,
+        )
+        .unwrap();
+        assert!(layout.runtime_agent.join("src/legacy_module.py").exists());
+
+        fs::remove_file(bundle.join("agent/src/legacy_module.py")).unwrap();
+        fs::write(bundle.join("VERSION"), "2.0.0").unwrap();
+
+        prepare(
+            &bundle.join("agent"),
+            &bundle.join("agent/.env"),
+            &bundle.join("VERSION"),
+            None,
+            &layout,
+        )
+        .unwrap();
+
+        assert!(
+            !layout.runtime_agent.join("src/legacy_module.py").exists(),
+            "removed bundle code must not remain importable from runtime/agent"
+        );
     }
 
     #[test]

@@ -507,7 +507,9 @@ def test_tool_call_events_carry_mcp_metadata_and_redact_sensitive_arguments(
 # --------------------------------------------------------------------------- #
 
 
-def test_remote_tool_transport_failure_does_not_crash_worker(tmp_path: Path) -> None:
+def test_remote_tool_transport_failure_does_not_crash_worker(
+    tmp_path: Path, caplog,
+) -> None:
     """Per S-07 / R-07, a transport-level failure on a remote MCP call must
     surface as an error envelope to the LLM (so the LLM can decide whether
     to retry or fall back) — it must NOT bubble up as an exception that
@@ -535,6 +537,7 @@ def test_remote_tool_transport_failure_does_not_crash_worker(tmp_path: Path) -> 
     events: list[SwarmEvent] = []
 
     with (
+        caplog.at_level("ERROR", logger="src.swarm.worker"),
         patch(
             "src.swarm.worker.build_swarm_registry",
             wraps=lambda tool_names, *, agent_config=None, include_shell_tools=False: _registry_with_remote(
@@ -560,6 +563,13 @@ def test_remote_tool_transport_failure_does_not_crash_worker(tmp_path: Path) -> 
     # The fake adapter actually saw the call (we routed through the real
     # MCPRemoteTool wrapper, not a stubbed-out path that swallows it).
     assert state["call_records"] and state["call_records"][0]["name"] == "search"
+
+    tool_results = [
+        e for e in events
+        if e.type == "tool_result" and e.data.get("tool") == "mcp_kb_search"
+    ]
+    assert tool_results and tool_results[0].data["status"] == "error"
+    assert "simulated remote stall" in caplog.text
 
     # The LLM observed the error envelope on its second turn so it could
     # decide what to do next. ``stream_chat`` was called twice: once to

@@ -629,7 +629,7 @@ function onStartupAnimationEnd() {
         <template #confirm-text>我知道了</template>
       </ConfirmDialog>
 
-      <ConfirmDialog data-test="reward-dialog" :open="rewardDialogOpen" title="支持作者领中级会员"
+      <ConfirmDialog data-test="reward-dialog" :open="rewardDialogOpen" title="支持作者领专业会员"
         :image="ProdConfig.imgBase + rewardQrCode" image-alt="支持作者二维码" hide-cancel @close="onRewardDialogClose">
         <p style="margin-top: 8px;">将打赏后的截图私发客服领取会员</p>
         <template #confirm-text>我知道了</template>

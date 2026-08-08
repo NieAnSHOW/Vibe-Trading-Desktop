@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.tools.redaction import _internal_roots, redact_internal_paths
+from src.tools.redaction import _internal_roots, redact_internal_paths, redact_log_text
 
 
 def test_none_and_empty_and_nonstr_safe():
@@ -33,3 +33,16 @@ def test_idempotent():
     once = redact_internal_paths(leak)
     assert redact_internal_paths(once) == once
     assert "<redacted>" in once
+
+
+def test_log_text_redacts_credentials_embedded_in_error_messages():
+    """Diagnostic error text must not leak common credential formats."""
+    result = redact_log_text(
+        'request failed: Authorization: Bearer bearer-secret api_key=api-secret '
+        'https://example.test/?access_token=url-secret'
+    )
+
+    assert "bearer-secret" not in result
+    assert "api-secret" not in result
+    assert "url-secret" not in result
+    assert result.count("[redacted]") == 3

@@ -273,7 +273,7 @@ pub fn download_update(info: &UpdateInfo, app: &AppHandle) -> Result<PathBuf, St
 }
 
 /// 安装更新：macOS 用 `open` 打开 DMG，Windows 用 `start` 启动安装程序。
-/// 安装命令触发后立即返回（让用户在 Finder 中手动拖拽），不退出 app。
+/// 安装命令触发后立即返回（让用户在 Finder 中手动拖拽）。
 pub fn install_update(path: &std::path::Path) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
@@ -301,6 +301,27 @@ pub fn install_update(path: &std::path::Path) -> Result<(), String> {
             .map(|_| ())
             .map_err(|e| format!("打开安装包失败: {e}"))
     }
+}
+
+/// Stop the running application service, hand the update package to the
+/// platform installer, then exit the current process. The exit is deliberately
+/// conditional: if the installer cannot be launched, the user remains in the
+/// current app to retry.
+pub fn install_update_then<S, L, E>(
+    path: &std::path::Path,
+    stop: S,
+    launch: L,
+    exit: E,
+) -> Result<(), String>
+where
+    S: FnOnce(),
+    L: FnOnce(&std::path::Path) -> Result<(), String>,
+    E: FnOnce(),
+{
+    stop();
+    launch(path)?;
+    exit();
+    Ok(())
 }
 
 // ── 测试 ─────────────────────────────────────────────────────────────
@@ -343,5 +364,40 @@ mod tests {
     #[test]
     fn pick_asset_returns_none_for_empty() {
         assert!(pick_asset(&[]).is_none());
+    }
+
+    #[test]
+    fn install_update_then_exits_only_after_successful_handoff() {
+        use std::path::Path;
+        use std::sync::{Arc, Mutex};
+
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let stop_events = events.clone();
+        let launch_events = events.clone();
+        let exit_events = events.clone();
+
+        install_update_then(
+            Path::new("/tmp/Trading Worker.dmg"),
+            move || stop_events.lock().unwrap().push("stop"),
+            move |_| {
+                launch_events.lock().unwrap().push("launch");
+                Ok(())
+            },
+            move || exit_events.lock().unwrap().push("exit"),
+        )
+        .unwrap();
+
+        assert_eq!(*events.lock().unwrap(), vec!["stop", "launch", "exit"]);
+
+        let exited = Arc::new(Mutex::new(false));
+        let exited_on_error = exited.clone();
+        let result = install_update_then(
+            Path::new("/tmp/Trading Worker.dmg"),
+            || {},
+            |_| Err("launch failed".to_string()),
+            move || *exited_on_error.lock().unwrap() = true,
+        );
+        assert!(result.is_err());
+        assert!(!*exited.lock().unwrap(), "failed handoff must not exit app");
     }
 }

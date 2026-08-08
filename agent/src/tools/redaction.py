@@ -17,10 +17,14 @@ Two independent concerns live here:
    Promoted from the swarm worker's private copies (#142) so
    the swarm worker, the live-action audit, the main agent loop, and the
    paper-trading surfaces all consume one shared implementation.
+3. ``redact_log_text`` — applies the structured redaction plus bounded
+   credential-pattern and internal-path redaction to diagnostic log text.
 """
 
 from __future__ import annotations
 
+import json
+import re
 import sys
 import sysconfig
 from functools import cache
@@ -75,6 +79,18 @@ _SENSITIVE_ARG_KEYS = {
 
 _SENSITIVE_ARG_MARKERS = ("api_key", "authorization", "password", "secret", "token")
 
+_EMBEDDED_CREDENTIAL_PATTERN = re.compile(
+    r"""(?ix)
+    (?P<prefix>
+        \b(?:authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret)\b
+        [\"']?\s*[:=]\s*[\"']?
+        (?:bearer\s+)?
+    )
+    (?P<value>[^\s,;\"'&}]+)
+    """
+)
+_BEARER_CREDENTIAL_PATTERN = re.compile(r"(?i)(\bbearer\s+)([A-Za-z0-9._~+/=-]+)")
+
 
 def _fold_key(name: str) -> str:
     """Fold a key to its alphanumeric core (lower-case, separators stripped).
@@ -82,8 +98,7 @@ def _fold_key(name: str) -> str:
     Collapses snake_case, camelCase, kebab-case and spaced variants to one form
     so ``account_number``, ``accountNumber``, ``account-number`` and
     ``Account Number`` all match the same curated entry — without resorting to a
-    broad ``"account"`` substring that would over-redact benign fields. Regex-free
-    (zero ReDoS surface), consistent with the rest of this module.
+    broad ``"account"`` substring that would over-redact benign fields.
 
     Args:
         name: Raw key name.
@@ -207,3 +222,25 @@ def redact_payload(obj: Any) -> Any:
     if isinstance(obj, list):
         return [redact_payload(item) for item in obj]
     return obj
+
+
+def redact_log_text(value: object, *, limit: int = 2_000) -> str:
+    """Return bounded diagnostic text safe to write to application logs.
+
+    Structured tool envelopes are recursively redacted before stringifying;
+    plain exception text still has internal filesystem roots removed. Keeping
+    this at the logging boundary prevents verbose provider/tool payloads from
+    leaking credentials or flooding the service log.
+    """
+    text = str(value or "")
+    try:
+        parsed = json.loads(text)
+    except (TypeError, ValueError):
+        redacted = redact_internal_paths(text)
+    else:
+        redacted = redact_internal_paths(
+            json.dumps(redact_payload(parsed), ensure_ascii=False, default=str)
+        )
+    redacted = _EMBEDDED_CREDENTIAL_PATTERN.sub(r"\g<prefix>[redacted]", redacted)
+    redacted = _BEARER_CREDENTIAL_PATTERN.sub(r"\1[redacted]", redacted)
+    return redacted if len(redacted) <= limit else redacted[:limit] + "..."

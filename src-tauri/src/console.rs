@@ -914,15 +914,18 @@ pub async fn console_member_benefits(
 }
 
 /// 停止服务:干净回收 sidecar 进程组。
+fn stop_service_blocking(state: &SharedChild) {
+    // 取走 child 后再等待回收，避免锁跨越可能阻塞的进程终止操作。
+    if let Some(mut child) = state.lock().unwrap().take() {
+        crate::sidecar::terminate(&mut child);
+    }
+}
+
 #[tauri::command]
 pub async fn console_stop_service(state: State<'_, SharedChild>) -> Result<(), String> {
-    // 单独语句取走 child,确保 MutexGuard 不跨 await(Future 须 Send)。
-    let child = state.lock().unwrap().take();
-    if let Some(mut child) = child {
-        // terminate 内部 child.wait() 同步等子进程退出;甩到阻塞线程池避免卡 main thread。
-        let _ = tauri::async_runtime::spawn_blocking(move || crate::sidecar::terminate(&mut child))
-            .await;
-    }
+    let shared = state.inner().clone();
+    // terminate 内部 child.wait() 同步等子进程退出;甩到阻塞线程池避免卡 main thread。
+    let _ = tauri::async_runtime::spawn_blocking(move || stop_service_blocking(&shared)).await;
     Ok(())
 }
 
@@ -1037,6 +1040,11 @@ pub async fn console_install_channel_dep(app: AppHandle, channel: String) -> Res
 /// 注意:窗口关闭按钮 X 不经此判断——它一律静默收纳后台,只有托盘「退出」才走这里。
 pub fn needs_quit_confirmation(service_running: bool, installing: bool) -> bool {
     service_running || installing
+}
+
+/// 安装器启动前的门禁:bootstrap 子进程结束并释放资源后才能开始更新。
+pub fn can_install_update(installing: bool) -> bool {
+    !installing
 }
 
 /// 用户在退出二次确认框点「确认退出」后调用:真正退出应用。
@@ -1538,15 +1546,34 @@ pub async fn console_download_update(
         .map(|p| p.to_string_lossy().to_string())
 }
 
-/// 用系统命令打开已下载的安装包（macOS 打开 DMG，Windows 启动安装程序）。
-/// 打开后 app 继续运行，用户手动完成安装。
+/// 用系统命令打开已下载的安装包（macOS 打开 DMG，Windows 启动安装程序），
+/// 然后退出当前进程。下次启动必定运行 boot/prepare，从新版 bundle 刷新 runtime 代码。
 #[tauri::command]
-pub fn console_install_update(path: String) -> Result<(), String> {
-    let p = std::path::Path::new(&path);
-    if !p.exists() {
+pub async fn console_install_update(
+    app: AppHandle,
+    installing: State<'_, InstallingFlag>,
+    service: State<'_, SharedChild>,
+    path: String,
+) -> Result<(), String> {
+    if !can_install_update(installing.0.load(Ordering::SeqCst)) {
+        return Err("依赖安装尚未完成，请等待后再安装更新".to_string());
+    }
+    let package = PathBuf::from(path);
+    if !package.exists() {
+        let path = package.display();
         return Err(format!("安装包不存在: {path}"));
     }
-    crate::updater::install_update(p)
+    let shared = service.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::updater::install_update_then(
+            &package,
+            move || stop_service_blocking(&shared),
+            crate::updater::install_update,
+            move || app.exit(0),
+        )
+    })
+    .await
+    .map_err(|e| format!("install update task join: {e}"))?
 }
 
 // ── 测试 ────────────────────────────────────────────────────────────
@@ -2063,6 +2090,12 @@ mod tests {
         assert!(needs_quit_confirmation(false, true), "安装中应确认");
         assert!(needs_quit_confirmation(true, true), "同时进行更应确认");
         assert!(!needs_quit_confirmation(false, false), "空闲直接退出");
+    }
+
+    #[test]
+    fn update_install_is_blocked_while_bootstrap_is_running() {
+        assert!(can_install_update(false));
+        assert!(!can_install_update(true));
     }
 
     #[test]

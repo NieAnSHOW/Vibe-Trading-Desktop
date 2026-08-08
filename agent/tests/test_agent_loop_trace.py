@@ -41,6 +41,88 @@ class _SecretRegistry:
         )
 
 
+class _ErrorRegistry:
+    """Minimal registry returning a structured tool failure."""
+
+    _tools: dict[str, Any] = {}
+
+    def get(self, tool_name: str) -> _Tool:
+        del tool_name
+        return _Tool()
+
+    def execute(self, tool_name: str, args: dict[str, Any]) -> str:
+        del tool_name, args
+        return json.dumps(
+            {
+                "status": "error",
+                "error": (
+                    f"Read_files failed at {Path.home() / 'private' / 'report.csv'}; "
+                    "Authorization: Bearer service-token api_key=api-secret"
+                ),
+                "error_code": "file_not_found",
+            }
+        )
+
+
+class _RaisingRegistry(_ErrorRegistry):
+    def execute(self, tool_name: str, args: dict[str, Any]) -> str:
+        del tool_name, args
+        raise RuntimeError("reader backend exploded")
+
+
+def test_raised_tool_exception_becomes_logged_error_result(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A registry exception must remain attributable to its tool call."""
+    agent = AgentLoop(
+        registry=_RaisingRegistry(),  # type: ignore[arg-type]
+        llm=SimpleNamespace(),
+        max_iterations=1,
+    )
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    agent.memory.run_dir = str(run_dir)
+    trace = TraceWriter(run_dir)
+    messages: list[dict[str, Any]] = []
+    tc = SimpleNamespace(id="tc-raised", name="Read_webpage", arguments={})
+
+    with caplog.at_level("ERROR", logger="src.agent.loop"):
+        agent._execute_single(tc, ContextBuilder, messages, trace, [], 1)
+    trace.close()
+
+    assert "reader backend exploded" in caplog.text
+    entry = next(e for e in TraceWriter.read(run_dir) if e["type"] == "tool_result")
+    assert entry["status"] == "error"
+    assert "Read_webpage" in entry["result"]
+
+
+def test_tool_error_result_is_logged_with_redacted_details(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Structured tool errors must be visible in service logs, safely."""
+    agent = AgentLoop(
+        registry=_ErrorRegistry(),  # type: ignore[arg-type]
+        llm=SimpleNamespace(),
+        max_iterations=1,
+    )
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    agent.memory.run_dir = str(run_dir)
+    trace = TraceWriter(run_dir)
+    tc = SimpleNamespace(id="tc-error", name="Read_files", arguments={})
+
+    with caplog.at_level("ERROR", logger="src.agent.loop"):
+        agent._execute_single(tc, ContextBuilder, [], trace, [], 1)
+    trace.close()
+
+    assert "Tool execution failed" in caplog.text
+    assert "Read_files" in caplog.text
+    assert "file_not_found" in caplog.text
+    assert str(Path.home() / "private" / "report.csv") not in caplog.text
+    assert "service-token" not in caplog.text
+    assert "api-secret" not in caplog.text
+
+
 def test_tool_call_trace_redacts_args_and_structured_results(tmp_path: Path) -> None:
     """Persistent trace entries should not store raw credentials/account fields."""
     agent = AgentLoop(

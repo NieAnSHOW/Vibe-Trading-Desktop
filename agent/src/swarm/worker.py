@@ -33,7 +33,7 @@ from src.swarm.models import (
 )
 from src.tools import build_swarm_registry
 from src.tools.mcp import MCPRemoteTool
-from src.tools.redaction import is_sensitive_arg, redact_payload
+from src.tools.redaction import is_sensitive_arg, redact_log_text, redact_payload
 
 logger = logging.getLogger(__name__)
 
@@ -538,7 +538,13 @@ def run_worker(
                 response = _stream_once()
         except Exception as exc:
             error_msg = f"LLM call failed at iteration {iteration}: {exc}"
-            logger.warning(error_msg)
+            logger.error(
+                "Swarm worker failed: agent=%s task=%s iteration=%d error=%s",
+                agent_id,
+                task_id,
+                iteration,
+                redact_log_text(error_msg),
+            )
             _emit(event_callback, "worker_failed", agent_id, task_id, {"error": error_msg})
             return WorkerResult(
                 status="failed",
@@ -686,14 +692,37 @@ def run_worker(
                 interval=_HEARTBEAT_INTERVAL_S,
                 emit=_on_heartbeat,
             ):
-                result = registry.execute(tc.name, args)
-            if tc.name != "load_skill" and not _is_error_result(result):
+                try:
+                    result = registry.execute(tc.name, args)
+                except Exception as exc:  # noqa: BLE001 - keep one tool failure from aborting its worker
+                    result = json.dumps(
+                        {
+                            "status": "error",
+                            "tool": tc.name,
+                            "error_code": "tool_execution_exception",
+                            "error_type": type(exc).__name__,
+                            "error": str(exc),
+                        },
+                        ensure_ascii=False,
+                    )
+            result_is_error = _is_error_result(result)
+            if result_is_error:
+                logger.error(
+                    "Swarm tool execution failed: agent=%s task=%s tool=%s iteration=%d elapsed_ms=%d result=%s",
+                    agent_id,
+                    task_id,
+                    tc.name,
+                    iteration,
+                    int((time.monotonic() - tc_start) * 1000),
+                    redact_log_text(result),
+                )
+            if tc.name != "load_skill" and not result_is_error:
                 data_tool_calls += 1
             tc_elapsed = time.monotonic() - tc_start
             _emit(
                 event_callback, "tool_result", agent_id, task_id,
                 {"tool": tc.name, "elapsed_ms": int(tc_elapsed * 1000),
-                 "status": "ok", "iteration": iteration,
+                 "status": "error" if result_is_error else "ok", "iteration": iteration,
                   "result_preview": _preview_tool_result(result),
                  **mcp_meta},
             )
