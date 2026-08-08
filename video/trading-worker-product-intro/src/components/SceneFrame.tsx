@@ -5,37 +5,17 @@ import {
   interpolate,
   spring,
   staticFile,
-  useCurrentFrame,
-  useVideoConfig,
 } from "remotion";
 import type { CSSProperties } from "react";
 import type { Scene } from "../scenes";
 import { sceneOpacity } from "./Motion";
 
-const FALLBACK_FPS = 30;
-
-const useFrameOrProp = (frame: number) => {
-  try {
-    return useCurrentFrame();
-  } catch {
-    return frame;
-  }
-};
-
-const useFpsOrFallback = () => {
-  try {
-    return useVideoConfig().fps;
-  } catch {
-    return FALLBACK_FPS;
-  }
-};
+const FPS = 30;
 
 export const SceneFrame = ({ frame, scene }: { frame: number; scene: Scene }) => {
-  void useFrameOrProp(frame);
-  const fps = useFpsOrFallback();
   const entrance = spring({
     frame,
-    fps,
+    fps: FPS,
     config: { damping: 200, mass: 0.9, stiffness: 120 },
   });
   const titleY = interpolate(entrance, [0, 1], [42, 0], {
@@ -86,7 +66,7 @@ export const SceneFrame = ({ frame, scene }: { frame: number; scene: Scene }) =>
           top: "auto",
         }}
       />
-      <div style={{ bottom: 96, left: 96, position: "absolute", right: 96 }}>
+      <div style={{ bottom: 96, left: 96, position: "absolute", right: scene.safetyLabel ? 820 : 96 }}>
         <div style={titleStyle}>{scene.title}</div>
         {scene.subtitle ? (
           <div style={{ color: "rgba(226, 232, 240, 0.9)", fontSize: 30, marginTop: 24 }}>{scene.subtitle}</div>
