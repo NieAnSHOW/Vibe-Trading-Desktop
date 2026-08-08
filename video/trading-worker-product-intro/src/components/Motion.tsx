@@ -7,13 +7,16 @@ export const clampProgress = (frame: number, start: number, duration: number) =>
   });
 
 export const sceneOpacity = (frame: number, duration: number) =>
-  Math.min(
-    interpolate(frame, [0, 12], [0, 1], {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-    }),
-    interpolate(frame, [duration - 12, duration], [1, 0], {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-    }),
+  Math.max(
+    0.18,
+    Math.min(
+      interpolate(frame, [0, 12], [0, 1], {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp",
+      }),
+      interpolate(frame, [duration - 12, duration], [1, 0], {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp",
+      }),
+    ),
   );

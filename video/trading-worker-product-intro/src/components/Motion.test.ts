@@ -9,12 +9,13 @@ describe("video timing", () => {
     ]);
   });
 
-  it("clamps visual progress and fades a scene at both edges", () => {
+  it("clamps visual progress and fades scenes without exposing a black boundary", () => {
     expect(clampProgress(-4, 0, 20)).toBe(0);
     expect(clampProgress(10, 0, 20)).toBe(0.5);
     expect(clampProgress(40, 0, 20)).toBe(1);
-    expect(sceneOpacity(0, 210)).toBe(0);
+    expect(sceneOpacity(0, 210)).toBe(0.18);
     expect(sceneOpacity(105, 210)).toBe(1);
-    expect(sceneOpacity(209, 210)).toBeLessThan(1);
+    expect(sceneOpacity(209, 210)).toBeGreaterThanOrEqual(0.18);
+    expect(sceneOpacity(210, 210)).toBe(0.18);
   });
 });
