@@ -22,13 +22,13 @@ npm i
 **Start Preview**
 
 ```console
-npm run dev
+npm run studio
 ```
 
 **Render video**
 
 ```console
-npx remotion render
+npm run render
 ```
 
 **Upgrade Remotion**

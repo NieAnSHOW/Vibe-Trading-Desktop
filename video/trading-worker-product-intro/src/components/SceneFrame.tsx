@@ -37,7 +37,16 @@ export const SceneFrame = ({ frame, scene }: { frame: number; scene: Scene }) =>
   };
 
   return (
-    <AbsoluteFill style={{ backgroundColor: "#080b16", opacity: sceneOpacity(frame, scene.durationInFrames) }}>
+    <AbsoluteFill
+      style={{
+        backgroundColor: "#080b16",
+        backgroundImage: scene.image
+          ? undefined
+          : "linear-gradient(rgba(148, 163, 184, 0.055) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px)",
+        backgroundSize: scene.image ? undefined : "72px 72px",
+        opacity: sceneOpacity(frame, scene.durationInFrames),
+      }}
+    >
       {scene.image ? (
         <Img
           src={staticFile(scene.image)}
