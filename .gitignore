@@ -123,3 +123,4 @@ src-tauri/gen/
 .agents/
 .codex/hooks.json
 local-task.md
+video/trading-worker-product-intro/out/
