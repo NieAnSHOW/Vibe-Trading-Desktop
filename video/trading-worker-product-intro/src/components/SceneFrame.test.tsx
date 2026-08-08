@@ -12,7 +12,7 @@ vi.mock("remotion", async () => {
   };
 });
 
-import { SceneFrame } from "./SceneFrame";
+import { OUTRO_IMAGES, SceneFrame } from "./SceneFrame";
 import type { Scene } from "../scenes";
 
 afterEach(cleanup);
@@ -47,7 +47,8 @@ describe("SceneFrame", () => {
         scene={{ ...baseScene, id: "alpha", safetyLabel: undefined, title: "探索你的下一条研究线索" }}
       />,
     );
-    expect(screen.getByTestId("alpha-count-mask")).toBeInTheDocument();
+    expect(screen.getByTestId("alpha-count-mask")).toHaveStyle({ height: "220px", top: "0px", width: "100%" });
     expect(screen.getByText("探索你的下一条研究线索")).toBeInTheDocument();
+    expect(OUTRO_IMAGES).not.toContain("ui/alpha-zoo.png");
   });
 });

@@ -11,7 +11,7 @@ import type { Scene } from "../scenes";
 import { sceneOpacity } from "./Motion";
 
 const FPS = 30;
-const OUTRO_IMAGES = ["ui/console.png", "ui/market.png", "ui/agent.png", "ui/reports.png", "ui/alpha-zoo.png"] as const;
+export const OUTRO_IMAGES = ["ui/console.png", "ui/market.png", "ui/agent.png", "ui/reports.png", "ui/chart.png"] as const;
 
 export const SceneFrame = ({ frame, scene }: { frame: number; scene: Scene }) => {
   const entrance = spring({
@@ -81,7 +81,7 @@ export const SceneFrame = ({ frame, scene }: { frame: number; scene: Scene }) =>
         {scene.id === "alpha" ? (
           <div
             data-testid="alpha-count-mask"
-            style={{ backgroundColor: "#f8fafc", height: 82, left: 88, position: "absolute", top: 0, width: 920 }}
+            style={{ backgroundColor: "#f8fafc", height: 220, left: 0, position: "absolute", top: 0, width: "100%" }}
           />
         ) : null}
         {scene.id === "agent" ? (
