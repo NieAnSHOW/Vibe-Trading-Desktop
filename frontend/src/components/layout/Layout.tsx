@@ -148,7 +148,11 @@ function NavLink({
         rel="noopener noreferrer"
         className={cn(
           base,
-          collapsed ? "justify-center p-2" : indent ? "gap-3 pl-8 pr-3 py-1.5" : "gap-3 px-3 py-2",
+          collapsed
+            ? "justify-center p-2"
+            : indent
+              ? "gap-3 pl-8 pr-3 py-1.5"
+              : "gap-3 px-3 py-2",
           "text-muted-foreground hover:bg-muted hover:text-foreground",
         )}
         title={collapsed ? label : undefined}
@@ -423,7 +427,7 @@ export function Layout() {
           )}
           {!collapsed ? (
             showResearch && (
-              <div className="space-y-0.5">
+              <div className="space-y-0.5 pl-6">
                 <NavLink
                   to="/reports"
                   icon={FileText}
@@ -482,28 +486,30 @@ export function Layout() {
                   ▶
                 </span>
               </button>
-              {showExternal &&
-                EXTERNAL_SHORTCUTS.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => {
-                      try {
-                        track(
-                          "feature_use",
-                          { shortcut_id: s.id },
-                          { name: "external_shortcut" },
-                        );
-                      } catch {}
-                      openExternalUrl(s.url);
-                    }}
-                    className="flex items-center gap-3 rounded-md pl-8 pr-3 py-1.5 text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground w-full text-left"
-                    title={t(s.descriptionKey)}
-                  >
-                    <s.icon className="h-4 w-4 shrink-0" />
-                    {t(s.labelKey)}
-                  </button>
-                ))}
+              <div className="space-y-0.5 pl-6">
+                {showExternal &&
+                  EXTERNAL_SHORTCUTS.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        try {
+                          track(
+                            "feature_use",
+                            { shortcut_id: s.id },
+                            { name: "external_shortcut" },
+                          );
+                        } catch {}
+                        openExternalUrl(s.url);
+                      }}
+                      className="flex items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground w-full text-left"
+                      title={t(s.descriptionKey)}
+                    >
+                      <s.icon className="h-4 w-4 shrink-0" />
+                      {t(s.labelKey)}
+                    </button>
+                  ))}
+              </div>
             </>
           )}
           {collapsed &&

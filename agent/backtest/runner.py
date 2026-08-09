@@ -342,7 +342,6 @@ _FORBIDDEN_FILE_ATTRS = frozenset(
         "touch",
         "unlink",
         "rename",
-        "replace",
         "mkdir",
         "rmdir",
         "chmod",
@@ -369,6 +368,17 @@ _FORBIDDEN_FILE_ATTRS = frozenset(
     }
 )
 _SCRUB_MSG = "is not allowed inside generated strategy code"
+
+
+def _is_pathlib_expression(node: ast.AST, module_aliases: Dict[str, str]) -> bool:
+    """Return whether an expression is a known ``pathlib`` object/factory."""
+    if isinstance(node, ast.Name):
+        return module_aliases.get(node.id) == "pathlib"
+    if isinstance(node, ast.Call):
+        return _is_pathlib_expression(node.func, module_aliases)
+    if isinstance(node, ast.Attribute):
+        return _is_pathlib_expression(node.value, module_aliases)
+    return False
 
 
 def _is_forbidden_os_attr(attr: str) -> bool:
@@ -440,6 +450,10 @@ def _reject_forbidden_node(node: ast.AST, module_aliases: Dict[str, str]) -> Non
             raise ValueError(f"Use of {attribute_root}.{node.attr} {_SCRUB_MSG}")
         if root == "functools" and node.attr == "partial":
             raise ValueError(f"Use of {attribute_root}.partial {_SCRUB_MSG}")
+        # ``replace`` is also a normal string/Pandas operation. Keep those
+        # valid while still rejecting the pathlib filesystem mutation.
+        if node.attr == "replace" and _is_pathlib_expression(node.value, module_aliases):
+            raise ValueError(f"Use of pathlib.replace {_SCRUB_MSG}")
         if node.attr in _FORBIDDEN_FILE_ATTRS:
             raise ValueError(f"Use of file API {node.attr!r} {_SCRUB_MSG}")
     elif isinstance(node, ast.Name):
@@ -494,6 +508,12 @@ def _scan_runtime_reachable(tree: ast.Module) -> None:
         helper_aliases: Dict[str, ast.AST] = {}
         for node in ast.walk(function):
             _record_import_aliases(node, function_module_aliases)
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                if _is_pathlib_expression(node.value, function_module_aliases):
+                    for target_node in targets:
+                        if isinstance(target_node, ast.Name):
+                            function_module_aliases[target_node.id] = "pathlib"
             if (
                 isinstance(node, ast.Assign)
                 and len(node.targets) == 1

@@ -144,3 +144,5 @@ def test_auto_compact_handoff_summary_is_reintroduced_as_user_message(
 
     assert messages[-1]["role"] == "user"
     assert "Continue from the summary above" in messages[-1]["content"]
+    assert "Transcript:" not in messages[-1]["content"]
+    assert "full transcript is retained in the run trace" in messages[-1]["content"]

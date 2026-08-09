@@ -104,6 +104,21 @@ def test_extract_ignores_lowercase_and_single_letter_tokens() -> None:
     assert grounding.extract_symbols_from_user_vars(user_vars) == []
 
 
+def test_worker_prompt_does_not_instruct_disabled_bash_tool() -> None:
+    """Workers must not be told to call a tool removed by host policy."""
+    spec = SwarmAgentSpec(
+        id="analyst",
+        role="Analyst",
+        system_prompt="Analyze the task.",
+        tools=["bash", "write_file"],
+    )
+
+    prompt = build_worker_prompt(spec, {}, "(no matching skills)", include_shell_tools=False)
+
+    assert "`bash` tool is unavailable" in prompt
+    assert "bash python script.py" not in prompt
+
+
 def test_extract_does_not_match_substrings_inside_words() -> None:
     user_vars = {
         # \b boundary should keep "FOO.USDA" / "BLAH.USA" from matching .US

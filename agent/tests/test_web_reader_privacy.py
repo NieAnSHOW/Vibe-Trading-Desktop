@@ -31,6 +31,7 @@ def captured(monkeypatch):
     def fake_get(url, headers=None, timeout=None):
         box["url"] = url
         box["headers"] = headers or {}
+        box["timeout"] = timeout
         r = box["resp"]
         if isinstance(r, BaseException):
             raise r
@@ -75,3 +76,15 @@ def test_no_cache_header_opt_in_only(captured):
     assert "x-no-cache" not in {k.lower() for k in captured["headers"]}
     read_url(URL, no_cache=True)
     assert captured["headers"].get("x-no-cache") == "true"
+
+
+def test_reader_uses_bounded_connect_and_read_timeouts(captured):
+    """The reader bounds connect, read, and total request duration."""
+    captured["resp"] = _Resp(200, "Title: X\n\nbody")
+
+    read_url(URL)
+
+    timeout = captured["timeout"]
+    assert timeout.connect_timeout == 5
+    assert timeout.read_timeout == 25
+    assert timeout.total == 30

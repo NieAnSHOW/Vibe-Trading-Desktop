@@ -9,6 +9,10 @@ from src.swarm.models import SwarmAgentSpec
 from src.swarm.presets import list_presets, load_preset
 from src.swarm.worker import build_worker_prompt
 from src.tools import build_swarm_registry
+from src.tools.a_stock_data_tool import AStockDataTool
+from src.tools.dragon_tiger_tool import DragonTigerTool
+from src.tools.fund_flow_tool import FundFlowTool
+from src.tools.market_data_tool import MarketDataTool
 
 
 def test_market_data_json_is_strict_when_loader_returns_nan():
@@ -40,6 +44,14 @@ def test_market_data_json_is_strict_when_loader_returns_nan():
     assert "NaN" not in text
     payload = json.loads(text)
     assert payload["X.US"][0]["high"] is None
+
+
+def test_market_research_tools_allow_distinct_follow_up_queries():
+    """Query tools must not be blocked after one successful parameter set."""
+    assert all(
+        tool().repeatable
+        for tool in (MarketDataTool, FundFlowTool, AStockDataTool, DragonTigerTool)
+    )
 
 
 def test_swarm_registry_can_expose_local_get_market_data_tool():

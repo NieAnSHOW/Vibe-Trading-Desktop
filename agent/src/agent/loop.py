@@ -1640,7 +1640,11 @@ class AgentLoop:
 
         # Reconstruct: system + summary + acknowledge + preserved tail
         state_summary = self.memory.to_summary()
-        compressed = f"[Conversation compressed — handoff summary. Transcript: {transcript_path}]\n\n{summary}"
+        compressed = (
+            "[Conversation compressed — handoff summary. The full transcript is "
+            "retained in the run trace and is not an input file for tools.]\n\n"
+            f"{summary}"
+        )
         if state_summary and state_summary != "(empty state)":
             compressed += f"\n\nCurrent agent state:\n{state_summary}"
 

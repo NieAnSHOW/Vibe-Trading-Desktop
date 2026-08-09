@@ -52,6 +52,14 @@ def test_read_and_edit_file_accept_configured_run_root(tmp_path: Path, monkeypat
     assert target.read_text(encoding="utf-8") == "alpha gamma"
 
 
+def test_read_file_skills_directory_guides_agent_to_load_skill() -> None:
+    """A common bare directory call gets an actionable recovery message."""
+    body = _body(ReadFileTool().execute(path="skills"))
+
+    assert body["status"] == "error"
+    assert "load_skill" in body["error"]
+
+
 def test_backtest_rejects_unconfigured_absolute_run_dir(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv("VIBE_TRADING_ALLOWED_RUN_ROOTS", raising=False)
     (tmp_path / "code").mkdir()

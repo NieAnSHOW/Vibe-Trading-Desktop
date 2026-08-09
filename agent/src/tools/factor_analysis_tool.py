@@ -10,6 +10,8 @@ import pandas as pd
 
 from src.agent.tools import BaseTool
 from src.factors.factor_analysis_core import compute_ic_series, compute_group_equity
+from src.tools.path_utils import allowed_file_roots, allowed_write_roots, resolve_safe_path
+from src.tools.redaction import redact_internal_paths
 
 # Backward-compatible aliases for any external imports of the private names.
 _compute_ic_series = compute_ic_series
@@ -37,7 +39,10 @@ def run_factor_analysis(
         factor_df = pd.read_csv(factor_csv, index_col=0, parse_dates=True)
         return_df = pd.read_csv(return_csv, index_col=0, parse_dates=True)
     except Exception as e:
-        return json.dumps({"status": "error", "error": f"Failed to read CSV: {e}"}, ensure_ascii=False)
+        return json.dumps(
+            {"status": "error", "error": f"Failed to read CSV: {redact_internal_paths(e)}"},
+            ensure_ascii=False,
+        )
 
     if factor_df.empty or return_df.empty:
         return json.dumps({"status": "error", "error": "Factor or return data is empty"}, ensure_ascii=False)
@@ -134,9 +139,32 @@ class FactorAnalysisTool(BaseTool):
         Returns:
             JSON-formatted analysis summary.
         """
+        run_dir = kwargs.get("run_dir")
+        factor_csv = kwargs["factor_csv"]
+        return_csv = kwargs["return_csv"]
+        output_dir = kwargs["output_dir"]
+        try:
+            # Swarm injects the worker artifact directory as ``run_dir``.
+            # Direct callers must instead supply paths beneath the dedicated
+            # read/write roots; omitting run_dir never grants unrestricted I/O.
+            factor_csv = str(
+                resolve_safe_path(factor_csv, str(run_dir) if run_dir else None, allowed_file_roots(), purpose="read")
+            )
+            return_csv = str(
+                resolve_safe_path(return_csv, str(run_dir) if run_dir else None, allowed_file_roots(), purpose="read")
+            )
+            output_dir = str(
+                resolve_safe_path(output_dir, str(run_dir) if run_dir else None, allowed_write_roots(), purpose="write")
+            )
+        except ValueError as exc:
+            return json.dumps(
+                {"status": "error", "error": redact_internal_paths(exc)},
+                ensure_ascii=False,
+            )
+
         return run_factor_analysis(
-            factor_csv=kwargs["factor_csv"],
-            return_csv=kwargs["return_csv"],
-            output_dir=kwargs["output_dir"],
+            factor_csv=factor_csv,
+            return_csv=return_csv,
+            output_dir=output_dir,
             n_groups=kwargs.get("n_groups", 5),
         )

@@ -101,7 +101,7 @@ describe("SettingsPage", () => {
     expect(wrapper.get('[data-test="clear-environment-action"]').text()).toBe("清理");
     expect(wrapper.get('[data-test="open-logs-action"]').text()).toBe("打开");
     expect(wrapper.get('[data-test="clear-logs-action"]').text()).toBe("清理");
-    expect(wrapper.get('[data-test="uninstall-legacy-action"]').text()).toBe("Vibe Trading");
+    expect(wrapper.get('[data-test="uninstall-legacy-action"]').text()).toBe("卸载老版本");
   });
 
   it("uninstalls the legacy app only after confirmation and stops the service first", async () => {
@@ -196,6 +196,34 @@ describe("SettingsPage", () => {
     // 服务未运行,直接清理,无需停服
     expect(mocks.consoleStopService).not.toHaveBeenCalled();
     expect(mocks.consoleClearVenv).toHaveBeenCalledOnce();
-    expect(wrapper.get(".settings-notice").text()).toBe("运行环境已清理，请重新安装依赖");
+    expect(wrapper.get(".settings-notice").text()).toBe("运行环境和过时代码已清理，请重新安装依赖");
+  });
+
+  it("asks to stop the running service before clearing the environment", async () => {
+    mocks.consoleStatus.mockResolvedValue({
+      env: "ready" as const,
+      service_running: true,
+      port: 4173,
+    });
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper.get('[data-test="clear-environment-action"]').trigger("click");
+    await flushPromises();
+    const dialog = wrapper.findAll("dialog").find(
+      (candidate) => candidate.find("h3").text() === "服务正在运行，确认停止后清理？",
+    );
+    expect(dialog).toBeDefined();
+    expect(dialog!.text()).toContain("停止当前服务");
+
+    (dialog!.element as HTMLDialogElement).returnValue = "ok";
+    await dialog!.trigger("close");
+    await flushPromises();
+
+    expect(mocks.consoleStopService).toHaveBeenCalledOnce();
+    expect(mocks.consoleClearVenv).toHaveBeenCalledOnce();
+    expect(mocks.consoleStopService.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.consoleClearVenv.mock.invocationCallOrder[0],
+    );
   });
 });

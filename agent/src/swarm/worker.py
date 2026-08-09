@@ -180,6 +180,7 @@ def build_worker_prompt(
     upstream_summaries: dict[str, str],
     skill_descriptions: str,
     grounding_block: str = "",
+    include_shell_tools: bool = False,
 ) -> str:
     """Build the worker's system prompt with role, upstream context, and skills.
 
@@ -192,6 +193,9 @@ def build_worker_prompt(
             ahead of the Execution Rules section so the worker sees real
             recent prices before any tool decision. Empty string skips the
             section entirely.
+        include_shell_tools: Whether the host policy allows the worker's
+            shell tool. This keeps instructions aligned with the filtered
+            registry when a preset still lists ``bash``.
 
     Returns:
         Complete system prompt string for the worker LLM.
@@ -263,15 +267,27 @@ def build_worker_prompt(
         "it and proceed without."
     )
 
+    shell_available = include_shell_tools and "bash" in (agent_spec.tools or [])
+    if shell_available:
+        execution_tools = (
+            "- Write ONE focused Python script via `write_file`, then run it with `bash python script.py`.\n"
+            "- Do NOT write long Python code inside bash. Use write_file + bash.\n"
+        )
+    else:
+        execution_tools = (
+            "- The `bash` tool is unavailable for this worker; do NOT call it. "
+            "Use the listed domain tools and file tools instead.\n"
+        )
     prompt_parts.append(
         "## Execution Rules\n\n"
         "You have a HARD LIMIT of 20 tool calls. After that you will be cut off. Work efficiently.\n\n"
+        "All file paths are relative to the worker run directory injected by the host. "
+        "Never use `/tmp` or another absolute output path; write artifacts such as `report.md` under the run directory.\n\n"
         "**Phase 1 — Plan (0 tool calls):** Before calling any tool, state your plan in 3-5 bullet points.\n\n"
         "**Phase 2 — Execute (≤15 tool calls):**\n"
         "- `load_skill` first to get data access methods and analysis patterns.\n"
-        "- Write ONE focused Python script via `write_file`, then run it with `bash python script.py`.\n"
-        "- Do NOT write long Python code inside bash. Use write_file + bash.\n"
-        "- Do NOT fetch data with curl/requests. Use the patterns from load_skill (yfinance, OKX API via Python).\n"
+        + execution_tools
+        + "- Do NOT fetch data with curl/requests. Use the patterns from load_skill (yfinance, OKX API via Python).\n"
         "- If a script fails, read the error, fix with `edit_file`, re-run. Max 2 retries per script.\n\n"
         "**Phase 3 — Summarize (MUST use write_file):**\n"
         "- You MUST call `write_file` with path `report.md` to save your final report as a markdown file.\n"
@@ -354,7 +370,11 @@ def run_worker(
     skills_loader = SkillsLoader()
     skill_desc = _filter_skill_descriptions(skills_loader, agent_spec.skills)
     system_prompt = build_worker_prompt(
-        agent_spec, upstream_summaries, skill_desc, grounding_block=grounding_block,
+        agent_spec,
+        upstream_summaries,
+        skill_desc,
+        grounding_block=grounding_block,
+        include_shell_tools=include_shell_tools,
     )
 
     # 4. Resolve prompt template with user vars (missing vars → LLM infers)

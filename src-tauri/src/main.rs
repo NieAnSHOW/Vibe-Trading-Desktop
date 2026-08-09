@@ -21,6 +21,8 @@ fn main() {
     let shared: SharedChild = Arc::new(Mutex::new(None));
     let shared_setup = shared.clone();
     let auth_state = auth::AuthState(std::sync::Arc::new(std::sync::Mutex::new(None)));
+    let runtime_operation = console::RuntimeOperationLock::new();
+    let runtime_operation_setup = runtime_operation.clone();
 
     // bootstrap 进行中标志(console::console_bootstrap 维护)。托盘「退出」据此判断
     // 是否需要二次确认;窗口关闭按钮 X 不再触发确认——它一律静默收纳到后台。
@@ -97,8 +99,16 @@ fn main() {
 
             let shared = shared_setup.clone();
             let auth_state = auth_state.clone();
+            let runtime_operation = runtime_operation_setup.clone();
             std::thread::spawn(move || {
-                if let Err(msg) = boot(&handle, &win, &res, &shared, &auth_state) {
+                if let Err(msg) = boot(
+                    &handle,
+                    &win,
+                    &res,
+                    &shared,
+                    &auth_state,
+                    &runtime_operation,
+                ) {
                     let safe_json = serde_json::to_string(&msg)
                         .unwrap_or_else(|_| "\"unknown error\"".to_string());
                     let _ = win.eval(&format!(
@@ -109,6 +119,7 @@ fn main() {
             Ok(())
         })
         .manage(shared.clone())
+        .manage(runtime_operation)
         .build(tauri::generate_context!())
         .expect("build tauri app")
         .run(move |_app, event| {
@@ -171,6 +182,7 @@ fn boot(
     res: &resources::Resources,
     shared: &SharedChild,
     auth_state: &auth::AuthState,
+    runtime_operation: &console::RuntimeOperationLock,
 ) -> Result<(), String> {
     let layout = runtime_dir::Layout::from_home()?;
     runtime_dir::prepare(
@@ -188,11 +200,12 @@ fn boot(
         let win = win.clone();
         let shared = shared.clone();
         let auth_state = auth_state.clone();
+        let runtime_operation = runtime_operation.clone();
         tauri::async_runtime::spawn(async move {
             let _ = win.eval(
                 "var e=document.getElementById('err');if(e)e.textContent='正在自动启动服务...';",
             );
-            match console::start_service_inner(&app, &shared, &auth_state).await {
+            match console::start_service_inner(&app, &shared, &auth_state, &runtime_operation).await {
                 Ok(port) => {
                     let _ = app.emit("service://started", port);
                     let _ = win.eval(

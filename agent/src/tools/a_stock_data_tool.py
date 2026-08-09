@@ -13,6 +13,7 @@ class AStockDataTool(BaseTool):
     """Fetch A-share reports, news, basics, and announcements."""
 
     name = "get_a_stock_data"
+    repeatable = True
     description = (
         "Fetch A-share non-OHLC data through the a-stock-data adapter. "
         "Use get_market_data for price bars; use this for research reports, "

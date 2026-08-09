@@ -161,6 +161,22 @@ pub fn prepare(
     let _guard = PREPARE_LOCK
         .lock()
         .map_err(|e| format!("prepare lock poisoned: {e}"))?;
+    prepare_locked(
+        bundle_agent,
+        bundle_env_seed,
+        bundle_version,
+        bundle_frontend_dist,
+        layout,
+    )
+}
+
+fn prepare_locked(
+    bundle_agent: &Path,
+    bundle_env_seed: &Path,
+    bundle_version: &Path,
+    bundle_frontend_dist: Option<&Path>,
+    layout: &Layout,
+) -> Result<(), String> {
     if !bundle_agent.exists() {
         return Err(format!("bundle agent template missing: {bundle_agent:?}"));
     }
@@ -221,6 +237,32 @@ pub fn prepare(
         }
     }
     Ok(())
+}
+
+/// Force a code refresh from the bundled resources even when VERSION matches
+/// the installed marker. This is used by environment repair flows to remove
+/// stale modules before dependencies are reinstalled.
+pub fn refresh_from_bundle(
+    bundle_agent: &Path,
+    bundle_env_seed: &Path,
+    bundle_version: &Path,
+    bundle_frontend_dist: Option<&Path>,
+    layout: &Layout,
+) -> Result<(), String> {
+    let _guard = PREPARE_LOCK
+        .lock()
+        .map_err(|e| format!("prepare lock poisoned: {e}"))?;
+    if layout.marker.exists() {
+        fs::remove_file(&layout.marker)
+            .map_err(|e| format!("remove installed version marker {:?}: {e}", layout.marker))?;
+    }
+    prepare_locked(
+        bundle_agent,
+        bundle_env_seed,
+        bundle_version,
+        bundle_frontend_dist,
+        layout,
+    )
 }
 
 #[cfg(test)]
@@ -376,6 +418,37 @@ mod tests {
             !layout.runtime_agent.join("src/legacy_module.py").exists(),
             "removed bundle code must not remain importable from runtime/agent"
         );
+    }
+
+    #[test]
+    fn refresh_from_bundle_removes_stale_code_even_when_version_marker_matches() {
+        let tmp = tempdir().unwrap();
+        let bundle = tmp.path().join("bundle");
+        let home = tmp.path().join("home");
+        make_bundle(&bundle, "1.0.0");
+        let layout = Layout::new(&home);
+
+        prepare(
+            &bundle.join("agent"),
+            &bundle.join("agent/.env"),
+            &bundle.join("VERSION"),
+            None,
+            &layout,
+        )
+        .unwrap();
+        fs::write(layout.runtime_agent.join("src/stale.py"), "# stale").unwrap();
+
+        refresh_from_bundle(
+            &bundle.join("agent"),
+            &bundle.join("agent/.env"),
+            &bundle.join("VERSION"),
+            None,
+            &layout,
+        )
+        .unwrap();
+
+        assert!(!layout.runtime_agent.join("src/stale.py").exists());
+        assert_eq!(fs::read_to_string(&layout.marker).unwrap().trim(), "1.0.0");
     }
 
     #[test]

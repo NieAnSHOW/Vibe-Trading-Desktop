@@ -300,6 +300,53 @@ def test_signal_engine_rejects_pathlib_secret_read(tmp_path) -> None:
         _load_module_from_file(signal_file, _module_name())
 
 
+def test_signal_engine_allows_string_replace_in_generate(tmp_path) -> None:
+    """String cleanup is not a filesystem operation."""
+    signal_file = tmp_path / "signal_engine.py"
+    signal_file.write_text(
+        "\n".join(
+            [
+                "class SignalEngine:",
+                "    def generate(self, *args, **kwargs):",
+                "        return '000001.SZ'.replace('.SZ', '')",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    module = _load_module_from_file(signal_file, _module_name())
+
+    assert module.SignalEngine().generate() == "000001"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "        path = Path('relative.txt')\n        return path.replace('other.txt')",
+        "        return pathlib.Path('relative.txt').replace('other.txt')",
+        "        return Path.cwd().replace('other')",
+    ],
+)
+def test_signal_engine_rejects_pathlib_replace_aliases(tmp_path, body) -> None:
+    """Path moves remain blocked while string/Pandas replace is allowed."""
+    signal_file = tmp_path / "signal_engine.py"
+    signal_file.write_text(
+        "\n".join(
+            [
+                "import pathlib",
+                "from pathlib import Path",
+                "class SignalEngine:",
+                "    def generate(self, *args, **kwargs):",
+                body,
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="pathlib.replace"):
+        _load_module_from_file(signal_file, _module_name())
+
+
 def test_signal_engine_rejects_pandas_absolute_write(tmp_path) -> None:
     signal_file = tmp_path / "signal_engine.py"
     signal_file.write_text(

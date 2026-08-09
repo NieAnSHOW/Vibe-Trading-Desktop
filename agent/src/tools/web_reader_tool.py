@@ -8,6 +8,7 @@ import logging
 from urllib.parse import urlsplit
 
 import requests
+from urllib3.util import Timeout as _HTTPTimeout
 
 from src.agent.progress import emit_progress
 from src.agent.tools import BaseTool
@@ -16,7 +17,9 @@ from src.security.scanner import with_security_warnings
 logger = logging.getLogger(__name__)
 
 _JINA_PREFIX = "https://r.jina.ai/"
-_TIMEOUT = 30
+_CONNECT_TIMEOUT = 5
+_READ_TIMEOUT = 25
+_TOTAL_TIMEOUT = 30
 _MAX_LENGTH = 8000
 _CACHED_MARKER = "Warning: This is a cached snapshot"
 
@@ -89,7 +92,15 @@ def read_url(url: str, no_cache: bool = False) -> str:
         resp = requests.get(
             f"{_JINA_PREFIX}{target_url}",
             headers=headers,
-            timeout=_TIMEOUT,
+            # A single scalar timeout applies independently to connect and
+            # read phases, so a stalled connection can consume ~60 seconds.
+            # Use urllib3's total deadline as well, so a slow upstream cannot
+            # reset the read timeout indefinitely by streaming tiny chunks.
+            timeout=_HTTPTimeout(
+                connect=_CONNECT_TIMEOUT,
+                read=_READ_TIMEOUT,
+                total=_TOTAL_TIMEOUT,
+            ),
         )
         emit_progress("parsing", message="extracting markdown")
         if resp.status_code != 200:
@@ -122,7 +133,16 @@ def read_url(url: str, no_cache: bool = False) -> str:
         return json.dumps(result, ensure_ascii=False)
 
     except requests.Timeout:
-        return json.dumps({"status": "error", "error": f"Request timed out ({_TIMEOUT}s)"}, ensure_ascii=False)
+        return json.dumps(
+            {
+                "status": "error",
+                "error": (
+                    "Request timed out "
+                    f"(connect={_CONNECT_TIMEOUT}s, read={_READ_TIMEOUT}s, total={_TOTAL_TIMEOUT}s)"
+                ),
+            },
+            ensure_ascii=False,
+        )
     except Exception as exc:
         logger.warning("read_url request failed: %s", exc)
         return json.dumps(

@@ -29,6 +29,31 @@ pub type SharedChild = Arc<Mutex<Option<Child>>>;
 /// 依赖安装(bootstrap)进行中标志。托盘「退出」据此判断是否需要二次确认。
 pub struct InstallingFlag(pub Arc<AtomicBool>);
 
+/// Serializes operations that mutate or execute the embedded runtime.
+#[derive(Clone)]
+pub struct RuntimeOperationLock(Arc<AtomicBool>);
+
+pub struct RuntimeOperationGuard(Arc<AtomicBool>);
+
+impl RuntimeOperationLock {
+    pub fn new() -> Self {
+        Self(Arc::new(AtomicBool::new(false)))
+    }
+
+    pub fn try_acquire(&self) -> Option<RuntimeOperationGuard> {
+        self.0
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .ok()
+            .map(|_| RuntimeOperationGuard(self.0.clone()))
+    }
+}
+
+impl Drop for RuntimeOperationGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+}
+
 async fn run_blocking<F, R>(operation: F) -> Result<R, String>
 where
     F: FnOnce() -> R + Send + 'static,
@@ -332,7 +357,11 @@ pub fn console_status(state: State<'_, SharedChild>) -> Result<StatusReport, Str
 pub async fn console_bootstrap(
     app: AppHandle,
     installing: State<'_, InstallingFlag>,
+    runtime_operation: State<'_, RuntimeOperationLock>,
 ) -> Result<(), String> {
+    let operation = runtime_operation
+        .try_acquire()
+        .ok_or("运行环境正在维护，请等待当前操作完成")?;
     let layout = Layout::from_home()?;
     prepare_runtime_from_bundle(&app, &layout)?;
     let res = crate::resources::Resources::resolve(&app).map_err(|e| format!("resources: {e}"))?;
@@ -345,6 +374,7 @@ pub async fn console_bootstrap(
     flag.store(true, Ordering::SeqCst);
     let app2 = app.clone();
     std::thread::spawn(move || {
+        let _operation = operation;
         let reader = BufReader::new(stdout);
         // 累积一帧的 event 名与 data JSON,遇空行(帧边界)组装并 emit。
         let mut event_name = String::new();
@@ -385,8 +415,9 @@ pub async fn console_start_service(
     app: AppHandle,
     state: State<'_, SharedChild>,
     auth_state: State<'_, AuthState>,
+    runtime_operation: State<'_, RuntimeOperationLock>,
 ) -> Result<u16, ServiceStartError> {
-    start_service_inner(&app, &state, &auth_state).await
+    start_service_inner(&app, &state, &auth_state, &runtime_operation).await
 }
 
 /// 启动服务的纯逻辑（IPC 与启动自动启动共用）。成功后在 shared 中挂载子进程。
@@ -394,7 +425,11 @@ pub async fn start_service_inner(
     app: &AppHandle,
     state: &SharedChild,
     auth_state: &AuthState,
+    runtime_operation: &RuntimeOperationLock,
 ) -> Result<u16, ServiceStartError> {
+    let _operation = runtime_operation.try_acquire().ok_or_else(|| ServiceStartError::Other {
+        message: "运行环境正在维护，请等待当前操作完成".to_string(),
+    })?;
     let layout = Layout::from_home().map_err(|e| ServiceStartError::Other { message: e })?;
     crate::sidecar::log_vip_runtime_event(&layout.logs_dir, "service start requested");
     if compute_env_status(&layout) != EnvStatus::Ready {
@@ -547,6 +582,7 @@ pub fn console_set_autostart(
     app: AppHandle,
     state: State<'_, SharedChild>,
     auth_state: State<'_, AuthState>,
+    runtime_operation: State<'_, RuntimeOperationLock>,
     enabled: bool,
 ) -> Result<(), String> {
     let layout = Layout::from_home()?;
@@ -559,8 +595,9 @@ pub fn console_set_autostart(
         let app = app.clone();
         let auth_state = auth_state.inner().clone();
         let shared = state.inner().clone();
+        let runtime_operation = runtime_operation.inner().clone();
         tauri::async_runtime::spawn(async move {
-            match start_service_inner(&app, &shared, &auth_state).await {
+            match start_service_inner(&app, &shared, &auth_state, &runtime_operation).await {
                 Ok(port) => {
                     let _ = app.emit("service://started", port);
                 }
@@ -922,10 +959,21 @@ fn stop_service_blocking(state: &SharedChild) {
 }
 
 #[tauri::command]
-pub async fn console_stop_service(state: State<'_, SharedChild>) -> Result<(), String> {
+pub async fn console_stop_service(
+    state: State<'_, SharedChild>,
+    runtime_operation: State<'_, RuntimeOperationLock>,
+) -> Result<(), String> {
+    let operation = runtime_operation
+        .try_acquire()
+        .ok_or("运行环境正在维护，请等待当前操作完成")?;
     let shared = state.inner().clone();
     // terminate 内部 child.wait() 同步等子进程退出;甩到阻塞线程池避免卡 main thread。
-    let _ = tauri::async_runtime::spawn_blocking(move || stop_service_blocking(&shared)).await;
+    tauri::async_runtime::spawn_blocking(move || {
+        let _operation = operation;
+        stop_service_blocking(&shared);
+    })
+    .await
+    .map_err(|e| format!("stop service task join: {e}"))?;
     Ok(())
 }
 
@@ -1005,8 +1053,15 @@ pub async fn console_channels_status(port: u16) -> Result<String, String> {
 /// `pip install --no-input 'vibe-trading-ai[<channel>]'`,逐行 emit "channeldep://progress"。
 /// pip 进度几乎全走 stderr,故 stdout/stderr 各开一线程转发,避免日志空白。
 #[tauri::command]
-pub async fn console_install_channel_dep(app: AppHandle, channel: String) -> Result<(), String> {
+pub async fn console_install_channel_dep(
+    app: AppHandle,
+    channel: String,
+    runtime_operation: State<'_, RuntimeOperationLock>,
+) -> Result<(), String> {
     validate_channel(&channel)?;
+    let operation = runtime_operation
+        .try_acquire()
+        .ok_or("运行环境正在维护，请等待当前操作完成")?;
     let layout = Layout::from_home()?;
     if !layout.venv_python.exists() {
         return Err("环境未就绪,请先完成依赖安装".into());
@@ -1029,6 +1084,7 @@ pub async fn console_install_channel_dep(app: AppHandle, channel: String) -> Res
         }
     });
     std::thread::spawn(move || {
+        let _operation = operation;
         let code = child.wait().ok().and_then(|s| s.code());
         let _ = app.emit("channeldep://exit", code);
     });
@@ -1067,11 +1123,35 @@ pub fn clear_venv_dir(layout: &Layout) -> Result<(), String> {
         .map_err(|e| format!("清理 venv 失败 {}: {e}", layout.venv_dir.display()))
 }
 
-/// 强制清理虚拟环境:删除 ~/.vibe-trading/venv,便于用户从零重新安装依赖。
+/// 强制清理虚拟环境：先停止服务并同步 bundle 代码，再删除
+/// ~/.vibe-trading/venv，便于用户从零重新安装依赖。
 #[tauri::command]
-pub fn console_clear_venv() -> Result<(), String> {
+pub async fn console_clear_venv(
+    app: AppHandle,
+    state: State<'_, SharedChild>,
+    runtime_operation: State<'_, RuntimeOperationLock>,
+) -> Result<(), String> {
+    let operation = runtime_operation
+        .try_acquire()
+        .ok_or("运行环境正在维护，请等待当前操作完成")?;
     let layout = Layout::from_home()?;
-    clear_venv_dir(&layout)
+    let resources = crate::resources::Resources::resolve(&app)
+        .map_err(|e| format!("resources: {e}"))?;
+    let shared = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _operation = operation;
+        stop_service_blocking(&shared);
+        crate::runtime_dir::refresh_from_bundle(
+            &resources.agent_template,
+            &resources.env_seed,
+            &resources.version_file,
+            Some(&resources.frontend_dist),
+            &layout,
+        )?;
+        clear_venv_dir(&layout)
+    })
+    .await
+    .map_err(|e| format!("clear environment task join: {e}"))?
 }
 
 #[allow(dead_code)]
@@ -2096,6 +2176,15 @@ mod tests {
     fn update_install_is_blocked_while_bootstrap_is_running() {
         assert!(can_install_update(false));
         assert!(!can_install_update(true));
+    }
+
+    #[test]
+    fn runtime_operation_lock_rejects_concurrent_operations() {
+        let lock = RuntimeOperationLock::new();
+        let operation = lock.try_acquire().expect("first operation acquires lock");
+        assert!(lock.try_acquire().is_none(), "second operation must be rejected");
+        drop(operation);
+        assert!(lock.try_acquire().is_some(), "lock releases when operation completes");
     }
 
     #[test]

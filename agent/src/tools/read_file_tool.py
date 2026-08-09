@@ -43,6 +43,18 @@ class ReadFileTool(BaseTool):
         limit = kwargs.get("limit")
         run_dir = kwargs.get("run_dir")
 
+        # ``skills`` is a directory, not an instruction file. Agents commonly
+        # try to inspect it before selecting a skill; give them the tool that
+        # can actually load a named skill instead of a misleading path error.
+        if str(file_path).rstrip("/\\") == "skills":
+            return json.dumps(
+                {
+                    "status": "error",
+                    "error": "'skills' is a directory. Use load_skill with a specific skill name instead.",
+                },
+                ensure_ascii=False,
+            )
+
         allowed_roots = []
         if run_dir:
             try:

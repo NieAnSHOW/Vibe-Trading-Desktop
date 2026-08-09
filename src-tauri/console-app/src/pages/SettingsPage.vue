@@ -76,8 +76,11 @@ function setMaintenanceError(m: unknown) {
   if (m) maintenanceNotice.value = "";
 }
 
-function onClearVenv() {
+async function onClearVenv() {
   maintenanceNotice.value = "";
+  maintenanceError.value = "";
+  // 更新用户点击时的真实服务状态，避免仅依赖页面挂载时的快照。
+  await env.refresh();
   clearVenvDialogOpen.value = true;
 }
 async function onClearVenvDialogClose(v: "ok" | "cancel") {
@@ -93,7 +96,7 @@ async function onClearVenvDialogClose(v: "ok" | "cancel") {
         serviceRunning.value = false;
       }
       await consoleClearVenv();
-      maintenanceNotice.value = "运行环境已清理，请重新安装依赖";
+      maintenanceNotice.value = "运行环境和过时代码已清理，请重新安装依赖";
       await env.refresh();
     } catch (e) {
       setMaintenanceError(e);
@@ -250,9 +253,18 @@ onMounted(async () => {
       </div>
     </section>
 
-    <ConfirmDialog :open="clearVenvDialogOpen" title="确认强制清理环境？" @close="onClearVenvDialogClose">
-      将删除 <b>~/.vibe-trading/venv</b> 虚拟环境(含已安装依赖)，<b>不会删除您的配置、会话等数据</b>。清理后需重新完整安装依赖，确认操作吗？
-      <template #confirm-text>确认清理</template>
+    <ConfirmDialog :open="clearVenvDialogOpen"
+      :title="serviceRunning ? '服务正在运行，确认停止后清理？' : '确认强制清理环境？'"
+      @close="onClearVenvDialogClose">
+      <template v-if="serviceRunning">
+        当前服务正在运行。确认后会先停止当前服务，再同步清理可能存在的过时代码和
+        <b>~/.vibe-trading/venv</b> 虚拟环境；配置、会话等用户数据不会删除。
+      </template>
+      <template v-else>
+        将同步清理可能存在的过时代码并删除 <b>~/.vibe-trading/venv</b> 虚拟环境(含已安装依赖)，
+        <b>不会删除您的配置、会话等数据</b>。清理后需重新完整安装依赖，确认操作吗？
+      </template>
+      <template #confirm-text>{{ serviceRunning ? "停止并清理" : "确认清理" }}</template>
     </ConfirmDialog>
 
     <ConfirmDialog :open="clearLogsDialogOpen" title="确认清理日志文件？" @close="onClearLogsDialogClose">
