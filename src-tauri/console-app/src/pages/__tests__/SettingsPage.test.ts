@@ -2,6 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createMemoryHistory } from "vue-router";
 import { createPinia, setActivePinia } from "pinia";
+import type { EnvironmentReport } from "../../ipc/types";
 
 const mocks = vi.hoisted(() => ({
   consoleGetSettings: vi.fn(async () => ({ autostart_service: false })),
@@ -16,6 +17,14 @@ const mocks = vi.hoisted(() => ({
   consoleClearVenv: vi.fn(async () => undefined),
   consoleUninstallLegacyApp: vi.fn(async () => undefined),
   consoleStopService: vi.fn(async () => undefined),
+  consoleCheckEnvironment: vi.fn(async (): Promise<EnvironmentReport> => ({
+    env: "ready",
+    installedVersion: "1.0.0",
+    bundleVersion: "1.0.0",
+    depsOk: true,
+    runtimeOk: true,
+  })),
+  consoleRepairEnvironment: vi.fn(async () => undefined),
 }));
 
 vi.mock("../../ipc/commands", () => ({
@@ -27,6 +36,8 @@ vi.mock("../../ipc/commands", () => ({
   consoleClearVenv: mocks.consoleClearVenv,
   consoleUninstallLegacyApp: mocks.consoleUninstallLegacyApp,
   consoleStopService: mocks.consoleStopService,
+  consoleCheckEnvironment: mocks.consoleCheckEnvironment,
+  consoleRepairEnvironment: mocks.consoleRepairEnvironment,
 }));
 
 import SettingsPage from "../SettingsPage.vue";
@@ -102,6 +113,96 @@ describe("SettingsPage", () => {
     expect(wrapper.get('[data-test="open-logs-action"]').text()).toBe("打开");
     expect(wrapper.get('[data-test="clear-logs-action"]').text()).toBe("清理");
     expect(wrapper.get('[data-test="uninstall-legacy-action"]').text()).toBe("卸载老版本");
+    expect(wrapper.get('[data-test="check-environment-action"]').text()).toBe("检查");
+  });
+
+  it("reports a healthy environment after checking", async () => {
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper.get('[data-test="check-environment-action"]').trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleCheckEnvironment).toHaveBeenCalledOnce();
+    expect(wrapper.get(".env-badge").text()).toBe("正常");
+    expect(wrapper.text()).toContain("依赖完整");
+    expect(wrapper.text()).toContain("运行时代码已是最新");
+    expect(wrapper.find('[data-test="repair-environment-action"]').exists()).toBe(false);
+  });
+
+  it("shows repair when dependencies or runtime are outdated, then repairs", async () => {
+    mocks.consoleCheckEnvironment
+      .mockResolvedValueOnce({
+        env: "incomplete",
+        installedVersion: "1.0.0",
+        bundleVersion: "1.1.0",
+        depsOk: false,
+        runtimeOk: false,
+      })
+      .mockResolvedValueOnce({
+        env: "ready",
+        installedVersion: "1.1.0",
+        bundleVersion: "1.1.0",
+        depsOk: true,
+        runtimeOk: true,
+      });
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper.get('[data-test="check-environment-action"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get(".env-badge").text()).toBe("异常");
+    expect(wrapper.text()).toContain("依赖不完整");
+    expect(wrapper.text()).toContain("运行时代码版本落后");
+
+    await wrapper.get('[data-test="repair-environment-action"]').trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleRepairEnvironment).toHaveBeenCalledOnce();
+    // 修复后复查显示正常
+    expect(wrapper.get(".env-badge").text()).toBe("正常");
+    expect(wrapper.text()).toContain("环境检查通过");
+    expect(wrapper.find('[data-test="repair-environment-action"]').exists()).toBe(false);
+  });
+
+  it("stops a running service before repairing the environment", async () => {
+    mocks.consoleStatus.mockResolvedValueOnce({
+      env: "ready" as const,
+      service_running: true,
+      port: 4173,
+    });
+    mocks.consoleCheckEnvironment.mockResolvedValueOnce({
+      env: "ready" as const,
+      installedVersion: "1.0.0",
+      bundleVersion: "1.1.0",
+      depsOk: true,
+      runtimeOk: false,
+    });
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper.get('[data-test="check-environment-action"]').trigger("click");
+    await flushPromises();
+    await wrapper.get('[data-test="repair-environment-action"]').trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleStopService).toHaveBeenCalledOnce();
+    expect(mocks.consoleRepairEnvironment).toHaveBeenCalledOnce();
+    expect(mocks.consoleStopService.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.consoleRepairEnvironment.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("renders an environment check error", async () => {
+    mocks.consoleCheckEnvironment.mockRejectedValueOnce(new Error("bundle missing"));
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper.get('[data-test="check-environment-action"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("bundle missing");
   });
 
   it("uninstalls the legacy app only after confirmation and stops the service first", async () => {

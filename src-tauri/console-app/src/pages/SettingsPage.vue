@@ -15,7 +15,10 @@ import {
   consoleClearVenv,
   consoleUninstallLegacyApp,
   consoleOpenExternalUrl,
+  consoleCheckEnvironment,
+  consoleRepairEnvironment,
 } from "../ipc/commands";
+import type { EnvironmentReport } from "../ipc/types";
 import { config as ProdConfig } from "../config/prod";
 import douyinPng from "../assets/douyin.png";
 import tauriConf from "../../../tauri.conf.json";
@@ -70,6 +73,58 @@ const uninstallLegacyBusy = useBusy();
 const clearVenvDialogOpen = ref(false);
 const clearLogsDialogOpen = ref(false);
 const uninstallLegacyDialogOpen = ref(false);
+
+// ── 环境检查（依赖完整性 + 运行时代码版本） ───────────────────────
+const envReport = ref<EnvironmentReport | null>(null);
+const envCheckBusy = useBusy();
+const envRepairBusy = useBusy();
+
+const envSummary = computed(() => {
+  const r = envReport.value;
+  if (!r) return "";
+  const parts: string[] = [];
+  parts.push(r.depsOk ? "依赖完整" : "依赖不完整");
+  parts.push(
+    r.runtimeOk
+      ? "运行时代码已是最新"
+      : `运行时代码版本落后（${r.installedVersion ?? "无"} → ${r.bundleVersion}）`,
+  );
+  return parts.join("；");
+});
+const envAllOk = computed(() => envReport.value?.depsOk && envReport.value.runtimeOk);
+
+async function onCheckEnvironment() {
+  maintenanceNotice.value = "";
+  maintenanceError.value = "";
+  try {
+    envReport.value = await consoleCheckEnvironment();
+  } catch (e) {
+    setMaintenanceError(e);
+  }
+}
+
+async function onRepairEnvironment() {
+  maintenanceNotice.value = "";
+  maintenanceError.value = "";
+  // 修复会同步代码并在需要时重装依赖，期间服务须处于停止状态。
+  if (serviceRunning.value) {
+    await service.stop();
+    env.setPort(null);
+    serviceRunning.value = false;
+  }
+  await envRepairBusy.run("修复中", async () => {
+    try {
+      await consoleRepairEnvironment();
+      // 修复完成后立即复查，反馈是否已达标。
+      envReport.value = await consoleCheckEnvironment();
+      maintenanceNotice.value = envAllOk.value
+        ? "环境检查通过：依赖完整，运行时代码已是最新。"
+        : "修复完成，但环境仍未达标，请查看下方检查结果。";
+    } catch (e) {
+      setMaintenanceError(e);
+    }
+  });
+}
 
 function setMaintenanceError(m: unknown) {
   maintenanceError.value = m ? String(m) : "";
@@ -189,6 +244,26 @@ onMounted(async () => {
 
     <section class="settings-card" aria-label="维护">
       <h1 class="settings-title">维护</h1>
+      <div class="settings-row">
+        <div class="settings-row__text">
+          <p class="settings-row__name">环境检查</p>
+          <p class="settings-row__desc">
+            检查依赖是否完整、运行时代码是否为最新版本；不达标时点击修复。
+          </p>
+          <p v-if="envReport" class="env-summary">
+            <span :class="['env-badge', { ok: envAllOk }]">{{ envAllOk ? "正常" : "异常" }}</span>
+            {{ envSummary }}
+          </p>
+        </div>
+        <div class="settings-row__actions">
+          <AppButton variant="ghost" :busy="envCheckBusy.busy.value" busy-label="检查中"
+            data-test="check-environment-action" @click="onCheckEnvironment">检查</AppButton>
+          <AppButton v-if="envReport && !envAllOk" variant="danger" :busy="envRepairBusy.busy.value"
+            busy-label="修复中" data-test="repair-environment-action" @click="onRepairEnvironment">
+            修复
+          </AppButton>
+        </div>
+      </div>
       <div class="settings-row">
         <div class="settings-row__text">
           <p class="settings-row__name">清理运行环境</p>
@@ -367,6 +442,39 @@ onMounted(async () => {
 .settings-row .btn-ghost {
   flex: none;
   white-space: nowrap;
+}
+
+/* 环境检查：结果徽标与摘要（检查完成前不展示） */
+.env-summary {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: hsl(var(--ink-dim));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.env-badge {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: hsl(var(--bad-fg));
+  background: hsl(var(--bad) / 0.1);
+  border: 1px solid hsl(var(--bad) / 0.4);
+}
+
+.env-badge.ok {
+  color: hsl(var(--ok-fg));
+  background: hsl(var(--ok) / 0.1);
+  border-color: hsl(var(--ok) / 0.3);
+}
+
+.settings-row__actions {
+  flex: none;
+  display: flex;
+  gap: 8px;
 }
 
 /* 破坏性操作弱化为描边款,与 settings-notice--bad 同系;避免实心红在列表里过于刺眼。

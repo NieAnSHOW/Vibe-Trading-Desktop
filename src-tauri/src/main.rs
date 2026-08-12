@@ -51,6 +51,8 @@ fn main() {
             console::console_clear_logs,
             console::console_clear_venv,
             console::console_uninstall_legacy_app,
+            console::console_check_environment,
+            console::console_repair_environment,
             console::console_get_settings,
             console::console_set_autostart,
             console::console_login_captcha,

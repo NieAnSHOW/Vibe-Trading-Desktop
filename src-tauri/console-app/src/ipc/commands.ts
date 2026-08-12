@@ -3,6 +3,7 @@ import type {
   AuthStatusView,
   Captcha,
   CommandMessage,
+  EnvironmentReport,
   LoginResultView,
   MemberUsageView,
   MemberBenefitsView,
@@ -42,6 +43,12 @@ export const consoleClearVenv = (): Promise<void> =>
 
 export const consoleUninstallLegacyApp = (): Promise<void> =>
   invoke<void>("console_uninstall_legacy_app");
+
+export const consoleCheckEnvironment = (): Promise<EnvironmentReport> =>
+  invoke<EnvironmentReport>("console_check_environment");
+
+export const consoleRepairEnvironment = (): Promise<void> =>
+  invoke<void>("console_repair_environment");
 
 export const consoleGetSettings = (): Promise<Settings> =>
   invoke<Settings>("console_get_settings");

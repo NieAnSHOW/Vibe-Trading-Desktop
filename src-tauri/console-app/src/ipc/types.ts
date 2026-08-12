@@ -8,6 +8,15 @@ export interface StatusReport {
   port: number | null;
 }
 
+// 镜像 src-tauri/src/console.rs 的 EnvironmentReport。
+export interface EnvironmentReport {
+  env: EnvState;
+  installedVersion: string | null;
+  bundleVersion: string;
+  depsOk: boolean;
+  runtimeOk: boolean;
+}
+
 // 镜像 src-tauri/src/settings.rs 的 Settings。
 export interface Settings {
   autostart_service: boolean;

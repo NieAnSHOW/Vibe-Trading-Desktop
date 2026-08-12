@@ -132,6 +132,20 @@ pub fn compute_env_status(layout: &Layout) -> EnvStatus {
     }
 }
 
+/// 环境检查判定（纯函数，供设置页「环境检查」与单元测试）。
+/// 依赖完整：venv 已就绪（Ready）。运行时代码最新：installed marker 与
+/// bundle 版本一致，且 runtime/agent 目录存在（marker 残留但代码被删时判旧）。
+pub fn decide_environment(
+    env: EnvStatus,
+    runtime_agent_is_dir: bool,
+    installed: Option<&str>,
+    bundle: &str,
+) -> (bool, bool) {
+    let deps_ok = env == EnvStatus::Ready;
+    let runtime_ok = runtime_agent_is_dir && installed.is_some_and(|v| v.trim() == bundle.trim());
+    (deps_ok, runtime_ok)
+}
+
 fn remember_until(remember: bool, now: i64) -> Option<i64> {
     remember.then_some(now + auth::REMEMBER_LOGIN_SECS)
 }
@@ -362,9 +376,20 @@ pub async fn console_bootstrap(
     let operation = runtime_operation
         .try_acquire()
         .ok_or("运行环境正在维护，请等待当前操作完成")?;
+    bootstrap_inner(&app, &installing, operation).await
+}
+
+/// bootstrap 的执行体（console_bootstrap 与 console_repair_environment 共用）。
+/// 调用方须已持有 RuntimeOperationLock 并移交；spawn 失败时锁随 guard 释放。
+/// 子进程退出后由事件线程置位/复位 InstallingFlag。
+async fn bootstrap_inner(
+    app: &AppHandle,
+    installing: &InstallingFlag,
+    operation: RuntimeOperationGuard,
+) -> Result<(), String> {
     let layout = Layout::from_home()?;
-    prepare_runtime_from_bundle(&app, &layout)?;
-    let res = crate::resources::Resources::resolve(&app).map_err(|e| format!("resources: {e}"))?;
+    prepare_runtime_from_bundle(app, &layout)?;
+    let res = crate::resources::Resources::resolve(app).map_err(|e| format!("resources: {e}"))?;
     let mut child = build_bootstrap_cmd(&res.runtime_python, &layout.runtime_agent)
         .spawn()
         .map_err(|e| format!("spawn bootstrap: {e}"))?;
@@ -565,6 +590,106 @@ pub async fn start_service_inner(
             Err(ServiceStartError::HealthTimeout)
         }
     }
+}
+
+// ── 环境检查与修复（设置页「维护」板块） ──────────────────────────
+
+/// console_check_environment 返回的环境报告（serde 默认字段名，与 StatusReport 一致）。
+#[derive(serde::Serialize)]
+pub struct EnvironmentReport {
+    pub env: EnvStatus,
+    pub installed_version: Option<String>,
+    pub bundle_version: String,
+    pub deps_ok: bool,
+    pub runtime_ok: bool,
+}
+
+/// 设置页「环境检查」：只读判定依赖是否完整、运行时代码是否最新，不做任何修改。
+#[tauri::command]
+pub fn console_check_environment(app: AppHandle) -> Result<EnvironmentReport, String> {
+    let layout = Layout::from_home()?;
+    let resources = crate::resources::Resources::resolve(&app)
+        .map_err(|e| format!("resources: {e}"))?;
+    let bundle = fs::read_to_string(&resources.version_file)
+        .map_err(|e| format!("read bundle VERSION: {e}"))?;
+    let installed = fs::read_to_string(&layout.marker).ok();
+    let env = compute_env_status(&layout);
+    let (deps_ok, runtime_ok) = decide_environment(
+        env,
+        layout.runtime_agent.is_dir(),
+        installed.as_deref(),
+        bundle.trim(),
+    );
+    Ok(EnvironmentReport {
+        env,
+        installed_version: installed.map(|v| v.trim().to_string()),
+        bundle_version: bundle.trim().to_string(),
+        deps_ok,
+        runtime_ok,
+    })
+}
+
+/// 设置页「环境检查」的针对性修复：停止服务 → 从 bundle 同步运行时代码
+/// （venv 失效时强制刷新代码与 .env，并重装依赖；仅代码落后时只同步代码）。
+/// 修复是否到位由用户随后再次点击「环境检查」判定。
+#[tauri::command]
+pub async fn console_repair_environment(
+    app: AppHandle,
+    state: State<'_, SharedChild>,
+    installing: State<'_, InstallingFlag>,
+    runtime_operation: State<'_, RuntimeOperationLock>,
+) -> Result<(), String> {
+    let operation = runtime_operation
+        .try_acquire()
+        .ok_or("运行环境正在维护，请等待当前操作完成")?;
+    let layout = Layout::from_home()?;
+    let resources = crate::resources::Resources::resolve(&app)
+        .map_err(|e| format!("resources: {e}"))?;
+    let shared = state.inner().clone();
+    // 停服 + 同步代码都在阻塞线程池执行，避免卡 Tauri 主线程。
+    let fresh = tauri::async_runtime::spawn_blocking(move || -> Result<bool, String> {
+        let _operation = operation;
+        stop_service_blocking(&shared);
+        let env = compute_env_status(&layout);
+        match env {
+            // venv 失效（NotInstalled/Incomplete）：强制清掉版本 marker，让
+            // prepare 视作升级，从 bundle 重同步代码并刷新 .env。
+            EnvStatus::NotInstalled | EnvStatus::Incomplete => {
+                crate::runtime_dir::refresh_from_bundle(
+                    &resources.agent_template,
+                    &resources.env_seed,
+                    &resources.version_file,
+                    Some(&resources.frontend_dist),
+                    &layout,
+                )?;
+                Ok(true)
+            }
+            // venv 已就绪：只同步运行时代码（版本落后/标记残留时）。
+            EnvStatus::Ready => {
+                crate::runtime_dir::prepare(
+                    &resources.agent_template,
+                    &resources.env_seed,
+                    &resources.version_file,
+                    Some(&resources.frontend_dist),
+                    &layout,
+                )?;
+                Ok(false)
+            }
+        }
+    })
+    .await
+    .map_err(|e| format!("repair environment task join: {e}"))??;
+
+    if fresh {
+        // 仅新装/重装时自动重装依赖（走 bootstrap，复用进度事件与 InstallingFlag）；
+        // venv 本来就 Ready 时只同步代码，不重复安装。
+        // 锁已在 spawn_blocking 内随 guard 释放，这里重新获取。
+        let operation = runtime_operation
+            .try_acquire()
+            .ok_or("运行环境正在维护，请等待当前操作完成")?;
+        bootstrap_inner(&app, &installing, operation).await?;
+    }
+    Ok(())
 }
 
 // ── 设置(桌面壳偏好,~/.vibe-trading/settings.json) ──────────────
@@ -2185,6 +2310,26 @@ mod tests {
         assert!(lock.try_acquire().is_none(), "second operation must be rejected");
         drop(operation);
         assert!(lock.try_acquire().is_some(), "lock releases when operation completes");
+    }
+
+    #[test]
+    fn environment_decide_reports_deps_and_runtime_status() {
+        // 依赖缺失 + runtime 全新（从未安装 → 需修复：首次安装后才有版本可言）
+        let (deps, runtime) = decide_environment(EnvStatus::NotInstalled, true, None, "1.0.0");
+        assert!(!deps);
+        assert!(!runtime, "从未安装视为运行时代码不全，触发安装");
+        // 依赖就绪 + 代码最新
+        let (deps, runtime) = decide_environment(EnvStatus::Ready, true, Some("1.0.0"), "1.0.0");
+        assert!(deps && runtime);
+        // 依赖就绪 + 版本落后
+        let (deps, runtime) = decide_environment(EnvStatus::Ready, true, Some("1.0.0"), "1.1.0");
+        assert!(deps && !runtime);
+        // marker 残留但代码目录缺失 → 判旧，需要修复
+        let (deps, runtime) = decide_environment(EnvStatus::Ready, false, Some("1.0.0"), "1.0.0");
+        assert!(deps && !runtime, "runtime/agent 缺失视为运行时代码不全");
+        // 依赖未完成 + 版本落后
+        let (deps, runtime) = decide_environment(EnvStatus::Incomplete, true, Some("0.9.0"), "1.0.0");
+        assert!(!deps && !runtime);
     }
 
     #[test]
