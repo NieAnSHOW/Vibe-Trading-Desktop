@@ -596,6 +596,7 @@ pub async fn start_service_inner(
 
 /// console_check_environment 返回的环境报告（serde 默认字段名，与 StatusReport 一致）。
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EnvironmentReport {
     pub env: EnvStatus,
     pub installed_version: Option<String>,
@@ -2330,6 +2331,23 @@ mod tests {
         // 依赖未完成 + 版本落后
         let (deps, runtime) = decide_environment(EnvStatus::Incomplete, true, Some("0.9.0"), "1.0.0");
         assert!(!deps && !runtime);
+    }
+
+    #[test]
+    fn environment_report_serializes_with_frontend_field_names() {
+        let report = EnvironmentReport {
+            env: EnvStatus::Ready,
+            installed_version: Some("1.0.0".into()),
+            bundle_version: "1.0.0".into(),
+            deps_ok: true,
+            runtime_ok: true,
+        };
+
+        let value = serde_json::to_value(report).expect("serialize environment report");
+        assert_eq!(value["installedVersion"], "1.0.0");
+        assert_eq!(value["bundleVersion"], "1.0.0");
+        assert_eq!(value["depsOk"], true);
+        assert_eq!(value["runtimeOk"], true);
     }
 
     #[test]
