@@ -12,7 +12,12 @@
     "reports": "리포트",
     "alphaZoo": "Alpha Zoo",
     "settings": "설정",
-    "console": "콘솔",
+    "rail": {
+      "section": "데스크톱",
+      "account": "계정",
+      "environment": "런타임",
+      "research": "리서치"
+    },
     "correlation": "상관 행렬",
     "sessions": "세션",
     "newChat": "새 채팅",

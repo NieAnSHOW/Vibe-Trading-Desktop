@@ -34,7 +34,8 @@ body {
   min-height: 0;
   display: flex;
   justify-content: center;
-  padding: 40px 20px 32px;
+  /* 左侧 68px 让位给固定 rail(components/Rail.vue),页面保持居中卡片布局 */
+  padding: 40px 20px 32px calc(20px + 68px);
   -webkit-font-smoothing: antialiased;
   line-height: 1.5;
 }

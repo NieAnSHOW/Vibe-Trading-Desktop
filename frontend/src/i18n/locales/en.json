@@ -35,7 +35,12 @@
     "reports": "Reports",
     "alphaZoo": "Alpha Zoo",
     "settings": "Settings",
-    "console": "Console",
+    "rail": {
+      "section": "Desktop",
+      "account": "Account",
+      "environment": "Runtime",
+      "research": "Research"
+    },
     "correlation": "Correlation Matrix",
     "docs": "Docs",
     "sessions": "Sessions",

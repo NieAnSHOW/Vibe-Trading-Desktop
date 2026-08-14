@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onErrorCaptured } from "vue";
 import { loadPublicConfig } from "./config/prod";
+import Rail from "./components/Rail.vue";
 
 const errMsg = ref("");
 onErrorCaptured((e) => {
@@ -18,11 +19,15 @@ onMounted(() => {
   <div v-if="errMsg" class="fatal">
     控制台发生错误：{{ errMsg }}
   </div>
-  <router-view v-else v-slot="{ Component }">
-    <Transition name="page" mode="out-in">
-      <component :is="Component" />
-    </Transition>
-  </router-view>
+  <template v-else>
+    <!-- 壳层级导航(账户/环境/研究/设置),fixed 定位常驻左侧 -->
+    <Rail />
+    <router-view v-slot="{ Component }">
+      <Transition name="page" mode="out-in">
+        <component :is="Component" />
+      </Transition>
+    </router-view>
+  </template>
 </template>
 
 <style>

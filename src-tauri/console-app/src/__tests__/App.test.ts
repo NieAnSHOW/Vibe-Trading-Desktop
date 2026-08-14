@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
+import { createPinia } from "pinia";
 import App from "../App.vue";
 import AppSource from "../App.vue?raw";
 
@@ -28,7 +29,8 @@ describe("App", () => {
   it("renders routed pages through the named out-in page transition", async () => {
     const wrapper = mount(App, {
       global: {
-        plugins: [router],
+        // App 壳含 Rail(账户/环境/研究/设置),其 env store 需要 pinia。
+        plugins: [router, createPinia()],
         stubs: {
           Transition: {
             props: ["name", "mode"],

@@ -15,11 +15,15 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   returns to the console, an unexpected sidecar exit automatically returns the
   window to the console (`service://stopped`), and the tray quit confirmation
   is re-delivered after the console page reloads.
-- **"控制台" entry inside the WebUI sidebar.** The shell embeds the WebUI with
-  `?desktop=1&console=<url>`; the WebUI captures this once into sessionStorage
-  and shows a Console entry in the sidebar tools section (hidden in plain
-  browser visits) that navigates back to the shell console page — making the
-  console a managed sub-surface of the product instead of a sibling app.
+- **Persistent shell rail (账户 / 环境 / 研究 / 设置).** A fixed left rail
+  unifies the desktop hierarchy: the console app wraps all its pages with the
+  rail (账户 → login, 环境 → runtime console, 研究 → embeds the WebUI via
+  `console_open_webui`, bottom 设置 → settings), and the embedded WebUI
+  renders the same rail on its far left, where 账户/环境/设置 navigate back
+  to the corresponding console hash routes and 研究 marks the active surface.
+  The console URL is normalized to origin+path so the WebUI can target
+  `#/login`, `#/` and `#/settings` precisely. Replaces the single sidebar
+  console entry from the previous iteration.
 
 ### Changed
 - Main desktop window widened to 1180×760 and made resizable/maximizable to

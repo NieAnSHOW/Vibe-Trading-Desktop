@@ -21,7 +21,6 @@ import {
   Loader2,
   Globe2,
   LineChart,
-  MonitorCog,
   Newspaper,
   Search,
   BookOpen,
@@ -34,7 +33,8 @@ import { cn } from "@/lib/utils";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { api, type SessionItem } from "@/lib/api";
 import { useAgentStore } from "@/stores/agent";
-import { isDesktopEmbedded, returnToConsole } from "@/lib/desktopShell";
+import { isDesktopEmbedded } from "@/lib/desktopShell";
+import { DesktopShellRail } from "@/components/layout/DesktopShellRail";
 import { ConnectionBanner } from "@/components/layout/ConnectionBanner";
 
 // Bump on each release; one place keeps the footer in sync with package.json.
@@ -308,6 +308,8 @@ export function Layout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      {/* 桌面壳层级导航(账户/环境/研究/设置),仅内嵌模式渲染 */}
+      {isDesktopEmbedded() && <DesktopShellRail />}
       {/* Sidebar */}
       <aside
         className={cn(
@@ -405,28 +407,6 @@ export function Layout() {
             collapsed={collapsed}
             isActive={isActive("/settings")}
           />
-          {/* 桌面壳内嵌时的「控制台」入口:返回壳内管理页(启停/修复/登录)。
-              浏览器直接访问(无 ?desktop=1)不显示,与托盘入口互为兜底。 */}
-          {isDesktopEmbedded() && (
-            <button
-              type="button"
-              onClick={() => {
-                try {
-                  track("feature_use", { nav_target: "desktop-console" }, { name: "nav_sidebar" });
-                } catch {}
-                returnToConsole();
-              }}
-              className={cn(
-                "flex items-center rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
-                collapsed ? "justify-center p-2" : "gap-3 px-3 py-2",
-                "text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-              title={collapsed ? t("layout.console") : undefined}
-            >
-              <MonitorCog className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {!collapsed && t("layout.console")}
-            </button>
-          )}
 
           {/* research — collapsible group */}
           {!collapsed && (

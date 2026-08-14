@@ -52,6 +52,9 @@ export function isShellConsoleUrl(url: string): boolean {
   }
 }
 
+/** 桌面壳 rail 的目标页面,对应控制台 hash 路由。 */
+export type ShellConsolePage = "login" | "console" | "settings";
+
 /** 读取已保存的控制台地址(无效或缺失返回 null)。 */
 export function getShellConsoleUrl(): string | null {
   let url: string | null = null;
@@ -64,12 +67,24 @@ export function getShellConsoleUrl(): string | null {
   return url;
 }
 
+/** 控制台页面完整地址:base + hash 路由(控制台是 createWebHashHistory)。 */
+export function shellConsolePageUrl(page: ShellConsolePage): string | null {
+  const base = getShellConsoleUrl();
+  if (!base) return null;
+  // base 已由壳侧规范化为 origin+path;防御性再剥一次 query/hash。
+  const parsed = new URL(base);
+  parsed.search = "";
+  parsed.hash = page === "console" ? "" : `#/${page}`;
+  return parsed.toString();
+}
+
 /** 导航回桌面壳控制台页;仅在有效地址时动作,否则保持当前页。
  *  navigate 可注入,便于单测(jsdom 无法 spy location.replace)。 */
 export function returnToConsole(
+  page: ShellConsolePage = "console",
   navigate: (url: string) => void = (url) => window.location.replace(url),
 ): void {
-  const url = getShellConsoleUrl();
+  const url = shellConsolePageUrl(page);
   if (url) {
     navigate(url);
   }

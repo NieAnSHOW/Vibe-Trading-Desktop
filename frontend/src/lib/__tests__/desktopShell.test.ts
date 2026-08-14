@@ -5,6 +5,7 @@ import {
   isDesktopEmbedded,
   isShellConsoleUrl,
   returnToConsole,
+  shellConsolePageUrl,
 } from "@/lib/desktopShell";
 
 function setSearch(search: string) {
@@ -58,12 +59,26 @@ describe("desktopShell", () => {
   it("navigates only when a valid console url exists", () => {
     const navigate = vi.fn();
 
-    returnToConsole(navigate);
+    returnToConsole("console", navigate);
     expect(navigate).not.toHaveBeenCalled();
 
     setSearch("/?desktop=1&console=" + encodeURIComponent("http://tauri.localhost/index.html"));
     initDesktopShell();
-    returnToConsole(navigate);
+    returnToConsole("console", navigate);
     expect(navigate).toHaveBeenCalledWith("http://tauri.localhost/index.html");
+  });
+
+  it("targets console pages via hash routes", () => {
+    setSearch("/?desktop=1&console=" + encodeURIComponent("tauri://localhost/index.html#/settings"));
+    initDesktopShell();
+
+    // base 规范化:剥掉壳侧携带的旧 hash 后再拼目标页
+    expect(shellConsolePageUrl("login")).toBe("tauri://localhost/index.html#/login");
+    expect(shellConsolePageUrl("settings")).toBe("tauri://localhost/index.html#/settings");
+    expect(shellConsolePageUrl("console")).toBe("tauri://localhost/index.html");
+
+    const navigate = vi.fn();
+    returnToConsole("settings", navigate);
+    expect(navigate).toHaveBeenCalledWith("tauri://localhost/index.html#/settings");
   });
 });

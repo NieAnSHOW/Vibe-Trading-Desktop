@@ -30,7 +30,12 @@
     "reports": "报告",
     "alphaZoo": "Alpha 因子库",
     "settings": "设置",
-    "console": "控制台",
+    "rail": {
+      "section": "桌面导航",
+      "account": "账户",
+      "environment": "环境",
+      "research": "研究"
+    },
     "correlation": "相关性矩阵",
     "docs": "文档",
     "sessions": "会话",

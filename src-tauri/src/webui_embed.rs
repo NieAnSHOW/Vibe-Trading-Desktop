@@ -83,14 +83,26 @@ pub fn embed(app: &AppHandle, port: u16) -> Result<(), String> {
         let current = win
             .url()
             .map_err(|e| format!("read webview url: {e}"))?;
-        state.begin_embed(current.clone());
-        Some(current)
+        // 规范化为 origin+path:控制台是 hash 路由,从 #/settings 等页面
+        // 嵌入时须剥掉旧 hash,WebUI 侧才能按目标页(账户/环境/设置)
+        // 重新拼接返回地址。
+        let base = normalize_base(&current);
+        state.begin_embed(base.clone());
+        Some(base)
     } else {
         None
     };
     let target = webui_url(port, console_url.as_ref())?;
     win.navigate(target)
         .map_err(|e| format!("navigate to webui: {e}"))
+}
+
+/// 去掉 URL 的 query 与 fragment,仅保留 scheme://host[:port]/path。
+pub fn normalize_base(url: &tauri::Url) -> tauri::Url {
+    let mut base = url.clone();
+    base.set_query(None);
+    base.set_fragment(None);
+    base
 }
 
 /// 从 WebUI 返回控制台;未嵌入时是幂等 no-op。
@@ -118,6 +130,13 @@ mod tests {
         assert_eq!(url.path(), "/");
         // desktop 标记始终携带:WebUI 侧据此显示「控制台」入口。
         assert_eq!(url.query(), Some("desktop=1"));
+    }
+
+    #[test]
+    fn normalize_base_strips_query_and_fragment() {
+        let url = tauri::Url::parse("tauri://localhost/index.html#/settings?x=1").unwrap();
+        let base = normalize_base(&url);
+        assert_eq!(base.as_str(), "tauri://localhost/index.html");
     }
 
     #[test]
