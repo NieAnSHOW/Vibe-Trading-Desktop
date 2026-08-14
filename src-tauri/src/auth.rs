@@ -2274,11 +2274,13 @@ mod tests {
     }
 
     #[test]
-    fn user_api_url_defaults_to_local_server() {
+    fn user_api_url_defaults_to_production_server() {
         let _api_url_lock = USER_API_URL_TEST_LOCK.lock().unwrap();
         let previous_api_url = std::env::var("VIBE_USER_API_URL").ok();
         std::env::remove_var("VIBE_USER_API_URL");
-        assert_eq!(user_api_url(), "http://127.0.0.1:8001");
+        // 默认与线上配置对齐(见 user_api_url 注释);本地开发用
+        // VIBE_USER_API_URL 覆盖(对齐 frontend/.env 的 127.0.0.1:8001)。
+        assert_eq!(user_api_url(), "https://trading-server.nieanshow.cn");
         match previous_api_url {
             Some(value) => std::env::set_var("VIBE_USER_API_URL", value),
             None => std::env::remove_var("VIBE_USER_API_URL"),

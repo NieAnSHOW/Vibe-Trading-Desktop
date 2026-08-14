@@ -572,6 +572,45 @@ pub async fn start_service_inner(
             }
             crate::sidecar::drain_child_pipes(&mut child, &layout.logs_dir);
             shared.lock().unwrap().replace(child);
+            // 崩溃守护:主窗口内嵌 WebUI 后控制台页已被替换,前端无法感知
+            // sidecar 异常退出。后台轮询子进程,崩溃时回收句柄、广播
+            // service://stopped,并把主窗口带回控制台。正常停止
+            // (console_stop_service / 退出流程先取走 child)时本线程自退。
+            {
+                let app = app.clone();
+                let shared = shared.clone();
+                let logs_dir = layout.logs_dir.clone();
+                std::thread::spawn(move || loop {
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                    let exited = {
+                        let mut guard = shared.lock().unwrap();
+                        let Some(child) = guard.as_mut() else {
+                            // child 已被停止/退出流程取走,不再归本线程监视。
+                            return;
+                        };
+                        match child.try_wait() {
+                            Ok(Some(_)) => {
+                                guard.take();
+                                true
+                            }
+                            Ok(None) => false,
+                            // try_wait 异常(句柄失效等):放弃监视,避免误报崩溃。
+                            Err(_) => return,
+                        }
+                    };
+                    if exited {
+                        crate::sidecar::log_vip_runtime_event(
+                            &logs_dir,
+                            "sidecar exited unexpectedly; broadcasting stop and returning to console",
+                        );
+                        let _ = app.emit("service://stopped", ());
+                        crate::webui_embed::return_to_console(&app);
+                        // 崩溃必须让用户看见:内嵌页已死,窗口带回控制台并前置。
+                        crate::tray::show_main_window(&app);
+                        return;
+                    }
+                });
+            }
             let _ = app.emit("service://started", port);
             Ok(port)
         }
@@ -1086,6 +1125,7 @@ fn stop_service_blocking(state: &SharedChild) {
 
 #[tauri::command]
 pub async fn console_stop_service(
+    app: AppHandle,
     state: State<'_, SharedChild>,
     runtime_operation: State<'_, RuntimeOperationLock>,
 ) -> Result<(), String> {
@@ -1100,12 +1140,31 @@ pub async fn console_stop_service(
     })
     .await
     .map_err(|e| format!("stop service task join: {e}"))?;
+    // 正常路径 stop 由控制台页发起(未嵌入,no-op);竞态下内嵌页还挂着时带回控制台,
+    // 避免用户停服后面对一个已死的 WebUI 页面。
+    crate::webui_embed::return_to_console(&app);
     Ok(())
 }
 
-/// 在系统默认浏览器打开 WebUI。
+/// 主窗口内嵌打开 WebUI:把 webview 直接导航到本地 backend,桌面壳以
+/// 完整应用形态承载业务 UI(控制台页被替换,托盘保留「返回控制台」入口)。
+/// 导航失败(窗口缺失等)时兜底系统浏览器,保证按钮始终可用。
 #[tauri::command]
-pub fn console_open_webui(port: u16) -> Result<(), String> {
+pub fn console_open_webui(app: AppHandle, port: u16) -> Result<(), String> {
+    match crate::webui_embed::embed(&app, port) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            eprintln!("warn: embed webui failed: {e}; fallback to system browser");
+            let url = format!("http://127.0.0.1:{port}/");
+            crate::validate_external_url(&url)?;
+            crate::open_url_with_system(&url)
+        }
+    }
+}
+
+/// 在系统默认浏览器打开 WebUI(次要入口;主入口为主窗口内嵌导航)。
+#[tauri::command]
+pub fn console_open_webui_external(port: u16) -> Result<(), String> {
     let url = format!("http://127.0.0.1:{port}/");
     crate::validate_external_url(&url)?;
     crate::open_url_with_system(&url)

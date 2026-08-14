@@ -6,10 +6,24 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Embedded WebUI in the desktop main window.** When the backend service is
+  ready, the desktop console's "open WebUI" action now navigates the main
+  window webview directly to the local backend (`http://127.0.0.1:<port>/`)
+  instead of launching the system browser, so the desktop app presents the full
+  product instead of a launcher. The previous behavior remains available via
+  the new `console_open_webui_external` command, a tray "返回控制台" menu item
+  returns to the console, an unexpected sidecar exit automatically returns the
+  window to the console (`service://stopped`), and the tray quit confirmation
+  is re-delivered after the console page reloads.
 
 ### Changed
+- Main desktop window widened to 1180×760 and made resizable/maximizable to
+  host the embedded WebUI.
 
 ### Fixed
+- Stale `user_api_url` test now asserts the production default server
+  (introduced in 32b3c0aa); local development overrides via
+  `VIBE_USER_API_URL`.
 
 ## [0.1.9] — 2026-06-01
 
