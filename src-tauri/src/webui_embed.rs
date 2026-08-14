@@ -56,23 +56,39 @@ impl WebuiEmbedState {
 }
 
 /// 构造 WebUI 地址。纯函数便于单测;仅指向回环。
-pub fn webui_url(port: u16) -> Result<tauri::Url, String> {
-    tauri::Url::parse(&format!("http://127.0.0.1:{port}/"))
-        .map_err(|e| format!("invalid webui url: {e}"))
+/// `console_url` 是导航前的控制台地址,随查询参数带给 WebUI——前端侧的
+/// 「控制台」导航入口据此 location.replace 回壳内页面,无需 Tauri IPC
+/// (远程页面调应用命令需要 app ACL manifest,成本高且难以离线验证)。
+pub fn webui_url(port: u16, console_url: Option<&tauri::Url>) -> Result<tauri::Url, String> {
+    let mut url = tauri::Url::parse(&format!("http://127.0.0.1:{port}/"))
+        .map_err(|e| format!("invalid webui url: {e}"))?;
+    {
+        let mut pairs = url.query_pairs_mut();
+        pairs.append_pair("desktop", "1");
+        if let Some(console) = console_url {
+            pairs.append_pair("console", console.as_str());
+        }
+    }
+    Ok(url)
 }
 
-/// 主窗口导航进 WebUI。仅在未嵌入时保存当前 URL;失败时由调用方决定
-/// 是否回退系统浏览器。
+/// 主窗口导航进 WebUI。仅在未嵌入时保存当前 URL(并把该地址透传给
+/// WebUI 作为返回入口);失败时由调用方决定是否回退系统浏览器。
 pub fn embed(app: &AppHandle, port: u16) -> Result<(), String> {
     let win = app
         .get_webview_window("main")
         .ok_or_else(|| "main window not found".to_string())?;
-    let target = webui_url(port)?;
     let state = app.state::<WebuiEmbedState>();
-    if !state.is_embedded() {
-        let current = win.url().map_err(|e| format!("read webview url: {e}"))?;
-        state.begin_embed(current);
-    }
+    let console_url = if !state.is_embedded() {
+        let current = win
+            .url()
+            .map_err(|e| format!("read webview url: {e}"))?;
+        state.begin_embed(current.clone());
+        Some(current)
+    } else {
+        None
+    };
+    let target = webui_url(port, console_url.as_ref())?;
     win.navigate(target)
         .map_err(|e| format!("navigate to webui: {e}"))
 }
@@ -95,11 +111,23 @@ mod tests {
 
     #[test]
     fn webui_url_points_to_loopback_root() {
-        let url = webui_url(8899).expect("parse");
+        let url = webui_url(8899, None).expect("parse");
         assert_eq!(url.scheme(), "http");
         assert_eq!(url.host_str(), Some("127.0.0.1"));
         assert_eq!(url.port(), Some(8899));
         assert_eq!(url.path(), "/");
+        // desktop 标记始终携带:WebUI 侧据此显示「控制台」入口。
+        assert_eq!(url.query(), Some("desktop=1"));
+    }
+
+    #[test]
+    fn webui_url_carries_encoded_console_url() {
+        let console = tauri::Url::parse("tauri://localhost/index.html?x=1&y=2").unwrap();
+        let url = webui_url(9000, Some(&console)).expect("parse");
+        let query: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+        assert!(query.contains(&("desktop".to_string(), "1".to_string())));
+        // 控制台地址(含自身的查询串)必须完整往返,前端才能导航回壳内页面。
+        assert!(query.contains(&("console".to_string(), console.to_string())));
     }
 
     #[test]

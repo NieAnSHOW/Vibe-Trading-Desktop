@@ -15,6 +15,11 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   returns to the console, an unexpected sidecar exit automatically returns the
   window to the console (`service://stopped`), and the tray quit confirmation
   is re-delivered after the console page reloads.
+- **"控制台" entry inside the WebUI sidebar.** The shell embeds the WebUI with
+  `?desktop=1&console=<url>`; the WebUI captures this once into sessionStorage
+  and shows a Console entry in the sidebar tools section (hidden in plain
+  browser visits) that navigates back to the shell console page — making the
+  console a managed sub-surface of the product instead of a sibling app.
 
 ### Changed
 - Main desktop window widened to 1180×760 and made resizable/maximizable to
