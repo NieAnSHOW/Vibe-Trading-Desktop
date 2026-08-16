@@ -117,60 +117,56 @@ describe("OnboardingPage", () => {
     await nextTick();
     expect(wrapper.classes()).toContain("onboarding-page--entering");
 
-    await wrapper.get(".onboarding-page__shell").trigger("animationend");
+    await wrapper.get(".onboarding-page").trigger("animationend");
     expect(wrapper.classes()).not.toContain("onboarding-page--entering");
   });
 
-  it("keeps the application header outside the content shell", () => {
+  it("keeps the startup placeholder free of the application shell", () => {
     const wrapper = mount(OnboardingPage, { global: { plugins: [router] } });
 
-    const header = wrapper.get(".app-header").element;
-    const shell = wrapper.get(".console-shell").element;
-
-    expect(shell.contains(header)).toBe(false);
+    expect(wrapper.find(".app-header").exists()).toBe(false);
+    expect(wrapper.find(".console-shell").exists()).toBe(false);
   });
 
-  it("keeps the local service workspace full width while signed out", async () => {
+  it("shows only the startup placeholder while the environment is ready", async () => {
     const wrapper = mount(OnboardingPage, { global: { plugins: [router] } });
 
     await flushPromises();
 
-    expect(wrapper.get(".console-workspace").classes()).toContain("console-workspace--guest");
-    expect(wrapper.find(".member-panel").exists()).toBe(false);
-    expect(wrapper.text()).not.toContain("登录使用会员服务");
-    expect(wrapper.find('[data-test="settings-entry"]').exists()).toBe(false);
-    expect(wrapper.get('[data-test="primary-service-action"]').text()).toBe("启动研究服务");
+    expect(wrapper.find(".onboarding-logo").exists()).toBe(true);
+    expect(wrapper.get(".onboarding-status").text()).toBe("应用启动中");
+    expect(wrapper.find('[data-test="repair-environment"]').exists()).toBe(false);
+    expect(wrapper.find(".service-panel").exists()).toBe(false);
   });
 
-  it("shows the workbench action when the environment reports a running service", async () => {
+  it("shows the repair button when the environment is incomplete", async () => {
     mocks.consoleStatus.mockResolvedValueOnce({
-      env: "ready",
-      service_running: true,
-      port: 8899,
+      env: "incomplete",
+      service_running: false,
+      port: null,
     });
     const wrapper = mount(OnboardingPage, { global: { plugins: [router] } });
 
     await flushPromises();
 
-    expect(wrapper.get('[data-test="primary-service-action"]').text()).toContain("进入研究工作台");
+    expect(wrapper.get('[data-test="repair-environment"]').text()).toContain("安装/修复环境");
+    expect(wrapper.get(".onboarding-status").text()).toBe("应用启动中");
   });
 
-  it("consolidates every service action into one operation bar without an inline log viewer", async () => {
+  it("starts bootstrap from the repair button", async () => {
+    const { consoleBootstrap } = await import("../../ipc/commands");
+    const bootstrapCommand = vi.mocked(consoleBootstrap);
+    mocks.consoleStatus.mockResolvedValueOnce({
+      env: "not_installed",
+      service_running: false,
+      port: null,
+    });
     const wrapper = mount(OnboardingPage, { global: { plugins: [router] } });
 
     await flushPromises();
+    await wrapper.get('[data-test="repair-environment"]').trigger("click");
 
-    const operationBars = wrapper.findAll('[aria-label="服务操作"]');
-    expect(operationBars).toHaveLength(1);
-    expect(operationBars[0].classes()).toContain("operation-bar");
-
-    const servicePanel = wrapper.get(".service-panel");
-    expect(servicePanel.findAll("button").every((button) => operationBars[0].element.contains(button.element))).toBe(true);
-    expect(operationBars[0].find('[data-test="primary-service-action"]').exists()).toBe(true);
-    expect(wrapper.find('[role="log"]').exists()).toBe(false);
-    expect(wrapper.find("#log").exists()).toBe(false);
-    expect(wrapper.find(".operations-footer").exists()).toBe(false);
-    expect(wrapper.text()).not.toContain("清空");
+    expect(bootstrapCommand).toHaveBeenCalledTimes(1);
   });
 
   it("starts the service after a successful bootstrap reaches a ready environment", async () => {
@@ -199,6 +195,6 @@ describe("OnboardingPage", () => {
     await flushPromises();
 
     expect(wrapper.get("#err").text()).toContain("依赖安装失败");
-    expect(wrapper.get('[data-test="primary-service-action"]').text()).toContain("安装或修复依赖");
+    expect(wrapper.get('[data-test="repair-environment"]').text()).toContain("安装/修复环境");
   });
 });
