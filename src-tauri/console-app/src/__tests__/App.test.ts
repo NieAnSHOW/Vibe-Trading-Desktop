@@ -66,7 +66,7 @@ describe("App", () => {
   it("renders routed pages through the named out-in page transition", async () => {
     const wrapper = mount(App, {
       global: {
-        // App 壳含 Rail(账户/环境/研究/设置),其 env store 需要 pinia。
+        // App 壳含 Rail(账户/研究/设置),其 env store 需要 pinia。
         plugins: [router, createPinia()],
         stubs: {
           Transition: {

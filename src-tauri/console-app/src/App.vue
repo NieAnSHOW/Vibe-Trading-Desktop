@@ -24,7 +24,7 @@ onMounted(() => {
     控制台发生错误：{{ errMsg }}
   </div>
   <template v-else>
-    <!-- 壳层级导航(账户/环境/研究/设置),fixed 定位常驻左侧 -->
+    <!-- 壳层级导航(账户/研究/设置),fixed 定位常驻左侧 -->
     <Rail />
     <div class="shell-content" data-test="shell-content">
       <router-view v-slot="{ Component }">

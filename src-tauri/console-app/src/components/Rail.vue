@@ -53,7 +53,7 @@ export const THEME_MODES: { id: ThemeMode; label: string }[] = [
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
-import { MonitorCog, Moon, Settings, Sun, Telescope, UserRound } from "@lucide/vue";
+import { Moon, Settings, Sun, Telescope, UserRound } from "@lucide/vue";
 import { useAuthStore } from "../stores/auth";
 import { useEnvStore } from "../stores/env";
 import {
@@ -63,7 +63,7 @@ import {
 } from "../ipc/commands";
 
 /**
- * 桌面壳层级导航栏(账户/环境/研究/底部设置),与 WebUI 侧
+ * 桌面壳层级导航栏(账户/研究/底部设置),与 WebUI 侧
  * DesktopShellRail 同构:控制台各页面渲染本 rail,「研究」经
  * console_open_webui 把主窗口导航进 WebUI;WebUI 侧的 rail 经
  * hash 路由返回对应页面。两侧共同构成常驻的层级导航。
@@ -211,13 +211,13 @@ onUnmounted(() => {
   }
 });
 
-type RailKey = "account" | "environment" | "research" | "settings";
+type RailKey = "account" | "settings";
 
 const activeKey = computed<RailKey | null>(() => {
   const p = route.path;
   if (p === "/login" || p === "/profile") return "account";
   if (p === "/settings") return "settings";
-  return "environment"; // / 、/channels、/monitor 都归环境(运行时管理)
+  return null;
 });
 
 const researchReady = computed(() => serviceRunning.value && port.value != null);
@@ -248,7 +248,7 @@ async function openResearch() {
       researchOpening.value = false;
     }
   } else {
-    // 服务未运行:进入环境页让用户启动,启动成功后自动进入研究。
+    // 服务未运行:回到启动引导页,启动成功后自动进入研究。
     router.push("/");
   }
 }
@@ -266,18 +266,6 @@ async function openResearch() {
     >
       <UserRound class="rail__icon" aria-hidden="true" />
       <span class="rail__label">账户</span>
-    </button>
-
-    <button
-      type="button"
-      class="rail__item"
-      :class="{ 'rail__item--active': activeKey === 'environment' }"
-      :aria-current="activeKey === 'environment' ? 'page' : undefined"
-      :disabled="researchOpening"
-      @click="router.push('/')"
-    >
-      <MonitorCog class="rail__icon" aria-hidden="true" />
-      <span class="rail__label">环境</span>
     </button>
 
     <button

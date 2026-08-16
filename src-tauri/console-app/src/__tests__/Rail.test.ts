@@ -51,6 +51,12 @@ async function mountRail(path = "/settings") {
   return wrapper;
 }
 
+function getRailButton(wrapper: ReturnType<typeof mount>, label: string) {
+  const button = wrapper.findAll("button").find((candidate) => candidate.text().trim() === label);
+  if (!button) throw new Error(`Rail button not found: ${label}`);
+  return button;
+}
+
 let currentMq: ReturnType<typeof installMatchMedia> | null = null;
 
 /** jsdom 没有 matchMedia;返回可控的 prefers-color-scheme 模拟。 */
@@ -151,6 +157,23 @@ describe("Rail account navigation", () => {
 });
 
 describe("Rail research navigation", () => {
+  it("renders no Environment navigation item", async () => {
+    const wrapper = await mountRail();
+
+    expect(wrapper.get(".rail").text()).not.toContain("环境");
+    expect(wrapper.findAll("button").some((button) => button.text().trim() === "环境")).toBe(false);
+  });
+
+  it("returns to the onboarding page when the service is stopped", async () => {
+    const wrapper = await mountRail();
+
+    await getRailButton(wrapper, "研究").trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/");
+    expect(consoleOpenWebui).not.toHaveBeenCalled();
+  });
+
   it("plays the shell exit transition before opening the WebUI", async () => {
     vi.useFakeTimers();
     try {
@@ -159,14 +182,14 @@ describe("Rail research navigation", () => {
       envStore.serviceRunning = true;
       envStore.setPort(8899);
 
-      const click = wrapper.findAll(".rail__item")[2].trigger("click");
+      const click = getRailButton(wrapper, "研究").trigger("click");
 
       expect(consoleOpenWebui).not.toHaveBeenCalled();
       expect(document.documentElement.classList.contains("desktop-shell-leaving")).toBe(true);
       await wrapper.vm.$nextTick();
-      expect(wrapper.findAll(".rail__item")[0].attributes("disabled")).toBeDefined();
-      expect(wrapper.findAll(".rail__item")[1].attributes("disabled")).toBeDefined();
-      expect(wrapper.findAll(".rail__item")[4].attributes("disabled")).toBeDefined();
+      expect(getRailButton(wrapper, "账户").attributes("disabled")).toBeDefined();
+      expect(getRailButton(wrapper, "研究").attributes("disabled")).toBeDefined();
+      expect(getRailButton(wrapper, "设置").attributes("disabled")).toBeDefined();
       await vi.advanceTimersByTimeAsync(220);
       await click;
       expect(consoleOpenWebui).toHaveBeenCalledWith(8899);
@@ -185,7 +208,7 @@ describe("Rail research navigation", () => {
       envStore.serviceRunning = true;
       envStore.setPort(8899);
 
-      const click = wrapper.findAll(".rail__item")[2].trigger("click");
+      const click = getRailButton(wrapper, "研究").trigger("click");
       await vi.advanceTimersByTimeAsync(220);
       await click;
 
