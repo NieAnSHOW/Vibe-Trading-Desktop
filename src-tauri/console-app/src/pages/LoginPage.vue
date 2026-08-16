@@ -477,9 +477,9 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* 登录页不套 .console-page 外壳:独立全屏门面。
+/* 登录页不套引导页外壳:独立全屏门面。
    body 有 18px padding,这里用 min-height 撑满剩余视口。 */
-/* 登录页不套 .console-page 外壳:独立全屏门面。
+/* 登录页不套引导页外壳:独立全屏门面。
    body 默认是 flex + justify-content:center(为 580px 控制台服务),
    展开逻辑见 console.css 的 body:has(> #app > .shell-content > .login-page)。 */
 .login-page {

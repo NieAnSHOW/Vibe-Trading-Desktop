@@ -306,8 +306,8 @@ function onStartupAnimationEnd() {
 </script>
 
 <template>
-  <main class="console-page" :class="{ 'console-page--ready': pageReady, 'console-page--entering': pageEntering }">
-    <header class="app-header console-page__header">
+  <main class="onboarding-page" :class="{ 'onboarding-page--ready': pageReady, 'onboarding-page--entering': pageEntering }">
+    <header class="app-header onboarding-page__header">
       <div class="brand-lockup" role="link" tabindex="0" aria-label="访问官网"
         @click="ProdConfig.officialUrl && consoleOpenExternalUrl(ProdConfig.officialUrl)"
         @keydown.enter="ProdConfig.officialUrl && consoleOpenExternalUrl(ProdConfig.officialUrl)">
@@ -320,7 +320,7 @@ function onStartupAnimationEnd() {
       </div>
     </header>
 
-    <section class="console-shell console-page__shell" aria-label="控制台内容" @animationend.self="onStartupAnimationEnd">
+    <section class="console-shell onboarding-page__shell" aria-label="启动引导" @animationend.self="onStartupAnimationEnd">
       <UpdateBanner ref="updateBanner" />
       <AdSlot :ads="adBanner" variant="banner" />
 
@@ -419,18 +419,18 @@ function onStartupAnimationEnd() {
 <style>
 @import "../styles/console.css";
 
-.console-page__header,
-.console-page__shell {
+.onboarding-page__header,
+.onboarding-page__shell {
   opacity: 0;
   transform: translateY(8px);
 }
 
-.console-page--ready .console-page__header,
-.console-page--ready .console-page__shell {
+.onboarding-page--ready .onboarding-page__header,
+.onboarding-page--ready .onboarding-page__shell {
   animation: console-enter 260ms ease-out both;
 }
 
-.console-page--ready .console-page__shell {
+.onboarding-page--ready .onboarding-page__shell {
   animation-delay: 60ms;
 }
 
@@ -443,8 +443,8 @@ function onStartupAnimationEnd() {
 
 @media (prefers-reduced-motion: reduce) {
 
-  .console-page--ready .console-page__header,
-  .console-page--ready .console-page__shell {
+  .onboarding-page--ready .onboarding-page__header,
+  .onboarding-page--ready .onboarding-page__shell {
     animation-duration: 0.01ms;
   }
 }

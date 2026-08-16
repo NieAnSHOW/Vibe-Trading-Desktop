@@ -118,7 +118,7 @@ function dismiss() {
   phase.value = "idle";
 }
 
-// 暴露给父组件手动触发检查（ConsolePage 启动时调用）
+// 暴露给父组件手动触发检查（引导页启动时调用）
 defineExpose({ checkUpdate });
 </script>
 

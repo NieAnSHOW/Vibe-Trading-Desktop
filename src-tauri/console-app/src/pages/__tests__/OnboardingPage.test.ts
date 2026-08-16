@@ -62,7 +62,7 @@ vi.mock("../../ipc/events", () => ({
   onUpdateProgress: vi.fn(async () => mocks.unlisten),
 }));
 
-import ConsolePage from "../ConsolePage.vue";
+import OnboardingPage from "../OnboardingPage.vue";
 import LoginPage from "../LoginPage.vue";
 
 const EmptyRoute = { template: "<div />" };
@@ -70,7 +70,7 @@ const EmptyRoute = { template: "<div />" };
 const router = createRouter({
   history: createMemoryHistory(),
   routes: [
-    { path: "/", component: ConsolePage },
+    { path: "/", component: OnboardingPage },
     { path: "/login", component: LoginPage },
     { path: "/profile", component: EmptyRoute },
     { path: "/settings", component: EmptyRoute },
@@ -103,26 +103,26 @@ beforeEach(async () => {
   await router.isReady();
 });
 
-describe("ConsolePage", () => {
-  it("marks the console page ready after mounting", async () => {
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+describe("OnboardingPage", () => {
+  it("marks the onboarding page ready after mounting", async () => {
+    const wrapper = mount(OnboardingPage, { global: { plugins: [router] } });
 
     await nextTick();
-    expect(wrapper.classes()).toContain("console-page--ready");
+    expect(wrapper.classes()).toContain("onboarding-page--ready");
   });
 
   it("keeps the page in its startup state until the content animation ends", async () => {
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+    const wrapper = mount(OnboardingPage, { global: { plugins: [router] } });
 
     await nextTick();
-    expect(wrapper.classes()).toContain("console-page--entering");
+    expect(wrapper.classes()).toContain("onboarding-page--entering");
 
-    await wrapper.get(".console-page__shell").trigger("animationend");
-    expect(wrapper.classes()).not.toContain("console-page--entering");
+    await wrapper.get(".onboarding-page__shell").trigger("animationend");
+    expect(wrapper.classes()).not.toContain("onboarding-page--entering");
   });
 
   it("keeps the application header outside the content shell", () => {
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+    const wrapper = mount(OnboardingPage, { global: { plugins: [router] } });
 
     const header = wrapper.get(".app-header").element;
     const shell = wrapper.get(".console-shell").element;
@@ -131,7 +131,7 @@ describe("ConsolePage", () => {
   });
 
   it("keeps the local service workspace full width while signed out", async () => {
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+    const wrapper = mount(OnboardingPage, { global: { plugins: [router] } });
 
     await flushPromises();
 
@@ -148,7 +148,7 @@ describe("ConsolePage", () => {
       service_running: true,
       port: 8899,
     });
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+    const wrapper = mount(OnboardingPage, { global: { plugins: [router] } });
 
     await flushPromises();
 
@@ -156,7 +156,7 @@ describe("ConsolePage", () => {
   });
 
   it("consolidates every service action into one operation bar without an inline log viewer", async () => {
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+    const wrapper = mount(OnboardingPage, { global: { plugins: [router] } });
 
     await flushPromises();
 
@@ -182,7 +182,7 @@ describe("ConsolePage", () => {
       .mockResolvedValueOnce({ env: "not_installed", service_running: false, port: null })
       .mockResolvedValue({ env: "ready", service_running: false, port: null });
 
-    mount(ConsolePage, { global: { plugins: [router] } });
+    mount(OnboardingPage, { global: { plugins: [router] } });
     await flushPromises();
     await mocks.bootstrapExitHandler?.(0);
     await flushPromises();
@@ -192,7 +192,7 @@ describe("ConsolePage", () => {
   });
 
   it("keeps the onboarding error visible when bootstrap fails", async () => {
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+    const wrapper = mount(OnboardingPage, { global: { plugins: [router] } });
     await flushPromises();
 
     await mocks.bootstrapExitHandler?.(1);

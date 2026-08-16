@@ -9,11 +9,13 @@
         const params = new URLSearchParams(location.search);
         const hash = location.hash;
         document.documentElement.dataset.consoleRoute =
-          hash === "#/login" || hash === "#/profile"
-            ? "account"
-            : hash === "#/settings"
-              ? "settings"
-              : "neutral";
+          hash === "" || hash === "#/"
+            ? "onboarding"
+            : hash === "#/login" || hash === "#/profile"
+              ? "account"
+              : hash === "#/settings"
+                ? "settings"
+                : "neutral";
         const mode = params.get("theme");
         const dark = mode === "dark" || (mode !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
         document.documentElement.dataset.theme = dark ? "dark" : "light";
@@ -92,6 +94,7 @@
       .console-rail-bootstrap__bottom { margin-top: auto; }
       html[data-theme="dark"] [data-bootstrap-theme="light"],
       html[data-theme="light"] [data-bootstrap-theme="dark"] { display: none; }
+      html[data-console-route="onboarding"] .console-rail-bootstrap { display: none; }
     </style>
   </head>
   <body>

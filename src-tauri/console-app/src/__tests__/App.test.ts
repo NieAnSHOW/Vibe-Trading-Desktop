@@ -7,9 +7,8 @@ import App from "../App.vue";
 const router = createRouter({
   history: createMemoryHistory(),
   routes: [
-    { path: "/", component: { template: "<p>first page</p>" } },
+    { path: "/", component: { template: '<main class="onboarding-page"><p>first page</p></main>' } },
     { path: "/next", component: { template: "<p>next page</p>" } },
-    { path: "/wide-console", component: { template: '<main class="console-page" />' } },
     { path: "/login-facade", component: { template: '<main class="login-page" />' } },
   ],
 });
@@ -35,7 +34,7 @@ function mountAppAtDocumentRoot() {
 }
 
 describe("App", () => {
-  it("removes the pre-rendered rail after the Vue rail is mounted", () => {
+  it("removes the pre-rendered rail after the Vue app is mounted", () => {
     const bootstrap = document.createElement("aside");
     bootstrap.id = "console-rail-bootstrap";
     document.body.append(bootstrap);
@@ -87,7 +86,8 @@ describe("App", () => {
     expect(wrapper.text()).toContain("next page");
   });
 
-  it("keeps the rail outside the cross-document transition content", () => {
+  it("keeps the rail outside the cross-document transition content", async () => {
+    await router.push("/next");
     const wrapper = mount(App, {
       global: {
         plugins: [router, createPinia()],
@@ -101,13 +101,17 @@ describe("App", () => {
     expect(content.element.contains(rail.element)).toBe(false);
   });
 
-  it("expands the console route to the full shell content area", async () => {
-    await router.push("/wide-console");
-    const wrapper = mountAppAtDocumentRoot();
-    await flushPromises();
+  it("renders the startup onboarding route without the application rail", () => {
+    const wrapper = mount(App, {
+      global: {
+        plugins: [router, createPinia()],
+      },
+    });
 
+    expect(wrapper.find(".rail").exists()).toBe(false);
     const content = wrapper.get('[data-test="shell-content"]');
-    const page = wrapper.find(".console-page");
+    const page = wrapper.find(".onboarding-page");
+    expect(content.classes()).toContain("shell-content--onboarding");
     expect(page.exists()).toBe(true);
     expect(content.element.contains(page.element)).toBe(true);
   });

@@ -796,9 +796,9 @@ body {
   padding: 18px 18px 18px calc(18px + var(--rail-width));
 }
 
-body:has(> #app > .shell-content > .console-page) {
+body:has(> #app > .shell-content--onboarding) {
   display: block;
-  padding: 0 0 0 var(--rail-width);
+  padding: 0;
 }
 
 /* 登录页同样全屏展开(左右双栏门面),但保留自身 18px 呼吸边距 */
@@ -806,7 +806,7 @@ body:has(> #app > .shell-content > .login-page) {
   display: block;
 }
 
-#app:has(> .shell-content > .console-page) {
+#app:has(> .shell-content--onboarding) {
   width: 100%;
   min-width: 0;
 }
@@ -815,7 +815,8 @@ body::before {
   display: none;
 }
 
-.console-page {
+.shell-content--onboarding,
+.onboarding-page {
   display: flex;
   width: 100%;
   min-width: 0;

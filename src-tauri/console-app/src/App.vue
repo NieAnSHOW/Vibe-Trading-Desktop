@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, onErrorCaptured } from "vue";
+import { computed, ref, onMounted, onErrorCaptured } from "vue";
+import { useRoute } from "vue-router";
 import { loadPublicConfig } from "./config/prod";
 import Rail from "./components/Rail.vue";
 
 const errMsg = ref("");
+const route = useRoute();
+const isOnboarding = computed(() => route.path === "/");
 onErrorCaptured((e) => {
   errMsg.value = String(e);
   return false; // 阻止向上抛
@@ -24,9 +27,9 @@ onMounted(() => {
     控制台发生错误：{{ errMsg }}
   </div>
   <template v-else>
-    <!-- 壳层级导航(账户/研究/设置),fixed 定位常驻左侧 -->
-    <Rail />
-    <div class="shell-content" data-test="shell-content">
+    <!-- 引导页独立覆盖主窗口；仅应用内功能页保留 Rail。 -->
+    <Rail v-if="!isOnboarding" />
+    <div class="shell-content" :class="{ 'shell-content--onboarding': isOnboarding }" data-test="shell-content">
       <router-view v-slot="{ Component }">
         <Transition name="page" mode="out-in">
           <component :is="Component" />
@@ -55,7 +58,7 @@ onMounted(() => {
 
 .shell-content:has(> .page-enter-active),
 .shell-content:has(> .page-leave-active),
-.shell-content:has(> .console-page--entering) {
+.shell-content:has(> .onboarding-page--entering) {
   overflow: clip;
 }
 
