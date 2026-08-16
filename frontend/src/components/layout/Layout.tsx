@@ -8,7 +8,6 @@ import {
   Bot,
   Eye,
   FileText,
-  Languages,
   Plus,
   Trash2,
   Pencil,
@@ -39,9 +38,6 @@ import {
 import { DesktopShellRail } from "@/components/layout/DesktopShellRail";
 import { ConnectionBanner } from "@/components/layout/ConnectionBanner";
 import { useDarkMode } from "@/hooks/useDarkMode";
-
-// Bump on each release; one place keeps the footer in sync with package.json.
-const APP_VERSION = `v${import.meta.env.VITE_DESKTOP_VERSION}_desktop`;
 
 type ExternalShortcut = {
   id: string;
@@ -212,7 +208,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 export function Layout() {
-  const { t, i18n: i18nHook } = useTranslation();
+  const { t } = useTranslation();
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   // Apply the desktop/system theme once for every route and expose the current
@@ -227,8 +223,11 @@ export function Layout() {
 
   // 仅在壳层已挂载后揭示跨文档导航的新页面，避免慢加载时跳过入场动画。
   useEffect(() => {
-    if (!document.documentElement.classList.contains("desktop-shell-entering")) return;
-    requestAnimationFrame(() => document.documentElement.classList.remove("desktop-shell-entering"));
+    if (!document.documentElement.classList.contains("desktop-shell-entering"))
+      return;
+    requestAnimationFrame(() =>
+      document.documentElement.classList.remove("desktop-shell-entering"),
+    );
   }, []);
 
   // BrowserRouter drops the original query string on client-side links. Keep
@@ -357,457 +356,438 @@ export function Layout() {
             collapsed ? "w-12" : "w-60",
           )}
         >
-        {/* ── top: logo + primary nav ── */}
-        <div
-          className={cn(
-            "flex shrink-0 justify-center border-b",
-            collapsed ? " px-1 py-3" : "px-4 py-3.5",
-          )}
-        >
-          <div className="flex items-center gap-2">
-            <img
-              src="/favicon.png"
-              alt="Trading Worker"
-              className="h-6 w-6 shrink-0 rounded"
+          {/* ── top: logo + primary nav ── */}
+          <div
+            className={cn(
+              "flex shrink-0 justify-center border-b",
+              collapsed ? " px-1 py-3" : "px-4 py-3.5",
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <img
+                src="/favicon.png"
+                alt="Trading Worker"
+                className="h-6 w-6 shrink-0 rounded"
+              />
+              {!collapsed && (
+                <span className="truncate font-semibold tracking-tight">
+                  Trading Worker
+                </span>
+              )}
+            </div>
+          </div>
+
+          <nav
+            className={cn(
+              "min-h-0 overflow-y-auto space-y-0.5",
+              collapsed ? "p-1" : "p-2",
+            )}
+          >
+            {!collapsed && (
+              <SectionLabel>{t("layout.section.workspace")}</SectionLabel>
+            )}
+
+            <NavLink
+              to="/dashboard"
+              icon={LayoutDashboard}
+              label={t("layout.dashboard")}
+              collapsed={collapsed}
+              isActive={pathname === "/" || isActive("/dashboard")}
+            />
+            <NavLink
+              to="/market-pulse"
+              icon={Activity}
+              label={t("layout.marketPulse")}
+              collapsed={collapsed}
+              isActive={isActive("/market-pulse")}
+            />
+            <NavLink
+              to="/indices"
+              icon={LineChart}
+              label={t("layout.indices", "指数")}
+              collapsed={collapsed}
+              isActive={isActive("/indices")}
+            />
+            <NavLink
+              to="/watchlist"
+              icon={Eye}
+              label={t("layout.watchlist")}
+              collapsed={collapsed}
+              isActive={isActive("/watchlist")}
+            />
+            <NavLink
+              to="/news"
+              icon={Newspaper}
+              label={t("layout.news")}
+              collapsed={collapsed}
+              isActive={isActive("/news")}
+            />
+            <NavLink
+              to="/agent"
+              icon={Bot}
+              label={t("layout.agent")}
+              collapsed={collapsed}
+              isActive={isActive("/agent")}
+            />
+            <NavLink
+              to="/usage"
+              icon={ChartNoAxesCombined}
+              label={t("layout.usage")}
+              collapsed={collapsed}
+              isActive={isActive("/usage")}
             />
             {!collapsed && (
-              <span className="truncate font-semibold tracking-tight">
-                Trading Worker
-              </span>
+              <SectionLabel>{t("layout.section.tools")}</SectionLabel>
             )}
-          </div>
-        </div>
+            <NavLink
+              to="/settings"
+              icon={Settings}
+              label={t("layout.settings")}
+              collapsed={collapsed}
+              isActive={isActive("/settings")}
+            />
 
-        <nav
-          className={cn(
-            "min-h-0 overflow-y-auto space-y-0.5",
-            collapsed ? "p-1" : "p-2",
-          )}
-        >
-          {!collapsed && (
-            <SectionLabel>{t("layout.section.workspace")}</SectionLabel>
-          )}
-
-          <NavLink
-            to="/dashboard"
-            icon={LayoutDashboard}
-            label={t("layout.dashboard")}
-            collapsed={collapsed}
-            isActive={pathname === "/" || isActive("/dashboard")}
-          />
-          <NavLink
-            to="/market-pulse"
-            icon={Activity}
-            label={t("layout.marketPulse")}
-            collapsed={collapsed}
-            isActive={isActive("/market-pulse")}
-          />
-          <NavLink
-            to="/indices"
-            icon={LineChart}
-            label={t("layout.indices", "指数")}
-            collapsed={collapsed}
-            isActive={isActive("/indices")}
-          />
-          <NavLink
-            to="/watchlist"
-            icon={Eye}
-            label={t("layout.watchlist")}
-            collapsed={collapsed}
-            isActive={isActive("/watchlist")}
-          />
-          <NavLink
-            to="/news"
-            icon={Newspaper}
-            label={t("layout.news")}
-            collapsed={collapsed}
-            isActive={isActive("/news")}
-          />
-          <NavLink
-            to="/agent"
-            icon={Bot}
-            label={t("layout.agent")}
-            collapsed={collapsed}
-            isActive={isActive("/agent")}
-          />
-          <NavLink
-            to="/usage"
-            icon={ChartNoAxesCombined}
-            label={t("layout.usage")}
-            collapsed={collapsed}
-            isActive={isActive("/usage")}
-          />
-          {!collapsed && (
-            <SectionLabel>{t("layout.section.tools")}</SectionLabel>
-          )}
-          <NavLink
-            to="/settings"
-            icon={Settings}
-            label={t("layout.settings")}
-            collapsed={collapsed}
-            isActive={isActive("/settings")}
-          />
-
-          {/* research — collapsible group */}
-          {!collapsed && (
-            <button
-              type="button"
-              onClick={() => setShowResearch((v) => !v)}
-              className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <FlaskConical className="h-4 w-4 shrink-0" />
-              <span className="flex-1 text-left">
-                {t("layout.researchTools")}
-              </span>
-              <span
-                className={cn(
-                  "text-[10px] text-muted-foreground/50 transition-transform",
-                  showResearch && "rotate-90",
-                )}
-              >
-                ▶
-              </span>
-            </button>
-          )}
-          {!collapsed ? (
-            showResearch && (
-              <div className="space-y-0.5 pl-6">
-                <NavLink
-                  to="/reports"
-                  icon={FileText}
-                  label={t("layout.reports")}
-                  collapsed={collapsed}
-                  isActive={isActive("/reports")}
-                  indent
-                />
-                <NavLink
-                  to="/alpha-zoo"
-                  icon={Layers}
-                  label={t("layout.alphaZoo")}
-                  collapsed={collapsed}
-                  isActive={isActive("/alpha-zoo")}
-                  indent
-                />
-                <NavLink
-                  to="/correlation"
-                  icon={BarChart3}
-                  label={t("layout.correlation")}
-                  collapsed={collapsed}
-                  isActive={isActive("/correlation")}
-                  indent
-                />
-              </div>
-            )
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowResearch((v) => !v)}
-              className="flex items-center justify-center p-2 w-full rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              title={t("layout.researchTools")}
-            >
-              <FlaskConical className="h-4 w-4 shrink-0" />
-            </button>
-          )}
-
-          {/* external — collapsible group */}
-          {!collapsed && (
-            <>
+            {/* research — collapsible group */}
+            {!collapsed && (
               <button
                 type="button"
-                onClick={() => setShowExternal((v) => !v)}
+                onClick={() => setShowResearch((v) => !v)}
                 className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground"
               >
-                <Globe2 className="h-4 w-4 shrink-0" />
+                <FlaskConical className="h-4 w-4 shrink-0" />
                 <span className="flex-1 text-left">
-                  {t("layout.externalShortcuts.title")}
+                  {t("layout.researchTools")}
                 </span>
                 <span
                   className={cn(
                     "text-[10px] text-muted-foreground/50 transition-transform",
-                    showExternal && "rotate-90",
+                    showResearch && "rotate-90",
                   )}
                 >
                   ▶
                 </span>
               </button>
-              <div className="space-y-0.5 pl-6">
-                {showExternal &&
-                  EXTERNAL_SHORTCUTS.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => {
-                        try {
-                          track(
-                            "feature_use",
-                            { shortcut_id: s.id },
-                            { name: "external_shortcut" },
-                          );
-                        } catch {}
-                        openExternalUrl(s.url);
-                      }}
-                      className="flex items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground w-full text-left"
-                      title={t(s.descriptionKey)}
-                    >
-                      <s.icon className="h-4 w-4 shrink-0" />
-                      {t(s.labelKey)}
-                    </button>
-                  ))}
-              </div>
-            </>
-          )}
-          {collapsed &&
-            EXTERNAL_SHORTCUTS.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => {
-                  try {
-                    track(
-                      "feature_use",
-                      { shortcut_id: s.id },
-                      { name: "external_shortcut" },
-                    );
-                  } catch {}
-                  openExternalUrl(s.url);
-                }}
-                className="flex items-center justify-center p-2 w-full rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                title={t(s.labelKey)}
-              >
-                <s.icon className="h-4 w-4 shrink-0" />
-              </button>
-            ))}
-
-          {/* docs */}
-          <NavLink
-            to="https://agent.nieanshow.cn/column/04-ai-trading/"
-            icon={BookOpen}
-            label={t("layout.docs")}
-            collapsed={collapsed}
-            isActive={false}
-            external
-            onExternalOpen={isDesktopEmbedded() ? openExternalUrl : undefined}
-          />
-        </nav>
-
-        {/* ── middle: sessions ── */}
-        {!collapsed && (
-          <div className="flex-1 overflow-hidden border-t mt-2 flex flex-col min-h-[160px]">
-            <div className="flex items-center justify-between py-2 px-4">
-              <span className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider select-none">
-                {t("layout.sessions")}
-              </span>
-              <Link
-                to="/agent"
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded"
-                title={t("layout.newChat")}
-                onClick={() => {
-                  try {
-                    track("feature_use", {}, { name: "session_new" });
-                  } catch {}
-                }}
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </Link>
-            </div>
-
-            <div className="px-2 pb-2 space-y-0.5 overflow-auto flex-1">
-              {sessionsLoading ? (
-                <div className="space-y-1.5 px-2 py-1">
-                  {[1, 2, 3].map((i) => (
-                    <div
-                      key={i}
-                      className="h-7 rounded-md bg-muted/50 animate-pulse"
-                    />
-                  ))}
+            )}
+            {!collapsed ? (
+              showResearch && (
+                <div className="space-y-0.5 pl-6">
+                  <NavLink
+                    to="/reports"
+                    icon={FileText}
+                    label={t("layout.reports")}
+                    collapsed={collapsed}
+                    isActive={isActive("/reports")}
+                    indent
+                  />
+                  <NavLink
+                    to="/alpha-zoo"
+                    icon={Layers}
+                    label={t("layout.alphaZoo")}
+                    collapsed={collapsed}
+                    isActive={isActive("/alpha-zoo")}
+                    indent
+                  />
+                  <NavLink
+                    to="/correlation"
+                    icon={BarChart3}
+                    label={t("layout.correlation")}
+                    collapsed={collapsed}
+                    isActive={isActive("/correlation")}
+                    indent
+                  />
                 </div>
-              ) : sessions.length === 0 ? (
-                <p className="px-3 py-4 text-center text-xs text-muted-foreground/50">
-                  {t("layout.noSessions")}
-                </p>
-              ) : null}
-              {sessions.map((s) => {
-                const active = s.session_id === activeSessionId;
-                const isDeleting = deleteTarget === s.session_id;
-                const isRenaming = renameTarget === s.session_id;
-                return (
-                  <div
-                    key={s.session_id}
+              )
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowResearch((v) => !v)}
+                className="flex items-center justify-center p-2 w-full rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                title={t("layout.researchTools")}
+              >
+                <FlaskConical className="h-4 w-4 shrink-0" />
+              </button>
+            )}
+
+            {/* external — collapsible group */}
+            {!collapsed && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowExternal((v) => !v)}
+                  className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <Globe2 className="h-4 w-4 shrink-0" />
+                  <span className="flex-1 text-left">
+                    {t("layout.externalShortcuts.title")}
+                  </span>
+                  <span
                     className={cn(
-                      "group flex min-w-0 items-center pr-2 rounded-md text-xs transition-colors truncate",
-                      "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
-                      active
-                        ? "bg-primary/10 text-primary font-medium"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      "text-[10px] text-muted-foreground/50 transition-transform",
+                      showExternal && "rotate-90",
                     )}
                   >
-                    {isRenaming ? (
-                      <input
-                        autoFocus
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") renameSession(s.session_id);
-                          if (e.key === "Escape") setRenameTarget(null);
+                    ▶
+                  </span>
+                </button>
+                <div className="space-y-0.5 pl-6">
+                  {showExternal &&
+                    EXTERNAL_SHORTCUTS.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          try {
+                            track(
+                              "feature_use",
+                              { shortcut_id: s.id },
+                              { name: "external_shortcut" },
+                            );
+                          } catch {}
+                          openExternalUrl(s.url);
                         }}
-                        onBlur={() => renameSession(s.session_id)}
-                        className="flex-1 min-w-0 pl-3 pr-2 py-1 rounded-md text-xs border border-primary bg-background outline-none"
-                      />
-                    ) : (
-                      <Link
-                        to={`/agent?session=${s.session_id}`}
-                        className={cn(
-                          "flex-1 min-w-0 pl-3 pr-2 py-1.5 rounded-md text-xs transition-colors truncate block",
-                        )}
-                        title={s.title || s.session_id}
+                        className="flex items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors text-muted-foreground hover:bg-muted hover:text-foreground w-full text-left"
+                        title={t(s.descriptionKey)}
                       >
-                        <span className="flex min-w-0 items-center gap-1.5">
-                          {streamingSessionId === s.session_id ? (
-                            <Loader2 className="h-3 w-3 shrink-0 animate-spin text-primary" />
-                          ) : (
-                            <span
-                              className={cn(
-                                "h-1.5 w-1.5 rounded-full shrink-0",
-                                active
-                                  ? "bg-primary/70"
-                                  : "bg-muted-foreground/40",
-                              )}
-                            />
-                          )}
-                          <span className="truncate">
-                            {s.title || s.session_id.slice(0, 16)}
-                          </span>
-                        </span>
-                      </Link>
-                    )}
-                    {!isRenaming && isDeleting ? (
-                      <div className="flex shrink-0 items-center gap-0.5">
-                        <button
-                          onClick={() => {
-                            try {
-                              track(
-                                "feature_use",
-                                {},
-                                { name: "session_delete" },
-                              );
-                            } catch {}
-                            deleteSession(s.session_id);
-                          }}
-                          className="p-1 text-danger rounded text-[10px] font-medium"
-                        >
-                          {t("layout.confirm")}
-                        </button>
-                        <button
-                          onClick={() => setDeleteTarget(null)}
-                          className="p-1 text-muted-foreground rounded text-[10px]"
-                        >
-                          {t("layout.cancel")}
-                        </button>
-                      </div>
-                    ) : !isRenaming ? (
+                        <s.icon className="h-4 w-4 shrink-0" />
+                        {t(s.labelKey)}
+                      </button>
+                    ))}
+                </div>
+              </>
+            )}
+            {collapsed &&
+              EXTERNAL_SHORTCUTS.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    try {
+                      track(
+                        "feature_use",
+                        { shortcut_id: s.id },
+                        { name: "external_shortcut" },
+                      );
+                    } catch {}
+                    openExternalUrl(s.url);
+                  }}
+                  className="flex items-center justify-center p-2 w-full rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  title={t(s.labelKey)}
+                >
+                  <s.icon className="h-4 w-4 shrink-0" />
+                </button>
+              ))}
+
+            {/* docs */}
+            <NavLink
+              to="https://agent.nieanshow.cn/column/04-ai-trading/"
+              icon={BookOpen}
+              label={t("layout.docs")}
+              collapsed={collapsed}
+              isActive={false}
+              external
+              onExternalOpen={isDesktopEmbedded() ? openExternalUrl : undefined}
+            />
+          </nav>
+
+          {/* ── middle: sessions ── */}
+          {!collapsed && (
+            <div className="flex-1 overflow-hidden border-t mt-2 flex flex-col min-h-[160px]">
+              <div className="flex items-center justify-between py-2 px-4">
+                <span className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider select-none">
+                  {t("layout.sessions")}
+                </span>
+                <Link
+                  to="/agent"
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded"
+                  title={t("layout.newChat")}
+                  onClick={() => {
+                    try {
+                      track("feature_use", {}, { name: "session_new" });
+                    } catch {}
+                  }}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+
+              <div className="px-2 pb-2 space-y-0.5 overflow-auto flex-1">
+                {sessionsLoading ? (
+                  <div className="space-y-1.5 px-2 py-1">
+                    {[1, 2, 3].map((i) => (
                       <div
-                        data-testid={`session-actions-${s.session_id}`}
-                        className="flex w-12 shrink-0 items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-                      >
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setRenameTarget(s.session_id);
-                            setRenameValue(s.title || "");
-                          }}
-                          className="p-1 text-muted-foreground hover:text-foreground rounded"
-                          title={t("layout.rename")}
-                          aria-label={t("layout.rename")}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setDeleteTarget(s.session_id);
-                          }}
-                          className="p-1 text-muted-foreground hover:text-danger rounded"
-                          title={t("layout.delete")}
-                          aria-label={t("layout.delete")}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ) : null}
+                        key={i}
+                        className="h-7 rounded-md bg-muted/50 animate-pulse"
+                      />
+                    ))}
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Spacer when collapsed */}
-        {collapsed && <div className="flex-1" />}
-
-        {/* ── bottom: language / collapse ── */}
-        <div
-          className={cn(
-            "border-t",
-            collapsed
-              ? "p-1 flex flex-col items-center gap-1"
-              : "px-3 py-2.5 flex items-center justify-between",
-          )}
-        >
-          {collapsed ? (
-            <>
-              <button
-                onClick={() => {
-                  try {
-                    track("feature_use", {}, { name: "sidebar_toggle" });
-                  } catch {}
-                  setCollapsed(false);
-                }}
-                className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
-                title={t("layout.expand")}
-              >
-                <ChevronsRight className="h-3.5 w-3.5" />
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => {
-                  try {
-                    track("feature_use", {}, { name: "lang_toggle" });
-                  } catch {}
-                  i18nHook.changeLanguage(
-                    i18nHook.language === "zh-CN" ? "en" : "zh-CN",
+                ) : sessions.length === 0 ? (
+                  <p className="px-3 py-4 text-center text-xs text-muted-foreground/50">
+                    {t("layout.noSessions")}
+                  </p>
+                ) : null}
+                {sessions.map((s) => {
+                  const active = s.session_id === activeSessionId;
+                  const isDeleting = deleteTarget === s.session_id;
+                  const isRenaming = renameTarget === s.session_id;
+                  return (
+                    <div
+                      key={s.session_id}
+                      className={cn(
+                        "group flex min-w-0 items-center pr-2 rounded-md text-xs transition-colors truncate",
+                        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
+                        active
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                    >
+                      {isRenaming ? (
+                        <input
+                          autoFocus
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") renameSession(s.session_id);
+                            if (e.key === "Escape") setRenameTarget(null);
+                          }}
+                          onBlur={() => renameSession(s.session_id)}
+                          className="flex-1 min-w-0 pl-3 pr-2 py-1 rounded-md text-xs border border-primary bg-background outline-none"
+                        />
+                      ) : (
+                        <Link
+                          to={`/agent?session=${s.session_id}`}
+                          className={cn(
+                            "flex-1 min-w-0 pl-3 pr-2 py-1.5 rounded-md text-xs transition-colors truncate block",
+                          )}
+                          title={s.title || s.session_id}
+                        >
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            {streamingSessionId === s.session_id ? (
+                              <Loader2 className="h-3 w-3 shrink-0 animate-spin text-primary" />
+                            ) : (
+                              <span
+                                className={cn(
+                                  "h-1.5 w-1.5 rounded-full shrink-0",
+                                  active
+                                    ? "bg-primary/70"
+                                    : "bg-muted-foreground/40",
+                                )}
+                              />
+                            )}
+                            <span className="truncate">
+                              {s.title || s.session_id.slice(0, 16)}
+                            </span>
+                          </span>
+                        </Link>
+                      )}
+                      {!isRenaming && isDeleting ? (
+                        <div className="flex shrink-0 items-center gap-0.5">
+                          <button
+                            onClick={() => {
+                              try {
+                                track(
+                                  "feature_use",
+                                  {},
+                                  { name: "session_delete" },
+                                );
+                              } catch {}
+                              deleteSession(s.session_id);
+                            }}
+                            className="p-1 text-danger rounded text-[10px] font-medium"
+                          >
+                            {t("layout.confirm")}
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget(null)}
+                            className="p-1 text-muted-foreground rounded text-[10px]"
+                          >
+                            {t("layout.cancel")}
+                          </button>
+                        </div>
+                      ) : !isRenaming ? (
+                        <div
+                          data-testid={`session-actions-${s.session_id}`}
+                          className="flex w-12 shrink-0 items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setRenameTarget(s.session_id);
+                              setRenameValue(s.title || "");
+                            }}
+                            className="p-1 text-muted-foreground hover:text-foreground rounded"
+                            title={t("layout.rename")}
+                            aria-label={t("layout.rename")}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setDeleteTarget(s.session_id);
+                            }}
+                            className="p-1 text-muted-foreground hover:text-danger rounded"
+                            title={t("layout.delete")}
+                            aria-label={t("layout.delete")}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
                   );
-                }}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors rounded"
-              >
-                <Languages className="h-3.5 w-3.5 inline -mt-px mr-0.5" />
-                {i18nHook.language === "zh-CN" ? "EN" : "中"}
-              </button>
-
-              <span className="text-[10px] text-muted-foreground/40 tabular-nums">
-                {APP_VERSION}
-              </span>
-
-              <button
-                onClick={() => {
-                  try {
-                    track("feature_use", {}, { name: "sidebar_toggle" });
-                  } catch {}
-                  setCollapsed(true);
-                }}
-                className="p-0.5 text-muted-foreground hover:text-foreground rounded transition-colors"
-                title={t("layout.collapse")}
-              >
-                <ChevronsLeft className="h-3.5 w-3.5" />
-              </button>
-            </>
+                })}
+              </div>
+            </div>
           )}
-        </div>
+
+          {/* Spacer when collapsed */}
+          {collapsed && <div className="flex-1" />}
+
+          {/* ── bottom: language / collapse ── */}
+          <div
+            className={cn(
+              "border-t",
+              collapsed
+                ? "p-1 flex flex-col items-center gap-1"
+                : "px-3 py-2.5 flex items-center justify-between",
+            )}
+          >
+            {collapsed ? (
+              <>
+                <button
+                  onClick={() => {
+                    try {
+                      track("feature_use", {}, { name: "sidebar_toggle" });
+                    } catch {}
+                    setCollapsed(false);
+                  }}
+                  className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+                  title={t("layout.expand")}
+                >
+                  <ChevronsRight className="h-3.5 w-3.5" />
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => {
+                    try {
+                      track("feature_use", {}, { name: "sidebar_toggle" });
+                    } catch {}
+                    setCollapsed(true);
+                  }}
+                  className="p-0.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+                  title={t("layout.collapse")}
+                >
+                  <ChevronsLeft className="h-3.5 w-3.5" />
+                </button>
+              </>
+            )}
+          </div>
         </aside>
 
         {/* Main */}

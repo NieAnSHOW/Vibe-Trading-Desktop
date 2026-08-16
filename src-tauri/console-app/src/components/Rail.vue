@@ -284,7 +284,7 @@ async function openResearch() {
       :class="{ 'rail__item--active': activeKey === 'research' }"
       :aria-current="activeKey === 'research' ? 'page' : undefined"
       :title="researchReady ? '进入研究(WebUI)' : '服务未运行,点击返回启动引导页'"
-      :disabled="researchOpening || webuiActive"
+      :disabled="researchOpening"
       @click="openResearch"
     >
       <Telescope class="rail__icon" aria-hidden="true" />
