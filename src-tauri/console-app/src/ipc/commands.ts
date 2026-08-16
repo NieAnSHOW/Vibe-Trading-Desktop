@@ -29,8 +29,8 @@ export const consoleStartService = (): Promise<number> =>
 export const consoleStopService = (): Promise<void> =>
   invoke<void>("console_stop_service");
 
-export const consoleOpenWebui = (port: number): Promise<void> =>
-  invoke<void>("console_open_webui", { port });
+export const consoleOpenWebui = (port: number): Promise<boolean> =>
+  invoke<boolean>("console_open_webui", { port });
 
 export const consoleOpenLogs = (): Promise<void> =>
   invoke<void>("console_open_logs");

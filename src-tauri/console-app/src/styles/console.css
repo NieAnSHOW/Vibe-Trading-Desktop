@@ -18,6 +18,37 @@
   --radius: 12px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
+html[data-theme="light"] {
+  color-scheme: light;
+  --bg: 220 20% 96%;
+  --surface-1: 0 0% 100%;
+  --surface-2: 220 18% 92%;
+  --line: 220 16% 84%;
+  --ink: 220 18% 16%;
+  --ink-dim: 220 12% 42%;
+  --ok: 145 62% 42%;
+  --ok-fg: 145 55% 30%;
+  --warn: 38 92% 48%;
+  --warn-fg: 38 80% 36%;
+  --bad: 0 75% 55%;
+  --bad-fg: 0 70% 45%;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+html[data-brand="blue"] { --brand: 217 76% 52%; --brand-strong: 217 70% 46%; --on-brand: 210 40% 98%; }
+html[data-brand="purple"] { --brand: 262 60% 55%; --brand-strong: 262 65% 49%; --on-brand: 270 50% 98%; }
+html[data-brand="pink"] { --brand: 330 70% 55%; --brand-strong: 330 68% 49%; --on-brand: 340 60% 98%; }
+html[data-brand="orange"] { --brand: 25 92% 52%; --brand-strong: 25 86% 46%; --on-brand: 26 48% 13%; }
+html[data-brand="green"] { --brand: 145 62% 40%; --brand-strong: 145 55% 34%; --on-brand: 150 45% 98%; }
+html.desktop-shell-entering .shell-content,
+html.desktop-shell-leaving .shell-content {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.shell-content {
+  transition: opacity 220ms ease, transform 220ms ease;
+}
 * {
   box-sizing: border-box;
   margin: 0;
@@ -765,17 +796,17 @@ body {
   padding: 18px 18px 18px calc(18px + var(--rail-width));
 }
 
-body:has(> #app > .console-page) {
+body:has(> #app > .shell-content > .console-page) {
   display: block;
   padding: 0 0 0 var(--rail-width);
 }
 
 /* 登录页同样全屏展开(左右双栏门面),但保留自身 18px 呼吸边距 */
-body:has(> #app > .login-page) {
+body:has(> #app > .shell-content > .login-page) {
   display: block;
 }
 
-#app:has(> .console-page) {
+#app:has(> .shell-content > .console-page) {
   width: 100%;
   min-width: 0;
 }

@@ -78,10 +78,41 @@ const { port, serviceRunning } = storeToRefs(envStore);
 const themeMode = ref<ThemeMode>("system");
 const themeColor = ref<ThemeColorId>("teal");
 const themeSaving = ref(false);
+const researchOpening = ref(false);
+const SHELL_PAGE_TRANSITION_MS = 220;
+
+function transferredThemeMode(): ThemeMode | null {
+  try {
+    const mode = new URLSearchParams(window.location.search).get("theme");
+    return mode === "system" || mode === "light" || mode === "dark" ? mode : null;
+  } catch {
+    return null;
+  }
+}
+
+function transferredThemeColor(): ThemeColorId | null {
+  try {
+    const color = new URLSearchParams(window.location.search).get("theme_color");
+    return THEME_COLORS.some((option) => option.id === color) ? (color as ThemeColorId) : null;
+  } catch {
+    return null;
+  }
+}
+
+const initialThemeMode = transferredThemeMode();
+const initialThemeColor = transferredThemeColor();
+if (initialThemeMode) themeMode.value = initialThemeMode;
+if (initialThemeColor) themeColor.value = initialThemeColor;
 
 function systemPrefersDark(): boolean {
   return typeof window.matchMedia === "function"
     ? window.matchMedia("(prefers-color-scheme: dark)").matches
+    : false;
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
     : false;
 }
 
@@ -151,10 +182,10 @@ onMounted(async () => {
   applyTheme();
   try {
     const settings = await consoleGetSettings();
-    if (settings.theme_mode === "system" || settings.theme_mode === "light" || settings.theme_mode === "dark") {
+    if (!initialThemeMode && (settings.theme_mode === "system" || settings.theme_mode === "light" || settings.theme_mode === "dark")) {
       themeMode.value = settings.theme_mode;
     }
-    if (THEME_COLORS.some((color) => color.id === settings.theme_color)) {
+    if (!initialThemeColor && THEME_COLORS.some((color) => color.id === settings.theme_color)) {
       themeColor.value = settings.theme_color;
     }
     applyTheme();
@@ -198,7 +229,24 @@ async function openAccount() {
 
 async function openResearch() {
   if (researchReady.value && port.value != null) {
-    await consoleOpenWebui(port.value);
+    if (researchOpening.value) return;
+    researchOpening.value = true;
+    const transitionMs = prefersReducedMotion() ? 0 : SHELL_PAGE_TRANSITION_MS;
+    if (transitionMs) document.documentElement.classList.add("desktop-shell-leaving");
+    try {
+      if (transitionMs) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, transitionMs));
+      }
+      const embedded = await consoleOpenWebui(port.value);
+      if (!embedded) {
+        document.documentElement.classList.remove("desktop-shell-leaving");
+        researchOpening.value = false;
+      }
+      } catch {
+      // WebUI 导航失败时恢复控制台，用户可以再次尝试。
+      document.documentElement.classList.remove("desktop-shell-leaving");
+      researchOpening.value = false;
+    }
   } else {
     // 服务未运行:进入环境页让用户启动,启动成功后自动进入研究。
     router.push("/");
@@ -213,6 +261,7 @@ async function openResearch() {
       class="rail__item"
       :class="{ 'rail__item--active': activeKey === 'account' }"
       :aria-current="activeKey === 'account' ? 'page' : undefined"
+      :disabled="researchOpening"
       @click="openAccount"
     >
       <UserRound class="rail__icon" aria-hidden="true" />
@@ -224,6 +273,7 @@ async function openResearch() {
       class="rail__item"
       :class="{ 'rail__item--active': activeKey === 'environment' }"
       :aria-current="activeKey === 'environment' ? 'page' : undefined"
+      :disabled="researchOpening"
       @click="router.push('/')"
     >
       <MonitorCog class="rail__icon" aria-hidden="true" />
@@ -234,36 +284,40 @@ async function openResearch() {
       type="button"
       class="rail__item"
       :title="researchReady ? '进入研究(WebUI)' : '服务未运行,点击前往环境页启动'"
+      :disabled="researchOpening"
       @click="openResearch"
     >
       <Telescope class="rail__icon" aria-hidden="true" />
       <span class="rail__label">研究</span>
     </button>
 
-    <button
-      type="button"
-      class="rail__item"
-      :title="themeTitle"
-      :aria-label="themeTitle"
-      data-test="theme-toggle"
-      :disabled="themeSaving"
-      @click="toggleTheme"
-    >
-      <Sun v-if="effectiveTheme === 'light'" class="rail__icon" aria-hidden="true" />
-      <Moon v-else class="rail__icon" aria-hidden="true" />
-      <span class="rail__label">{{ effectiveTheme === "light" ? "浅色" : "深色" }}</span>
-    </button>
+    <div class="rail__bottom">
+      <button
+        type="button"
+        class="rail__item"
+        :title="themeTitle"
+        :aria-label="themeTitle"
+        data-test="theme-toggle"
+        :disabled="themeSaving || researchOpening"
+        @click="toggleTheme"
+      >
+        <Sun v-if="effectiveTheme === 'light'" class="rail__icon" aria-hidden="true" />
+        <Moon v-else class="rail__icon" aria-hidden="true" />
+        <span class="rail__label">{{ effectiveTheme === "light" ? "浅色" : "深色" }}</span>
+      </button>
 
-    <button
-      type="button"
-      class="rail__item rail__item--bottom"
-      :class="{ 'rail__item--active': activeKey === 'settings' }"
-      :aria-current="activeKey === 'settings' ? 'page' : undefined"
-      @click="router.push('/settings')"
-    >
-      <Settings class="rail__icon" aria-hidden="true" />
-      <span class="rail__label">设置</span>
-    </button>
+      <button
+        type="button"
+        class="rail__item"
+        :class="{ 'rail__item--active': activeKey === 'settings' }"
+        :aria-current="activeKey === 'settings' ? 'page' : undefined"
+        :disabled="researchOpening"
+        @click="router.push('/settings')"
+      >
+        <Settings class="rail__icon" aria-hidden="true" />
+        <span class="rail__label">设置</span>
+      </button>
+    </div>
   </nav>
 </template>
 
@@ -317,7 +371,7 @@ async function openResearch() {
   color: hsl(var(--brand));
 }
 
-.rail__item--bottom {
+.rail__bottom {
   margin-top: auto;
 }
 

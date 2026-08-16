@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useLayoutEffect, useState, useRef } from "react";
 import { Link, Outlet, useLocation, useSearchParams } from "react-router-dom";
 import { track } from "@/lib/telemetry";
 import {
@@ -30,7 +30,7 @@ import {
 import { cn } from "@/lib/utils";
 import { api, type SessionItem } from "@/lib/api";
 import { useAgentStore } from "@/stores/agent";
-import { isDesktopEmbedded } from "@/lib/desktopShell";
+import { dismissDesktopRailBootstrap, isDesktopEmbedded } from "@/lib/desktopShell";
 import { DesktopShellRail } from "@/components/layout/DesktopShellRail";
 import { ConnectionBanner } from "@/components/layout/ConnectionBanner";
 import { useDarkMode } from "@/hooks/useDarkMode";
@@ -128,6 +128,7 @@ function NavLink({
   isActive,
   external,
   indent,
+  onExternalOpen,
 }: {
   to: string;
   icon: LucideIcon;
@@ -136,6 +137,7 @@ function NavLink({
   isActive: boolean;
   external?: boolean;
   indent?: boolean;
+  onExternalOpen?: (url: string) => void;
 }) {
   const base =
     "flex items-center rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary";
@@ -156,10 +158,14 @@ function NavLink({
           "text-muted-foreground hover:bg-muted hover:text-foreground",
         )}
         title={collapsed ? label : undefined}
-        onClick={() => {
+        onClick={(event) => {
           try {
             track("feature_use", { nav_target: to }, { name: "nav_sidebar" });
           } catch {}
+          if (onExternalOpen) {
+            event.preventDefault();
+            onExternalOpen(to);
+          }
         }}
       >
         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -204,8 +210,21 @@ export function Layout() {
   const { t, i18n: i18nHook } = useTranslation();
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
-  // Apply the desktop/system theme once for every route; the WebUI has no theme control.
-  useDarkMode();
+  // Apply the desktop/system theme once for every route and expose the current
+  // theme state to the embedded desktop rail.
+  const { dark, themeSaving, toggleDark } = useDarkMode();
+
+  // The static rail in index.html covers the document-navigation gap. Remove
+  // it before paint, after the real rail has been committed to the DOM.
+  useLayoutEffect(() => {
+    dismissDesktopRailBootstrap();
+  }, []);
+
+  // 仅在壳层已挂载后揭示跨文档导航的新页面，避免慢加载时跳过入场动画。
+  useEffect(() => {
+    if (!document.documentElement.classList.contains("desktop-shell-entering")) return;
+    requestAnimationFrame(() => document.documentElement.classList.remove("desktop-shell-entering"));
+  }, []);
 
   // ── telemetry ──
   const startedAtRef = useRef(Date.now());
@@ -308,14 +327,24 @@ export function Layout() {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* 桌面壳层级导航(账户/环境/研究/设置),仅内嵌模式渲染 */}
-      {isDesktopEmbedded() && <DesktopShellRail />}
-      {/* Sidebar */}
-      <aside
-        className={cn(
-          "border-r bg-card flex flex-col shrink-0 transition-all duration-200",
-          collapsed ? "w-12" : "w-60",
-        )}
+      {isDesktopEmbedded() && (
+        <DesktopShellRail
+          dark={dark}
+          themeSaving={themeSaving}
+          onToggleTheme={toggleDark}
+        />
+      )}
+      <div
+        data-testid="desktop-shell-content"
+        className="desktop-shell-content flex flex-1 min-h-0 min-w-0"
       >
+        {/* Sidebar */}
+        <aside
+          className={cn(
+            "border-r bg-card flex flex-col shrink-0 transition-all duration-200",
+            collapsed ? "w-12" : "w-60",
+          )}
+        >
         {/* ── top: logo + primary nav ── */}
         <div
           className={cn(
@@ -545,6 +574,7 @@ export function Layout() {
             collapsed={collapsed}
             isActive={false}
             external
+            onExternalOpen={isDesktopEmbedded() ? openExternalUrl : undefined}
           />
         </nav>
 
@@ -766,20 +796,21 @@ export function Layout() {
             </>
           )}
         </div>
-      </aside>
+        </aside>
 
-      {/* Main */}
-      <div
-        data-testid="web-ui-main"
-        className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden"
-      >
-        <ConnectionBanner status={sseStatus} retryAttempt={sseRetryAttempt} />
-        <main
-          data-testid="web-ui-outlet"
-          className="flex-1 min-h-0 min-w-0 overflow-auto"
+        {/* Main */}
+        <div
+          data-testid="web-ui-main"
+          className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden"
         >
-          <Outlet />
-        </main>
+          <ConnectionBanner status={sseStatus} retryAttempt={sseRetryAttempt} />
+          <main
+            data-testid="web-ui-outlet"
+            className="flex-1 min-h-0 min-w-0 overflow-auto"
+          >
+            <Outlet />
+          </main>
+        </div>
       </div>
     </div>
   );

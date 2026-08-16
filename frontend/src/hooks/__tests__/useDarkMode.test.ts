@@ -1,9 +1,18 @@
-import { renderHook } from "@testing-library/react";
-import { initDesktopShell } from "@/lib/desktopShell";
+import { act, renderHook } from "@testing-library/react";
+import { vi } from "vitest";
+import { getDesktopThemeMode, initDesktopShell } from "@/lib/desktopShell";
 import { useDarkMode } from "../useDarkMode";
+
+const mocks = vi.hoisted(() => ({
+  invoke: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
 
 describe("useDarkMode", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.invoke.mockResolvedValue(undefined);
     localStorage.clear();
     sessionStorage.clear();
     document.documentElement.classList.remove("dark");
@@ -42,5 +51,30 @@ describe("useDarkMode", () => {
 
     expect(result.current.dark).toBe(false);
     expect(document.documentElement.classList.contains("dark")).toBe(false);
+  });
+
+  it("allows the desktop rail to switch the current WebUI theme", async () => {
+    const { result } = renderHook(() => useDarkMode());
+
+    await act(async () => {
+      await result.current.toggleDark();
+    });
+
+    expect(result.current.dark).toBe(true);
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+  });
+
+  it("persists a desktop rail toggle for the next research session", async () => {
+    window.history.replaceState(null, "", "?desktop=1&theme=light");
+    initDesktopShell();
+    const { result } = renderHook(() => useDarkMode());
+
+    await act(async () => {
+      await result.current.toggleDark();
+    });
+
+    expect(mocks.invoke).toHaveBeenCalledWith("console_set_theme_mode", { mode: "dark" });
+    expect(result.current.dark).toBe(true);
+    expect(getDesktopThemeMode()).toBe("dark");
   });
 });

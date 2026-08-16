@@ -72,6 +72,7 @@ pub fn webui_url(
         pairs.append_pair("desktop", "1");
         pairs.append_pair("theme", theme_mode);
         pairs.append_pair("theme_color", theme_color);
+        pairs.append_pair("transition", "1");
         if let Some(console) = console_url {
             pairs.append_pair("console", console.as_str());
         }
@@ -124,12 +125,43 @@ pub fn normalize_base(url: &tauri::Url) -> tauri::Url {
     base
 }
 
+/// Add the current shell preferences to a native return navigation so the
+/// console pre-paint rail starts with the same theme as the WebUI.
+pub fn console_url_with_theme(
+    mut url: tauri::Url,
+    theme_mode: &str,
+    theme_color: &str,
+) -> tauri::Url {
+    let mode = match theme_mode {
+        "light" | "dark" | "system" => theme_mode,
+        _ => "system",
+    };
+    let color = match theme_color {
+        "teal" | "blue" | "purple" | "pink" | "orange" | "green" => theme_color,
+        _ => "teal",
+    };
+    {
+        let mut pairs = url.query_pairs_mut();
+        pairs.append_pair("theme", mode);
+        pairs.append_pair("theme_color", color);
+        pairs.append_pair("transition", "1");
+    }
+    url
+}
+
 /// 从 WebUI 返回控制台;未嵌入时是幂等 no-op。
 pub fn return_to_console(app: &AppHandle) {
     let state = app.state::<WebuiEmbedState>();
     if let Some(console_url) = state.end_embed() {
         if let Some(win) = app.get_webview_window("main") {
-            if let Err(e) = win.navigate(console_url) {
+            let (theme_mode, theme_color) = crate::runtime_dir::Layout::from_home()
+                .map(|layout| {
+                    let settings = crate::settings::load(&layout.root);
+                    (settings.theme_mode, settings.theme_color)
+                })
+                .unwrap_or_else(|_| ("system".to_string(), "teal".to_string()));
+            let target = console_url_with_theme(console_url, &theme_mode, &theme_color);
+            if let Err(e) = win.navigate(target) {
                 eprintln!("warn: navigate back to console: {e}");
             }
         }
@@ -148,7 +180,7 @@ mod tests {
         assert_eq!(url.port(), Some(8899));
         assert_eq!(url.path(), "/");
         // desktop 标记始终携带:WebUI 侧据此显示「控制台」入口。
-        assert_eq!(url.query(), Some("desktop=1&theme=system&theme_color=teal"));
+        assert_eq!(url.query(), Some("desktop=1&theme=system&theme_color=teal&transition=1"));
     }
 
     #[test]
@@ -159,6 +191,16 @@ mod tests {
     }
 
     #[test]
+    fn console_url_carries_theme_for_native_return() {
+        let console = tauri::Url::parse("tauri://localhost/index.html").unwrap();
+        let themed = console_url_with_theme(console, "dark", "blue");
+        let query: Vec<(String, String)> = themed.query_pairs().into_owned().collect();
+        assert!(query.contains(&("theme".to_string(), "dark".to_string())));
+        assert!(query.contains(&("theme_color".to_string(), "blue".to_string())));
+        assert!(query.contains(&("transition".to_string(), "1".to_string())));
+    }
+
+    #[test]
     fn webui_url_carries_encoded_console_url() {
         let console = tauri::Url::parse("tauri://localhost/index.html?x=1&y=2").unwrap();
         let url = webui_url(9000, Some(&console), "dark", "blue").expect("parse");
@@ -166,6 +208,7 @@ mod tests {
         assert!(query.contains(&("desktop".to_string(), "1".to_string())));
         assert!(query.contains(&("theme".to_string(), "dark".to_string())));
         assert!(query.contains(&("theme_color".to_string(), "blue".to_string())));
+        assert!(query.contains(&("transition".to_string(), "1".to_string())));
         // 控制台地址(含自身的查询串)必须完整往返,前端才能导航回壳内页面。
         assert!(query.contains(&("console".to_string(), console.to_string())));
     }

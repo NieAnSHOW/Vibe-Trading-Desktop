@@ -1,3 +1,45 @@
 fn main() {
-    tauri_build::build()
+    tauri_build::try_build(
+        tauri_build::Attributes::new().app_manifest(
+            tauri_build::AppManifest::new().commands(&[
+                "open_external_url",
+                "console_status",
+                "console_bootstrap",
+                "console_start_service",
+                "console_stop_service",
+                "console_open_webui",
+                "console_open_webui_external",
+                "console_start_channels",
+                "console_channels_status",
+                "console_install_channel_dep",
+                "console_quit",
+                "console_open_logs",
+                "console_clear_logs",
+                "console_clear_venv",
+                "console_uninstall_legacy_app",
+                "console_check_environment",
+                "console_repair_environment",
+                "console_get_settings",
+                "console_set_autostart",
+                "console_set_theme_mode",
+                "console_set_theme_color",
+                "console_login_captcha",
+                "console_login_send_sms",
+                "console_login_by_phone",
+                "console_login_by_password",
+                "console_login_register",
+                "console_login_set_password",
+                "console_auth_status",
+                "console_member_usage",
+                "console_member_benefits",
+                "console_logout",
+                "console_fetch_ads",
+                "console_get_public_config",
+                "console_check_update",
+                "console_download_update",
+                "console_install_update",
+            ]),
+        ),
+    )
+    .expect("failed to build Tauri application manifest");
 }

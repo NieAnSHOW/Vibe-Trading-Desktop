@@ -1,8 +1,8 @@
 import { useTranslation } from "react-i18next";
-import { MonitorCog, Settings, Telescope, UserRound, type LucideIcon } from "lucide-react";
+import { Moon, MonitorCog, Settings, Sun, Telescope, UserRound, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { track } from "@/lib/telemetry";
-import { returnToConsole, type ShellConsolePage } from "@/lib/desktopShell";
+import { returnToConsoleWithTransition, type ShellConsolePage } from "@/lib/desktopShell";
 
 /**
  * 桌面壳层级导航栏:主窗口最左侧固定竖排(图标在上、文字在下)。
@@ -18,46 +18,53 @@ function RailButton({
   icon: Icon,
   active,
   onClick,
+  disabled,
 }: {
   label: string;
   icon: LucideIcon;
   active?: boolean;
   onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={active}
+      disabled={active || disabled}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex w-14 flex-col items-center gap-1 rounded-lg px-1 py-2 text-center transition-colors",
-        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
-        active
-          ? "bg-primary/10 text-primary"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        "desktop-shell-rail__item",
+        active && "desktop-shell-rail__item--active",
       )}
     >
-      <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
-      <span className="w-full truncate text-[10px] leading-tight">{label}</span>
+      <Icon className="desktop-shell-rail__icon" aria-hidden="true" />
+      <span className="desktop-shell-rail__label">{label}</span>
     </button>
   );
 }
 
-export function DesktopShellRail() {
+export function DesktopShellRail({
+  dark,
+  themeSaving,
+  onToggleTheme,
+}: {
+  dark: boolean;
+  themeSaving?: boolean;
+  onToggleTheme: () => void;
+}) {
   const { t } = useTranslation();
 
   const go = (page: ShellConsolePage, target: string) => {
     try {
       track("feature_use", { nav_target: target }, { name: "desktop_rail" });
     } catch {}
-    returnToConsole(page);
+    returnToConsoleWithTransition(page);
   };
 
   return (
     <aside
       aria-label={t("layout.rail.section")}
-      className="flex w-[68px] shrink-0 flex-col items-center gap-1 border-r bg-card py-3"
+      className="desktop-shell-rail"
     >
       <RailButton
         label={t("layout.rail.account")}
@@ -71,7 +78,13 @@ export function DesktopShellRail() {
       />
       {/* 研究 = 当前 WebUI,常亮不可点 */}
       <RailButton label={t("layout.rail.research")} icon={Telescope} active />
-      <div className="mt-auto">
+      <div className="desktop-shell-rail__bottom">
+        <RailButton
+          label={t(dark ? "layout.dark" : "layout.light")}
+          icon={dark ? Moon : Sun}
+          disabled={themeSaving}
+          onClick={onToggleTheme}
+        />
         <RailButton
           label={t("layout.settings")}
           icon={Settings}

@@ -11,6 +11,10 @@ onErrorCaptured((e) => {
 
 // 启动即拉取服务端公共配置（enableLogin/enableAd/checkUpdate 等），失败静默降级默认值
 onMounted(() => {
+  document.getElementById("console-rail-bootstrap")?.remove();
+  if (document.documentElement.classList.contains("desktop-shell-entering")) {
+    requestAnimationFrame(() => document.documentElement.classList.remove("desktop-shell-entering"));
+  }
   void loadPublicConfig();
 });
 </script>
@@ -22,11 +26,13 @@ onMounted(() => {
   <template v-else>
     <!-- 壳层级导航(账户/环境/研究/设置),fixed 定位常驻左侧 -->
     <Rail />
-    <router-view v-slot="{ Component }">
-      <Transition name="page" mode="out-in">
-        <component :is="Component" />
-      </Transition>
-    </router-view>
+    <div class="shell-content" data-test="shell-content">
+      <router-view v-slot="{ Component }">
+        <Transition name="page" mode="out-in">
+          <component :is="Component" />
+        </Transition>
+      </router-view>
+    </div>
   </template>
 </template>
 
@@ -47,9 +53,9 @@ onMounted(() => {
   transform: translateY(8px);
 }
 
-#app:has(> .page-enter-active),
-#app:has(> .page-leave-active),
-#app:has(> .console-page--entering) {
+.shell-content:has(> .page-enter-active),
+.shell-content:has(> .page-leave-active),
+.shell-content:has(> .console-page--entering) {
   overflow: clip;
 }
 

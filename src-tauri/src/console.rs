@@ -1208,14 +1208,15 @@ pub async fn console_stop_service(
 /// 完整应用形态承载业务 UI(控制台页被替换,托盘保留「返回控制台」入口)。
 /// 导航失败(窗口缺失等)时兜底系统浏览器,保证按钮始终可用。
 #[tauri::command]
-pub fn console_open_webui(app: AppHandle, port: u16) -> Result<(), String> {
+pub fn console_open_webui(app: AppHandle, port: u16) -> Result<bool, String> {
     match crate::webui_embed::embed(&app, port) {
-        Ok(()) => Ok(()),
+        Ok(()) => Ok(true),
         Err(e) => {
             eprintln!("warn: embed webui failed: {e}; fallback to system browser");
             let url = format!("http://127.0.0.1:{port}/");
             crate::validate_external_url(&url)?;
-            crate::open_url_with_system(&url)
+            crate::open_url_with_system(&url)?;
+            Ok(false)
         }
     }
 }

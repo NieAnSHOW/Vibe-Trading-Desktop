@@ -177,6 +177,438 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Enables the console_auth_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-auth-status",
+          "markdownDescription": "Enables the console_auth_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_bootstrap command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-bootstrap",
+          "markdownDescription": "Enables the console_bootstrap command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_channels_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-channels-status",
+          "markdownDescription": "Enables the console_channels_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_check_environment command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-check-environment",
+          "markdownDescription": "Enables the console_check_environment command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_check_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-check-update",
+          "markdownDescription": "Enables the console_check_update command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_clear_logs command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-clear-logs",
+          "markdownDescription": "Enables the console_clear_logs command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_clear_venv command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-clear-venv",
+          "markdownDescription": "Enables the console_clear_venv command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_download_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-download-update",
+          "markdownDescription": "Enables the console_download_update command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_fetch_ads command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-fetch-ads",
+          "markdownDescription": "Enables the console_fetch_ads command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_get_public_config command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-get-public-config",
+          "markdownDescription": "Enables the console_get_public_config command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_get_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-get-settings",
+          "markdownDescription": "Enables the console_get_settings command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_install_channel_dep command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-install-channel-dep",
+          "markdownDescription": "Enables the console_install_channel_dep command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_install_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-install-update",
+          "markdownDescription": "Enables the console_install_update command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_login_by_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-login-by-password",
+          "markdownDescription": "Enables the console_login_by_password command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_login_by_phone command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-login-by-phone",
+          "markdownDescription": "Enables the console_login_by_phone command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_login_captcha command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-login-captcha",
+          "markdownDescription": "Enables the console_login_captcha command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_login_register command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-login-register",
+          "markdownDescription": "Enables the console_login_register command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_login_send_sms command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-login-send-sms",
+          "markdownDescription": "Enables the console_login_send_sms command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_login_set_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-login-set-password",
+          "markdownDescription": "Enables the console_login_set_password command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_logout command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-logout",
+          "markdownDescription": "Enables the console_logout command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_member_benefits command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-member-benefits",
+          "markdownDescription": "Enables the console_member_benefits command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_member_usage command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-member-usage",
+          "markdownDescription": "Enables the console_member_usage command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_open_logs command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-open-logs",
+          "markdownDescription": "Enables the console_open_logs command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_open_webui command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-open-webui",
+          "markdownDescription": "Enables the console_open_webui command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_open_webui_external command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-open-webui-external",
+          "markdownDescription": "Enables the console_open_webui_external command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_quit command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-quit",
+          "markdownDescription": "Enables the console_quit command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_repair_environment command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-repair-environment",
+          "markdownDescription": "Enables the console_repair_environment command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_set_autostart command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-set-autostart",
+          "markdownDescription": "Enables the console_set_autostart command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_set_theme_color command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-set-theme-color",
+          "markdownDescription": "Enables the console_set_theme_color command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_set_theme_mode command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-set-theme-mode",
+          "markdownDescription": "Enables the console_set_theme_mode command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_start_channels command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-start-channels",
+          "markdownDescription": "Enables the console_start_channels command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_start_service command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-start-service",
+          "markdownDescription": "Enables the console_start_service command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-status",
+          "markdownDescription": "Enables the console_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_stop_service command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-stop-service",
+          "markdownDescription": "Enables the console_stop_service command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_uninstall_legacy_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-uninstall-legacy-app",
+          "markdownDescription": "Enables the console_uninstall_legacy_app command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the open_external_url command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-external-url",
+          "markdownDescription": "Enables the open_external_url command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_auth_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-auth-status",
+          "markdownDescription": "Denies the console_auth_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_bootstrap command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-bootstrap",
+          "markdownDescription": "Denies the console_bootstrap command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_channels_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-channels-status",
+          "markdownDescription": "Denies the console_channels_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_check_environment command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-check-environment",
+          "markdownDescription": "Denies the console_check_environment command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_check_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-check-update",
+          "markdownDescription": "Denies the console_check_update command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_clear_logs command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-clear-logs",
+          "markdownDescription": "Denies the console_clear_logs command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_clear_venv command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-clear-venv",
+          "markdownDescription": "Denies the console_clear_venv command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_download_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-download-update",
+          "markdownDescription": "Denies the console_download_update command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_fetch_ads command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-fetch-ads",
+          "markdownDescription": "Denies the console_fetch_ads command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_get_public_config command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-get-public-config",
+          "markdownDescription": "Denies the console_get_public_config command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_get_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-get-settings",
+          "markdownDescription": "Denies the console_get_settings command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_install_channel_dep command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-install-channel-dep",
+          "markdownDescription": "Denies the console_install_channel_dep command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_install_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-install-update",
+          "markdownDescription": "Denies the console_install_update command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_login_by_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-login-by-password",
+          "markdownDescription": "Denies the console_login_by_password command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_login_by_phone command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-login-by-phone",
+          "markdownDescription": "Denies the console_login_by_phone command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_login_captcha command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-login-captcha",
+          "markdownDescription": "Denies the console_login_captcha command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_login_register command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-login-register",
+          "markdownDescription": "Denies the console_login_register command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_login_send_sms command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-login-send-sms",
+          "markdownDescription": "Denies the console_login_send_sms command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_login_set_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-login-set-password",
+          "markdownDescription": "Denies the console_login_set_password command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_logout command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-logout",
+          "markdownDescription": "Denies the console_logout command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_member_benefits command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-member-benefits",
+          "markdownDescription": "Denies the console_member_benefits command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_member_usage command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-member-usage",
+          "markdownDescription": "Denies the console_member_usage command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_open_logs command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-open-logs",
+          "markdownDescription": "Denies the console_open_logs command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_open_webui command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-open-webui",
+          "markdownDescription": "Denies the console_open_webui command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_open_webui_external command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-open-webui-external",
+          "markdownDescription": "Denies the console_open_webui_external command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_quit command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-quit",
+          "markdownDescription": "Denies the console_quit command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_repair_environment command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-repair-environment",
+          "markdownDescription": "Denies the console_repair_environment command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_set_autostart command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-set-autostart",
+          "markdownDescription": "Denies the console_set_autostart command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_set_theme_color command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-set-theme-color",
+          "markdownDescription": "Denies the console_set_theme_color command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_set_theme_mode command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-set-theme-mode",
+          "markdownDescription": "Denies the console_set_theme_mode command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_start_channels command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-start-channels",
+          "markdownDescription": "Denies the console_start_channels command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_start_service command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-start-service",
+          "markdownDescription": "Denies the console_start_service command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-status",
+          "markdownDescription": "Denies the console_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_stop_service command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-stop-service",
+          "markdownDescription": "Denies the console_stop_service command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_uninstall_legacy_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-uninstall-legacy-app",
+          "markdownDescription": "Denies the console_uninstall_legacy_app command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_external_url command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-external-url",
+          "markdownDescription": "Denies the open_external_url command without any pre-configured scope."
+        },
+        {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
           "type": "string",
           "const": "core:default",

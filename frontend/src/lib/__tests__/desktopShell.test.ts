@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  dismissDesktopRailBootstrap,
   getDesktopThemeColor,
   getDesktopThemeMode,
   getShellConsoleUrl,
@@ -7,6 +8,7 @@ import {
   isDesktopEmbedded,
   isShellConsoleUrl,
   returnToConsole,
+  returnToConsoleWithTransition,
   shellConsolePageUrl,
 } from "@/lib/desktopShell";
 
@@ -85,21 +87,87 @@ describe("desktopShell", () => {
     setSearch("/?desktop=1&console=" + encodeURIComponent("http://tauri.localhost/index.html"));
     initDesktopShell();
     returnToConsole("console", navigate);
-    expect(navigate).toHaveBeenCalledWith("http://tauri.localhost/index.html");
+    expect(navigate).toHaveBeenCalledWith("http://tauri.localhost/index.html?theme=system&transition=1");
   });
 
   it("targets console pages via hash routes", () => {
-    setSearch("/?desktop=1&console=" + encodeURIComponent("tauri://localhost/index.html#/settings"));
+    setSearch("/?desktop=1&theme=dark&theme_color=blue&console=" + encodeURIComponent("tauri://localhost/index.html#/settings"));
     initDesktopShell();
 
-    // base 规范化:剥掉壳侧携带的旧 hash 后再拼目标页
-    expect(shellConsolePageUrl("login")).toBe("tauri://localhost/index.html#/login");
-    expect(shellConsolePageUrl("profile")).toBe("tauri://localhost/index.html#/profile");
-    expect(shellConsolePageUrl("settings")).toBe("tauri://localhost/index.html#/settings");
-    expect(shellConsolePageUrl("console")).toBe("tauri://localhost/index.html");
+    // base 规范化:剥掉壳侧携带的旧 hash 后再拼目标页;同时携带主题供控制台首屏同步绘制。
+    expect(shellConsolePageUrl("login")).toBe("tauri://localhost/index.html?theme=dark&theme_color=blue&transition=1#/login");
+    expect(shellConsolePageUrl("profile")).toBe("tauri://localhost/index.html?theme=dark&theme_color=blue&transition=1#/profile");
+    expect(shellConsolePageUrl("settings")).toBe("tauri://localhost/index.html?theme=dark&theme_color=blue&transition=1#/settings");
+    expect(shellConsolePageUrl("console")).toBe("tauri://localhost/index.html?theme=dark&theme_color=blue&transition=1");
 
     const navigate = vi.fn();
     returnToConsole("settings", navigate);
-    expect(navigate).toHaveBeenCalledWith("tauri://localhost/index.html#/settings");
+    expect(navigate).toHaveBeenCalledWith("tauri://localhost/index.html?theme=dark&theme_color=blue&transition=1#/settings");
+  });
+
+  it("waits for the shell exit transition before returning to the console", () => {
+    vi.useFakeTimers();
+    try {
+      setSearch("/?desktop=1&theme=dark&console=" + encodeURIComponent("tauri://localhost/index.html"));
+      initDesktopShell();
+      const navigate = vi.fn();
+
+      returnToConsoleWithTransition("settings", navigate);
+
+      expect(navigate).not.toHaveBeenCalled();
+      expect(document.documentElement.classList.contains("desktop-shell-leaving")).toBe(true);
+      vi.advanceTimersByTime(220);
+      expect(navigate).toHaveBeenCalledWith("tauri://localhost/index.html?theme=dark&transition=1#/settings");
+    } finally {
+      vi.useRealTimers();
+      document.documentElement.classList.remove("desktop-shell-leaving");
+    }
+  });
+
+  it("does not queue a second shell navigation while one is leaving", () => {
+    vi.useFakeTimers();
+    try {
+      setSearch("/?desktop=1&theme=dark&console=" + encodeURIComponent("tauri://localhost/index.html"));
+      initDesktopShell();
+      const navigate = vi.fn();
+
+      returnToConsoleWithTransition("settings", navigate);
+      returnToConsoleWithTransition("profile", navigate);
+      vi.advanceTimersByTime(220);
+
+      expect(navigate).toHaveBeenCalledTimes(1);
+      expect(navigate).toHaveBeenCalledWith("tauri://localhost/index.html?theme=dark&transition=1#/settings");
+    } finally {
+      vi.useRealTimers();
+      document.documentElement.classList.remove("desktop-shell-leaving");
+    }
+  });
+
+  it("skips the shell delay when reduced motion is requested", () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+      setSearch("/?desktop=1&theme=dark&console=" + encodeURIComponent("tauri://localhost/index.html"));
+      initDesktopShell();
+      const navigate = vi.fn();
+
+      returnToConsoleWithTransition("settings", navigate);
+
+      expect(navigate).toHaveBeenCalledWith("tauri://localhost/index.html?theme=dark&transition=1#/settings");
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+      document.documentElement.classList.remove("desktop-shell-leaving");
+    }
+  });
+
+  it("removes the pre-rendered rail only after the React rail can take over", () => {
+    const bootstrap = document.createElement("aside");
+    bootstrap.id = "desktop-shell-rail-bootstrap";
+    document.body.append(bootstrap);
+
+    dismissDesktopRailBootstrap();
+
+    expect(document.getElementById("desktop-shell-rail-bootstrap")).toBeNull();
   });
 });

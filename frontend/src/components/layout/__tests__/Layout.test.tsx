@@ -6,6 +6,11 @@ import i18n from "@/i18n";
 import { api } from "@/lib/api";
 import { Layout } from "../Layout";
 
+vi.mock("@/lib/desktopShell", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/desktopShell")>();
+  return { ...actual, isDesktopEmbedded: () => true };
+});
+
 vi.mock("@/lib/api", () => ({
   api: {
     listSessions: vi.fn().mockResolvedValue([]),
@@ -35,11 +40,10 @@ function renderLayout(initialEntry = "/") {
 }
 
 describe("Layout sidebar", () => {
-  it("does not render a WebUI theme toggle", () => {
+  it("renders the embedded theme toggle with the shared Chinese label", () => {
     renderLayout();
 
-    expect(screen.queryByTitle("亮色")).not.toBeInTheDocument();
-    expect(screen.queryByTitle("暗色")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "浅色" })).toBeInTheDocument();
   });
 
   it("renders the sidebar with nav links and route outlet", () => {
@@ -143,6 +147,16 @@ describe("Layout sidebar", () => {
     expect(container.querySelector('[data-testid="web-ui-outlet"]')).toHaveClass("min-h-0", "min-w-0", "overflow-auto");
   });
 
+  it("keeps the desktop rail outside the cross-document transition content", () => {
+    const { container } = renderLayout();
+    const content = container.querySelector('[data-testid="desktop-shell-content"]');
+    const rail = container.querySelector("aside[aria-label]");
+
+    expect(content).toBeInTheDocument();
+    expect(rail).toBeInTheDocument();
+    expect(content).not.toContainElement(rail);
+  });
+
   it("keeps session actions in the flex flow so long titles cannot overlap them", async () => {
     const session = {
       session_id: "session-with-a-long-title",
@@ -183,6 +197,19 @@ describe("Layout sidebar", () => {
     const { invoke } = await import("@tauri-apps/api/core");
     expect(invoke).toHaveBeenCalledWith("open_external_url", {
       url: "https://www.10jqka.com.cn/",
+    });
+  });
+
+  it("opens the docs link through the system browser in the desktop shell", async () => {
+    const user = userEvent.setup();
+    renderLayout();
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockClear();
+
+    await user.click(screen.getByRole("link", { name: /文档/i }));
+
+    expect(invoke).toHaveBeenCalledWith("open_external_url", {
+      url: "https://agent.nieanshow.cn/column/04-ai-trading/",
     });
   });
 });

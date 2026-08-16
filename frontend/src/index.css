@@ -132,6 +132,95 @@
   }
 }
 
+.desktop-shell-content {
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+html.desktop-shell-entering .desktop-shell-content,
+html.desktop-shell-leaving .desktop-shell-content {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.desktop-shell-rail {
+  --desktop-rail-surface: 0 0% 100%;
+  --desktop-rail-surface-hover: 220 18% 92%;
+  --desktop-rail-line: 220 16% 84%;
+  --desktop-rail-ink: 220 18% 16%;
+  --desktop-rail-ink-dim: 220 12% 42%;
+  display: flex;
+  width: 68px;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 0;
+  background: hsl(var(--desktop-rail-surface) / 0.92);
+  border-right: 1px solid hsl(var(--desktop-rail-line));
+  backdrop-filter: blur(8px);
+}
+
+.dark .desktop-shell-rail {
+  --desktop-rail-surface: 220 20% 8%;
+  --desktop-rail-surface-hover: 220 20% 12%;
+  --desktop-rail-line: 220 18% 18%;
+  --desktop-rail-ink: 220 12% 93%;
+  --desktop-rail-ink-dim: 220 10% 66%;
+}
+
+.desktop-shell-rail__item {
+  display: flex;
+  width: 56px;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 2px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: hsl(var(--desktop-rail-ink-dim));
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1), color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.desktop-shell-rail__item:hover:not(:disabled) {
+  background: hsl(var(--desktop-rail-surface-hover));
+  color: hsl(var(--desktop-rail-ink));
+}
+
+.desktop-shell-rail__item:focus-visible {
+  outline: 1px solid hsl(var(--primary));
+  outline-offset: 1px;
+}
+
+.desktop-shell-rail__item:disabled {
+  cursor: default;
+}
+
+.desktop-shell-rail__item--active {
+  background: hsl(var(--primary) / 0.16);
+  color: hsl(var(--primary));
+}
+
+.desktop-shell-rail__bottom {
+  margin-top: auto;
+}
+
+.desktop-shell-rail__icon {
+  width: 20px;
+  height: 20px;
+}
+
+.desktop-shell-rail__label {
+  width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Streaming pulse-slide animation for the "running" bar */
 @keyframes pulse-slide {
   0% {

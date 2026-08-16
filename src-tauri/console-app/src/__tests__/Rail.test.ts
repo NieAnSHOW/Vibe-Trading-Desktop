@@ -25,9 +25,11 @@ vi.mock("../ipc/commands", () => ({
 
 import Rail from "../components/Rail.vue";
 import { useAuthStore } from "../stores/auth";
+import { useEnvStore } from "../stores/env";
 import {
   consoleAuthStatus,
   consoleGetSettings,
+  consoleOpenWebui,
   consoleSetThemeMode,
 } from "../ipc/commands";
 
@@ -71,19 +73,23 @@ function installMatchMedia(initialDark: boolean) {
       listeners.forEach((cb) => cb({ matches: v }));
     },
   };
-  vi.stubGlobal("matchMedia", vi.fn(() => mq));
+  vi.stubGlobal("matchMedia", vi.fn((query: string) =>
+    query === "(prefers-reduced-motion: reduce)" ? { matches: false } : mq,
+  ));
   currentMq = mq;
   return mq;
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.history.replaceState(null, "", "/");
   setActivePinia(createPinia());
   vi.mocked(consoleAuthStatus).mockResolvedValue({
     authenticated: false,
     userInfo: null,
     expireAt: 0,
   });
+  vi.mocked(consoleOpenWebui).mockResolvedValue(true);
   installMatchMedia(true);
 });
 
@@ -144,11 +150,80 @@ describe("Rail account navigation", () => {
   });
 });
 
+describe("Rail research navigation", () => {
+  it("plays the shell exit transition before opening the WebUI", async () => {
+    vi.useFakeTimers();
+    try {
+      const wrapper = await mountRail();
+      const envStore = useEnvStore();
+      envStore.serviceRunning = true;
+      envStore.setPort(8899);
+
+      const click = wrapper.findAll(".rail__item")[2].trigger("click");
+
+      expect(consoleOpenWebui).not.toHaveBeenCalled();
+      expect(document.documentElement.classList.contains("desktop-shell-leaving")).toBe(true);
+      await wrapper.vm.$nextTick();
+      expect(wrapper.findAll(".rail__item")[0].attributes("disabled")).toBeDefined();
+      expect(wrapper.findAll(".rail__item")[1].attributes("disabled")).toBeDefined();
+      expect(wrapper.findAll(".rail__item")[4].attributes("disabled")).toBeDefined();
+      await vi.advanceTimersByTimeAsync(220);
+      await click;
+      expect(consoleOpenWebui).toHaveBeenCalledWith(8899);
+    } finally {
+      vi.useRealTimers();
+      document.documentElement.classList.remove("desktop-shell-leaving");
+    }
+  });
+
+  it("restores the console when WebUI falls back to the system browser", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(consoleOpenWebui).mockResolvedValueOnce(false);
+      const wrapper = await mountRail();
+      const envStore = useEnvStore();
+      envStore.serviceRunning = true;
+      envStore.setPort(8899);
+
+      const click = wrapper.findAll(".rail__item")[2].trigger("click");
+      await vi.advanceTimersByTimeAsync(220);
+      await click;
+
+      expect(document.documentElement.classList.contains("desktop-shell-leaving")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+      document.documentElement.classList.remove("desktop-shell-leaving");
+    }
+  });
+});
+
 describe("Rail theme", () => {
   it("defaults to the system theme and reflects it on <html>", async () => {
     await mountRail();
 
     expect(document.documentElement.dataset.theme).toBe("dark");
+  });
+
+  it("uses the transferred theme before asynchronously loading settings", () => {
+    installMatchMedia(false);
+    window.history.replaceState(null, "", "?theme=dark&theme_color=blue#/settings");
+    let resolveSettings: (() => void) | undefined;
+    vi.mocked(consoleGetSettings).mockImplementationOnce(
+      () => new Promise((resolve) => {
+        resolveSettings = () => resolve({
+          autostart_service: false,
+          theme_mode: "dark",
+          theme_color: "blue",
+        });
+      }),
+    );
+
+    const wrapper = mount(Rail, { global: { plugins: [router] } });
+
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(document.documentElement.dataset.brand).toBe("blue");
+    resolveSettings?.();
+    wrapper.unmount();
   });
 
   it("follows system theme changes while in system mode", async () => {
@@ -173,6 +248,7 @@ describe("Rail theme", () => {
   it("toggles light/dark from the rail and persists the explicit choice", async () => {
     const wrapper = await mountRail();
     expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(wrapper.get(".rail__bottom").get('[data-test="theme-toggle"]')).toBeTruthy();
 
     await wrapper.get('[data-test="theme-toggle"]').trigger("click");
 

@@ -11,6 +11,12 @@ const EMBEDDED_KEY = "vibe.desktop.embedded";
 const CONSOLE_URL_KEY = "vibe.desktop.consoleUrl";
 const THEME_MODE_KEY = "vibe.desktop.themeMode";
 const THEME_COLOR_KEY = "vibe.desktop.themeColor";
+export const SHELL_PAGE_TRANSITION_MS = 220;
+
+/** Remove the HTML-first rail once the React rail has committed. */
+export function dismissDesktopRailBootstrap(): void {
+  document.getElementById("desktop-shell-rail-bootstrap")?.remove();
+}
 
 export type DesktopThemeMode = "system" | "light" | "dark";
 
@@ -63,6 +69,22 @@ export function getDesktopThemeMode(): DesktopThemeMode {
     return isDesktopThemeMode(saved) ? saved : "system";
   } catch {
     return "system";
+  }
+}
+
+/** 更新嵌入 WebUI 的当前主题模式，保证 SPA 路由或刷新后继续使用新选择。 */
+export function setDesktopThemeMode(mode: DesktopThemeMode): void {
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("desktop") === "1") {
+      url.searchParams.set("theme", mode);
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+    if (window.sessionStorage.getItem(EMBEDDED_KEY) === "1") {
+      window.sessionStorage.setItem(THEME_MODE_KEY, mode);
+    }
+  } catch {
+    // sessionStorage/history 不可用时仍由当前 React 状态维持本次显示主题。
   }
 }
 
@@ -127,8 +149,33 @@ export function shellConsolePageUrl(page: ShellConsolePage): string | null {
   // base 已由壳侧规范化为 origin+path;防御性再剥一次 query/hash。
   const parsed = new URL(base);
   parsed.search = "";
+  // 把当前 WebUI 主题交接给控制台,让其在异步读取设置前就能首屏使用同一主题。
+  const theme = getDesktopThemeModeTransfer();
+  if (theme) {
+    parsed.searchParams.set("theme", theme);
+    const color = getDesktopThemeColor();
+    if (color) parsed.searchParams.set("theme_color", color);
+  }
+  parsed.searchParams.set("transition", "1");
   parsed.hash = page === "console" ? "" : `#/${page}`;
   return parsed.toString();
+}
+
+function getDesktopThemeModeTransfer(): DesktopThemeMode | null {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("desktop") === "1") {
+      const theme = params.get("theme");
+      if (isDesktopThemeMode(theme)) return theme;
+    }
+    if (window.sessionStorage.getItem(EMBEDDED_KEY) === "1") {
+      const saved = window.sessionStorage.getItem(THEME_MODE_KEY);
+      return isDesktopThemeMode(saved) ? saved : null;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
 }
 
 /** 导航回桌面壳控制台页;仅在有效地址时动作,否则保持当前页。
@@ -140,5 +187,32 @@ export function returnToConsole(
   const url = shellConsolePageUrl(page);
   if (url) {
     navigate(url);
+  }
+}
+
+/**
+ * 研究页与控制台属于不同文档。先播放与控制台路由一致的离场动画，再执行
+ * 整页导航，避免点击导航时画面瞬间跳变。
+ */
+export function returnToConsoleWithTransition(
+  page: ShellConsolePage = "console",
+  navigate: (url: string) => void = (url) => window.location.replace(url),
+): void {
+  const url = shellConsolePageUrl(page);
+  if (!url) return;
+  if (document.documentElement.classList.contains("desktop-shell-leaving")) return;
+  if (prefersReducedMotion()) {
+    navigate(url);
+    return;
+  }
+  document.documentElement.classList.add("desktop-shell-leaving");
+  window.setTimeout(() => navigate(url), SHELL_PAGE_TRANSITION_MS);
+}
+
+function prefersReducedMotion(): boolean {
+  try {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
   }
 }
