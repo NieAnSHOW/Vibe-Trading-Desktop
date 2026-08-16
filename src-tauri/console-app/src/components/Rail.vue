@@ -271,7 +271,7 @@ async function openResearch() {
     <button
       type="button"
       class="rail__item"
-      :title="researchReady ? '进入研究(WebUI)' : '服务未运行,点击前往环境页启动'"
+      :title="researchReady ? '进入研究(WebUI)' : '服务未运行,点击返回启动引导页'"
       :disabled="researchOpening"
       @click="openResearch"
     >
