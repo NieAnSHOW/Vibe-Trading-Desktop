@@ -2,9 +2,6 @@
 import { onMounted, onUnmounted, ref, computed } from "vue";
 import { storeToRefs } from "pinia";
 import type { UnlistenFn } from "@tauri-apps/api/event";
-import { useAuthStore } from "../stores/auth";
-import { useRouter } from "vue-router";
-
 import { useEnvStore } from "../stores/env";
 import { useServiceStore } from "../stores/service";
 import { useBootstrapStore } from "../stores/bootstrap";
@@ -15,7 +12,6 @@ import {
   consoleOpenWebui,
   consoleQuit,
   consoleFetchAds,
-  consoleMemberUsage,
   consoleOpenExternalUrl,
 } from "../ipc/commands";
 import {
@@ -26,7 +22,7 @@ import {
   onChanneldepExit,
 } from "../ipc/events";
 import type { BootstrapEvent } from "../ipc/types";
-import type { AdItem, MemberUsageView } from "../ipc/types";
+import type { AdItem } from "../ipc/types";
 
 import StatusBadge from "../components/StatusBadge.vue";
 import AppButton from "../components/AppButton.vue";
@@ -39,15 +35,10 @@ import { useBusy } from "../composables/useBusy";
 import logoPng from "../assets/128x128@2x.png";
 import { config as ProdConfig } from '../config/prod'
 import {
-  ArrowUpRight,
-  CircleUserRound,
   Database,
   ExternalLink,
-  Gift,
-  Headset,
   MessageCircleMore,
   Play,
-  RefreshCw,
   ServerCog,
   ShieldCheck,
   Square,
@@ -60,8 +51,6 @@ const env = useEnvStore();
 const service = useServiceStore();
 const bootstrap = useBootstrapStore();
 const channels = useChannelsStore();
-const authStore = useAuthStore();
-const router = useRouter();
 
 const { env: envState, port, serviceRunning } = storeToRefs(env);
 
@@ -69,96 +58,6 @@ const updateBanner = ref<InstanceType<typeof UpdateBanner> | null>(null);
 const errorMsg = ref("");
 const pageReady = ref(false);
 const pageEntering = ref(false);
-const kefuDialogOpen = ref(false);
-const kefuQrCode = computed(() => ProdConfig.kefuQrCode.trim());
-function onKefuDialogClose() {
-  kefuDialogOpen.value = false;
-}
-const rewardDialogOpen = ref(false);
-const rewardQrCode = computed(() => ProdConfig.rewardQrCode.trim());
-function onRewardDialogClose() {
-  rewardDialogOpen.value = false;
-}
-const memberUsage = ref<MemberUsageView | null>(null);
-const usageRefreshing = ref(false);
-const membershipUpdateNotice = ref(false);
-const membershipRefreshBusy = useBusy();
-const membershipRestartDialogOpen = ref(false);
-const usageNumberFormatter = new Intl.NumberFormat("en-US", {
-  maximumFractionDigits: 0,
-});
-
-function formatUsageAmount(value: number) {
-  return usageNumberFormatter.format(value);
-}
-
-const remainingPercent = computed(() => {
-  const usage = memberUsage.value;
-  if (!usage || usage.total_granted <= 0) return 0;
-  return Math.min(100, Math.max(0, (usage.total_available / usage.total_granted) * 100));
-});
-
-async function refreshMemberUsage() {
-  if (!authStore.authenticated || usageRefreshing.value) return;
-  usageRefreshing.value = true;
-  try {
-    memberUsage.value = await consoleMemberUsage();
-  } catch (e: any) {
-    if (e?.variant === "LoginExpired") {
-      authStore.clear();
-      clearMemberUsage();
-      return;
-    }
-    // 保留上次成功结果，用量接口不可用不影响控制台其他状态。
-  } finally {
-    usageRefreshing.value = false;
-  }
-}
-
-async function refreshAuthForMembership() {
-  await authStore.refresh();
-  if (!authStore.authenticated) {
-    clearMemberUsage();
-    return false;
-  }
-  if (authStore.membershipChanged) {
-    membershipUpdateNotice.value = true;
-    memberUsage.value = null;
-  }
-  return true;
-}
-
-async function refreshMembershipUsageManually() {
-  if (!await refreshAuthForMembership()) return;
-  await refreshMemberUsage();
-  if (!serviceRunning.value && authStore.authenticated) {
-    membershipUpdateNotice.value = false;
-    authStore.acknowledgeMembershipChange();
-  }
-}
-
-async function doRestartForMembershipUpdate() {
-  await membershipRefreshBusy.run("刷新中", async () => {
-    try {
-      await service.stop();
-      env.setPort(null);
-      serviceRunning.value = false;
-      const p = await service.start();
-      env.setPort(p);
-      serviceRunning.value = true;
-      membershipUpdateNotice.value = false;
-      authStore.acknowledgeMembershipChange();
-      await refreshMemberUsage();
-    } catch (e) {
-      setErr(e);
-    }
-  });
-}
-
-async function onMembershipRestartDialogClose(value: "ok" | "cancel") {
-  membershipRestartDialogOpen.value = false;
-  if (value === "ok") await doRestartForMembershipUpdate();
-}
 
 function setErr(m: unknown) {
   errorMsg.value = m ? String(m) : "";
@@ -174,35 +73,6 @@ const ENV_MAP = {
 const envBadge = computed(() => {
   if (!envState.value) return { txt: "检测中", cls: "warn" };
   return ENV_MAP[envState.value] ?? { txt: "未知", cls: "warn" };
-});
-
-const accountName = computed(
-  () => authStore.userInfo?.nickName || authStore.userInfo?.phone || "已登录",
-);
-
-const memberTier = computed(() => {
-  const level = authStore.userInfo?.memberLevel;
-  if (!level) return null;
-
-  const name = level.name?.trim() || "会员";
-  const identity = `${level.code ?? ""} ${name}`.toLowerCase();
-  const tone = /vip|elite|ultimate|diamond|至尊/.test(identity) || level.levelValue >= 50
-    ? "signature"
-    : /pro|premium|plus|gold|高级/.test(identity) || level.levelValue >= 20
-      ? "pro"
-      : "member";
-
-  return {
-    name,
-    tone,
-    caption: name.includes("会员") ? "" : "会员",
-    label: name.includes("会员") ? name : `${name} 会员`,
-  };
-});
-
-const memberExpireTime = computed(() => {
-  const expireTime = authStore.userInfo?.memberLevel?.expireTime?.trim();
-  return expireTime || null;
 });
 
 // console_bootstrap 是 fire-and-forget:spawn 后立即返回,真正的结束信号是
@@ -276,12 +146,6 @@ async function onStart() {
       serviceRunning.value = true;
       hintHidden.value = true;
     } catch (e: any) {
-      if (e?.variant === "LoginExpired") {
-        authStore.clear();
-        clearMemberUsage();
-        setErr("登录已过期，请重新登录");
-        return;
-      }
       setErr(e?.message || String(e));
     }
   });
@@ -369,31 +233,10 @@ async function refresh() {
 let unlistens: UnlistenFn[] = [];
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let adTimer: ReturnType<typeof setInterval> | null = null;
-let usageTimer: ReturnType<typeof setInterval> | null = null;
-
-function clearMemberUsage() {
-  memberUsage.value = null;
-  if (usageTimer) {
-    clearInterval(usageTimer);
-    usageTimer = null;
-  }
-}
 
 onMounted(async () => {
   pageReady.value = true;
   pageEntering.value = true;
-  // 恢复登录态（静默，不阻塞）
-  await authStore.refresh();
-  if (ProdConfig.enableLogin && authStore.authenticated) {
-    if (authStore.membershipChanged) {
-      membershipUpdateNotice.value = true;
-      memberUsage.value = null;
-    }
-    void refreshMemberUsage();
-    usageTimer = setInterval(async () => {
-      if (await refreshAuthForMembership()) void refreshMemberUsage();
-    }, 300_000);
-  }
   // TODO: 暂时禁用自动更新，启动时静默检查更新（失败不影响主流程）
   if (ProdConfig.checkUpdate) {
     updateBanner.value?.checkUpdate().catch(() => { });
@@ -404,10 +247,13 @@ onMounted(async () => {
       bootstrap.advance(e.stage, e.message ?? "");
       if (e.ok === false) setErr(e.message || "依赖安装失败");
     }),
-    onBootstrapExit((code: number) => {
+    onBootstrapExit(async (code: number) => {
       if (code !== 0 && bootstrap.state !== "done") bootstrap.advance("failed", "");
       installing.value = false; // 权威结束信号:无论成功失败,后台线程退出即释放按钮
-      refresh();
+      await refresh();
+      if (code === 0 && envState.value === "ready" && !serviceRunning.value) {
+        await onStart();
+      }
     }),
     onServiceStarted((p: number) => {
       env.setPort(p);
@@ -439,7 +285,6 @@ onUnmounted(() => {
   unlistens.forEach((u) => u());
   if (pollTimer) clearInterval(pollTimer);
   if (adTimer) clearInterval(adTimer);
-  clearMemberUsage();
 });
 
 function onStartupAnimationEnd() {
@@ -467,8 +312,7 @@ function onStartupAnimationEnd() {
       <AdSlot :ads="adBanner" variant="banner" />
 
 
-      <div class="console-workspace"
-        :class="{ 'console-workspace--guest': !ProdConfig.enableLogin || !authStore.authenticated }">
+      <div class="console-workspace console-workspace--guest">
         <section class="service-panel" aria-labelledby="service-title">
           <div class="service-hero">
             <div class="service-state-line">
@@ -536,82 +380,7 @@ function onStartupAnimationEnd() {
           <ProgressBar />
         </section>
 
-        <aside v-if="ProdConfig.enableLogin && authStore.authenticated" class="member-panel" aria-label="会员服务">
-          <div v-if="membershipUpdateNotice" class="login-notice" role="status">
-            会员权益已更新，当前服务仍在使用旧配置。
-            <AppButton v-if="isServiceRunning" variant="ghost" :busy="membershipRefreshBusy.busy.value"
-              data-test="membership-refresh-service" @click="membershipRestartDialogOpen = true">
-              重启服务并刷新
-            </AppButton>
-            <AppButton v-else variant="ghost" data-test="membership-refresh-usage"
-              @click="refreshMembershipUsageManually">
-              刷新会员用量
-            </AppButton>
-          </div>
-          <button class="member-profile-link" type="button" @click="router.push('/profile')">
-            <CircleUserRound :size="48" stroke-width="1.3" aria-hidden="true" />
-            <span class="member-profile-copy">
-              <b>{{ memberTier?.label ?? '会员账户' }}</b>
-              <small>{{ accountName }}</small>
-            </span>
-            <ArrowUpRight :size="17" aria-hidden="true" />
-          </button>
-          <p v-if="memberExpireTime" class="member-expire-time">有效期至 {{ memberExpireTime }}</p>
-          <section class="member-usage-section" data-test="member-usage-section" aria-label="会员用量">
-            <div class="member-usage-head">
-              <span class="member-usage-title">剩余用量</span>
-              <AppButton variant="ghost" :busy="usageRefreshing" busy-label="刷新中" data-test="member-usage-refresh"
-                @click="refreshMembershipUsageManually">
-                <RefreshCw :size="14" aria-hidden="true" />刷新
-              </AppButton>
-            </div>
-            <template v-if="memberUsage?.unlimited_quota">
-              <div class="member-usage-unlimited-state">
-                <strong class="member-usage-unlimited" data-test="member-usage-unlimited">不限量</strong>
-                <span data-test="member-usage-unlimited-note">当前套餐权益</span>
-              </div>
-            </template>
-            <template v-else-if="memberUsage">
-              <div class="usage-summary">
-                <strong>{{ formatUsageAmount(memberUsage.total_available) }}</strong><span>积分</span>
-                <small>{{ Math.round(remainingPercent) }}% 可用</small>
-              </div>
-              <div class="member-usage-track" role="progressbar" aria-label="剩余额度" :aria-valuenow="remainingPercent"
-                aria-valuemin="0" aria-valuemax="100">
-                <div class="member-usage-fill" :style="{ width: `${remainingPercent}%` }"></div>
-              </div>
-              <div class="usage-detail">
-                <span>总量 <b>{{ formatUsageAmount(memberUsage.total_granted) }}</b></span>
-                <span>已用 <b>{{ formatUsageAmount(memberUsage.total_used) }}</b></span>
-              </div>
-            </template>
-            <p v-else class="member-usage-placeholder">用量暂未加载</p>
-          </section>
-          <div style="display: flex;justify-content:space-between">
-            <AppButton v-if="kefuQrCode" variant="ghost" class="member-kefu-entry" data-test="member-kefu-entry"
-              @click="kefuDialogOpen = true">
-              <Headset :size="15" aria-hidden="true" />联系客服
-            </AppButton>
-            <AppButton v-if="rewardQrCode" variant="ghost" class="member-kefu-entry" data-test="member-reward-entry"
-              @click="rewardDialogOpen = true">
-              <Gift :size="15" aria-hidden="true" />支持作者领中级会员
-            </AppButton>
-          </div>
-
-        </aside>
       </div>
-
-      <ConfirmDialog data-test="kefu-dialog" :open="kefuDialogOpen" title="联系客服"
-        :image="ProdConfig.imgBase + kefuQrCode" image-alt="客服微信二维码" hide-cancel @close="onKefuDialogClose">
-        <p style="margin-top: 8px;">请使用微信扫描上方二维码添加专属客服</p>
-        <template #confirm-text>我知道了</template>
-      </ConfirmDialog>
-
-      <ConfirmDialog data-test="reward-dialog" :open="rewardDialogOpen" title="支持作者领专业会员"
-        :image="ProdConfig.imgBase + rewardQrCode" image-alt="支持作者二维码" hide-cancel @close="onRewardDialogClose">
-        <p style="margin-top: 8px;">将打赏后的截图私发客服领取会员</p>
-        <template #confirm-text>我知道了</template>
-      </ConfirmDialog>
 
       <ConfirmDialog :open="installStopDialogOpen" title="服务运行中，确认停止并安装？" @close="onInstallStopDialogClose">
         检测到后端服务正在运行，安装新版本依赖需要先停止服务。<b>停止将中断正在执行的任务</b>（回测、研究、实盘等），确认停止并继续安装吗？
@@ -621,11 +390,6 @@ function onStartupAnimationEnd() {
       <ConfirmDialog :open="stopDialogOpen" title="确认停止服务？" @close="onStopDialogClose">
         停止将中断后端进程，<b>请确保当前没有正在执行的任务</b>（回测、研究、实盘等）。
         <template #confirm-text>确认停止</template>
-      </ConfirmDialog>
-
-      <ConfirmDialog :open="membershipRestartDialogOpen" title="确认刷新会员服务？" @close="onMembershipRestartDialogClose">
-        会员权益已更新，需要重启本地服务才能使用新的会员配置。<b>重启会中断正在执行的任务</b>，确认继续吗？
-        <template #confirm-text>重启并刷新</template>
       </ConfirmDialog>
 
       <ConfirmDialog :open="quitDialogOpen" title="确认退出客户端？" @close="onQuitDialogClose">
@@ -641,16 +405,6 @@ function onStartupAnimationEnd() {
 
 <style>
 @import "../styles/console.css";
-
-.login-notice {
-  padding: 4px 10px;
-  border: 1px solid hsl(var(--ok) / 0.3);
-  border-radius: 8px;
-  background: hsl(var(--ok) / 0.1);
-  color: hsl(var(--ok-fg));
-  font-size: 13px;
-  margin-bottom: 15px;
-}
 
 .console-page__header,
 .console-page__shell {

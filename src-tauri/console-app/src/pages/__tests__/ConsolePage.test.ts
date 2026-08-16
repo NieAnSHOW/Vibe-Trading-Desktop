@@ -3,7 +3,7 @@ import { nextTick } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
-import type { AuthStatusView, StatusReport } from "../../ipc/types";
+import type { StatusReport } from "../../ipc/types";
 
 const mocks = vi.hoisted(() => ({
   consoleStatus: vi.fn(async (): Promise<StatusReport> => ({
@@ -11,22 +11,11 @@ const mocks = vi.hoisted(() => ({
     service_running: false,
     port: null,
   })),
-  consoleAuthStatus: vi.fn(async (): Promise<AuthStatusView> => ({
-    authenticated: true,
-    userInfo: null,
-    expireAt: 9999999999,
-  })),
-  consoleMemberUsage: vi.fn(async () => ({
-    total_available: 98025508,
-    total_granted: 113514188,
-    total_used: 15488680,
-    unlimited_quota: false,
-  })),
+  bootstrapExitHandler: null as ((code: number) => unknown) | null,
   unlisten: vi.fn(),
 }));
 
 vi.mock("../../ipc/commands", () => ({
-  consoleAuthStatus: mocks.consoleAuthStatus,
   consoleStatus: mocks.consoleStatus,
   consoleBootstrap: vi.fn(),
   consoleOpenWebui: vi.fn(),
@@ -58,12 +47,14 @@ vi.mock("../../ipc/commands", () => ({
   consoleLoginByPassword: vi.fn(),
   consoleLoginRegister: vi.fn(),
   consoleLoginSetPassword: vi.fn(),
-  consoleMemberUsage: mocks.consoleMemberUsage,
 }));
 
 vi.mock("../../ipc/events", () => ({
   onBootstrapEvent: vi.fn(async () => mocks.unlisten),
-  onBootstrapExit: vi.fn(async () => mocks.unlisten),
+  onBootstrapExit: vi.fn(async (handler: (code: number) => unknown) => {
+    mocks.bootstrapExitHandler = handler;
+    return mocks.unlisten;
+  }),
   onServiceStarted: vi.fn(async () => mocks.unlisten),
   onQuitRequested: vi.fn(async () => mocks.unlisten),
   onChanneldepProgress: vi.fn(async () => mocks.unlisten),
@@ -106,6 +97,7 @@ beforeAll(() => {
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  mocks.bootstrapExitHandler = null;
   setActivePinia(createPinia());
   await router.push("/");
   await router.isReady();
@@ -138,22 +130,7 @@ describe("ConsolePage", () => {
     expect(shell.contains(header)).toBe(false);
   });
 
-  it("displays a restored login notice passed by the login page", async () => {
-    await router.push({ path: "/", query: { loginMessage: "欢迎回来" } });
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
-
-    await flushPromises();
-
-    expect(wrapper.get('[data-test="login-notice"]').attributes("role")).toBe("status");
-    expect(wrapper.get('[data-test="login-notice"]').text()).toBe("欢迎回来");
-  });
-
   it("keeps the local service workspace full width while signed out", async () => {
-    mocks.consoleAuthStatus.mockResolvedValueOnce({
-      authenticated: false,
-      userInfo: null,
-      expireAt: null,
-    });
     const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
 
     await flushPromises();
@@ -196,143 +173,21 @@ describe("ConsolePage", () => {
     expect(wrapper.text()).not.toContain("清空");
   });
 
-  it("shows a remembered token-only session in the member panel without duplicate header entries", async () => {
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+  it("starts the service after a successful bootstrap reaches a ready environment", async () => {
+    const { consoleStartService, consoleOpenWebui } = await import("../../ipc/commands");
+    const start = vi.mocked(consoleStartService);
+    const open = vi.mocked(consoleOpenWebui);
+    start.mockResolvedValue(8899);
+    mocks.consoleStatus
+      .mockResolvedValueOnce({ env: "not_installed", service_running: false, port: null })
+      .mockResolvedValue({ env: "ready", service_running: false, port: null });
 
+    mount(ConsolePage, { global: { plugins: [router] } });
+    await flushPromises();
+    await mocks.bootstrapExitHandler?.(0);
     await flushPromises();
 
-    expect(wrapper.text()).toContain("已登录");
-    expect(wrapper.find('[data-test="account-profile-entry"]').exists()).toBe(false);
-    expect(wrapper.find('[data-test="settings-entry"]').exists()).toBe(false);
-    expect(wrapper.get(".member-profile-link").text()).toContain("已登录");
-    expect(wrapper.findAll("button").some((button) => button.text() === "退出登录")).toBe(false);
-  });
-
-  it("shows the membership level returned with the authenticated profile", async () => {
-    mocks.consoleAuthStatus.mockResolvedValueOnce({
-      authenticated: true,
-      userInfo: {
-        id: 1,
-        nickName: "Tester",
-        gender: 0,
-        status: 1,
-        loginType: 2,
-        memberLevel: {
-          id: 3,
-          name: "Pro",
-          code: "pro",
-          levelValue: 20,
-          expireTime: "2026-12-31 23:59:59",
-        },
-      },
-      expireAt: 9999999999,
-    });
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
-
-    await flushPromises();
-
-    expect(wrapper.text()).toContain("Pro 会员");
-    expect(wrapper.text()).toContain("有效期至 2026-12-31 23:59:59");
-    expect(wrapper.get(".member-profile-link").text()).toContain("Pro 会员");
-  });
-
-  it("提示会员权益变化并允许刷新用量", async () => {
-    mocks.consoleAuthStatus.mockResolvedValueOnce({
-      authenticated: true,
-      userInfo: { id: 1, nickName: "Tester", gender: 0, status: 1, loginType: 2 },
-      expireAt: 9999999999,
-      membershipChanged: true,
-    });
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
-
-    await flushPromises();
-
-    expect(wrapper.get('[data-test="membership-refresh-usage"]').text()).toContain("刷新会员用量");
-    await wrapper.get('[data-test="membership-refresh-usage"]').trigger("click");
-    await flushPromises();
-    expect(wrapper.find('[data-test="membership-refresh-usage"]').exists()).toBe(false);
-  });
-
-  it("renders member usage and refreshes it manually", async () => {
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
-
-    await flushPromises();
-
-    expect(wrapper.get(".member-panel").text()).toContain("98,025,508积分");
-    const usageSection = wrapper.get('[data-test="member-usage-section"]');
-    expect(usageSection.text()).toContain("剩余用量");
-    expect(usageSection.text()).toContain("98,025,508积分");
-    expect(usageSection.get('[role="progressbar"]').attributes("aria-label")).toBe("剩余额度");
-    expect(wrapper.text()).toContain("总量 113,514,188");
-    expect(wrapper.text()).toContain("已用 15,488,680");
-    await wrapper.get('[data-test="member-usage-refresh"]').trigger("click");
-    await flushPromises();
-    expect(mocks.consoleMemberUsage).toHaveBeenCalledTimes(2);
-  });
-
-  it("renders an unlimited badge instead of usage amounts for unlimited quotas", async () => {
-    mocks.consoleMemberUsage.mockResolvedValueOnce({
-      total_available: 98025508,
-      total_granted: 113514188,
-      total_used: 15488680,
-      unlimited_quota: true,
-    });
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
-
-    await flushPromises();
-
-    expect(wrapper.get('[data-test="member-usage-unlimited"]').text()).toBe("不限量");
-    expect(wrapper.get('[data-test="member-usage-unlimited-note"]').text()).toBe("当前套餐权益");
-    expect(wrapper.text()).not.toContain("剩余 98,025,508");
-    expect(wrapper.text()).not.toContain("总量 113,514,188");
-    expect(wrapper.text()).not.toContain("已用 15,488,680");
-    expect(wrapper.get('[data-test="member-usage-section"]').find('[role="progressbar"]').exists()).toBe(false);
-  });
-
-  it("keeps usage refresh available after the initial request fails", async () => {
-    mocks.consoleMemberUsage.mockRejectedValueOnce(new Error("offline"));
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
-
-    await flushPromises();
-
-    await wrapper.get('[data-test="member-usage-refresh"]').trigger("click");
-    await flushPromises();
-    expect(mocks.consoleMemberUsage).toHaveBeenCalledTimes(2);
-  });
-
-  it("clears member usage when the usage request reports an expired login", async () => {
-    mocks.consoleMemberUsage.mockRejectedValueOnce({ variant: "LoginExpired" });
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
-
-    await flushPromises();
-
-    expect(wrapper.find('[data-test="member-usage-refresh"]').exists()).toBe(false);
-  });
-
-  it("shows the kefu entry with a QR code dialog when kefuQrCode is configured", async () => {
-    const { config } = await import("../../config/prod");
-    config.kefuQrCode = "/kefu-qr.png";
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
-
-    await flushPromises();
-
-    expect(wrapper.get('[data-test="member-kefu-entry"]').text()).toContain("联系客服");
-    await wrapper.get('[data-test="member-kefu-entry"]').trigger("click");
-    await nextTick();
-
-    const dialog = wrapper.get('[data-test="kefu-dialog"]');
-    expect(dialog.attributes("open")).toBeDefined();
-    expect(dialog.get("img").attributes("src")).toBe("http://127.0.0.1:8001/kefu-qr.png");
-    expect(dialog.get("img").attributes("alt")).toBe("客服微信二维码");
-  });
-
-  it("hides the kefu entry when no kefu QR code is configured", async () => {
-    const { config } = await import("../../config/prod");
-    config.kefuQrCode = "";
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
-
-    await flushPromises();
-
-    expect(wrapper.find('[data-test="member-kefu-entry"]').exists()).toBe(false);
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith(8899);
   });
 });
