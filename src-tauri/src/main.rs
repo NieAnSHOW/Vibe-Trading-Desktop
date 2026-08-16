@@ -219,10 +219,12 @@ pub fn open_url_with_system(url: &str) -> Result<(), String> {
 }
 
 /// 准备可写运行目录(会话/日志/venv 父目录就绪;runtime/ 代码刷新)。
-/// 不自动 spawn serve——窗口先停在控制台页(console.html),由用户经控制台
-/// 按钮触发 bootstrap / 启停;服务就绪后 console_open_webui 把主窗口内嵌
-/// 导航进 WebUI。唯一例外:设置里开启了「启动即启动服务」且环境就绪时,
-/// 在此自动拉起后端并直接进入 WebUI。
+/// 非 Ready 环境停在控制台页(console.html),由用户经控制台按钮触发
+/// bootstrap / 启停;Ready 环境则自动拉起后端并由 webui_embed 内嵌 WebUI。
+fn should_auto_start(env: console::EnvStatus, service_running: bool) -> bool {
+    env == console::EnvStatus::Ready && !service_running
+}
+
 fn boot(
     app: &tauri::AppHandle,
     win: &tauri::WebviewWindow,
@@ -240,10 +242,10 @@ fn boot(
         Some(&res.frontend_dist),
         &layout,
     )?;
-    if console::compute_env_status(&layout) == console::EnvStatus::Ready
-        && crate::settings::load(&layout.root).autostart_service
-        && shared.lock().unwrap().is_none()
-    {
+    if should_auto_start(
+        console::compute_env_status(&layout),
+        shared.lock().unwrap().is_some(),
+    ) {
         let app = app.clone();
         let win = win.clone();
         let shared = shared.clone();
@@ -302,6 +304,14 @@ mod tests {
         assert!(validate_external_url("file:///etc/passwd").is_err());
         assert!(validate_external_url("javascript:alert(1)").is_err());
         assert!(validate_external_url("not a url").is_err());
+    }
+
+    #[test]
+    fn ready_environment_starts_even_when_legacy_autostart_is_disabled() {
+        assert!(should_auto_start(console::EnvStatus::Ready, false));
+        assert!(!should_auto_start(console::EnvStatus::Incomplete, false));
+        assert!(!should_auto_start(console::EnvStatus::NotInstalled, false));
+        assert!(!should_auto_start(console::EnvStatus::Ready, true));
     }
 
     // console-dist/index.html 顶层执行 `window.__TAURI__.core`;Tauri v2 仅在
