@@ -62,6 +62,9 @@ import {
   consoleSetThemeMode,
 } from "../ipc/commands";
 
+const props = defineProps<{ webuiActive?: boolean }>();
+const emit = defineEmits<{ navigateConsole: [] }>();
+
 /**
  * 桌面壳层级导航栏(账户/研究/底部设置),与 WebUI 侧
  * DesktopShellRail 同构:控制台各页面渲染本 rail,「研究」经
@@ -211,9 +214,10 @@ onUnmounted(() => {
   }
 });
 
-type RailKey = "account" | "settings";
+type RailKey = "account" | "research" | "settings";
 
 const activeKey = computed<RailKey | null>(() => {
+  if (props.webuiActive) return "research";
   const p = route.path;
   if (p === "/login" || p === "/profile") return "account";
   if (p === "/settings") return "settings";
@@ -223,8 +227,14 @@ const activeKey = computed<RailKey | null>(() => {
 const researchReady = computed(() => serviceRunning.value && port.value != null);
 
 async function openAccount() {
+  if (props.webuiActive) emit("navigateConsole");
   if (!authStore.authenticated) await authStore.refresh();
   return router.push(authStore.authenticated ? "/profile" : "/login");
+}
+
+async function openSettings() {
+  if (props.webuiActive) emit("navigateConsole");
+  return router.push("/settings");
 }
 
 async function openResearch() {
@@ -237,12 +247,12 @@ async function openResearch() {
       if (transitionMs) {
         await new Promise<void>((resolve) => window.setTimeout(resolve, transitionMs));
       }
-      const embedded = await consoleOpenWebui(port.value);
-      if (!embedded) {
+      const opened = await consoleOpenWebui(port.value);
+      if (!opened) {
         document.documentElement.classList.remove("desktop-shell-leaving");
-        researchOpening.value = false;
       }
-      } catch {
+      researchOpening.value = false;
+    } catch {
       // WebUI 导航失败时恢复控制台，用户可以再次尝试。
       document.documentElement.classList.remove("desktop-shell-leaving");
       researchOpening.value = false;
@@ -271,8 +281,10 @@ async function openResearch() {
     <button
       type="button"
       class="rail__item"
+      :class="{ 'rail__item--active': activeKey === 'research' }"
+      :aria-current="activeKey === 'research' ? 'page' : undefined"
       :title="researchReady ? '进入研究(WebUI)' : '服务未运行,点击返回启动引导页'"
-      :disabled="researchOpening"
+      :disabled="researchOpening || webuiActive"
       @click="openResearch"
     >
       <Telescope class="rail__icon" aria-hidden="true" />
@@ -283,6 +295,7 @@ async function openResearch() {
       <button
         type="button"
         class="rail__item"
+        style="margin-bottom: 6px;"
         :title="themeTitle"
         :aria-label="themeTitle"
         data-test="theme-toggle"
@@ -300,7 +313,7 @@ async function openResearch() {
         :class="{ 'rail__item--active': activeKey === 'settings' }"
         :aria-current="activeKey === 'settings' ? 'page' : undefined"
         :disabled="researchOpening"
-        @click="router.push('/settings')"
+        @click="openSettings"
       >
         <Settings class="rail__icon" aria-hidden="true" />
         <span class="rail__label">设置</span>

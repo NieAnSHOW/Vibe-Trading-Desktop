@@ -6,11 +6,14 @@ import {
   getShellConsoleUrl,
   initDesktopShell,
   isDesktopEmbedded,
+  isDesktopShellFrame,
   isShellConsoleUrl,
+  preserveDesktopShellFrameUrl,
   returnToConsole,
   returnToConsoleWithTransition,
   shellConsolePageUrl,
 } from "@/lib/desktopShell";
+import webuiDocument from "../../../index.html?raw";
 
 function setSearch(search: string) {
   window.history.replaceState(null, "", search);
@@ -20,6 +23,11 @@ describe("desktopShell", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
     setSearch("/");
+  });
+
+  it("does not ship an environment item in the HTML-first desktop rail", () => {
+    expect(webuiDocument).not.toContain('data-bootstrap-label="environment"');
+    expect(webuiDocument).not.toContain(">环境<");
   });
 
   it("captures desktop flag and console url on init", () => {
@@ -64,6 +72,26 @@ describe("desktopShell", () => {
 
     expect(isDesktopEmbedded()).toBe(false);
     expect(getShellConsoleUrl()).toBeNull();
+  });
+
+  it("recognizes a WebUI iframe while retaining desktop privileges", () => {
+    setSearch("/?desktop=1&shell=frame&theme=dark");
+    initDesktopShell();
+
+    expect(isDesktopEmbedded()).toBe(true);
+    expect(isDesktopShellFrame()).toBe(true);
+  });
+
+  it("restores frame query markers after a SPA route drops them", () => {
+    setSearch("/?desktop=1&shell=frame");
+    initDesktopShell();
+    setSearch("/settings?tab=appearance#theme");
+
+    preserveDesktopShellFrameUrl();
+
+    expect(window.location.pathname).toBe("/settings");
+    expect(window.location.search).toBe("?tab=appearance&desktop=1&shell=frame");
+    expect(window.location.hash).toBe("#theme");
   });
 
   it("rejects console urls with unexpected schemes", () => {

@@ -11,6 +11,8 @@ import {
   consoleBootstrap,
   consoleStartService,
   consoleOpenWebui,
+  consoleCloseWebui,
+  consoleTakePendingWebui,
   consoleChannelsStatus,
   consoleInstallChannelDep,
   consoleUninstallLegacyApp,
@@ -31,6 +33,20 @@ describe("ipc/commands", () => {
     invokeMock.mockResolvedValue(undefined);
     await consoleOpenWebui(8899);
     expect(invokeMock).toHaveBeenCalledWith("console_open_webui", { port: 8899 });
+  });
+
+  it("consoleTakePendingWebui retrieves an auto-start request once the shell mounts", async () => {
+    invokeMock.mockResolvedValue("http://127.0.0.1:8899/?desktop=1&shell=frame");
+
+    await expect(consoleTakePendingWebui()).resolves.toContain("shell=frame");
+    expect(invokeMock).toHaveBeenCalledWith("console_take_pending_webui");
+  });
+
+  it("consoleCloseWebui synchronizes a rail-initiated return with the native shell", async () => {
+    invokeMock.mockResolvedValue(undefined);
+
+    await consoleCloseWebui();
+    expect(invokeMock).toHaveBeenCalledWith("console_close_webui");
   });
 
   it("consoleChannelsStatus 透传 port", async () => {

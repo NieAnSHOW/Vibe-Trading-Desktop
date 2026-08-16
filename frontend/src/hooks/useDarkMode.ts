@@ -3,6 +3,7 @@ import {
   getDesktopThemeColor,
   getDesktopThemeMode,
   isDesktopEmbedded,
+  isDesktopShellFrame,
   setDesktopThemeMode,
   type DesktopThemeMode,
 } from "@/lib/desktopShell";
@@ -30,6 +31,19 @@ export function useDarkMode() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
+
+  useEffect(() => {
+    if (!isDesktopShellFrame()) return;
+    const onShellTheme = (event: MessageEvent) => {
+      if (event.source !== window.parent) return;
+      const data = event.data;
+      if (data?.type !== "vibe-shell:theme" || typeof data.dark !== "boolean") return;
+      setDark(data.dark);
+      if (typeof data.color === "string") document.documentElement.dataset.brand = data.color;
+    };
+    window.addEventListener("message", onShellTheme);
+    return () => window.removeEventListener("message", onShellTheme);
+  }, []);
 
   const toggleDark = async () => {
     if (themeSaving) return;

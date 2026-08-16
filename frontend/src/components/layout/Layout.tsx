@@ -30,7 +30,12 @@ import {
 import { cn } from "@/lib/utils";
 import { api, type SessionItem } from "@/lib/api";
 import { useAgentStore } from "@/stores/agent";
-import { dismissDesktopRailBootstrap, isDesktopEmbedded } from "@/lib/desktopShell";
+import {
+  dismissDesktopRailBootstrap,
+  isDesktopEmbedded,
+  isDesktopShellFrame,
+  preserveDesktopShellFrameUrl,
+} from "@/lib/desktopShell";
 import { DesktopShellRail } from "@/components/layout/DesktopShellRail";
 import { ConnectionBanner } from "@/components/layout/ConnectionBanner";
 import { useDarkMode } from "@/hooks/useDarkMode";
@@ -226,6 +231,13 @@ export function Layout() {
     requestAnimationFrame(() => document.documentElement.classList.remove("desktop-shell-entering"));
   }, []);
 
+  // BrowserRouter drops the original query string on client-side links. Keep
+  // the frame marker in the address bar so a hard refresh of /settings (etc.)
+  // receives the same narrowly-scoped iframe response policy from the API.
+  useEffect(() => {
+    preserveDesktopShellFrameUrl();
+  }, [pathname]);
+
   // ── telemetry ──
   const startedAtRef = useRef(Date.now());
   useEffect(() => {
@@ -327,7 +339,7 @@ export function Layout() {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* 桌面壳层级导航(账户/研究/设置),仅内嵌模式渲染 */}
-      {isDesktopEmbedded() && (
+      {isDesktopEmbedded() && !isDesktopShellFrame() && (
         <DesktopShellRail
           dark={dark}
           themeSaving={themeSaving}

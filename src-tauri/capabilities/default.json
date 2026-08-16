@@ -16,6 +16,8 @@
     "allow-console-start-service",
     "allow-console-stop-service",
     "allow-console-open-webui",
+    "allow-console-take-pending-webui",
+    "allow-console-close-webui",
     "allow-console-open-webui-external",
     "allow-console-start-channels",
     "allow-console-channels-status",

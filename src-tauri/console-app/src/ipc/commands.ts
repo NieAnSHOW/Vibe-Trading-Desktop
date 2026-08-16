@@ -32,6 +32,12 @@ export const consoleStopService = (): Promise<void> =>
 export const consoleOpenWebui = (port: number): Promise<boolean> =>
   invoke<boolean>("console_open_webui", { port });
 
+export const consoleTakePendingWebui = (): Promise<string | null> =>
+  invoke<string | null>("console_take_pending_webui");
+
+export const consoleCloseWebui = (): Promise<void> =>
+  invoke<void>("console_close_webui");
+
 export const consoleOpenLogs = (): Promise<void> =>
   invoke<void>("console_open_logs");
 

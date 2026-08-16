@@ -31,24 +31,24 @@
       })();
     </script>
     <style>
-      /* Covers the native document-navigation gap before Vue can mount. */
+      /* Renders before the Vue bundle so native-window startup never exposes a blank rail. */
       .console-rail-bootstrap {
         --bootstrap-surface: 220 20% 8%;
         --bootstrap-line: 220 18% 18%;
-        --bootstrap-ink-dim: 220 10% 66%;
+        --bootstrap-ink: 220 10% 66%;
         --bootstrap-brand: 175 72% 40%;
-        display: flex;
         position: fixed;
         inset: 0 auto 0 0;
         z-index: 30;
+        display: flex;
         width: 68px;
         flex-direction: column;
         align-items: center;
         gap: 6px;
         padding: 14px 0;
-        background: hsl(var(--bootstrap-surface) / 0.92);
         border-right: 1px solid hsl(var(--bootstrap-line));
-        color: hsl(var(--bootstrap-ink-dim));
+        background: hsl(var(--bootstrap-surface) / 0.92);
+        color: hsl(var(--bootstrap-ink));
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
         backdrop-filter: blur(8px);
         box-sizing: border-box;
@@ -56,7 +56,7 @@
       html[data-theme="light"] .console-rail-bootstrap {
         --bootstrap-surface: 0 0% 100%;
         --bootstrap-line: 220 16% 84%;
-        --bootstrap-ink-dim: 220 12% 42%;
+        --bootstrap-ink: 220 12% 42%;
       }
       html[data-brand="blue"] .console-rail-bootstrap { --bootstrap-brand: 217 76% 52%; }
       html[data-brand="purple"] .console-rail-bootstrap { --bootstrap-brand: 262 60% 55%; }
@@ -73,11 +73,13 @@
         border-radius: 10px;
         color: inherit;
         font: inherit;
+        font-size: 11px;
         line-height: 1.25;
         box-sizing: border-box;
       }
       html[data-console-route="account"] [data-console-rail="account"],
-      html[data-console-route="settings"] [data-console-rail="settings"] {
+      html[data-console-route="settings"] [data-console-rail="settings"],
+      html[data-console-route="research"] [data-console-rail="research"] {
         background: hsl(var(--bootstrap-brand) / 0.16);
         color: hsl(var(--bootstrap-brand));
       }
@@ -90,10 +92,10 @@
         stroke-linecap: round;
         stroke-linejoin: round;
       }
-      .console-rail-bootstrap__label { font-size: 11px; }
       .console-rail-bootstrap__bottom { margin-top: auto; }
+      .console-rail-bootstrap__theme { margin-bottom: 6px; }
       html[data-theme="dark"] [data-bootstrap-theme="light"],
-      html[data-theme="light"] [data-bootstrap-theme="dark"] { display: none; }
+      html[data-theme="light"] [data-bootstrap-theme="dark"],
       html[data-console-route="onboarding"] .console-rail-bootstrap { display: none; }
     </style>
   </head>
@@ -101,24 +103,24 @@
     <aside id="console-rail-bootstrap" class="console-rail-bootstrap" aria-hidden="true">
       <div class="console-rail-bootstrap__item" data-console-rail="account">
         <svg class="console-rail-bootstrap__icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
-        <span class="console-rail-bootstrap__label">账户</span>
+        <span>账户</span>
       </div>
-      <div class="console-rail-bootstrap__item">
-        <svg class="console-rail-bootstrap__icon" viewBox="0 0 24 24"><path d="m10.065 12.493-6.18 1.318a.934.934 0 0 1-1.108-.702l-.537-2.15a1.07 1.07 0 0 1 .691-1.265l13.504-4.44"/><path d="m13.56 11.747 4.332-.924"/><path d="m16 21-3.105-6.21"/><path d="M16.485 5.94a2 2 0 0 1 1.455-2.425l1.09-.272a1 1 0 0 1 1.212.727l1.515 6.06a1 1 0 0 1-.727 1.213l-1.09.272a2 2 0 0 1-2.425-1.455z"/><path d="m6.158 8.633 1.114 4.456"/><path d="m8 21 3.105-6.21"/><circle cx="12" cy="13" r="2"/></svg>
-        <span class="console-rail-bootstrap__label">研究</span>
+      <div class="console-rail-bootstrap__item" data-console-rail="research">
+        <svg class="console-rail-bootstrap__icon" viewBox="0 0 24 24"><path d="m10 12-6 2-1-3 14-5"/><path d="m16 21-3-6"/><path d="m8 21 3-6"/><circle cx="12" cy="13" r="2"/></svg>
+        <span>研究</span>
       </div>
       <div class="console-rail-bootstrap__bottom">
-        <div class="console-rail-bootstrap__item" data-bootstrap-theme="light">
-          <svg class="console-rail-bootstrap__icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-          <span class="console-rail-bootstrap__label">浅色</span>
+        <div class="console-rail-bootstrap__item console-rail-bootstrap__theme" data-bootstrap-theme="light">
+          <svg class="console-rail-bootstrap__icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
+          <span>浅色</span>
         </div>
-        <div class="console-rail-bootstrap__item" data-bootstrap-theme="dark">
+        <div class="console-rail-bootstrap__item console-rail-bootstrap__theme" data-bootstrap-theme="dark">
           <svg class="console-rail-bootstrap__icon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
-          <span class="console-rail-bootstrap__label">深色</span>
+          <span>深色</span>
         </div>
         <div class="console-rail-bootstrap__item" data-console-rail="settings">
-          <svg class="console-rail-bootstrap__icon" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-          <span class="console-rail-bootstrap__label">设置</span>
+          <svg class="console-rail-bootstrap__icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 2-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2h-3v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1-2-2 .1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H5.5v-3h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 2-2 .1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5v-.2h3v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 2 2-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.2v3H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+          <span>设置</span>
         </div>
       </div>
     </aside>

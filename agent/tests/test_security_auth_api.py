@@ -85,6 +85,31 @@ def test_local_dev_write_allowed_when_key_unset() -> None:
     assert response.status_code in {201, 501}
 
 
+def test_desktop_frame_response_uses_tauri_only_csp_allowlist() -> None:
+    response = _local_client().get(
+        "/not-found?desktop=1&shell=frame",
+        headers={"Host": "127.0.0.1:8899"},
+    )
+
+    assert "x-frame-options" not in response.headers
+    assert response.headers["content-security-policy"] == (
+        "frame-ancestors tauri://localhost http://tauri.localhost "
+        "https://tauri.localhost http://localhost:5173"
+    )
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy-report-only"]
+
+
+def test_regular_and_remote_responses_keep_frame_deny() -> None:
+    local = _local_client().get("/not-found", headers={"Host": "127.0.0.1:8899"})
+    remote = _remote_client().get(
+        "/not-found?desktop=1&shell=frame",
+        headers={"Host": "127.0.0.1:8899"},
+    )
+
+    assert local.headers["x-frame-options"] == "DENY"
+    assert remote.headers["x-frame-options"] == "DENY"
+
+
 def test_docker_gateway_dev_write_allowed_only_with_compose_trust_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

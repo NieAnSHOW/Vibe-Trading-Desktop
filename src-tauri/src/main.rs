@@ -34,8 +34,7 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
-        // 内嵌 WebUI 状态:console_open_webui 导航进入、托盘/停止流程导航返回、
-        // 嵌入态下的托盘退出确认挂起到控制台页重载后补发(见 on_page_load)。
+        // Persistent shell state: WebUI is a retained child frame, not a main-webview navigation.
         .manage(webui_embed::WebuiEmbedState::default())
         // 单实例保护：第二个进程实例启动时，唤回第一个实例的主窗口并退出自身。
         // Windows 用命名 Mutex 实现锁；macOS/Linux 用 Unix domain socket。
@@ -50,6 +49,8 @@ fn main() {
             console::console_start_service,
             console::console_stop_service,
             console::console_open_webui,
+            console::console_take_pending_webui,
+            console::console_close_webui,
             console::console_open_webui_external,
             console::console_start_channels,
             console::console_channels_status,
@@ -83,37 +84,6 @@ fn main() {
         ])
         .manage(console::InstallingFlag(installing))
         .manage(auth_state.clone())
-        .on_page_load(|webview, payload| {
-            // 嵌入态下托盘「退出」先把主窗口带回控制台;此处等控制台页
-            // 加载完成后补发退出确认事件(控制台页被 WebUI 替换期间,
-            // 原有的事件直达确认框收不到)。
-            if !matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
-                return;
-            }
-            let app = webview.app_handle().clone();
-            if !app
-                .state::<webui_embed::WebuiEmbedState>()
-                .take_quit_pending()
-            {
-                return;
-            }
-            std::thread::spawn(move || {
-                // 等控制台 SPA 挂载并注册 QUIT_REQUESTED_EVENT 监听后再发。
-                std::thread::sleep(std::time::Duration::from_millis(300));
-                let service_running = app.state::<SharedChild>().lock().unwrap().is_some();
-                let installing = app
-                    .state::<console::InstallingFlag>()
-                    .0
-                    .load(std::sync::atomic::Ordering::SeqCst);
-                let _ = app.emit(
-                    console::QUIT_REQUESTED_EVENT,
-                    serde_json::json!({
-                        "service_running": service_running,
-                        "installing": installing,
-                    }),
-                );
-            });
-        })
         .on_window_event(move |window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 // 后台挂载:点关闭按钮 X 一律静默隐藏窗口(收纳后台),不退出应用。
@@ -267,9 +237,9 @@ fn boot(
             {
                 Ok(port) => {
                     let _ = app.emit("service://started", port);
-                    // 自动启动成功:主窗口直接进入 WebUI,开机即完整产品形态。
-                    if let Err(e) = crate::webui_embed::embed(&app, port) {
-                        eprintln!("warn: auto embed webui failed: {e}");
+                    // The Vue shell consumes this request from its retained frame.
+                    if let Err(e) = console::console_open_webui(app.clone(), port) {
+                        eprintln!("warn: auto open webui failed: {e}");
                     }
                     let _ = win.eval(
                         "var e=document.getElementById('err');if(e)e.textContent='';",

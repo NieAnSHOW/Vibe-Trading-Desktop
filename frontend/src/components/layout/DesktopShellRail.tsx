@@ -1,8 +1,18 @@
 import { useTranslation } from "react-i18next";
-import { Moon, Settings, Sun, Telescope, UserRound, type LucideIcon } from "lucide-react";
+import {
+  Moon,
+  Settings,
+  Sun,
+  Telescope,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { track } from "@/lib/telemetry";
-import { returnToConsoleWithTransition, type ShellConsolePage } from "@/lib/desktopShell";
+import {
+  returnToConsoleWithTransition,
+  type ShellConsolePage,
+} from "@/lib/desktopShell";
 
 /**
  * 桌面壳层级导航栏:主窗口最左侧固定竖排(图标在上、文字在下)。
@@ -62,10 +72,7 @@ export function DesktopShellRail({
   };
 
   return (
-    <aside
-      aria-label={t("layout.rail.section")}
-      className="desktop-shell-rail"
-    >
+    <aside aria-label={t("layout.rail.section")} className="desktop-shell-rail">
       <RailButton
         label={t("layout.rail.account")}
         icon={UserRound}
@@ -80,6 +87,7 @@ export function DesktopShellRail({
           disabled={themeSaving}
           onClick={onToggleTheme}
         />
+        <div className="h-[6px]"></div>
         <RailButton
           label={t("layout.settings")}
           icon={Settings}

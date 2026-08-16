@@ -8,6 +8,8 @@ fn main() {
                 "console_start_service",
                 "console_stop_service",
                 "console_open_webui",
+                "console_take_pending_webui",
+                "console_close_webui",
                 "console_open_webui_external",
                 "console_start_channels",
                 "console_channels_status",

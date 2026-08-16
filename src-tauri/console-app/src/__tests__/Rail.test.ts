@@ -157,6 +157,21 @@ describe("Rail account navigation", () => {
 });
 
 describe("Rail research navigation", () => {
+  it("keeps Research active without triggering another WebUI navigation while its frame is visible", async () => {
+    const wrapper = mount(Rail, {
+      props: { webuiActive: true },
+      global: { plugins: [router] },
+    });
+    await flushPromises();
+
+    const research = getRailButton(wrapper, "研究");
+    expect(research.classes()).toContain("rail__item--active");
+    expect(research.attributes("disabled")).toBeDefined();
+
+    await research.trigger("click");
+    expect(consoleOpenWebui).not.toHaveBeenCalled();
+  });
+
   it("renders no Environment navigation item", async () => {
     const wrapper = await mountRail();
 

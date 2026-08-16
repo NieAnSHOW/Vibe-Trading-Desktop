@@ -11,6 +11,7 @@ const EMBEDDED_KEY = "vibe.desktop.embedded";
 const CONSOLE_URL_KEY = "vibe.desktop.consoleUrl";
 const THEME_MODE_KEY = "vibe.desktop.themeMode";
 const THEME_COLOR_KEY = "vibe.desktop.themeColor";
+const FRAME_KEY = "vibe.desktop.frame";
 export const SHELL_PAGE_TRANSITION_MS = 220;
 
 /** Remove the HTML-first rail once the React rail has committed. */
@@ -36,6 +37,8 @@ export function initDesktopShell(): void {
     if (params.get("desktop") !== "1") return;
 
     window.sessionStorage.setItem(EMBEDDED_KEY, "1");
+    if (params.get("shell") === "frame") window.sessionStorage.setItem(FRAME_KEY, "1");
+    else window.sessionStorage.removeItem(FRAME_KEY);
     const consoleUrl = params.get("console")?.trim();
     if (consoleUrl) {
       window.sessionStorage.setItem(CONSOLE_URL_KEY, consoleUrl);
@@ -115,6 +118,42 @@ export function isDesktopEmbedded(): boolean {
     return new URLSearchParams(window.location.search).get("desktop") === "1";
   } catch {
     return false;
+  }
+}
+
+/** The WebUI is hosted in the console's retained iframe and must not render a second rail. */
+export function isDesktopShellFrame(): boolean {
+  try {
+    if (new URLSearchParams(window.location.search).get("shell") === "frame") return true;
+    return window.sessionStorage.getItem(FRAME_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Keep the frame marker on deep SPA routes so a hard refresh remains embeddable. */
+export function preserveDesktopShellFrameUrl(): void {
+  if (!isDesktopShellFrame()) return;
+  try {
+    const url = new URL(window.location.href);
+    let changed = false;
+    if (url.searchParams.get("desktop") !== "1") {
+      url.searchParams.set("desktop", "1");
+      changed = true;
+    }
+    if (url.searchParams.get("shell") !== "frame") {
+      url.searchParams.set("shell", "frame");
+      changed = true;
+    }
+    if (changed) {
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${url.pathname}${url.search}${url.hash}`,
+      );
+    }
+  } catch {
+    // History may be unavailable in restricted webviews; the session marker still works.
   }
 }
 

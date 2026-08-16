@@ -2,7 +2,32 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { createPinia } from "pinia";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import App from "../App.vue";
+import consoleDocument from "../../index.html?raw";
+
+const consoleStyles = readFileSync(
+  resolve(process.cwd(), "src/styles/console.css"),
+  "utf8",
+);
+const appSource = readFileSync(resolve(process.cwd(), "src/App.vue"), "utf8");
+
+let openListener: ((url: string) => void) | undefined;
+let closeListener: (() => void) | undefined;
+vi.mock("../ipc/events", () => ({
+  onWebuiOpen: vi.fn(async (callback: (url: string) => void) => {
+    openListener = callback;
+    return vi.fn();
+  }),
+  onWebuiClose: vi.fn(async (callback: () => void) => {
+    closeListener = callback;
+    return vi.fn();
+  }),
+}));
+vi.mock("../ipc/commands", () => ({
+  consoleTakePendingWebui: vi.fn(async () => null),
+}));
 
 const router = createRouter({
   history: createMemoryHistory(),
@@ -19,6 +44,10 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  openListener = undefined;
+  closeListener = undefined;
+  delete document.documentElement.dataset.theme;
+  delete document.documentElement.dataset.brand;
   document.getElementById("app")?.remove();
   document.getElementById("console-rail-bootstrap")?.remove();
 });
@@ -34,6 +63,21 @@ function mountAppAtDocumentRoot() {
 }
 
 describe("App", () => {
+  it("ships a pre-rendered navigation rail without an Environment item", () => {
+    expect(consoleDocument).toContain("console-rail-bootstrap");
+    expect(consoleDocument).toContain('data-console-rail="research"');
+    expect(consoleDocument).not.toContain("环境");
+  });
+
+  it("keeps login and transition styles aligned with the console surface wrapper", () => {
+    expect(consoleStyles).toContain(
+      'body:has(> #app > .shell-content > [data-test="console-surface"] > .login-page)',
+    );
+    expect(appSource).toContain(
+      '.shell-content:has(> [data-test="console-surface"] > .page-enter-active)',
+    );
+  });
+
   it("removes the pre-rendered rail after the Vue app is mounted", () => {
     const bootstrap = document.createElement("aside");
     bootstrap.id = "console-rail-bootstrap";
@@ -125,5 +169,86 @@ describe("App", () => {
     const page = wrapper.find(".login-page");
     expect(page.exists()).toBe(true);
     expect(content.element.contains(page.element)).toBe(true);
+  });
+
+  it("keeps the console document mounted while the WebUI frame is shown and hidden", async () => {
+    vi.useFakeTimers();
+    try {
+      await router.push("/next");
+      const wrapper = mountAppAtDocumentRoot();
+      await flushPromises();
+
+      openListener?.("http://127.0.0.1:8899/?desktop=1&shell=frame");
+      await flushPromises();
+
+      const frame = wrapper.get('iframe[data-test="desktop-webui-frame"]');
+      expect(frame.attributes("src")).toContain("shell=frame");
+      expect(wrapper.find(".rail").exists()).toBe(true);
+      expect(wrapper.get('[data-test="console-surface"]').isVisible()).toBe(false);
+
+      closeListener?.();
+      await flushPromises();
+      expect(wrapper.get('[data-test="console-surface"]').isVisible()).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(220);
+      expect(wrapper.find('iframe[data-test="desktop-webui-frame"]').exists()).toBe(true);
+      expect(wrapper.get('[data-test="console-surface"]').isVisible()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the WebUI frame outside the transitioning console surface", async () => {
+    await router.push("/next");
+    const wrapper = mountAppAtDocumentRoot();
+    await flushPromises();
+
+    openListener?.("http://127.0.0.1:8899/?desktop=1&shell=frame");
+    await flushPromises();
+
+    const frame = wrapper.get('iframe[data-test="desktop-webui-frame"]');
+    const surface = wrapper.get('[data-test="shell-content"]');
+    expect(surface.element.contains(frame.element)).toBe(false);
+  });
+
+  it("ignores a stale close animation when research is reopened", async () => {
+    vi.useFakeTimers();
+    try {
+      await router.push("/next");
+      const wrapper = mountAppAtDocumentRoot();
+      await flushPromises();
+      const url = "http://127.0.0.1:8899/?desktop=1&shell=frame";
+
+      openListener?.(url);
+      await flushPromises();
+      closeListener?.();
+      await flushPromises();
+      openListener?.(url);
+      await flushPromises();
+
+      await vi.advanceTimersByTimeAsync(220);
+      expect(wrapper.get('[data-test="console-surface"]').isVisible()).toBe(false);
+      expect(wrapper.get('iframe[data-test="desktop-webui-frame"]').isVisible()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("forwards console theme changes to the retained WebUI frame", async () => {
+    await router.push("/next");
+    const wrapper = mountAppAtDocumentRoot();
+    await flushPromises();
+    openListener?.("http://127.0.0.1:8899/?desktop=1&shell=frame");
+    await flushPromises();
+
+    const frame = wrapper.get('iframe[data-test="desktop-webui-frame"]');
+    const postMessage = vi.spyOn((frame.element as HTMLIFrameElement).contentWindow!, "postMessage");
+    window.dispatchEvent(new CustomEvent("vibe:theme-mode", { detail: "dark" }));
+    window.dispatchEvent(new CustomEvent("vibe:theme-color", { detail: "blue" }));
+
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: "vibe-shell:theme", dark: true, color: "blue" },
+      "http://127.0.0.1:8899",
+    );
   });
 });

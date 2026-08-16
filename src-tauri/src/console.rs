@@ -19,7 +19,7 @@ use windows_sys::Win32::{
     },
 };
 
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::auth::{self, AuthError, AuthState, Captcha, LoginRaw, UserInfo};
 use crate::runtime_dir::Layout;
@@ -741,6 +741,8 @@ pub async fn console_repair_environment(
     .await
     .map_err(|e| format!("repair environment task join: {e}"))??;
 
+    crate::webui_embed::return_to_console(&app);
+
     if fresh {
         // 仅新装/重装时自动重装依赖（走 bootstrap，复用进度事件与 InstallingFlag）；
         // venv 本来就 Ready 时只同步代码，不重复安装。
@@ -1204,21 +1206,38 @@ pub async fn console_stop_service(
     Ok(())
 }
 
-/// 主窗口内嵌打开 WebUI:把 webview 直接导航到本地 backend,桌面壳以
-/// 完整应用形态承载业务 UI(控制台页被替换,托盘保留「返回控制台」入口)。
-/// 导航失败(窗口缺失等)时兜底系统浏览器,保证按钮始终可用。
+/// Open WebUI inside the console's retained iframe. The main webview is never
+/// navigated, so the shell rail and the console state remain mounted.
 #[tauri::command]
 pub fn console_open_webui(app: AppHandle, port: u16) -> Result<bool, String> {
-    match crate::webui_embed::embed(&app, port) {
-        Ok(()) => Ok(true),
+    match crate::webui_embed::prepare_frame(&app, port) {
+        Ok(url) => {
+            app.emit("webui://open", url)
+                .map_err(|e| format!("emit webui open: {e}"))?;
+            Ok(true)
+        }
         Err(e) => {
-            eprintln!("warn: embed webui failed: {e}; fallback to system browser");
+            eprintln!("warn: prepare embedded webui failed: {e}; fallback to system browser");
             let url = format!("http://127.0.0.1:{port}/");
             crate::validate_external_url(&url)?;
             crate::open_url_with_system(&url)?;
             Ok(false)
         }
     }
+}
+
+/// Consume a WebUI request emitted before the Vue shell registered listeners
+/// (for example, the ready-environment auto-start path during native boot).
+#[tauri::command]
+pub fn console_take_pending_webui(app: AppHandle) -> Option<String> {
+    app.state::<crate::webui_embed::WebuiEmbedState>()
+        .take_frame_url()
+}
+
+/// Close the retained research frame when the persistent rail enters a console page.
+#[tauri::command]
+pub fn console_close_webui(app: AppHandle) {
+    crate::webui_embed::return_to_console(&app);
 }
 
 /// 在系统默认浏览器打开 WebUI(次要入口;主入口为主窗口内嵌导航)。
@@ -1397,7 +1416,9 @@ pub async fn console_clear_venv(
         clear_venv_dir(&layout)
     })
     .await
-    .map_err(|e| format!("clear environment task join: {e}"))?
+    .map_err(|e| format!("clear environment task join: {e}"))??;
+    crate::webui_embed::return_to_console(&app);
+    Ok(())
 }
 
 #[allow(dead_code)]

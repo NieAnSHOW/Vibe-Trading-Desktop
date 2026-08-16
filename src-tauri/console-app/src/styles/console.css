@@ -802,7 +802,7 @@ body:has(> #app > .shell-content--onboarding) {
 }
 
 /* 登录页同样全屏展开(左右双栏门面),但保留自身 18px 呼吸边距 */
-body:has(> #app > .shell-content > .login-page) {
+body:has(> #app > .shell-content > [data-test="console-surface"] > .login-page) {
   display: block;
 }
 

@@ -77,4 +77,23 @@ describe("useDarkMode", () => {
     expect(result.current.dark).toBe(true);
     expect(getDesktopThemeMode()).toBe("dark");
   });
+
+  it("accepts theme updates from the retained desktop shell frame", async () => {
+    window.history.replaceState(null, "", "?desktop=1&shell=frame&theme=light");
+    initDesktopShell();
+    const { result } = renderHook(() => useDarkMode());
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          source: window,
+          data: { type: "vibe-shell:theme", dark: true, color: "blue" },
+        }),
+      );
+    });
+
+    expect(result.current.dark).toBe(true);
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(document.documentElement.dataset.brand).toBe("blue");
+  });
 });

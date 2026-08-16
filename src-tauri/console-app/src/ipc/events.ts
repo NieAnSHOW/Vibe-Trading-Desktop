@@ -12,6 +12,12 @@ export const onBootstrapExit = (cb: (code: number) => void): Promise<UnlistenFn>
 export const onServiceStarted = (cb: (port: number) => void): Promise<UnlistenFn> =>
   listen<number>("service://started", (ev) => cb(ev.payload));
 
+export const onWebuiOpen = (cb: (url: string) => void): Promise<UnlistenFn> =>
+  listen<string>("webui://open", (ev) => cb(ev.payload));
+
+export const onWebuiClose = (cb: () => void): Promise<UnlistenFn> =>
+  listen("webui://close", () => cb());
+
 export const onQuitRequested = (
   cb: (payload: { installing?: boolean } | unknown) => void,
 ): Promise<UnlistenFn> =>

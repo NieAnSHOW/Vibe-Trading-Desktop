@@ -30,7 +30,6 @@ import {
   type LLMSettings,
 } from "@/lib/api";
 import { getApiAuthKey, setApiAuthKey } from "@/lib/apiAuth";
-import { QVerisSettings } from "@/components/settings/QVerisSettings"; // QVERIS-INTEGRATION
 import { RuntimeStatus } from "@/components/settings/RuntimeStatus";
 
 interface LLMFormState {
@@ -475,8 +474,6 @@ export function Settings() {
           </p>
         </div>
         {localApiAccessSection}
-        {/* QVERIS-INTEGRATION */}
-        <QVerisSettings />
         <div className="rounded-lg border bg-card p-5 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-base font-semibold">
@@ -565,7 +562,7 @@ export function Settings() {
       </div>
 
       {/* {localApiAccessSection} */}
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)]">
+      <div className="grid gap-1">
         <div className="grid content-start gap-3">
           <form onSubmit={submit} className="grid gap-3">
             <section className="rounded-lg border bg-card p-4 shadow-sm">
@@ -850,47 +847,6 @@ export function Settings() {
             </div>
           </form>
         </div>
-
-        <aside className="grid content-start gap-3 [&>section>form]:grid-cols-1">
-          {/* QVERIS-INTEGRATION */}
-          <QVerisSettings />
-
-          {/* Usage data consent */}
-          <div className="rounded-lg border bg-card p-4 shadow-sm">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-base font-semibold">
-                {i18n.t("settings.usageData.title")}
-              </h2>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={usageDataOn}
-                onClick={() => toggleUsageData(!usageDataOn)}
-                className={`relative h-6 w-11 rounded-full transition ${usageDataOn ? "bg-primary" : "bg-muted"}`}
-              >
-                <span
-                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${usageDataOn ? "left-[22px]" : "left-0.5"}`}
-                />
-              </button>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {i18n.t("settings.usageData.description")}
-            </p>
-            {/* <button
-              type="button"
-              onClick={handleTestUpload}
-              disabled={flushing}
-              className="mt-3 inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {flushing ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Upload className="h-3.5 w-3.5" />
-              )}
-              测试上传埋点数据
-            </button> */}
-          </div>
-        </aside>
       </div>
 
       {/* IM channels */}

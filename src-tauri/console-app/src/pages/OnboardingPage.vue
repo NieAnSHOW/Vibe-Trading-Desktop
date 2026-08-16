@@ -168,7 +168,7 @@ function onStartupAnimationEnd() {
   >
     <section class="onboarding-stage">
       <img class="onboarding-logo" alt="Trading Worker" :src="logoPng" />
-      <p class="onboarding-status">应用启动中</p>
+      <p class="onboarding-status">{{ needsRepair ? '请先点击安装环境' : '应用启动中...' }} </p>
       <p v-show="displayError" id="err" class="onboarding-error" role="alert">{{ displayError }}</p>
       <AppButton
         v-if="needsRepair"

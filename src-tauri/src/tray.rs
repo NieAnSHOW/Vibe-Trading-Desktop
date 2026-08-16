@@ -49,8 +49,7 @@ pub fn show_main_window(app: &AppHandle) {
 }
 
 /// 读取当前运行态,执行托盘「退出」:空闲直接 exit,否则唤回窗口 + emit 让前端确认。
-/// 嵌入态(主窗口停在 WebUI,控制台页已被替换)下事件无人监听——先带回
-/// 控制台并挂起确认标记,由 main.rs 的 on_page_load 在页面加载完成后补发。
+/// 控制台文档始终存在,因此嵌入研究页时先隐藏 iframe 再直接发确认事件。
 fn handle_quit(app: &AppHandle) {
     let service_running = app.state::<SharedChild>().lock().unwrap().is_some();
     let installing = app.state::<InstallingFlag>().0.load(Ordering::SeqCst);
@@ -62,20 +61,15 @@ fn handle_quit(app: &AppHandle) {
         QuitDecision::ExitNow => app.exit(0),
         QuitDecision::ConfirmFirst => {
             if embedded {
-                // 嵌入态:控制台页已被 WebUI 替换,事件无人监听。先带回控制台
-                // 并挂起确认标记,on_page_load 在页面加载完成后补发。
-                app.state::<crate::webui_embed::WebuiEmbedState>()
-                    .set_quit_pending();
                 crate::webui_embed::return_to_console(app);
-            } else {
-                let _ = app.emit(
-                    QUIT_REQUESTED_EVENT,
-                    serde_json::json!({
-                        "service_running": service_running,
-                        "installing": installing,
-                    }),
-                );
             }
+            let _ = app.emit(
+                QUIT_REQUESTED_EVENT,
+                serde_json::json!({
+                    "service_running": service_running,
+                    "installing": installing,
+                }),
+            );
             show_main_window(app); // 确认框须在可见窗口里显示
         }
     }

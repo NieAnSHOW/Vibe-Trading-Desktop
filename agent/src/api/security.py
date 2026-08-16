@@ -59,6 +59,11 @@ _SSE_TICKET_EXPIRIES: Deque[tuple[float, str]] = deque()
 _SSE_TICKETS_LOCK = threading.Lock()
 _QUERY_SECRET_RE = re.compile(r"([?&](?:api_key|ticket|token|access_token)=)[^&#\s\"]*", re.IGNORECASE)
 
+# The desktop console is a Tauri document.  In production it is served from a
+# Tauri origin; during `cargo tauri dev` it is served from this local Vite
+# origin.  These are the only ancestors allowed to host the desktop WebUI.
+_DESKTOP_FRAME_ANCESTORS = "tauri://localhost http://tauri.localhost https://tauri.localhost http://localhost:5173"
+
 
 def _redact_access_log_query(value: str) -> str:
     """Remove illegal news API queries and known credential query values."""
@@ -153,8 +158,29 @@ async def _add_security_response_headers(request: Request, call_next):
     response.headers.setdefault("Permissions-Policy", "camera=(), geolocation=(), microphone=()")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
-    response.headers.setdefault("X-Frame-Options", "DENY")
+    if _is_desktop_shell_frame_request(request):
+        # X-Frame-Options cannot express a Tauri parent allowlist.  For the
+        # one explicitly-marked local desktop frame, replace it with enforced
+        # CSP `frame-ancestors`; ordinary browser responses remain DENY.
+        if "X-Frame-Options" in response.headers:
+            del response.headers["X-Frame-Options"]
+        response.headers["Content-Security-Policy"] = (
+            f"frame-ancestors {_DESKTOP_FRAME_ANCESTORS}"
+        )
+    else:
+        response.headers.setdefault("X-Frame-Options", "DENY")
     return response
+
+
+def _is_desktop_shell_frame_request(request: Request) -> bool:
+    """Return whether this is the trusted local desktop iframe document load."""
+    params = request.query_params
+    return (
+        params.get("desktop") == "1"
+        and params.get("shell") == "frame"
+        and _is_local_client(request)
+        and _is_allowed_loopback_host(request.headers.get("host", ""))
+    )
 
 
 class _UvicornQuerySecretRedactionFilter(logging.Filter):

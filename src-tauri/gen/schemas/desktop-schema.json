@@ -219,6 +219,12 @@
           "markdownDescription": "Enables the console_clear_venv command without any pre-configured scope."
         },
         {
+          "description": "Enables the console_close_webui command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-close-webui",
+          "markdownDescription": "Enables the console_close_webui command without any pre-configured scope."
+        },
+        {
           "description": "Enables the console_download_update command without any pre-configured scope.",
           "type": "string",
           "const": "allow-console-download-update",
@@ -381,6 +387,12 @@
           "markdownDescription": "Enables the console_stop_service command without any pre-configured scope."
         },
         {
+          "description": "Enables the console_take_pending_webui command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-take-pending-webui",
+          "markdownDescription": "Enables the console_take_pending_webui command without any pre-configured scope."
+        },
+        {
           "description": "Enables the console_uninstall_legacy_app command without any pre-configured scope.",
           "type": "string",
           "const": "allow-console-uninstall-legacy-app",
@@ -433,6 +445,12 @@
           "type": "string",
           "const": "deny-console-clear-venv",
           "markdownDescription": "Denies the console_clear_venv command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_close_webui command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-close-webui",
+          "markdownDescription": "Denies the console_close_webui command without any pre-configured scope."
         },
         {
           "description": "Denies the console_download_update command without any pre-configured scope.",
@@ -595,6 +613,12 @@
           "type": "string",
           "const": "deny-console-stop-service",
           "markdownDescription": "Denies the console_stop_service command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_take_pending_webui command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-take-pending-webui",
+          "markdownDescription": "Denies the console_take_pending_webui command without any pre-configured scope."
         },
         {
           "description": "Denies the console_uninstall_legacy_app command without any pre-configured scope.",

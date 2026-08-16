@@ -5,7 +5,13 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: (...args: unknown[]) => listenMock(...args),
 }));
 
-import { onBootstrapEvent, onServiceStarted, onQuitRequested } from "../events";
+import {
+  onBootstrapEvent,
+  onServiceStarted,
+  onQuitRequested,
+  onWebuiClose,
+  onWebuiOpen,
+} from "../events";
 
 describe("ipc/events", () => {
   it("onBootstrapEvent 注册 bootstrap://event 并返回 unlisten", async () => {
@@ -27,5 +33,15 @@ describe("ipc/events", () => {
     listenMock.mockResolvedValue(vi.fn());
     await onQuitRequested(vi.fn());
     expect(listenMock).toHaveBeenCalledWith("app://quit-requested", expect.any(Function));
+  });
+
+  it("registers persistent-shell WebUI visibility events", async () => {
+    listenMock.mockResolvedValue(vi.fn());
+
+    await onWebuiOpen(vi.fn());
+    await onWebuiClose(vi.fn());
+
+    expect(listenMock).toHaveBeenCalledWith("webui://open", expect.any(Function));
+    expect(listenMock).toHaveBeenCalledWith("webui://close", expect.any(Function));
   });
 });
