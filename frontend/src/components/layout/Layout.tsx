@@ -326,7 +326,7 @@ export function Layout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      {/* 桌面壳层级导航(账户/环境/研究/设置),仅内嵌模式渲染 */}
+      {/* 桌面壳层级导航(账户/研究/设置),仅内嵌模式渲染 */}
       {isDesktopEmbedded() && (
         <DesktopShellRail
           dark={dark}

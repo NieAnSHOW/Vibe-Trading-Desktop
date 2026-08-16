@@ -38,7 +38,6 @@
     "rail": {
       "section": "Desktop",
       "account": "Account",
-      "environment": "Runtime",
       "research": "Research"
     },
     "correlation": "Correlation Matrix",

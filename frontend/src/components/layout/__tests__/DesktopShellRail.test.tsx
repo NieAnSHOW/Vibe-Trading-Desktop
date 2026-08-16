@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   returnToConsoleWithTransition: vi.fn(),
+  track: vi.fn(),
   toggleTheme: vi.fn(),
 }));
 
@@ -15,7 +16,7 @@ vi.mock("@/lib/desktopShell", () => ({
   returnToConsoleWithTransition: mocks.returnToConsoleWithTransition,
 }));
 
-vi.mock("@/lib/telemetry", () => ({ track: vi.fn() }));
+vi.mock("@/lib/telemetry", () => ({ track: mocks.track }));
 
 import { DesktopShellRail } from "../DesktopShellRail";
 
@@ -34,6 +35,17 @@ describe("DesktopShellRail", () => {
     await userEvent.click(screen.getByRole("button", { name: "layout.rail.account" }));
 
     expect(mocks.returnToConsoleWithTransition).toHaveBeenCalledWith("profile");
+  });
+
+  it("does not expose environment navigation in the embedded research rail", () => {
+    renderRail();
+
+    expect(screen.queryByRole("button", { name: /environment/i })).not.toBeInTheDocument();
+    expect(mocks.track).not.toHaveBeenCalledWith(
+      "feature_use",
+      { nav_target: "desktop-environment" },
+      { name: "desktop_rail" },
+    );
   });
 
   it("places the theme toggle beside settings at the bottom of the rail", async () => {
