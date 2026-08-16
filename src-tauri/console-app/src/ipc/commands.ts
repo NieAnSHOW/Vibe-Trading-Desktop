@@ -53,9 +53,6 @@ export const consoleRepairEnvironment = (): Promise<void> =>
 export const consoleGetSettings = (): Promise<Settings> =>
   invoke<Settings>("console_get_settings");
 
-export const consoleSetAutostart = (enabled: boolean): Promise<void> =>
-  invoke<void>("console_set_autostart", { enabled });
-
 export const consoleSetThemeMode = (mode: Settings["theme_mode"]): Promise<void> =>
   invoke<void>("console_set_theme_mode", { mode });
 

@@ -6,15 +6,12 @@ import type { EnvironmentReport } from "../../ipc/types";
 
 const mocks = vi.hoisted(() => ({
   consoleGetSettings: vi.fn<() => Promise<{
-    autostart_service: boolean;
     theme_mode: "system" | "light" | "dark";
     theme_color: "teal" | "blue" | "purple" | "pink" | "orange" | "green";
   }>>(async () => ({
-    autostart_service: false,
     theme_mode: "system" as const,
     theme_color: "teal" as const,
   })),
-  consoleSetAutostart: vi.fn(async () => undefined),
   consoleSetThemeMode: vi.fn(async () => undefined),
   consoleSetThemeColor: vi.fn(async () => undefined),
   consoleStatus: vi.fn(async () => ({
@@ -39,7 +36,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../../ipc/commands", () => ({
   consoleGetSettings: mocks.consoleGetSettings,
-  consoleSetAutostart: mocks.consoleSetAutostart,
   consoleSetThemeMode: mocks.consoleSetThemeMode,
   consoleSetThemeColor: mocks.consoleSetThemeColor,
   consoleStatus: mocks.consoleStatus,
@@ -85,36 +81,15 @@ beforeEach(async () => {
 });
 
 describe("SettingsPage", () => {
-  it("loads the autostart setting and renders the current version", async () => {
+  it("hides startup behavior while keeping maintenance controls available", async () => {
     const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
     await flushPromises();
 
     expect(mocks.consoleGetSettings).toHaveBeenCalledOnce();
-    expect(wrapper.get('[role="switch"]').attributes("aria-checked")).toBe("false");
+    expect(wrapper.find('[aria-label="启动行为"]').exists()).toBe(false);
+    expect(wrapper.get('[aria-label="维护"]')).toBeTruthy();
+    expect(wrapper.get('[data-test="check-environment-action"]')).toBeTruthy();
     expect(wrapper.text()).toContain("v0.");
-  });
-
-  it("turns the switch on and persists the change", async () => {
-    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
-    await flushPromises();
-
-    await wrapper.get('[role="switch"]').trigger("click");
-    await flushPromises();
-
-    expect(mocks.consoleSetAutostart).toHaveBeenCalledWith(true);
-    expect(wrapper.get('[role="switch"]').attributes("aria-checked")).toBe("true");
-  });
-
-  it("rolls the switch back when saving fails", async () => {
-    mocks.consoleSetAutostart.mockRejectedValueOnce(new Error("io error"));
-    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
-    await flushPromises();
-
-    await wrapper.get('[role="switch"]').trigger("click");
-    await flushPromises();
-
-    expect(wrapper.get('[role="switch"]').attributes("aria-checked")).toBe("false");
-    expect(wrapper.text()).toContain("保存失败");
   });
 
   it("renders the maintenance actions migrated from the console", async () => {
@@ -392,7 +367,6 @@ describe("SettingsPage appearance", () => {
 
   it("loads persisted theme preferences", async () => {
     mocks.consoleGetSettings.mockResolvedValueOnce({
-      autostart_service: false,
       theme_mode: "light",
       theme_color: "green",
     });

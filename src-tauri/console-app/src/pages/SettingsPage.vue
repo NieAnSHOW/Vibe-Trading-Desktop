@@ -16,7 +16,6 @@ import {
 } from "../components/Rail.vue";
 import {
   consoleGetSettings,
-  consoleSetAutostart,
   consoleSetThemeColor,
   consoleSetThemeMode,
   consoleOpenLogs,
@@ -36,8 +35,6 @@ const env = useEnvStore();
 const service = useServiceStore();
 const { serviceRunning } = storeToRefs(env);
 
-const autostart = ref(false);
-const saving = ref(false);
 const notice = ref("");
 const loadError = ref("");
 
@@ -83,7 +80,6 @@ async function load() {
   loadError.value = "";
   try {
     const settings = await consoleGetSettings();
-    autostart.value = settings.autostart_service;
     if (settings.theme_mode === "system" || settings.theme_mode === "light" || settings.theme_mode === "dark") {
       themeMode.value = settings.theme_mode;
     }
@@ -92,23 +88,6 @@ async function load() {
     }
   } catch (error) {
     loadError.value = String(error);
-  }
-}
-
-async function onAutostartChange() {
-  if (saving.value) return;
-  saving.value = true;
-  notice.value = "";
-  const next = !autostart.value;
-  autostart.value = next; // 乐观更新,失败时回滚
-  try {
-    await consoleSetAutostart(next);
-    notice.value = next ? "已开启：下次启动应用时将自动启动服务" : "已关闭：启动应用时不再自动启动服务";
-  } catch (error) {
-    autostart.value = !next; // 保存失败回滚开关状态
-    notice.value = `保存失败：${String(error)}`;
-  } finally {
-    saving.value = false;
   }
 }
 
@@ -274,27 +253,6 @@ onUnmounted(() => {
 
 <template>
   <main class="settings">
-    <section class="settings-card" aria-label="启动行为">
-      <h1 class="settings-title">启动行为</h1>
-      <div class="settings-row">
-        <div class="settings-row__text">
-          <p class="settings-row__name">启动时自动启动服务</p>
-          <p class="settings-row__desc">
-            打开应用时若依赖已就绪，自动在后台拉起后端服务，免去手动点击「启动服务」。
-          </p>
-        </div>
-        <button type="button" role="switch" :aria-checked="autostart" :class="['switch', { on: autostart }]"
-          :disabled="saving" @click="onAutostartChange">
-          <span class="switch__thumb" aria-hidden="true"></span>
-          <span class="switch__label">{{ autostart ? "已开启" : "已关闭" }}</span>
-        </button>
-      </div>
-      <p v-if="loadError" class="settings-notice settings-notice--bad">
-        设置加载失败：{{ loadError }}
-      </p>
-      <p v-else-if="notice" class="settings-notice">{{ notice }}</p>
-    </section>
-
     <section class="settings-card" aria-label="外观">
       <h1 class="settings-title">外观</h1>
       <div class="settings-row">
@@ -337,6 +295,10 @@ onUnmounted(() => {
           ></button>
         </div>
       </div>
+      <p v-if="loadError" class="settings-notice settings-notice--bad">
+        设置加载失败：{{ loadError }}
+      </p>
+      <p v-else-if="notice" class="settings-notice">{{ notice }}</p>
     </section>
 
     <section class="settings-card" aria-label="维护">
