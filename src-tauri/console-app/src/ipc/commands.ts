@@ -56,6 +56,12 @@ export const consoleGetSettings = (): Promise<Settings> =>
 export const consoleSetAutostart = (enabled: boolean): Promise<void> =>
   invoke<void>("console_set_autostart", { enabled });
 
+export const consoleSetThemeMode = (mode: Settings["theme_mode"]): Promise<void> =>
+  invoke<void>("console_set_theme_mode", { mode });
+
+export const consoleSetThemeColor = (color: Settings["theme_color"]): Promise<void> =>
+  invoke<void>("console_set_theme_color", { color });
+
 export const consoleStartChannels = (port: number): Promise<string> =>
   invoke<string>("console_start_channels", { port });
 

@@ -5,8 +5,18 @@ import { createPinia, setActivePinia } from "pinia";
 import type { EnvironmentReport } from "../../ipc/types";
 
 const mocks = vi.hoisted(() => ({
-  consoleGetSettings: vi.fn(async () => ({ autostart_service: false })),
+  consoleGetSettings: vi.fn<() => Promise<{
+    autostart_service: boolean;
+    theme_mode: "system" | "light" | "dark";
+    theme_color: "teal" | "blue" | "purple" | "pink" | "orange" | "green";
+  }>>(async () => ({
+    autostart_service: false,
+    theme_mode: "system" as const,
+    theme_color: "teal" as const,
+  })),
   consoleSetAutostart: vi.fn(async () => undefined),
+  consoleSetThemeMode: vi.fn(async () => undefined),
+  consoleSetThemeColor: vi.fn(async () => undefined),
   consoleStatus: vi.fn(async () => ({
     env: "ready" as const,
     service_running: false,
@@ -30,6 +40,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../../ipc/commands", () => ({
   consoleGetSettings: mocks.consoleGetSettings,
   consoleSetAutostart: mocks.consoleSetAutostart,
+  consoleSetThemeMode: mocks.consoleSetThemeMode,
+  consoleSetThemeColor: mocks.consoleSetThemeColor,
   consoleStatus: mocks.consoleStatus,
   consoleOpenLogs: mocks.consoleOpenLogs,
   consoleClearLogs: mocks.consoleClearLogs,
@@ -326,5 +338,90 @@ describe("SettingsPage", () => {
     expect(mocks.consoleStopService.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.consoleClearVenv.mock.invocationCallOrder[0],
     );
+  });
+});
+
+describe("SettingsPage appearance", () => {
+  it("defaults the theme mode to system and shows all choices", async () => {
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    const modeButtons = wrapper.findAll('[data-test="theme-mode"] button');
+    expect(modeButtons.map((b) => b.attributes("data-mode"))).toEqual([
+      "system",
+      "light",
+      "dark",
+    ]);
+    expect(modeButtons[0].classes()).toContain("active");
+    expect(wrapper.text()).toContain("跟随系统");
+  });
+
+  it("persists a selected theme mode and notifies the theme engine", async () => {
+    const events: string[] = [];
+    window.addEventListener("vibe:theme-mode", (e) => {
+      events.push(String((e as CustomEvent).detail));
+    });
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper
+      .get('[data-test="theme-mode"] button[data-mode="dark"]')
+      .trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleSetThemeMode).toHaveBeenCalledWith("dark");
+    expect(events).toEqual(["dark"]);
+  });
+
+  it("persists a selected theme color and notifies the theme engine", async () => {
+    const events: string[] = [];
+    window.addEventListener("vibe:theme-color", (e) => {
+      events.push(String((e as CustomEvent).detail));
+    });
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper
+      .get('[data-test="theme-color"] button[data-color="blue"]')
+      .trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleSetThemeColor).toHaveBeenCalledWith("blue");
+    expect(events).toEqual(["blue"]);
+  });
+
+  it("loads persisted theme preferences", async () => {
+    mocks.consoleGetSettings.mockResolvedValueOnce({
+      autostart_service: false,
+      theme_mode: "light",
+      theme_color: "green",
+    });
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(
+      wrapper
+        .get('[data-test="theme-mode"] button[data-mode="light"]')
+        .classes(),
+    ).toContain("active");
+    expect(
+      wrapper
+        .get('[data-test="theme-color"] button[data-color="green"]')
+        .classes(),
+    ).toContain("active");
+  });
+
+  it("keeps the selected mode in sync when the rail changes it", async () => {
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    window.dispatchEvent(new CustomEvent("vibe:theme-mode", { detail: "dark" }));
+    await flushPromises();
+
+    expect(
+      wrapper
+        .get('[data-test="theme-mode"] button[data-mode="dark"]')
+        .classes(),
+    ).toContain("active");
   });
 });

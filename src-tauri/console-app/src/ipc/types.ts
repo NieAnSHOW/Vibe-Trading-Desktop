@@ -20,6 +20,8 @@ export interface EnvironmentReport {
 // 镜像 src-tauri/src/settings.rs 的 Settings。
 export interface Settings {
   autostart_service: boolean;
+  theme_mode: "system" | "light" | "dark";
+  theme_color: "teal" | "blue" | "purple" | "pink" | "orange" | "green";
 }
 
 export type BootstrapStage =

@@ -160,7 +160,8 @@ describe("ConsolePage", () => {
 
     expect(wrapper.get(".console-workspace").classes()).toContain("console-workspace--guest");
     expect(wrapper.find(".member-panel").exists()).toBe(false);
-    expect(wrapper.text()).toContain("登录使用会员服务");
+    expect(wrapper.text()).not.toContain("登录使用会员服务");
+    expect(wrapper.find('[data-test="settings-entry"]').exists()).toBe(false);
     expect(wrapper.get('[data-test="primary-service-action"]').text()).toBe("启动研究服务");
   });
 
@@ -195,27 +196,16 @@ describe("ConsolePage", () => {
     expect(wrapper.text()).not.toContain("清空");
   });
 
-  it("shows a remembered token-only session as logged in", async () => {
+  it("shows a remembered token-only session in the member panel without duplicate header entries", async () => {
     const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
 
     await flushPromises();
 
     expect(wrapper.text()).toContain("已登录");
-    expect(wrapper.get('[data-test="account-profile-entry"]').attributes("aria-label")).toContain("个人中心");
-    await wrapper.get('[data-test="account-profile-entry"]').trigger("click");
-    await flushPromises();
-    expect(router.currentRoute.value.path).toBe("/profile");
+    expect(wrapper.find('[data-test="account-profile-entry"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="settings-entry"]').exists()).toBe(false);
+    expect(wrapper.get(".member-profile-link").text()).toContain("已登录");
     expect(wrapper.findAll("button").some((button) => button.text() === "退出登录")).toBe(false);
-  });
-
-  it("opens settings from the application header", async () => {
-    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
-    await flushPromises();
-
-    await wrapper.get('[data-test="settings-entry"]').trigger("click");
-    await flushPromises();
-
-    expect(router.currentRoute.value.path).toBe("/settings");
   });
 
   it("shows the membership level returned with the authenticated profile", async () => {
@@ -243,7 +233,7 @@ describe("ConsolePage", () => {
 
     expect(wrapper.text()).toContain("Pro 会员");
     expect(wrapper.text()).toContain("有效期至 2026-12-31 23:59:59");
-    expect(wrapper.get(".member-tier").classes()).toContain("member-tier--pro");
+    expect(wrapper.get(".member-profile-link").text()).toContain("Pro 会员");
   });
 
   it("提示会员权益变化并允许刷新用量", async () => {

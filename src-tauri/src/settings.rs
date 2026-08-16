@@ -11,12 +11,28 @@ pub struct Settings {
     /// 启动应用时是否自动拉起后端服务。
     #[serde(default)]
     pub autostart_service: bool,
+    /// 应用主题模式: system / light / dark。
+    #[serde(default = "default_theme_mode")]
+    pub theme_mode: String,
+    /// 应用主题色: teal / blue / purple / pink / orange / green。
+    #[serde(default = "default_theme_color")]
+    pub theme_color: String,
+}
+
+fn default_theme_mode() -> String {
+    "system".to_string()
+}
+
+fn default_theme_color() -> String {
+    "teal".to_string()
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
             autostart_service: false,
+            theme_mode: default_theme_mode(),
+            theme_color: default_theme_color(),
         }
     }
 }
@@ -52,6 +68,8 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let settings = load(tmp.path());
         assert!(!settings.autostart_service);
+        assert_eq!(settings.theme_mode, "system");
+        assert_eq!(settings.theme_color, "teal");
     }
 
     #[test]
@@ -69,8 +87,18 @@ mod tests {
     #[test]
     fn save_roundtrips_through_disk() {
         let tmp = tempfile::tempdir().unwrap();
-        save(tmp.path(), &Settings { autostart_service: true }).unwrap();
+        save(
+            tmp.path(),
+            &Settings {
+                autostart_service: true,
+                theme_mode: "dark".to_string(),
+                theme_color: "blue".to_string(),
+            },
+        )
+        .unwrap();
         assert!(load(tmp.path()).autostart_service);
+        assert_eq!(load(tmp.path()).theme_mode, "dark");
+        assert_eq!(load(tmp.path()).theme_color, "blue");
         // 再次保存会覆盖,且目录已存在。
         save(tmp.path(), &Settings::default()).unwrap();
         assert!(!load(tmp.path()).autostart_service);

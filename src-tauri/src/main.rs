@@ -17,10 +17,13 @@ use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 
 type SharedChild = console::SharedChild;
+type SharedPort = console::SharedPort;
 
 fn main() {
     let shared: SharedChild = Arc::new(Mutex::new(None));
     let shared_setup = shared.clone();
+    let service_port: SharedPort = Arc::new(Mutex::new(None));
+    let service_port_setup = service_port.clone();
     let auth_state = auth::AuthState(std::sync::Arc::new(std::sync::Mutex::new(None)));
     let runtime_operation = console::RuntimeOperationLock::new();
     let runtime_operation_setup = runtime_operation.clone();
@@ -60,6 +63,8 @@ fn main() {
             console::console_repair_environment,
             console::console_get_settings,
             console::console_set_autostart,
+            console::console_set_theme_mode,
+            console::console_set_theme_color,
             console::console_login_captcha,
             console::console_login_send_sms,
             console::console_login_by_phone,
@@ -136,6 +141,7 @@ fn main() {
             }
 
             let shared = shared_setup.clone();
+            let service_port = service_port_setup.clone();
             let auth_state = auth_state.clone();
             let runtime_operation = runtime_operation_setup.clone();
             std::thread::spawn(move || {
@@ -144,6 +150,7 @@ fn main() {
                     &win,
                     &res,
                     &shared,
+                    &service_port,
                     &auth_state,
                     &runtime_operation,
                 ) {
@@ -157,6 +164,7 @@ fn main() {
             Ok(())
         })
         .manage(shared.clone())
+        .manage(service_port)
         .manage(runtime_operation)
         .build(tauri::generate_context!())
         .expect("build tauri app")
@@ -220,6 +228,7 @@ fn boot(
     win: &tauri::WebviewWindow,
     res: &resources::Resources,
     shared: &SharedChild,
+    service_port: &SharedPort,
     auth_state: &auth::AuthState,
     runtime_operation: &console::RuntimeOperationLock,
 ) -> Result<(), String> {
@@ -238,13 +247,22 @@ fn boot(
         let app = app.clone();
         let win = win.clone();
         let shared = shared.clone();
+        let service_port = service_port.clone();
         let auth_state = auth_state.clone();
         let runtime_operation = runtime_operation.clone();
         tauri::async_runtime::spawn(async move {
             let _ = win.eval(
                 "var e=document.getElementById('err');if(e)e.textContent='正在自动启动服务...';",
             );
-            match console::start_service_inner(&app, &shared, &auth_state, &runtime_operation).await {
+            match console::start_service_inner(
+                &app,
+                &shared,
+                &service_port,
+                &auth_state,
+                &runtime_operation,
+            )
+            .await
+            {
                 Ok(port) => {
                     let _ = app.emit("service://started", port);
                     // 自动启动成功:主窗口直接进入 WebUI,开机即完整产品形态。

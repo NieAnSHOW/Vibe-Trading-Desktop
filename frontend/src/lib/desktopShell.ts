@@ -9,6 +9,16 @@
 
 const EMBEDDED_KEY = "vibe.desktop.embedded";
 const CONSOLE_URL_KEY = "vibe.desktop.consoleUrl";
+const THEME_MODE_KEY = "vibe.desktop.themeMode";
+const THEME_COLOR_KEY = "vibe.desktop.themeColor";
+
+export type DesktopThemeMode = "system" | "light" | "dark";
+
+const THEME_COLORS = new Set(["teal", "blue", "purple", "pink", "orange", "green"]);
+
+function isDesktopThemeMode(value: string | null): value is DesktopThemeMode {
+  return value === "system" || value === "light" || value === "dark";
+}
 
 /** 控制台地址只允许这些 scheme,防御异常参数导致的任意导航。 */
 const ALLOWED_SCHEMES = ["http:", "https:", "tauri:"];
@@ -24,8 +34,51 @@ export function initDesktopShell(): void {
     if (consoleUrl) {
       window.sessionStorage.setItem(CONSOLE_URL_KEY, consoleUrl);
     }
+    const themeMode = params.get("theme");
+    window.sessionStorage.setItem(
+      THEME_MODE_KEY,
+      isDesktopThemeMode(themeMode) ? themeMode : "system",
+    );
+    const themeColor = params.get("theme_color");
+    if (THEME_COLORS.has(themeColor ?? "")) {
+      window.sessionStorage.setItem(THEME_COLOR_KEY, themeColor!);
+    } else {
+      window.sessionStorage.removeItem(THEME_COLOR_KEY);
+    }
   } catch {
     // sessionStorage 不可用(隐私模式极端情况)时静默降级:入口按 URL 探测。
+  }
+}
+
+/** 读取桌面壳传入的主题模式;普通浏览器始终返回系统模式。 */
+export function getDesktopThemeMode(): DesktopThemeMode {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("desktop") === "1") {
+      const theme = params.get("theme");
+      if (isDesktopThemeMode(theme)) return theme;
+    }
+    if (window.sessionStorage.getItem(EMBEDDED_KEY) !== "1") return "system";
+    const saved = window.sessionStorage.getItem(THEME_MODE_KEY);
+    return isDesktopThemeMode(saved) ? saved : "system";
+  } catch {
+    return "system";
+  }
+}
+
+/** 读取桌面壳传入的主题色;普通浏览器不强制主题色。 */
+export function getDesktopThemeColor(): string | null {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("desktop") === "1") {
+      const color = params.get("theme_color");
+      if (THEME_COLORS.has(color ?? "")) return color;
+    }
+    if (window.sessionStorage.getItem(EMBEDDED_KEY) !== "1") return null;
+    const saved = window.sessionStorage.getItem(THEME_COLOR_KEY);
+    return THEME_COLORS.has(saved ?? "") ? saved : null;
+  } catch {
+    return null;
   }
 }
 
@@ -53,7 +106,7 @@ export function isShellConsoleUrl(url: string): boolean {
 }
 
 /** 桌面壳 rail 的目标页面,对应控制台 hash 路由。 */
-export type ShellConsolePage = "login" | "console" | "settings";
+export type ShellConsolePage = "login" | "profile" | "console" | "settings";
 
 /** 读取已保存的控制台地址(无效或缺失返回 null)。 */
 export function getShellConsoleUrl(): string | null {

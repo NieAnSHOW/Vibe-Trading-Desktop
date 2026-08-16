@@ -59,12 +59,19 @@ impl WebuiEmbedState {
 /// `console_url` 是导航前的控制台地址,随查询参数带给 WebUI——前端侧的
 /// 「控制台」导航入口据此 location.replace 回壳内页面,无需 Tauri IPC
 /// (远程页面调应用命令需要 app ACL manifest,成本高且难以离线验证)。
-pub fn webui_url(port: u16, console_url: Option<&tauri::Url>) -> Result<tauri::Url, String> {
+pub fn webui_url(
+    port: u16,
+    console_url: Option<&tauri::Url>,
+    theme_mode: &str,
+    theme_color: &str,
+) -> Result<tauri::Url, String> {
     let mut url = tauri::Url::parse(&format!("http://127.0.0.1:{port}/"))
         .map_err(|e| format!("invalid webui url: {e}"))?;
     {
         let mut pairs = url.query_pairs_mut();
         pairs.append_pair("desktop", "1");
+        pairs.append_pair("theme", theme_mode);
+        pairs.append_pair("theme_color", theme_color);
         if let Some(console) = console_url {
             pairs.append_pair("console", console.as_str());
         }
@@ -92,7 +99,19 @@ pub fn embed(app: &AppHandle, port: u16) -> Result<(), String> {
     } else {
         None
     };
-    let target = webui_url(port, console_url.as_ref())?;
+    let layout = crate::runtime_dir::Layout::from_home()?;
+    let settings = crate::settings::load(&layout.root);
+    let theme_mode = match settings.theme_mode.as_str() {
+        "light" | "dark" | "system" => settings.theme_mode.as_str(),
+        _ => "system",
+    };
+    let theme_color = match settings.theme_color.as_str() {
+        "teal" | "blue" | "purple" | "pink" | "orange" | "green" => {
+            settings.theme_color.as_str()
+        }
+        _ => "teal",
+    };
+    let target = webui_url(port, console_url.as_ref(), theme_mode, theme_color)?;
     win.navigate(target)
         .map_err(|e| format!("navigate to webui: {e}"))
 }
@@ -123,13 +142,13 @@ mod tests {
 
     #[test]
     fn webui_url_points_to_loopback_root() {
-        let url = webui_url(8899, None).expect("parse");
+        let url = webui_url(8899, None, "system", "teal").expect("parse");
         assert_eq!(url.scheme(), "http");
         assert_eq!(url.host_str(), Some("127.0.0.1"));
         assert_eq!(url.port(), Some(8899));
         assert_eq!(url.path(), "/");
         // desktop 标记始终携带:WebUI 侧据此显示「控制台」入口。
-        assert_eq!(url.query(), Some("desktop=1"));
+        assert_eq!(url.query(), Some("desktop=1&theme=system&theme_color=teal"));
     }
 
     #[test]
@@ -142,9 +161,11 @@ mod tests {
     #[test]
     fn webui_url_carries_encoded_console_url() {
         let console = tauri::Url::parse("tauri://localhost/index.html?x=1&y=2").unwrap();
-        let url = webui_url(9000, Some(&console)).expect("parse");
+        let url = webui_url(9000, Some(&console), "dark", "blue").expect("parse");
         let query: Vec<(String, String)> = url.query_pairs().into_owned().collect();
         assert!(query.contains(&("desktop".to_string(), "1".to_string())));
+        assert!(query.contains(&("theme".to_string(), "dark".to_string())));
+        assert!(query.contains(&("theme_color".to_string(), "blue".to_string())));
         // 控制台地址(含自身的查询串)必须完整往返,前端才能导航回壳内页面。
         assert!(query.contains(&("console".to_string(), console.to_string())));
     }

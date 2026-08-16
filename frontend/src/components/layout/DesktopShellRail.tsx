@@ -62,7 +62,7 @@ export function DesktopShellRail() {
       <RailButton
         label={t("layout.rail.account")}
         icon={UserRound}
-        onClick={() => go("login", "desktop-account")}
+        onClick={() => go("profile", "desktop-account")}
       />
       <RailButton
         label={t("layout.rail.environment")}

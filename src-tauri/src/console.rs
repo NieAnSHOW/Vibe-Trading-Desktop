@@ -25,6 +25,7 @@ use crate::auth::{self, AuthError, AuthState, Captcha, LoginRaw, UserInfo};
 use crate::runtime_dir::Layout;
 
 pub type SharedChild = Arc<Mutex<Option<Child>>>;
+pub type SharedPort = Arc<Mutex<Option<u16>>>;
 
 /// 依赖安装(bootstrap)进行中标志。托盘「退出」据此判断是否需要二次确认。
 pub struct InstallingFlag(pub Arc<AtomicBool>);
@@ -232,6 +233,19 @@ pub struct StatusReport {
     pub port: Option<u16>,
 }
 
+pub fn build_status_report(
+    env: EnvStatus,
+    service_running: bool,
+    port: Option<u16>,
+) -> StatusReport {
+    StatusReport {
+        env,
+        service_running,
+        // 仅在 sidecar 仍由本应用持有时返回端口,避免暴露失效地址。
+        port: service_running.then_some(port).flatten(),
+    }
+}
+
 /// 登录命令返回给前端的结构（不含 token）。
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -351,14 +365,14 @@ impl std::fmt::Display for ServiceStartError {
 
 /// 环境 + 服务状态快照,供控制台首屏与轮询。
 #[tauri::command]
-pub fn console_status(state: State<'_, SharedChild>) -> Result<StatusReport, String> {
+pub fn console_status(
+    state: State<'_, SharedChild>,
+    service_port: State<'_, SharedPort>,
+) -> Result<StatusReport, String> {
     let layout = Layout::from_home()?;
     let running = state.lock().unwrap().is_some();
-    Ok(StatusReport {
-        env: compute_env_status(&layout),
-        service_running: running,
-        port: None,
-    })
+    let port = *service_port.lock().unwrap();
+    Ok(build_status_report(compute_env_status(&layout), running, port))
 }
 
 /// 触发依赖 bootstrap:spawn `vibe-trading bootstrap --sse`,把 SSE 帧解析为
@@ -439,16 +453,18 @@ async fn bootstrap_inner(
 pub async fn console_start_service(
     app: AppHandle,
     state: State<'_, SharedChild>,
+    service_port: State<'_, SharedPort>,
     auth_state: State<'_, AuthState>,
     runtime_operation: State<'_, RuntimeOperationLock>,
 ) -> Result<u16, ServiceStartError> {
-    start_service_inner(&app, &state, &auth_state, &runtime_operation).await
+    start_service_inner(&app, &state, &service_port, &auth_state, &runtime_operation).await
 }
 
 /// 启动服务的纯逻辑（IPC 与启动自动启动共用）。成功后在 shared 中挂载子进程。
 pub async fn start_service_inner(
     app: &AppHandle,
     state: &SharedChild,
+    service_port: &SharedPort,
     auth_state: &AuthState,
     runtime_operation: &RuntimeOperationLock,
 ) -> Result<u16, ServiceStartError> {
@@ -571,6 +587,7 @@ pub async fn start_service_inner(
                 eprintln!("warn: cannot mkdir logs_dir: {e}");
             }
             crate::sidecar::drain_child_pipes(&mut child, &layout.logs_dir);
+            *service_port.lock().unwrap() = Some(port);
             shared.lock().unwrap().replace(child);
             // 崩溃守护:主窗口内嵌 WebUI 后控制台页已被替换,前端无法感知
             // sidecar 异常退出。后台轮询子进程,崩溃时回收句柄、广播
@@ -579,6 +596,7 @@ pub async fn start_service_inner(
             {
                 let app = app.clone();
                 let shared = shared.clone();
+                let service_port = service_port.clone();
                 let logs_dir = layout.logs_dir.clone();
                 std::thread::spawn(move || loop {
                     std::thread::sleep(std::time::Duration::from_secs(2));
@@ -591,6 +609,7 @@ pub async fn start_service_inner(
                         match child.try_wait() {
                             Ok(Some(_)) => {
                                 guard.take();
+                                *service_port.lock().unwrap() = None;
                                 true
                             }
                             Ok(None) => false,
@@ -676,6 +695,7 @@ pub fn console_check_environment(app: AppHandle) -> Result<EnvironmentReport, St
 pub async fn console_repair_environment(
     app: AppHandle,
     state: State<'_, SharedChild>,
+    service_port: State<'_, SharedPort>,
     installing: State<'_, InstallingFlag>,
     runtime_operation: State<'_, RuntimeOperationLock>,
 ) -> Result<(), String> {
@@ -686,10 +706,11 @@ pub async fn console_repair_environment(
     let resources = crate::resources::Resources::resolve(&app)
         .map_err(|e| format!("resources: {e}"))?;
     let shared = state.inner().clone();
+    let service_port = service_port.inner().clone();
     // 停服 + 同步代码都在阻塞线程池执行，避免卡 Tauri 主线程。
     let fresh = tauri::async_runtime::spawn_blocking(move || -> Result<bool, String> {
         let _operation = operation;
-        stop_service_blocking(&shared);
+        stop_service_blocking(&shared, &service_port);
         let env = compute_env_status(&layout);
         match env {
             // venv 失效（NotInstalled/Incomplete）：强制清掉版本 marker，让
@@ -746,6 +767,7 @@ pub fn console_get_settings() -> Result<crate::settings::Settings, String> {
 pub fn console_set_autostart(
     app: AppHandle,
     state: State<'_, SharedChild>,
+    service_port: State<'_, SharedPort>,
     auth_state: State<'_, AuthState>,
     runtime_operation: State<'_, RuntimeOperationLock>,
     enabled: bool,
@@ -760,9 +782,18 @@ pub fn console_set_autostart(
         let app = app.clone();
         let auth_state = auth_state.inner().clone();
         let shared = state.inner().clone();
+        let service_port = service_port.inner().clone();
         let runtime_operation = runtime_operation.inner().clone();
         tauri::async_runtime::spawn(async move {
-            match start_service_inner(&app, &shared, &auth_state, &runtime_operation).await {
+            match start_service_inner(
+                &app,
+                &shared,
+                &service_port,
+                &auth_state,
+                &runtime_operation,
+            )
+            .await
+            {
                 Ok(port) => {
                     let _ = app.emit("service://started", port);
                 }
@@ -776,6 +807,30 @@ pub fn console_set_autostart(
         });
     }
     Ok(())
+}
+
+/// 保存桌面端主题模式。主题设置只影响本地桌面壳,不触碰后端运行配置。
+#[tauri::command]
+pub fn console_set_theme_mode(mode: String) -> Result<(), String> {
+    if !matches!(mode.as_str(), "system" | "light" | "dark") {
+        return Err("主题模式无效".to_string());
+    }
+    let layout = Layout::from_home()?;
+    let mut settings = crate::settings::load(&layout.root);
+    settings.theme_mode = mode;
+    crate::settings::save(&layout.root, &settings)
+}
+
+/// 保存桌面端主题色。
+#[tauri::command]
+pub fn console_set_theme_color(color: String) -> Result<(), String> {
+    if !matches!(color.as_str(), "teal" | "blue" | "purple" | "pink" | "orange" | "green") {
+        return Err("主题色无效".to_string());
+    }
+    let layout = Layout::from_home()?;
+    let mut settings = crate::settings::load(&layout.root);
+    settings.theme_color = color;
+    crate::settings::save(&layout.root, &settings)
 }
 
 #[tauri::command]
@@ -1116,27 +1171,30 @@ pub async fn console_member_benefits(
 }
 
 /// 停止服务:干净回收 sidecar 进程组。
-fn stop_service_blocking(state: &SharedChild) {
+fn stop_service_blocking(state: &SharedChild, service_port: &SharedPort) {
     // 取走 child 后再等待回收，避免锁跨越可能阻塞的进程终止操作。
     if let Some(mut child) = state.lock().unwrap().take() {
         crate::sidecar::terminate(&mut child);
     }
+    *service_port.lock().unwrap() = None;
 }
 
 #[tauri::command]
 pub async fn console_stop_service(
     app: AppHandle,
     state: State<'_, SharedChild>,
+    service_port: State<'_, SharedPort>,
     runtime_operation: State<'_, RuntimeOperationLock>,
 ) -> Result<(), String> {
     let operation = runtime_operation
         .try_acquire()
         .ok_or("运行环境正在维护，请等待当前操作完成")?;
     let shared = state.inner().clone();
+    let service_port = service_port.inner().clone();
     // terminate 内部 child.wait() 同步等子进程退出;甩到阻塞线程池避免卡 main thread。
     tauri::async_runtime::spawn_blocking(move || {
         let _operation = operation;
-        stop_service_blocking(&shared);
+        stop_service_blocking(&shared, &service_port);
     })
     .await
     .map_err(|e| format!("stop service task join: {e}"))?;
@@ -1314,6 +1372,7 @@ pub fn clear_venv_dir(layout: &Layout) -> Result<(), String> {
 pub async fn console_clear_venv(
     app: AppHandle,
     state: State<'_, SharedChild>,
+    service_port: State<'_, SharedPort>,
     runtime_operation: State<'_, RuntimeOperationLock>,
 ) -> Result<(), String> {
     let operation = runtime_operation
@@ -1323,9 +1382,10 @@ pub async fn console_clear_venv(
     let resources = crate::resources::Resources::resolve(&app)
         .map_err(|e| format!("resources: {e}"))?;
     let shared = state.inner().clone();
+    let service_port = service_port.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let _operation = operation;
-        stop_service_blocking(&shared);
+        stop_service_blocking(&shared, &service_port);
         crate::runtime_dir::refresh_from_bundle(
             &resources.agent_template,
             &resources.env_seed,
@@ -1818,6 +1878,7 @@ pub async fn console_install_update(
     app: AppHandle,
     installing: State<'_, InstallingFlag>,
     service: State<'_, SharedChild>,
+    service_port: State<'_, SharedPort>,
     path: String,
 ) -> Result<(), String> {
     if !can_install_update(installing.0.load(Ordering::SeqCst)) {
@@ -1829,10 +1890,11 @@ pub async fn console_install_update(
         return Err(format!("安装包不存在: {path}"));
     }
     let shared = service.inner().clone();
+    let service_port = service_port.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         crate::updater::install_update_then(
             &package,
-            move || stop_service_blocking(&shared),
+            move || stop_service_blocking(&shared, &service_port),
             crate::updater::install_update,
             move || app.exit(0),
         )
@@ -2407,6 +2469,20 @@ mod tests {
         assert_eq!(value["bundleVersion"], "1.0.0");
         assert_eq!(value["depsOk"], true);
         assert_eq!(value["runtimeOk"], true);
+    }
+
+    #[test]
+    fn status_report_preserves_running_service_port() {
+        let report = build_status_report(EnvStatus::Ready, true, Some(8899));
+        assert!(report.service_running);
+        assert_eq!(report.port, Some(8899));
+    }
+
+    #[test]
+    fn status_report_hides_port_when_service_is_stopped() {
+        let report = build_status_report(EnvStatus::Ready, false, Some(8899));
+        assert!(!report.service_running);
+        assert_eq!(report.port, None);
     }
 
     #[test]

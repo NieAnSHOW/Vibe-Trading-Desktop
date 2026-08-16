@@ -1,10 +1,66 @@
+<script lang="ts">
+/**
+ * 桌面控制台主题契约(Rail 持有主题引擎;SettingsPage 通过 window 事件驱动)。
+ *
+ * storage(~/.vibe-trading/settings.json,由 Tauri command 读写):
+ *   theme_mode  — "system" | "light" | "dark"(缺省 "system",跟随系统)
+ *   theme_color — 主题色 id(缺省 "teal",见 THEME_COLORS)
+ *
+ * events(控制台内部):
+ *   window "vibe:theme-mode"  CustomEvent<ThemeMode>   — 设置页选择后广播
+ *   window "vibe:theme-color" CustomEvent<ThemeColorId> — 设置页选择后广播
+ *
+ * DOM:<html data-theme="light|dark" data-brand=<id>>,配合本文件末尾非 scoped
+ * 变量覆盖让亮/暗与主题色生效。
+ *
+ */
+export type ThemeMode = "system" | "light" | "dark";
+export type ThemeColorId =
+  | "teal"
+  | "blue"
+  | "purple"
+  | "pink"
+  | "orange"
+  | "green";
+
+export const THEME_MODE_EVENT = "vibe:theme-mode";
+export const THEME_COLOR_EVENT = "vibe:theme-color";
+
+export interface ThemeColorOption {
+  id: ThemeColorId;
+  label: string;
+  /** 与 console.css --brand 同构的 HSL 字符串,仅用于设置页色块展示。 */
+  hsl: string;
+}
+
+export const THEME_COLORS: ThemeColorOption[] = [
+  { id: "teal", label: "青绿", hsl: "175 72% 40%" },
+  { id: "blue", label: "蓝", hsl: "217 76% 52%" },
+  { id: "purple", label: "紫", hsl: "262 60% 55%" },
+  { id: "pink", label: "粉", hsl: "330 70% 55%" },
+  { id: "orange", label: "橙", hsl: "25 92% 52%" },
+  { id: "green", label: "绿", hsl: "145 62% 40%" },
+];
+
+export const THEME_MODES: { id: ThemeMode; label: string }[] = [
+  { id: "system", label: "跟随系统" },
+  { id: "light", label: "浅色" },
+  { id: "dark", label: "深色" },
+];
+</script>
+
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
-import { MonitorCog, Settings, Telescope, UserRound } from "@lucide/vue";
+import { MonitorCog, Moon, Settings, Sun, Telescope, UserRound } from "@lucide/vue";
+import { useAuthStore } from "../stores/auth";
 import { useEnvStore } from "../stores/env";
-import { consoleOpenWebui } from "../ipc/commands";
+import {
+  consoleGetSettings,
+  consoleOpenWebui,
+  consoleSetThemeMode,
+} from "../ipc/commands";
 
 /**
  * 桌面壳层级导航栏(账户/环境/研究/底部设置),与 WebUI 侧
@@ -14,12 +70,114 @@ import { consoleOpenWebui } from "../ipc/commands";
  */
 const route = useRoute();
 const router = useRouter();
+const authStore = useAuthStore();
 const envStore = useEnvStore();
 const { port, serviceRunning } = storeToRefs(envStore);
 
+// ── 主题引擎:默认跟随系统,设置页经 window 事件驱动本引擎生效 ──
+const themeMode = ref<ThemeMode>("system");
+const themeColor = ref<ThemeColorId>("teal");
+const themeSaving = ref(false);
+
+function systemPrefersDark(): boolean {
+  return typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-color-scheme: dark)").matches
+    : false;
+}
+
+const systemDark = ref(systemPrefersDark());
+
+const effectiveTheme = computed<"light" | "dark">(() =>
+  themeMode.value === "system"
+    ? systemDark.value
+      ? "dark"
+      : "light"
+    : themeMode.value,
+);
+
+const themeTitle = computed(() => {
+  if (themeMode.value === "system") return "主题：跟随系统（点击切换深浅色）";
+  return effectiveTheme.value === "dark" ? "主题：深色" : "主题：浅色";
+});
+
+function applyTheme() {
+  document.documentElement.dataset.theme = effectiveTheme.value;
+  document.documentElement.dataset.brand = themeColor.value;
+}
+
+function applyThemeMode(mode: ThemeMode) {
+  themeMode.value = mode;
+  applyTheme();
+}
+
+async function toggleTheme() {
+  if (themeSaving.value) return;
+  const mode: ThemeMode = effectiveTheme.value === "dark" ? "light" : "dark";
+  themeSaving.value = true;
+  try {
+    await consoleSetThemeMode(mode);
+    applyThemeMode(mode);
+    window.dispatchEvent(new CustomEvent(THEME_MODE_EVENT, { detail: mode }));
+  } catch {
+    // 持久化失败时保留原主题，避免 UI 与下次启动读取到的设置不一致。
+  } finally {
+    themeSaving.value = false;
+  }
+}
+
+function onSystemSchemeChange(e?: MediaQueryListEvent) {
+  if (e) systemDark.value = e.matches;
+  if (themeMode.value === "system") applyTheme();
+}
+
+function onThemeModeEvent(e: Event) {
+  const mode = (e as CustomEvent<ThemeMode>).detail;
+  if (mode === "system" || mode === "light" || mode === "dark") {
+    applyThemeMode(mode);
+  }
+}
+
+function onThemeColorEvent(e: Event) {
+  const color = (e as CustomEvent<ThemeColorId>).detail;
+  if (THEME_COLORS.some((c) => c.id === color)) {
+    themeColor.value = color;
+    applyTheme();
+  }
+}
+
 // rail 挂载即刷新一次状态:从任意页面(如登录页)直达时也能感知服务态。
-onMounted(() => {
+onMounted(async () => {
   void envStore.refresh();
+  applyTheme();
+  try {
+    const settings = await consoleGetSettings();
+    if (settings.theme_mode === "system" || settings.theme_mode === "light" || settings.theme_mode === "dark") {
+      themeMode.value = settings.theme_mode;
+    }
+    if (THEME_COLORS.some((color) => color.id === settings.theme_color)) {
+      themeColor.value = settings.theme_color;
+    }
+    applyTheme();
+  } catch {
+    // 设置读取失败时保留系统默认主题。
+  }
+  window.addEventListener(THEME_MODE_EVENT, onThemeModeEvent);
+  window.addEventListener(THEME_COLOR_EVENT, onThemeColorEvent);
+  if (typeof window.matchMedia === "function") {
+    window
+      .matchMedia("(prefers-color-scheme: dark)")
+      .addEventListener("change", onSystemSchemeChange);
+  }
+});
+
+onUnmounted(() => {
+  window.removeEventListener(THEME_MODE_EVENT, onThemeModeEvent);
+  window.removeEventListener(THEME_COLOR_EVENT, onThemeColorEvent);
+  if (typeof window.matchMedia === "function") {
+    window
+      .matchMedia("(prefers-color-scheme: dark)")
+      .removeEventListener("change", onSystemSchemeChange);
+  }
 });
 
 type RailKey = "account" | "environment" | "research" | "settings";
@@ -32,6 +190,11 @@ const activeKey = computed<RailKey | null>(() => {
 });
 
 const researchReady = computed(() => serviceRunning.value && port.value != null);
+
+async function openAccount() {
+  if (!authStore.authenticated) await authStore.refresh();
+  return router.push(authStore.authenticated ? "/profile" : "/login");
+}
 
 async function openResearch() {
   if (researchReady.value && port.value != null) {
@@ -50,7 +213,7 @@ async function openResearch() {
       class="rail__item"
       :class="{ 'rail__item--active': activeKey === 'account' }"
       :aria-current="activeKey === 'account' ? 'page' : undefined"
-      @click="router.push('/login')"
+      @click="openAccount"
     >
       <UserRound class="rail__icon" aria-hidden="true" />
       <span class="rail__label">账户</span>
@@ -79,6 +242,20 @@ async function openResearch() {
 
     <button
       type="button"
+      class="rail__item"
+      :title="themeTitle"
+      :aria-label="themeTitle"
+      data-test="theme-toggle"
+      :disabled="themeSaving"
+      @click="toggleTheme"
+    >
+      <Sun v-if="effectiveTheme === 'light'" class="rail__icon" aria-hidden="true" />
+      <Moon v-else class="rail__icon" aria-hidden="true" />
+      <span class="rail__label">{{ effectiveTheme === "light" ? "浅色" : "深色" }}</span>
+    </button>
+
+    <button
+      type="button"
       class="rail__item rail__item--bottom"
       :class="{ 'rail__item--active': activeKey === 'settings' }"
       :aria-current="activeKey === 'settings' ? 'page' : undefined"
@@ -101,7 +278,7 @@ async function openResearch() {
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  width: 68px;
+  width: var(--rail-width);
   padding: 14px 0;
   background: hsl(var(--surface-1) / 0.92);
   border-right: 1px solid hsl(var(--line));
@@ -152,5 +329,77 @@ async function openResearch() {
 .rail__label {
   font-size: 11px;
   line-height: 1.2;
+}
+</style>
+
+<style>
+/* 主题引擎变量覆盖:html[data-theme]/data-brand 由本组件写入,优先级高于
+   console.css 的 :root 默认深色,让亮/暗与主题色在整站生效。 */
+html[data-theme="light"] {
+  color-scheme: light;
+  --bg: 220 20% 96%;
+  --surface-1: 0 0% 100%;
+  --surface-2: 220 18% 92%;
+  --line: 220 16% 84%;
+  --ink: 220 18% 16%;
+  --ink-dim: 220 12% 42%;
+  --ok: 145 62% 42%;
+  --ok-fg: 145 55% 30%;
+  --warn: 38 92% 48%;
+  --warn-fg: 38 80% 36%;
+  --bad: 0 75% 55%;
+  --bad-fg: 0 70% 45%;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: 220 24% 4%;
+  --surface-1: 220 20% 8%;
+  --surface-2: 220 20% 12%;
+  --line: 220 18% 18%;
+  --ink: 220 12% 93%;
+  --ink-dim: 220 10% 66%;
+  --ok: 145 62% 50%;
+  --ok-fg: 145 58% 66%;
+  --warn: 38 92% 55%;
+  --warn-fg: 40 95% 66%;
+  --bad: 0 75% 60%;
+  --bad-fg: 0 88% 74%;
+}
+
+html[data-brand="teal"] {
+  --brand: 175 72% 40%;
+  --brand-strong: 175 60% 41%;
+  --on-brand: 26 48% 13%;
+}
+
+html[data-brand="blue"] {
+  --brand: 217 76% 52%;
+  --brand-strong: 217 70% 46%;
+  --on-brand: 210 40% 98%;
+}
+
+html[data-brand="purple"] {
+  --brand: 262 60% 55%;
+  --brand-strong: 262 65% 49%;
+  --on-brand: 270 50% 98%;
+}
+
+html[data-brand="pink"] {
+  --brand: 330 70% 55%;
+  --brand-strong: 330 68% 49%;
+  --on-brand: 340 60% 98%;
+}
+
+html[data-brand="orange"] {
+  --brand: 25 92% 52%;
+  --brand-strong: 25 86% 46%;
+  --on-brand: 26 48% 13%;
+}
+
+html[data-brand="green"] {
+  --brand: 145 62% 40%;
+  --brand-strong: 145 55% 34%;
+  --on-brand: 150 45% 98%;
 }
 </style>

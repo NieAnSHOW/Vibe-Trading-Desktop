@@ -45,12 +45,10 @@ import {
   ExternalLink,
   Gift,
   Headset,
-  LogIn,
   MessageCircleMore,
   Play,
   RefreshCw,
   ServerCog,
-  Settings,
   ShieldCheck,
   Square,
   MessageSquareText,
@@ -462,26 +460,6 @@ function onStartupAnimationEnd() {
           <p class="sub">您的专属 AI 理财专家</p>
         </div>
       </div>
-      <nav class="header-actions" aria-label="控制台快捷操作">
-        <button v-if="ProdConfig.enableLogin && authStore.authenticated" class="account-profile-entry"
-          data-test="account-profile-entry" type="button" :aria-label="`打开个人中心，${accountName}`"
-          @click="router.push('/profile')">
-          <CircleUserRound :size="18" aria-hidden="true" />
-          <span class="account-name" :title="accountName">{{ accountName }}</span>
-          <span v-if="memberTier" class="member-tier" :class="`member-tier--${memberTier.tone}`"
-            :title="`当前会员等级：${memberTier.label}`">
-            <span class="member-tier-mark" aria-hidden="true">V</span>
-            <span class="member-tier-name">{{ memberTier.name }}</span>
-          </span>
-        </button>
-        <AppButton v-else-if="ProdConfig.enableLogin" variant="ghost" @click="router.push('/login')">
-          <LogIn :size="16" aria-hidden="true" />登录使用会员服务
-        </AppButton>
-        <button class="icon-button" data-test="settings-entry" type="button" aria-label="打开设置" title="设置"
-          @click="router.push('/settings')">
-          <Settings :size="19" aria-hidden="true" />
-        </button>
-      </nav>
     </header>
 
     <section class="console-shell console-page__shell" aria-label="控制台内容" @animationend.self="onStartupAnimationEnd">

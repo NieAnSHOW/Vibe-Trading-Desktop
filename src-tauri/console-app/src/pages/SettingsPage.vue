@@ -1,15 +1,24 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { storeToRefs } from "pinia";
-import { useRouter } from "vue-router";
 import AppButton from "../components/AppButton.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import { useEnvStore } from "../stores/env";
 import { useServiceStore } from "../stores/service";
 import { useBusy } from "../composables/useBusy";
 import {
+  THEME_COLORS,
+  THEME_COLOR_EVENT,
+  THEME_MODES,
+  THEME_MODE_EVENT,
+  type ThemeColorId,
+  type ThemeMode,
+} from "../components/Rail.vue";
+import {
   consoleGetSettings,
   consoleSetAutostart,
+  consoleSetThemeColor,
+  consoleSetThemeMode,
   consoleOpenLogs,
   consoleClearLogs,
   consoleClearVenv,
@@ -23,7 +32,6 @@ import { config as ProdConfig } from "../config/prod";
 import douyinPng from "../assets/douyin.png";
 import tauriConf from "../../../tauri.conf.json";
 
-const router = useRouter();
 const env = useEnvStore();
 const service = useServiceStore();
 const { serviceRunning } = storeToRefs(env);
@@ -32,6 +40,40 @@ const autostart = ref(false);
 const saving = ref(false);
 const notice = ref("");
 const loadError = ref("");
+
+// ── 外观:主题模式(默认跟随系统)+ 主题色;经 window 事件交给 Rail 主题引擎 ──
+const themeMode = ref<ThemeMode>("system");
+const themeColor = ref<ThemeColorId>("teal");
+
+async function selectThemeMode(mode: ThemeMode) {
+  try {
+    await consoleSetThemeMode(mode);
+    themeMode.value = mode;
+    window.dispatchEvent(new CustomEvent(THEME_MODE_EVENT, { detail: mode }));
+  } catch (error) {
+    notice.value = `保存失败：${String(error)}`;
+  }
+}
+
+async function selectThemeColor(color: ThemeColorId) {
+  try {
+    await consoleSetThemeColor(color);
+    themeColor.value = color;
+    window.dispatchEvent(new CustomEvent(THEME_COLOR_EVENT, { detail: color }));
+  } catch (error) {
+    notice.value = `保存失败：${String(error)}`;
+  }
+}
+
+function onThemeModeEvent(e: Event) {
+  const mode = (e as CustomEvent<ThemeMode>).detail;
+  if (mode === "system" || mode === "light" || mode === "dark") themeMode.value = mode;
+}
+
+function onThemeColorEvent(e: Event) {
+  const color = (e as CustomEvent<ThemeColorId>).detail;
+  if (THEME_COLORS.some((option) => option.id === color)) themeColor.value = color;
+}
 
 const version = computed(() => tauriConf.version);
 // 官网链接：App.vue 启动时 loadPublicConfig() 拉取，空则隐藏入口
@@ -42,6 +84,12 @@ async function load() {
   try {
     const settings = await consoleGetSettings();
     autostart.value = settings.autostart_service;
+    if (settings.theme_mode === "system" || settings.theme_mode === "light" || settings.theme_mode === "dark") {
+      themeMode.value = settings.theme_mode;
+    }
+    if (THEME_COLORS.some((option) => option.id === settings.theme_color)) {
+      themeColor.value = settings.theme_color;
+    }
   } catch (error) {
     loadError.value = String(error);
   }
@@ -211,16 +259,21 @@ async function onUninstallLegacyDialogClose(v: "ok" | "cancel") {
 }
 
 onMounted(async () => {
+  window.addEventListener(THEME_MODE_EVENT, onThemeModeEvent);
+  window.addEventListener(THEME_COLOR_EVENT, onThemeColorEvent);
   await load();
   // 取真实服务状态:清理运行环境时若服务在跑需先停,venv 占用删除会失败
   await env.refresh();
+});
+
+onUnmounted(() => {
+  window.removeEventListener(THEME_MODE_EVENT, onThemeModeEvent);
+  window.removeEventListener(THEME_COLOR_EVENT, onThemeColorEvent);
 });
 </script>
 
 <template>
   <main class="settings">
-    <AppButton variant="ghost" @click="router.push('/')">返回控制台</AppButton>
-
     <section class="settings-card" aria-label="启动行为">
       <h1 class="settings-title">启动行为</h1>
       <div class="settings-row">
@@ -240,6 +293,50 @@ onMounted(async () => {
         设置加载失败：{{ loadError }}
       </p>
       <p v-else-if="notice" class="settings-notice">{{ notice }}</p>
+    </section>
+
+    <section class="settings-card" aria-label="外观">
+      <h1 class="settings-title">外观</h1>
+      <div class="settings-row">
+        <div class="settings-row__text">
+          <p class="settings-row__name">主题模式</p>
+          <p class="settings-row__desc">默认跟随系统；手动选择后以手动为准，可在本页改回「跟随系统」。</p>
+        </div>
+        <div class="theme-segment" role="group" aria-label="主题模式" data-test="theme-mode">
+          <button
+            v-for="m in THEME_MODES"
+            :key="m.id"
+            type="button"
+            :class="{ active: themeMode === m.id }"
+            :data-mode="m.id"
+            :aria-pressed="themeMode === m.id"
+            @click="selectThemeMode(m.id)"
+          >
+            {{ m.label }}
+          </button>
+        </div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-row__text">
+          <p class="settings-row__name">主题色</p>
+          <p class="settings-row__desc">选择应用主色，用于高亮与选中态。</p>
+        </div>
+        <div class="theme-colors" role="group" aria-label="主题色" data-test="theme-color">
+          <button
+            v-for="c in THEME_COLORS"
+            :key="c.id"
+            type="button"
+            class="theme-swatch"
+            :class="{ active: themeColor === c.id }"
+            :data-color="c.id"
+            :title="c.label"
+            :aria-label="`主题色：${c.label}`"
+            :aria-pressed="themeColor === c.id"
+            :style="{ '--swatch': `hsl(${c.hsl})` }"
+            @click="selectThemeColor(c.id)"
+          ></button>
+        </div>
+      </div>
     </section>
 
     <section class="settings-card" aria-label="维护">
@@ -475,6 +572,70 @@ onMounted(async () => {
   flex: none;
   display: flex;
   gap: 8px;
+}
+
+/* 外观:主题模式分段控件 + 主题色色块 */
+.theme-segment {
+  flex: none;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid hsl(var(--line));
+  border-radius: 999px;
+  background: hsl(var(--surface-2));
+}
+
+.theme-segment button {
+  border: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: transparent;
+  color: hsl(var(--ink-dim));
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    background 0.16s var(--ease),
+    color 0.16s var(--ease);
+}
+
+.theme-segment button.active {
+  background: hsl(var(--surface-1));
+  color: hsl(var(--ink));
+  box-shadow: 0 1px 4px hsl(0 0% 0% / 0.18);
+}
+
+.theme-segment button:focus-visible,
+.theme-swatch:focus-visible {
+  outline: 2px solid hsl(var(--brand));
+  outline-offset: 2px;
+}
+
+.theme-colors {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.theme-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--swatch, hsl(var(--brand)));
+  cursor: pointer;
+  transition:
+    transform 0.16s var(--ease),
+    border-color 0.16s var(--ease);
+}
+
+.theme-swatch:hover {
+  transform: scale(1.1);
+}
+
+.theme-swatch.active {
+  border-color: hsl(var(--ink));
 }
 
 /* 破坏性操作弱化为描边款,与 settings-notice--bad 同系;避免实心红在列表里过于刺眼。

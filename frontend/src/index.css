@@ -75,6 +75,26 @@
     --chart-compare-b: #fbbf24;
   }
 
+  :root[data-brand="blue"] {
+    --primary: 217 76% 52%;
+  }
+  :root[data-brand="purple"] {
+    --primary: 262 60% 55%;
+  }
+  :root[data-brand="pink"] {
+    --primary: 330 70% 55%;
+  }
+  :root[data-brand="orange"] {
+    --primary: 25 92% 52%;
+    --primary-foreground: 26 48% 13%;
+  }
+  :root[data-brand="teal"] {
+    --primary-foreground: 26 48% 13%;
+  }
+  :root[data-brand="green"] {
+    --primary: 145 62% 40%;
+  }
+
   * {
     @apply border-border;
   }

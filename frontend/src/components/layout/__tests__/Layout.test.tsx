@@ -35,6 +35,13 @@ function renderLayout(initialEntry = "/") {
 }
 
 describe("Layout sidebar", () => {
+  it("does not render a WebUI theme toggle", () => {
+    renderLayout();
+
+    expect(screen.queryByTitle("亮色")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("暗色")).not.toBeInTheDocument();
+  });
+
   it("renders the sidebar with nav links and route outlet", () => {
     renderLayout();
 

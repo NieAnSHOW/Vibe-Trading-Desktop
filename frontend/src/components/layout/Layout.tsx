@@ -9,8 +9,6 @@ import {
   Eye,
   FileText,
   Languages,
-  Moon,
-  Sun,
   Plus,
   Trash2,
   Pencil,
@@ -30,12 +28,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useDarkMode } from "@/hooks/useDarkMode";
 import { api, type SessionItem } from "@/lib/api";
 import { useAgentStore } from "@/stores/agent";
 import { isDesktopEmbedded } from "@/lib/desktopShell";
 import { DesktopShellRail } from "@/components/layout/DesktopShellRail";
 import { ConnectionBanner } from "@/components/layout/ConnectionBanner";
+import { useDarkMode } from "@/hooks/useDarkMode";
 
 // Bump on each release; one place keeps the footer in sync with package.json.
 const APP_VERSION = `v${import.meta.env.VITE_DESKTOP_VERSION}_desktop`;
@@ -206,6 +204,8 @@ export function Layout() {
   const { t, i18n: i18nHook } = useTranslation();
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
+  // Apply the desktop/system theme once for every route; the WebUI has no theme control.
+  useDarkMode();
 
   // ── telemetry ──
   const startedAtRef = useRef(Date.now());
@@ -230,7 +230,6 @@ export function Layout() {
     } catch {}
   }, [pathname]);
 
-  const { dark, toggle } = useDarkMode();
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const sseStatus = useAgentStore((s) => s.sseStatus);
@@ -707,7 +706,7 @@ export function Layout() {
         {/* Spacer when collapsed */}
         {collapsed && <div className="flex-1" />}
 
-        {/* ── bottom: theme / lang / collapse ── */}
+        {/* ── bottom: language / collapse ── */}
         <div
           className={cn(
             "border-t",
@@ -718,22 +717,6 @@ export function Layout() {
         >
           {collapsed ? (
             <>
-              <button
-                onClick={() => {
-                  try {
-                    track("feature_use", {}, { name: "theme_toggle" });
-                  } catch {}
-                  toggle();
-                }}
-                className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
-                title={dark ? t("layout.light") : t("layout.dark")}
-              >
-                {dark ? (
-                  <Sun className="h-3.5 w-3.5" />
-                ) : (
-                  <Moon className="h-3.5 w-3.5" />
-                )}
-              </button>
               <button
                 onClick={() => {
                   try {
@@ -749,23 +732,6 @@ export function Layout() {
             </>
           ) : (
             <>
-              <button
-                onClick={() => {
-                  try {
-                    track("feature_use", {}, { name: "theme_toggle" });
-                  } catch {}
-                  toggle();
-                }}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors rounded"
-                title={dark ? t("layout.light") : t("layout.dark")}
-              >
-                {dark ? (
-                  <Sun className="h-3.5 w-3.5" />
-                ) : (
-                  <Moon className="h-3.5 w-3.5" />
-                )}
-              </button>
-
               <button
                 onClick={() => {
                   try {

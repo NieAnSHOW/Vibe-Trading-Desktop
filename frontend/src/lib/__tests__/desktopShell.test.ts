@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  getDesktopThemeColor,
+  getDesktopThemeMode,
   getShellConsoleUrl,
   initDesktopShell,
   isDesktopEmbedded,
@@ -34,6 +36,24 @@ describe("desktopShell", () => {
 
     expect(isDesktopEmbedded()).toBe(true);
     expect(getShellConsoleUrl()).toBe("http://tauri.localhost/");
+  });
+
+  it("keeps desktop theme preferences after SPA navigation drops the query string", () => {
+    setSearch("/?desktop=1&theme=dark&theme_color=blue");
+    initDesktopShell();
+    // 模拟 SPA 路由跳转：查询串会被 React Router 清掉。
+    setSearch("/agent");
+
+    expect(getDesktopThemeMode()).toBe("dark");
+    expect(getDesktopThemeColor()).toBe("blue");
+  });
+
+  it("clears a stale theme color when the desktop shell does not provide one", () => {
+    window.sessionStorage.setItem("vibe.desktop.themeColor", "blue");
+    setSearch("/?desktop=1&theme=dark");
+    initDesktopShell();
+
+    expect(getDesktopThemeColor()).toBeNull();
   });
 
   it("is not embedded in a plain browser visit", () => {
@@ -74,6 +94,7 @@ describe("desktopShell", () => {
 
     // base 规范化:剥掉壳侧携带的旧 hash 后再拼目标页
     expect(shellConsolePageUrl("login")).toBe("tauri://localhost/index.html#/login");
+    expect(shellConsolePageUrl("profile")).toBe("tauri://localhost/index.html#/profile");
     expect(shellConsolePageUrl("settings")).toBe("tauri://localhost/index.html#/settings");
     expect(shellConsolePageUrl("console")).toBe("tauri://localhost/index.html");
 

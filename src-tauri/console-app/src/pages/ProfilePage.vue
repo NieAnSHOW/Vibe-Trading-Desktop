@@ -36,7 +36,7 @@ async function loadBenefits() {
   loading.value = true; loadError.value = "";
   try { benefits.value = (await consoleMemberBenefits()).benefits; }
   catch (error: any) {
-    if (error?.variant === "LoginExpired" || error?.variant === "NotAuthenticated") { auth.clear(); await router.replace("/"); return; }
+    if (error?.variant === "LoginExpired" || error?.variant === "NotAuthenticated") { auth.clear(); await router.replace("/login"); return; }
     loadError.value = "权益暂时无法加载";
   } finally { loading.value = false; }
 }
@@ -49,7 +49,7 @@ async function onLogout(v: "ok" | "cancel") {
     await router.replace("/");
   });
 }
-onMounted(async () => { await auth.refresh(); if (!auth.authenticated) return router.replace("/"); await loadBenefits(); });
+onMounted(async () => { await auth.refresh(); if (!auth.authenticated) return router.replace("/login"); await loadBenefits(); });
 </script>
 
 <template>
