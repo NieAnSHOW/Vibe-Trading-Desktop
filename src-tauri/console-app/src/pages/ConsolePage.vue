@@ -79,6 +79,7 @@ const envBadge = computed(() => {
 // bootstrap://exit 事件。installing 由该事件翻转,而非 IPC resolve——否则按钮
 // 在 IPC 返回瞬间就恢复可点,但实际安装仍在后台跑几十秒到几分钟。
 const installing = ref(false);
+const bootstrapFailed = ref(false);
 const startBusy = useBusy();
 const stopBusy = useBusy();
 
@@ -90,7 +91,7 @@ const btnStartDisabled = computed(
   () => envState.value !== "ready" || isServiceRunning.value || port.value !== null || startBusy.busy.value,
 );
 const primaryActionKind = computed<"install" | "start" | "open">(() => {
-  if (envState.value !== "ready") return "install";
+  if (envState.value !== "ready" || bootstrapFailed.value) return "install";
   return isServiceRunning.value ? "open" : "start";
 });
 
@@ -125,12 +126,14 @@ async function onInstallStopDialogClose(v: "ok" | "cancel") {
 
 async function doInstall() {
   setErr("");
+  bootstrapFailed.value = false;
   bootstrap.start();
   installing.value = true;
   try {
     await consoleBootstrap(); // fire-and-forget:spawn 成功即返回,结束走 bootstrap://exit
   } catch (e) {
     setErr(e);
+    bootstrapFailed.value = true;
     bootstrap.advance("failed", "");
     installing.value = false; // spawn 失败:后台线程不会 emit exit,这里释放
   }
@@ -221,12 +224,12 @@ async function fetchAds() {
 }
 
 // ── 刷新(轮询) ──────────────────────────────────────────────────
-async function refresh() {
+async function refresh(clearError = true) {
   await env.refresh();
   // 渲染依赖 envState/serviceRunning 的 computed 自动更新。
   hintHidden.value = envState.value === "ready" || serviceRunning.value;
   await channels.refresh(port.value, serviceRunning.value);
-  setErr("");
+  if (clearError) setErr("");
 }
 
 // ── 事件监听(生命周期内) ────────────────────────────────────────
@@ -245,14 +248,24 @@ onMounted(async () => {
   unlistens = await Promise.all([
     onBootstrapEvent((e: BootstrapEvent) => {
       bootstrap.advance(e.stage, e.message ?? "");
-      if (e.ok === false) setErr(e.message || "依赖安装失败");
+      if (e.ok === false) {
+        bootstrapFailed.value = true;
+        setErr(e.message || "依赖安装失败");
+      }
     }),
     onBootstrapExit(async (code: number) => {
-      if (code !== 0 && bootstrap.state !== "done") bootstrap.advance("failed", "");
+      if (code !== 0 && bootstrap.state !== "done") {
+        bootstrapFailed.value = true;
+        bootstrap.advance("failed", "");
+        if (!errorMsg.value) setErr("依赖安装失败");
+      }
+      if (code === 0) bootstrapFailed.value = false;
       installing.value = false; // 权威结束信号:无论成功失败,后台线程退出即释放按钮
-      await refresh();
+      await refresh(code === 0);
       if (code === 0 && envState.value === "ready" && !serviceRunning.value) {
         await onStart();
+      } else if (code === 0 && envState.value !== "ready") {
+        setErr("安装完成，但运行环境尚未就绪，请重试安装");
       }
     }),
     onServiceStarted((p: number) => {

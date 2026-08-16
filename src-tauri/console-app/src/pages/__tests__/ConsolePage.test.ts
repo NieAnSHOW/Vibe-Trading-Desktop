@@ -190,4 +190,15 @@ describe("ConsolePage", () => {
     expect(start).toHaveBeenCalledTimes(1);
     expect(open).toHaveBeenCalledWith(8899);
   });
+
+  it("keeps the onboarding error visible when bootstrap fails", async () => {
+    const wrapper = mount(ConsolePage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await mocks.bootstrapExitHandler?.(1);
+    await flushPromises();
+
+    expect(wrapper.get("#err").text()).toContain("依赖安装失败");
+    expect(wrapper.get('[data-test="primary-service-action"]').text()).toContain("安装或修复依赖");
+  });
 });
