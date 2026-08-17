@@ -12,6 +12,10 @@ const consoleStyles = readFileSync(
   "utf8",
 );
 const appSource = readFileSync(resolve(process.cwd(), "src/App.vue"), "utf8");
+const settingsPageSource = readFileSync(
+  resolve(process.cwd(), "src/pages/SettingsPage.vue"),
+  "utf8",
+);
 
 let openListener: ((url: string) => void) | undefined;
 let closeListener: (() => void) | undefined;
@@ -78,11 +82,23 @@ describe("App", () => {
     );
   });
 
-  it("uses the iframe's available viewport width for Rail-aware console content", () => {
+  it("uses a Rail-aware document canvas for console content", () => {
     expect(consoleStyles).toContain(".shell-content--rail");
-    expect(consoleStyles).toContain("width: calc(100vw - var(--rail-width));");
     expect(consoleStyles).toContain("margin-left: var(--rail-width);");
     expect(consoleStyles).toContain("min-height: 100dvh;");
+  });
+
+  it("keeps Rail-aware console content inside the document viewport when a vertical scrollbar is present", () => {
+    const railShell = consoleStyles.match(/\.shell-content--rail\s*\{[^}]*\}/)?.[0] ?? "";
+
+    expect(railShell).toContain("margin-left: var(--rail-width);");
+    expect(railShell).not.toContain("width:");
+  });
+
+  it("keeps native console page roots fluid inside the Rail-aware canvas", () => {
+    expect(consoleStyles.match(/\.console\s*\{[^}]*\}/)?.[0]).toContain("width: 100%;");
+    expect(consoleStyles.match(/\.profile\s*\{[^}]*\}/)?.[0]).toContain("width: 100%;");
+    expect(settingsPageSource.match(/\.settings\s*\{[^}]*\}/)?.[0]).toContain("width: 100%;");
   });
 
   it("removes the pre-rendered rail after the Vue app is mounted", () => {

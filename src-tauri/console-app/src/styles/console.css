@@ -71,15 +71,18 @@ body {
   line-height: 1.5;
 }
 
-#app,
-.shell-content {
+#app {
   width: 100%;
   min-width: 0;
   min-height: 100dvh;
 }
 
+.shell-content {
+  min-width: 0;
+  min-height: 100dvh;
+}
+
 .shell-content--rail {
-  width: calc(100vw - var(--rail-width));
   margin-left: var(--rail-width);
 }
 
@@ -89,7 +92,7 @@ body {
 }
 
 .shell-content--standalone.shell-content--rail {
-  width: calc(100vw - var(--rail-width));
+  width: auto;
   margin-left: var(--rail-width);
 }
 /* Warm ambient wash — carries the brand's "温暖/安心" on the app's front door.
@@ -111,7 +114,8 @@ body::before {
 .console {
   position: relative;
   z-index: 1;
-  width: 580px;
+  width: 100%;
+  min-width: 0;
 }
 
 /* Header */
@@ -249,7 +253,8 @@ h1 {
 .profile {
   position: relative;
   z-index: 1;
-  width: 580px;
+  width: 100%;
+  min-width: 0;
 }
 .profile-card {
   margin-top: 18px;

@@ -419,7 +419,8 @@ onUnmounted(() => {
 .settings {
   position: relative;
   z-index: 1;
-  width: 580px;
+  width: 100%;
+  min-width: 0;
 }
 
 .settings-card {
