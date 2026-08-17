@@ -63,13 +63,34 @@ body {
     "Microsoft YaHei", sans-serif;
   background: hsl(var(--bg));
   color: hsl(var(--ink));
-  min-height: 0;
-  display: flex;
-  justify-content: center;
-  /* 为固定 rail(components/Rail.vue)预留空间,页面保持居中卡片布局 */
-  padding: 40px 20px 32px calc(20px + var(--rail-width));
+  min-width: 0;
+  min-height: 100dvh;
+  display: block;
+  padding: 0;
   -webkit-font-smoothing: antialiased;
   line-height: 1.5;
+}
+
+#app,
+.shell-content {
+  width: 100%;
+  min-width: 0;
+  min-height: 100dvh;
+}
+
+.shell-content--rail {
+  width: calc(100vw - var(--rail-width));
+  margin-left: var(--rail-width);
+}
+
+.shell-content--standalone {
+  width: 100vw;
+  margin-left: 0;
+}
+
+.shell-content--standalone.shell-content--rail {
+  width: calc(100vw - var(--rail-width));
+  margin-left: var(--rail-width);
 }
 /* Warm ambient wash — carries the brand's "温暖/安心" on the app's front door.
  Purposeful, not decorative glass; kept subtle so log text stays crisp. */
@@ -279,9 +300,6 @@ h1 {
   border: 0;
 }
 @media (max-width: 640px) {
-  body {
-    padding: 24px 16px 28px calc(16px + var(--rail-width));
-  }
   .console {
     width: 100%;
   }
@@ -787,13 +805,6 @@ dialog.confirm--info .confirm-actions {
   --on-brand: 180 30% 7%;
   --radius: 10px;
   --z-sticky: 20;
-}
-
-body {
-  min-width: 0;
-  min-height: 100vh;
-  align-items: stretch;
-  padding: 18px 18px 18px calc(18px + var(--rail-width));
 }
 
 body:has(> #app > .shell-content--onboarding) {
@@ -1399,10 +1410,6 @@ body::before {
 }
 
 @media (max-width: 899px) {
-  body {
-    padding: 12px 12px 12px calc(12px + var(--rail-width));
-  }
-
   .console-shell {
     margin: 12px;
   }

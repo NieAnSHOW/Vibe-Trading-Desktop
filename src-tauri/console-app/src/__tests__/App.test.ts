@@ -78,6 +78,13 @@ describe("App", () => {
     );
   });
 
+  it("uses the iframe's available viewport width for Rail-aware console content", () => {
+    expect(consoleStyles).toContain(".shell-content--rail");
+    expect(consoleStyles).toContain("width: calc(100vw - var(--rail-width));");
+    expect(consoleStyles).toContain("margin-left: var(--rail-width);");
+    expect(consoleStyles).toContain("min-height: 100dvh;");
+  });
+
   it("removes the pre-rendered rail after the Vue app is mounted", () => {
     const bootstrap = document.createElement("aside");
     bootstrap.id = "console-rail-bootstrap";
