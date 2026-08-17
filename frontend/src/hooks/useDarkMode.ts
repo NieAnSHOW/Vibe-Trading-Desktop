@@ -8,17 +8,29 @@ import {
   type DesktopThemeMode,
 } from "@/lib/desktopShell";
 
+function shellThemeOverride(): boolean | null {
+  if (!isDesktopShellFrame()) return null;
+  const value = document.documentElement.dataset.shellDark;
+  if (value === "dark") return true;
+  if (value === "light") return false;
+  return null;
+}
+
+function resolveDark(themeMode: DesktopThemeMode): boolean {
+  const shellOverride = shellThemeOverride();
+  if (shellOverride !== null) return shellOverride;
+  return themeMode === "dark" || (themeMode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+}
+
 export function useDarkMode() {
   const [themeMode, setThemeMode] = useState<DesktopThemeMode>(getDesktopThemeMode);
-  const [dark, setDark] = useState(() => {
-    return themeMode === "dark" || (themeMode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-  });
+  const [dark, setDark] = useState(() => resolveDark(themeMode));
   const [themeSaving, setThemeSaving] = useState(false);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => {
-      setDark(themeMode === "dark" || (themeMode === "system" && media.matches));
+      setDark(resolveDark(themeMode));
     };
     const color = getDesktopThemeColor();
     if (color) document.documentElement.dataset.brand = color;
@@ -38,6 +50,7 @@ export function useDarkMode() {
       if (event.source !== window.parent) return;
       const data = event.data;
       if (data?.type !== "vibe-shell:theme" || typeof data.dark !== "boolean") return;
+      document.documentElement.dataset.shellDark = data.dark ? "dark" : "light";
       setDark(data.dark);
       if (typeof data.color === "string") document.documentElement.dataset.brand = data.color;
     };

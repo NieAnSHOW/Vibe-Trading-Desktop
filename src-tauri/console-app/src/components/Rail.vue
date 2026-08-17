@@ -161,7 +161,12 @@ async function toggleTheme() {
 
 function onSystemSchemeChange(e?: MediaQueryListEvent) {
   if (e) systemDark.value = e.matches;
-  if (themeMode.value === "system") applyTheme();
+  if (themeMode.value === "system") {
+    applyTheme();
+    // The retained WebUI iframe has its own matchMedia context. Tell it when
+    // the shell's effective system theme changes so all consumers stay aligned.
+    window.dispatchEvent(new CustomEvent(THEME_MODE_EVENT, { detail: "system" }));
+  }
 }
 
 function onThemeModeEvent(e: Event) {

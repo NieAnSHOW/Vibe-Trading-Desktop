@@ -266,10 +266,16 @@ describe("Rail theme", () => {
 
   it("follows system theme changes while in system mode", async () => {
     await mountRail();
+    const onThemeMode = vi.fn();
+    window.addEventListener("vibe:theme-mode", onThemeMode);
 
     currentMq!.setDark(false);
 
     expect(document.documentElement.dataset.theme).toBe("light");
+    expect(onThemeMode).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: "system" }),
+    );
+    window.removeEventListener("vibe:theme-mode", onThemeMode);
   });
 
   it("applies the persisted explicit theme mode", async () => {

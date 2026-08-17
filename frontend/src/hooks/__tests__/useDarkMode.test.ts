@@ -16,6 +16,7 @@ describe("useDarkMode", () => {
     localStorage.clear();
     sessionStorage.clear();
     document.documentElement.classList.remove("dark");
+    delete document.documentElement.dataset.shellDark;
     window.history.replaceState(null, "", "/");
   });
 
@@ -95,5 +96,29 @@ describe("useDarkMode", () => {
     expect(result.current.dark).toBe(true);
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     expect(document.documentElement.dataset.brand).toBe("blue");
+  });
+
+  it("keeps a shell-synchronized dark theme when a later consumer mounts", async () => {
+    window.history.replaceState(null, "", "?desktop=1&shell=frame&theme=light");
+    initDesktopShell();
+    const first = renderHook(() => useDarkMode());
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          source: window,
+          data: { type: "vibe-shell:theme", dark: true },
+        }),
+      );
+    });
+
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+
+    const second = renderHook(() => useDarkMode());
+
+    expect(second.result.current.dark).toBe(true);
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    first.unmount();
+    second.unmount();
   });
 });
