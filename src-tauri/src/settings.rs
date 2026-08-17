@@ -20,7 +20,7 @@ pub struct Settings {
 }
 
 fn default_theme_mode() -> String {
-    "system".to_string()
+    "light".to_string()
 }
 
 fn default_theme_color() -> String {
@@ -68,7 +68,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let settings = load(tmp.path());
         assert!(!settings.autostart_service);
-        assert_eq!(settings.theme_mode, "system");
+        assert_eq!(settings.theme_mode, "light");
         assert_eq!(settings.theme_color, "teal");
     }
 

@@ -190,7 +190,10 @@ function onStartupAnimationEnd() {
   >
     <section class="onboarding-stage">
       <img class="onboarding-logo" alt="Trading Worker" :src="logoPng" />
-      <p class="onboarding-status">{{ needsRepair ? '请先点击安装环境' : '应用启动中...' }} </p>
+      <span class="onboarding-name">Trading Worker</span>
+      <p class="onboarding-status">
+        <i v-if="!needsRepair" class="onboarding-dot" aria-hidden="true"></i>{{ needsRepair ? '请先点击安装环境' : '应用启动中...' }}
+      </p>
       <p v-show="displayError" id="err" class="onboarding-error" role="alert">{{ displayError }}</p>
       <AppButton
         v-if="needsRepair"
@@ -200,7 +203,7 @@ function onStartupAnimationEnd() {
         data-test="repair-environment"
         @click="onRepair"
       >
-        <Wrench :size="17" aria-hidden="true" />
+        <Wrench :size="16" aria-hidden="true" />
         安装/修复环境
       </AppButton>
     </section>
@@ -218,11 +221,19 @@ function onStartupAnimationEnd() {
 </template>
 
 <style scoped>
+/* 启动门面:近黑蓝画布 + 品牌辉光,等宽品牌名与状态行(设计系统"状态用
+   等宽 + 青绿点位"表达),与登录页品牌面板同构 */
 .onboarding-page {
   display: grid;
   min-height: 100dvh;
   place-items: center;
-  background: hsl(var(--bg));
+  background:
+    radial-gradient(
+      46% 32% at 50% 36%,
+      hsl(var(--brand) / 0.1),
+      transparent 70%
+    ),
+    hsl(var(--bg));
   color: hsl(var(--ink));
 }
 
@@ -231,7 +242,7 @@ function onStartupAnimationEnd() {
   min-width: 240px;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 0;
   padding: 32px;
   text-align: center;
 }
@@ -241,27 +252,55 @@ function onStartupAnimationEnd() {
   height: 96px;
   border-radius: 22px;
   object-fit: contain;
-  filter: drop-shadow(0 12px 30px hsl(var(--brand) / 0.2));
+  filter: drop-shadow(0 14px 34px hsl(var(--brand) / 0.22));
+}
+
+/* 等宽大写品牌名,与登录页 brand-name 同构 */
+.onboarding-name {
+  margin-top: 18px;
+  font-family: var(--tw-mono);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .onboarding-status {
-  color: hsl(var(--ink-dim));
-  font-size: 16px;
-}
-
-.onboarding-error {
-  max-width: 320px;
-  color: hsl(var(--bad-fg));
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.onboarding-stage :deep(.btn-primary) {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 40px;
-  padding-inline: 18px;
+  margin-top: 12px;
+  color: hsl(var(--ink-dim));
+  font-family: var(--tw-mono);
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+}
+
+/* 启动进行中:青绿点位脉冲(设计系统"进行中使用青绿点位") */
+.onboarding-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: hsl(var(--brand));
+  animation: pulse 1.4s var(--ease) infinite;
+}
+
+/* 视觉主体由全局 #err:not(:empty) 提供,这里只约束宽度 */
+.onboarding-error {
+  max-width: 340px;
+}
+
+/* 主操作:设计系统按钮规范(44px 高 / 8px 圆角 / 等宽标签 + 品牌辉光) */
+.onboarding-stage :deep(.btn-primary) {
+  margin-top: 22px;
+  min-height: 44px;
+  padding-inline: 22px;
+  border-radius: 8px;
+  font-family: var(--tw-mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  box-shadow: 0 6px 20px hsl(var(--brand) / 0.28);
 }
 
 .onboarding-page--ready .onboarding-stage {
@@ -277,6 +316,10 @@ function onStartupAnimationEnd() {
 
 @media (prefers-reduced-motion: reduce) {
   .onboarding-page--ready .onboarding-stage {
+    animation-duration: 0.01ms;
+  }
+
+  .onboarding-dot {
     animation-duration: 0.01ms;
   }
 }

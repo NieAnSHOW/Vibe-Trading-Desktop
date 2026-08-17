@@ -355,6 +355,7 @@ export function Layout() {
             "bg-card flex flex-col shrink-0 transition-all duration-200 rounded-xl my-2 ml-[2px]",
             collapsed ? "w-12" : "w-52",
           )}
+          style={{ boxShadow: "0 12px 32px hsl(220 20% 40% / 0.08)" }}
         >
           {/* ── top: logo + primary nav ── */}
           <div

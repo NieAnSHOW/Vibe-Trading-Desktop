@@ -77,8 +77,8 @@ const authStore = useAuthStore();
 const envStore = useEnvStore();
 const { port, serviceRunning } = storeToRefs(envStore);
 
-// ── 主题引擎:默认跟随系统,设置页经 window 事件驱动本引擎生效 ──
-const themeMode = ref<ThemeMode>("system");
+// ── 主题引擎:默认浅色(初次启动),设置页经 window 事件驱动本引擎生效 ──
+const themeMode = ref<ThemeMode>("light");
 const themeColor = ref<ThemeColorId>("teal");
 const themeSaving = ref(false);
 const researchOpening = ref(false);

@@ -14,6 +14,7 @@ import { useAuthStore } from "../stores/auth";
 import { useBusy } from "../composables/useBusy";
 import SetPasswordModal from "../components/SetPasswordModal.vue";
 import logoPng from "../assets/128x128@2x.png";
+import { Layers, MessageCircle, ShieldCheck } from "@lucide/vue";
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -269,43 +270,21 @@ onUnmounted(() => {
 
 <template>
   <main class="login-page">
-    <!-- 左栏：品牌与产品介绍（门面，不随 tab 变化） -->
-    <section class="brand-panel" aria-label="产品介绍">
-      <header class="brand-head">
-        <img class="brand-mark" :src="logoPng" alt="Trading Worker 图标" />
-        <span class="brand-name">Trading Worker</span>
+    <!-- 单列居中门面:标题 → 登录卡 → 卖点,自上而下即任务路径 -->
+    <header class="login-intro">
+      <h1 class="login-title">用自然语言，做专业级研究</h1>
+    </header>
+
+    <section class="card">
+      <header class="login-brand">
+        <img class="login-brand__mark" :src="logoPng" alt="Trading Worker 图标" />
+        <div class="login-brand__copy">
+          <span class="login-brand__name">Trading Worker</span>
+          <span class="login-brand__tag">Local AI Research Workstation</span>
+        </div>
       </header>
 
-      <div class="brand-body">
-        <p class="eyebrow">Local AI Research Workstation</p>
-        <h1 class="brand-title">用自然语言，做专业级研究</h1>
-        <p class="brand-desc">
-          Trading Worker 是一款自然语言驱动的金融研究 AI 智能体桌面应用，内置 70+ 金融技能与回测引擎，覆盖投研对话、策略研究与回测分析。
-        </p>
-
-        <ul class="brand-points">
-          <li>
-            <strong>对话式研究</strong>
-            <span>直接问“帮我回测一个均线交叉策略”，不用写代码</span>
-          </li>
-          <li>
-            <strong>70+ 金融技能</strong>
-            <span>覆盖技术分析、基本面、策略回测、加密货币等</span>
-          </li>
-          <li>
-            <strong>本地运行</strong>
-            <span>数据与 API Key 只存放在你自己的电脑上</span>
-          </li>
-        </ul>
-      </div>
-
-      <p class="brand-foot">登录后启动服务，自动配置 VIP 大模型</p>
-    </section>
-
-    <!-- 右栏：登录 / 注册表单 -->
-    <section class="panel-side">
-      <section class="card">
-        <nav v-if="tab !== 'register'" class="tabs" role="tablist" aria-label="登录方式">
+      <nav v-if="tab !== 'register'" class="tabs" role="tablist" aria-label="登录方式">
           <button :class="['tab', tab === 'sms' && 'active']" role="tab" :aria-selected="tab === 'sms'"
             @click="switchTab('sms')">
             短信登录
@@ -366,12 +345,6 @@ onUnmounted(() => {
             @click="submitSms">
             {{ submitBusy.busy.value ? "登录中…" : "登录" }}
           </button>
-          <button type="button" class="skip-btn" @click="router.replace('/')">
-            回到首页
-          </button>
-          <button data-test="register-entry" type="button" class="register-entry" @click="showRegister">
-            没有账号？注册
-          </button>
         </form>
 
         <form v-else-if="tab === 'password'" class="form" @submit.prevent="submitPassword">
@@ -397,12 +370,6 @@ onUnmounted(() => {
           <button type="button" class="submit" :disabled="!phoneValid || !passwordValid || submitBusy.busy.value"
             @click="submitPassword">
             {{ submitBusy.busy.value ? "登录中…" : "登录" }}
-          </button>
-          <button type="button" class="skip-btn" @click="router.replace('/')">
-            回到首页
-          </button>
-          <button data-test="register-entry" type="button" class="register-entry" @click="showRegister">
-            没有账号？注册
           </button>
         </form>
 
@@ -460,20 +427,42 @@ onUnmounted(() => {
             :disabled="!registerValid || submitBusy.busy.value" @click="submitRegister">
             {{ submitBusy.busy.value ? "注册中…" : "注册" }}
           </button>
-          <button type="button" class="skip-btn" @click="router.replace('/')">
-            回到首页
-          </button>
-          <button data-test="back-to-login" type="button" class="register-entry" @click="showLogin">
-            已有账号？去登录
-          </button>
         </form>
 
         <p v-if="notice" class="notice" role="status">{{ notice }}</p>
         <p v-if="err" class="err" role="alert">{{ err }}</p>
+
+        <footer class="login-links">
+          <button type="button" class="skip-btn" @click="router.replace('/')">回到首页</button>
+          <button v-if="tab !== 'register'" data-test="register-entry" type="button" class="register-entry"
+            @click="showRegister">
+            没有账号？注册
+          </button>
+          <button v-else data-test="back-to-login" type="button" class="register-entry" @click="showLogin">
+            已有账号？去登录
+          </button>
+        </footer>
       </section>
 
       <SetPasswordModal :open="showSetPwd" @close="onPwdModalClose" />
-    </section>
+
+      <ul class="login-points" aria-label="产品要点">
+        <li>
+          <MessageCircle :size="18" aria-hidden="true" />
+          <strong>对话式研究</strong>
+          <span>直接问“帮我回测一个均线交叉策略”，不用写代码</span>
+        </li>
+        <li>
+          <Layers :size="18" aria-hidden="true" />
+          <strong>70+ 金融技能</strong>
+          <span>覆盖技术分析、基本面、策略回测、加密货币等</span>
+        </li>
+        <li>
+          <ShieldCheck :size="18" aria-hidden="true" />
+          <strong>本地运行</strong>
+          <span>数据与 API Key 只存放在你自己的电脑上</span>
+        </li>
+      </ul>
   </main>
 </template>
 
@@ -483,181 +472,176 @@ onUnmounted(() => {
 /* 登录页不套引导页外壳:独立全屏门面。
    body 默认是 flex + justify-content:center(为 580px 控制台服务),
    展开逻辑见 console.css 的 body:has(> #app > .shell-content > [data-test="console-surface"] > .login-page)。 */
+/* ── 门面:单列居中(标题 → 登录卡 → 卖点)。随全局亮/暗主题切换:
+   浅色为设计系统"米白纸面",深色为"近黑蓝研究底";品牌色仍全局生效 ── */
 .login-page {
-  /* Trading Worker 设计系统令牌(局部作用域,不污染全局) */
-  --tw-font-display: "Playfair Display", "Noto Serif SC", "Songti SC", serif;
-  --tw-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --tw-gold: oklch(0.66 0.04 85);
-  --tw-accent: oklch(0.72 0.11 180);
-  --tw-accent-dim: oklch(0.72 0.11 180 / 0.16);
+  --login-canvas:
+    radial-gradient(
+      64% 42% at 50% -6%,
+      hsl(var(--brand) / 0.07),
+      transparent 62%
+    ),
+    radial-gradient(
+      44% 30% at 6% 104%,
+      oklch(0.66 0.04 85 / 0.05),
+      transparent 60%
+    ),
+    linear-gradient(164deg, oklch(0.975 0.008 95) 0%, oklch(0.955 0.01 100) 100%);
+  --login-noise-opacity: 0.03;
+  --login-card-shadow:
+    0 1px 2px hsl(220 20% 30% / 0.05),
+    0 16px 40px hsl(220 20% 30% / 0.1);
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(400px, 440px);
-  gap: 18px;
-  width: 100%;
-  min-height: calc(100vh - 36px);
-  margin-inline: auto;
-  max-width: 1240px;
-}
-
-/* ── 左栏:品牌面板(设计系统"近黑蓝研究底 + 青绿焦点") ──
-   底色近黑蓝,青绿焦点光只做氛围,金色微光呼应字号标签;
-   白色文字对比度仍 ≥ 4.5:1。 */
-.brand-panel {
-  /* 品牌面板恒为设计系统"深色研究底":局部固定米白 ink,不随亮暗主题变 */
-  --ink: 220 12% 93%;
-  position: relative;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  padding: 38px 42px 32px;
-  border-radius: 20px;
-  background:
-    radial-gradient(110% 75% at -8% -10%, oklch(0.72 0.11 180 / 0.16), transparent 55%),
-    radial-gradient(70% 55% at 108% 112%, oklch(0.66 0.04 85 / 0.05), transparent 60%),
+  align-items: center;
+  justify-content: safe center;
+  gap: 30px;
+  width: 100%;
+  min-height: 100dvh;
+  padding: 30px 20px 34px;
+}
+
+html[data-theme="dark"] .login-page {
+  --login-canvas:
+    radial-gradient(
+      64% 42% at 50% -6%,
+      hsl(var(--brand) / 0.14),
+      transparent 62%
+    ),
+    radial-gradient(
+      44% 30% at 6% 104%,
+      oklch(0.66 0.04 85 / 0.05),
+      transparent 60%
+    ),
     linear-gradient(164deg, oklch(0.058 0.007 222) 0%, oklch(0.042 0.006 214) 100%);
-  border: 1px solid oklch(0.96 0.01 90 / 0.1);
-  box-shadow:
+  --login-noise-opacity: 0.05;
+  --login-card-shadow:
     0 1px 0 hsl(0 0% 100% / 0.06) inset,
-    0 30px 80px -24px hsl(175 52% 4% / 0.7);
-  color: hsl(var(--ink));
+    0 1px 2px hsl(220 50% 3% / 0.5),
+    0 16px 36px hsl(220 60% 3% / 0.5),
+    0 40px 90px -20px hsl(220 70% 2% / 0.55);
+}
+
+.login-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--login-canvas);
 }
 
 /* 噪点纹理:消除大面积纯色的“塑料感”,只做氛围,不承载信息。 */
-.brand-panel::before {
+.login-page::after {
   content: "";
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 0;
+  z-index: -1;
   pointer-events: none;
   background-image: url("data:image/svg+xml;charset=utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
   background-size: 180px 180px;
-  opacity: 0.05;
+  opacity: var(--login-noise-opacity);
   mix-blend-mode: overlay;
 }
 
-/* 面板内容上提到噪点之上,避免文字被纹理干扰。 */
-.brand-head,
-.brand-body,
-.brand-foot {
-  position: relative;
-  z-index: 1;
+/* 衬线标题:品牌承诺,先于任务被读到 */
+.login-title {
+  max-width: 18em;
+  font-family: var(--tw-display);
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
 }
 
-.brand-head {
+.login-brand {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding-bottom: 18px;
+  margin-bottom: 4px;
 }
 
-.brand-mark {
+.login-brand__mark {
   flex: none;
-  width: 42px;
-  height: 42px;
-  border-radius: 11px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   box-shadow:
-    0 1px 0 hsl(0 0% 100% / 0.1) inset,
-    0 6px 16px hsl(175 50% 6% / 0.45);
+    0 1px 0 hsl(0 0% 100% / 0.08) inset,
+    0 6px 16px hsl(var(--brand) / 0.18);
 }
 
-.brand-name {
-  font-family: var(--tw-font-mono);
-  font-size: 15px;
+.login-brand__copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.login-brand__name {
+  font-family: var(--tw-mono);
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
-/* 设计系统 eyebrow:金色等宽小标签,承载品牌语气 */
-.eyebrow {
-  margin-bottom: 14px;
-  color: var(--tw-gold);
-  font-family: var(--tw-font-mono);
-  font-size: 11.5px;
+.login-brand__tag {
+  font-family: var(--tw-mono);
+  font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.2em;
   text-transform: uppercase;
+  color: var(--tw-gold);
 }
 
-.brand-body {
-  margin: auto 0;
-  padding: 48px 0;
-  max-width: 46ch;
-}
-
-.brand-title {
-  font-family: var(--tw-font-display);
-  font-size: clamp(30px, 3.4vw, 40px);
-  font-weight: 400;
-  letter-spacing: 0.01em;
-  line-height: 1.2;
-  text-wrap: balance;
-  color: hsl(var(--ink));
-}
-
-.brand-desc {
-  margin-top: 14px;
-  font-size: 14px;
-  line-height: 1.65;
-  color: hsl(var(--ink) / 0.8);
-  text-wrap: pretty;
-}
-
-.brand-points {
-  display: grid;
-  gap: 14px;
-  margin-top: 34px;
-  list-style: none;
-  padding: 0;
-}
-
-.brand-points li {
-  display: grid;
-  gap: 3px;
-}
-
-.brand-points strong {
+/* 卡底链接行:回到首页 / 注册入口 */
+.login-links {
   display: flex;
   align-items: center;
-  gap: 9px;
-  font-size: 14px;
-  font-weight: 650;
-  letter-spacing: -0.005em;
-  color: hsl(var(--ink));
-}
-
-/* 极简品牌色锚点:不抢标题,只给列表一个克制的节奏感。 */
-.brand-points strong::before {
-  content: "";
-  flex: none;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: hsl(var(--brand) / 0.95);
-  box-shadow: 0 0 0 3px hsl(var(--brand) / 0.18);
-}
-
-.brand-points span {
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: hsl(var(--ink) / 0.72);
-}
-
-.brand-foot {
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid hsl(0 0% 100% / 0.08);
-  font-size: 12.5px;
-  color: hsl(var(--ink) / 0.72);
-}
-
-/* ── 右栏:表单卡片 ── */
-.panel-side {
-  display: flex;
-  align-items: safe center;
   justify-content: center;
-  overflow-y: auto;
+  gap: 22px;
+  margin-top: 18px;
+}
+
+/* 卡下卖点:信任背书,退为暗调 */
+.login-points {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px 40px;
+  max-width: 780px;
+  padding: 0;
+  list-style: none;
+}
+
+.login-points li {
+  display: grid;
+  min-width: 168px;
+  gap: 6px;
+  justify-items: center;
+  text-align: center;
+}
+
+.login-points svg {
+  color: hsl(var(--brand));
+}
+
+.login-points strong {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.login-points span {
+  max-width: 22em;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: hsl(var(--ink-dim));
 }
 
 .card {
@@ -667,11 +651,7 @@ onUnmounted(() => {
   border: 1px solid hsl(var(--line));
   border-radius: 18px;
   padding: 30px 28px 26px;
-  box-shadow:
-    0 1px 0 hsl(0 0% 100% / 0.06) inset,
-    0 1px 2px hsl(220 50% 3% / 0.5),
-    0 16px 36px hsl(220 60% 3% / 0.5),
-    0 40px 90px -20px hsl(220 70% 2% / 0.55);
+  box-shadow: var(--login-card-shadow);
 }
 
 .tabs {
@@ -742,8 +722,7 @@ onUnmounted(() => {
   color: hsl(var(--ink));
   background: hsl(var(--surface-2));
   border: 1px solid hsl(var(--line));
-  border-radius: 9px;
-  box-shadow: 0 1px 2px hsl(220 40% 2% / 0.5) inset;
+  border-radius: 8px;
   transition:
     border-color 0.16s var(--ease),
     box-shadow 0.16s var(--ease),
@@ -762,24 +741,15 @@ onUnmounted(() => {
   outline: none;
   border-color: hsl(var(--brand) / 0.65);
   background: hsl(var(--surface-2));
-  box-shadow:
-    0 0 0 4px hsl(var(--brand) / 0.14),
-    0 1px 2px hsl(220 40% 2% / 0.5) inset;
 }
 
 /* 注册密码失焦校验失败:醒目红色边框 + 提示文字 */
 .field.invalid {
   border-color: hsl(var(--bad) / 0.75);
-  box-shadow:
-    0 0 0 4px hsl(var(--bad) / 0.16),
-    0 1px 2px hsl(220 40% 2% / 0.5) inset;
 }
 
 .field.invalid:focus {
   border-color: hsl(var(--bad));
-  box-shadow:
-    0 0 0 4px hsl(var(--bad) / 0.2),
-    0 1px 2px hsl(220 40% 2% / 0.5) inset;
 }
 
 .field-error {
@@ -797,7 +767,7 @@ onUnmounted(() => {
 .inline .field {
   flex: 1;
   min-width: 0;
-  font-family: var(--tw-font-mono);
+  font-family: var(--tw-mono);
   font-size: 13.5px;
 }
 
@@ -808,7 +778,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   padding: 0;
-  background: hsl(var(--surface-2));
+  background: hsl(46.67, 0.5%, 29.35%);
   border: 1px solid hsl(var(--line));
   border-radius: 8px;
   overflow: hidden;
@@ -854,7 +824,7 @@ onUnmounted(() => {
   color: hsl(var(--brand));
   border: 1px solid hsl(var(--line));
   border-radius: 8px;
-  font-family: var(--tw-font-mono);
+  font-family: var(--tw-mono);
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
@@ -891,10 +861,10 @@ onUnmounted(() => {
   margin-top: 4px;
   padding: 13px 14px;
   background: hsl(var(--brand));
-  color: hsl(var(--on-brand));
+  color: #fff;
   border: 0;
   border-radius: 8px;
-  font-family: var(--tw-font-mono);
+  font-family: var(--tw-mono);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -938,35 +908,27 @@ onUnmounted(() => {
 }
 
 .skip-btn {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 9px 12px;
+  padding: 2px 4px;
+  border: 0;
   background: transparent;
   color: hsl(var(--ink-dim));
-  border: 1px solid hsl(var(--line));
-  border-radius: 8px;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 550;
   cursor: pointer;
-  transition:
-    color 0.16s var(--ease),
-    border-color 0.16s var(--ease),
-    background 0.16s var(--ease);
+  transition: color 0.16s var(--ease);
 }
 
 .skip-btn:hover {
   color: hsl(var(--ink));
-  border-color: hsl(var(--ink-dim) / 0.5);
-  background: hsl(var(--surface-2) / 0.5);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .skip-btn:focus-visible {
   outline: 2px solid hsl(var(--brand));
   outline-offset: 2px;
+  border-radius: 4px;
 }
-
 .remember-row {
   display: flex;
   align-items: center;
@@ -1008,7 +970,7 @@ onUnmounted(() => {
   padding: 10px 12px;
   background: hsl(var(--bad) / 0.1);
   border: 1px solid hsl(var(--bad) / 0.3);
-  border-radius: 9px;
+  border-radius: 8px;
   color: hsl(var(--bad-fg));
   font-size: 12.5px;
   line-height: 1.5;
@@ -1020,82 +982,36 @@ onUnmounted(() => {
   padding: 10px 12px;
   background: hsl(var(--ok) / 0.1);
   border: 1px solid hsl(var(--ok) / 0.3);
-  border-radius: 9px;
+  border-radius: 8px;
   color: hsl(var(--ok-fg));
   font-size: 12.5px;
   line-height: 1.5;
   word-break: break-word;
 }
 
-/* ── 矮窗口:压缩品牌面板垂直空间,内容不足时内部滚动 ── */
-@media (max-height: 760px) {
-  .brand-body {
-    padding: 26px 0;
-  }
-
-  .brand-points {
-    margin-top: 22px;
-    gap: 10px;
-  }
-
-  .brand-desc {
-    margin-top: 10px;
-  }
-}
-
-@media (max-height: 620px) {
-  .brand-panel {
-    overflow-y: auto;
-  }
-
-  .brand-body {
-    padding: 12px 0;
-  }
-}
-
-/* ── 窄屏:单栏堆叠,品牌面板退化为紧凑头 ── */
-@media (max-width: 899px) {
+/* ── 响应式:单列流天然自适应;窄屏收紧节奏,极窄卖点转单列 ── */
+@media (max-width: 640px) {
   .login-page {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 14px;
-    min-height: 0;
+    gap: 22px;
+    padding: 22px 16px 26px;
   }
 
-  .brand-panel {
-    padding: 22px 26px;
-    border-radius: 14px;
+  .login-points {
+    gap: 12px 26px;
   }
 
-  .brand-body {
-    margin: 0;
-    padding: 22px 0 4px;
-    max-width: none;
-  }
-
-  .brand-title {
-    font-size: 22px;
-  }
-
-  .brand-points {
-    margin-top: 18px;
-  }
-
-  .brand-foot {
-    margin-top: 18px;
+  .login-points li {
+    min-width: 148px;
   }
 }
 
-@media (max-width: 520px) {
-  .brand-panel {
-    padding: 18px 20px;
+@media (max-width: 400px) {
+  .login-points li {
+    min-width: 100%;
   }
 
-  .brand-body {
-    padding-top: 16px;
-  }
-
-  .card {
-    padding: 22px 18px 20px;
+  .login-links {
+    gap: 14px;
   }
 }
 </style>

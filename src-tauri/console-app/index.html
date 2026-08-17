@@ -17,7 +17,7 @@
                 ? "settings"
                 : "neutral";
         const mode = params.get("theme");
-        const dark = mode === "dark" || (mode !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+        const dark = mode === "dark" || (mode === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
         document.documentElement.dataset.theme = dark ? "dark" : "light";
         document.documentElement.style.colorScheme = dark ? "dark" : "light";
         document.documentElement.style.backgroundColor = dark ? "hsl(220 24% 4%)" : "hsl(220 20% 96%)";

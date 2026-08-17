@@ -172,83 +172,120 @@ onUnmounted(() => clearMemberUsage());
 </script>
 
 <template>
-  <main class="profile">
-    <section class="profile-card profile-member-card">
-      <div class="profile-identity">
-        <CircleUserRound :size="48" stroke-width="1.3" aria-hidden="true" />
-        <div>
-          <h1 class="profile-title">{{ memberTier?.label ?? "会员账户" }}</h1>
-          <p class="profile-meta">{{ accountName }}</p>
-        </div>
-      </div>
-      <p v-if="auth.userInfo?.phone" class="profile-meta">{{ auth.userInfo.phone }}</p>
-      <span v-if="level" class="member-tier" :class="`member-tier--${memberTier?.tone ?? 'member'}`">
-        <span class="member-tier-mark">V</span><span class="member-tier-name">{{ level.name }}</span>
-      </span>
-      <p v-if="level?.expireTime" class="profile-meta">有效期至 {{ level.expireTime }}</p>
+  <main class="tw-page profile">
+    <header>
+      <p class="tw-kicker">Membership</p>
+      <h1 class="tw-page-title">会员账户</h1>
+      <p class="tw-page-sub">本地账户信息、会员权益与剩余用量。</p>
+    </header>
 
-      <div v-if="membershipUpdateNotice" class="login-notice" role="status">
-        会员权益已更新，当前服务仍在使用旧配置。
-        <AppButton v-if="serviceRunning" variant="ghost" :busy="membershipRefreshBusy.busy.value"
-          data-test="membership-refresh-service" @click="membershipRestartDialogOpen = true">
-          重启服务并刷新
-        </AppButton>
-        <AppButton v-else variant="ghost" data-test="membership-refresh-usage" @click="refreshMembershipUsageManually">
-          刷新会员用量
-        </AppButton>
-      </div>
+    <div v-if="membershipUpdateNotice" class="pf-notice" role="status">
+      <span>会员权益已更新，当前服务仍在使用旧配置。</span>
+      <AppButton v-if="serviceRunning" variant="primary" :busy="membershipRefreshBusy.busy.value"
+        data-test="membership-refresh-service" @click="membershipRestartDialogOpen = true">
+        重启服务并刷新
+      </AppButton>
+      <AppButton v-else variant="ghost" data-test="membership-refresh-usage" @click="refreshMembershipUsageManually">
+        刷新会员用量
+      </AppButton>
+    </div>
 
-      <section class="member-usage-section" data-test="member-usage-section" aria-label="会员用量">
-        <div class="member-usage-head">
-          <span class="member-usage-title">剩余用量</span>
-          <AppButton variant="ghost" :busy="usageRefreshing" busy-label="刷新中" data-test="member-usage-refresh"
-            @click="refreshMembershipUsageManually">
-            <RefreshCw :size="14" aria-hidden="true" />刷新
-          </AppButton>
+    <!-- DOM 顺序 = 窄屏优先级流:身份 → 用量 → 权益 → 支持 → 退出;桌面位由网格指定 -->
+    <div class="tw-grid">
+      <section class="tw-panel pf-identity" aria-label="账户身份">
+        <div class="tw-panel__body pf-identity__body">
+          <span class="pf-avatar" aria-hidden="true">
+            <CircleUserRound :size="28" stroke-width="1.3" />
+          </span>
+          <h2 class="pf-name">{{ accountName }}</h2>
+          <p v-if="auth.userInfo?.phone" class="pf-phone">{{ auth.userInfo.phone }}</p>
+          <span v-if="level" class="member-tier" :class="`member-tier--${memberTier?.tone ?? 'member'}`">
+            <span class="member-tier-mark">V</span><span class="member-tier-name">{{ level.name }}</span>
+          </span>
+          <p v-if="level?.expireTime" class="pf-expire">有效期至 {{ level.expireTime }}</p>
         </div>
-        <template v-if="memberUsage?.unlimited_quota">
-          <div class="member-usage-unlimited-state">
-            <strong class="member-usage-unlimited" data-test="member-usage-unlimited">不限量</strong>
-            <span data-test="member-usage-unlimited-note">当前套餐权益</span>
-          </div>
-        </template>
-        <template v-else-if="memberUsage">
-          <div class="usage-summary">
-            <strong>{{ formatUsageAmount(memberUsage.total_available) }}</strong><span>积分</span>
-            <small>{{ Math.round(remainingPercent) }}% 可用</small>
-          </div>
-          <div class="member-usage-track" role="progressbar" aria-label="剩余额度" :aria-valuenow="remainingPercent"
-            aria-valuemin="0" aria-valuemax="100">
-            <div class="member-usage-fill" :style="{ width: `${remainingPercent}%` }"></div>
-          </div>
-          <div class="usage-detail">
-            <span>总量 <b>{{ formatUsageAmount(memberUsage.total_granted) }}</b></span>
-            <span>已用 <b>{{ formatUsageAmount(memberUsage.total_used) }}</b></span>
-          </div>
-        </template>
-        <p v-else class="member-usage-placeholder">用量暂未加载</p>
       </section>
 
-      <div class="profile-support-actions">
-        <AppButton v-if="kefuQrCode" variant="ghost" class="member-kefu-entry" data-test="member-kefu-entry"
-          @click="kefuDialogOpen = true">
-          <Headset :size="15" aria-hidden="true" />联系客服
-        </AppButton>
-        <AppButton v-if="rewardQrCode" variant="ghost" class="member-kefu-entry" data-test="member-reward-entry"
-          @click="rewardDialogOpen = true">
-          <Gift :size="15" aria-hidden="true" />支持作者领中级会员
-        </AppButton>
-      </div>
-      <p v-if="actionError" class="profile-meta" role="alert">{{ actionError }}</p>
-    </section>
-    <section class="profile-card" aria-label="当前会员权益">
-      <h2 class="profile-title">当前会员权益</h2>
-      <p v-if="loading" class="profile-meta">正在加载会员权益...</p>
-      <template v-else-if="loadError"><p class="profile-meta">{{ loadError }}</p><AppButton variant="ghost" @click="loadBenefits">重试</AppButton></template>
-      <p v-else-if="benefits.length === 0" class="profile-meta">当前会员暂无可展示权益</p>
-      <ul v-else class="benefit-list"><li v-for="benefit in benefits" :key="benefit.id" class="benefit-item"><b>{{ benefit.title }}</b><p v-if="benefit.description">{{ benefit.description }}</p></li></ul>
-      <div class="profile-danger-zone"><AppButton variant="danger" :busy="logoutBusy.busy.value" @click="logoutOpen = true">退出登录</AppButton></div>
-    </section>
+      <section class="tw-panel pf-usage" data-test="member-usage-section" aria-label="会员用量">
+        <header class="tw-panel__head">
+          <h2 class="tw-panel__label">剩余用量</h2>
+          <AppButton variant="ghost" :busy="usageRefreshing" busy-label="刷新中" data-test="member-usage-refresh"
+            @click="refreshMembershipUsageManually">
+            <RefreshCw :size="13" aria-hidden="true" />刷新
+          </AppButton>
+        </header>
+        <div class="tw-panel__body">
+          <template v-if="memberUsage?.unlimited_quota">
+            <div class="pf-unlimited">
+              <strong data-test="member-usage-unlimited">不限量</strong>
+              <span data-test="member-usage-unlimited-note">当前套餐权益</span>
+            </div>
+          </template>
+          <template v-else-if="memberUsage">
+            <div class="pf-usage-summary">
+              <strong>{{ formatUsageAmount(memberUsage.total_available) }}</strong><span>积分</span>
+              <small>{{ Math.round(remainingPercent) }}% 可用</small>
+            </div>
+            <div class="pf-usage-track" role="progressbar" aria-label="剩余额度" :aria-valuenow="remainingPercent"
+              aria-valuemin="0" aria-valuemax="100">
+              <div class="pf-usage-fill" :style="{ width: `${remainingPercent}%` }"></div>
+            </div>
+            <div class="pf-usage-detail">
+              <span>总量 <b>{{ formatUsageAmount(memberUsage.total_granted) }}</b></span>
+              <span>已用 <b>{{ formatUsageAmount(memberUsage.total_used) }}</b></span>
+            </div>
+          </template>
+          <p v-else class="pf-state">用量暂未加载</p>
+        </div>
+      </section>
+
+      <section class="tw-panel pf-benefits" aria-label="当前会员权益">
+        <header class="tw-panel__head">
+          <h2 class="tw-panel__label">当前会员权益</h2>
+        </header>
+        <div class="tw-panel__body pf-benefits__body">
+          <p v-if="loading" class="pf-state">正在加载会员权益...</p>
+          <div v-else-if="loadError" class="pf-state pf-state--action">
+            <p>{{ loadError }}</p>
+            <AppButton variant="ghost" @click="loadBenefits">重试</AppButton>
+          </div>
+          <p v-else-if="benefits.length === 0" class="pf-state">当前会员暂无可展示权益</p>
+          <ul v-else class="pf-benefit-list">
+            <li v-for="benefit in benefits" :key="benefit.id" class="pf-benefit">
+              <b>{{ benefit.title }}</b>
+              <p v-if="benefit.description">{{ benefit.description }}</p>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section v-if="kefuQrCode || rewardQrCode" class="tw-panel pf-support" aria-label="支持与联系">
+        <header class="tw-panel__head">
+          <h2 class="tw-panel__label">支持与联系</h2>
+        </header>
+        <div class="tw-panel__body pf-support__body" style="display: flex;">
+          <AppButton v-if="kefuQrCode" variant="ghost" class="pf-contact" data-test="member-kefu-entry"
+            @click="kefuDialogOpen = true">
+            <Headset :size="15" aria-hidden="true" />联系客服
+          </AppButton>
+          <AppButton v-if="rewardQrCode" variant="ghost" class="pf-contact" data-test="member-reward-entry"
+            @click="rewardDialogOpen = true">
+            <Gift :size="15" aria-hidden="true" />支持作者领中级会员
+          </AppButton>
+        </div>
+      </section>
+
+      <section class="tw-panel pf-danger" aria-label="账户操作">
+        <div class="tw-panel__body pf-danger__body">
+          <AppButton variant="danger" class="pf-logout" :busy="logoutBusy.busy.value" @click="logoutOpen = true">
+            退出登录
+          </AppButton>
+        </div>
+      </section>
+    </div>
+
+    <p v-if="actionError" class="pf-error" role="alert">{{ actionError }}</p>
+
     <ConfirmDialog data-test="kefu-dialog" :open="kefuDialogOpen" title="联系客服"
       :image="ProdConfig.imgBase + kefuQrCode" image-alt="客服微信二维码" hide-cancel @close="onKefuDialogClose">
       <p style="margin-top: 8px;">请使用微信扫描上方二维码添加专属客服</p>
@@ -269,21 +306,244 @@ onUnmounted(() => clearMemberUsage());
 </template>
 
 <style>
-.profile-identity {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+/* 页面特有布局;共享词汇(tw-*)见 console.css。
+   桌面位:用量/权益为主列,身份/支持/退出为右侧上下文列 */
+@media (min-width: 900px) {
+  .pf-identity { grid-area: 1 / 2; }
+  .pf-usage { grid-area: 1 / 1; }
+  .pf-benefits { grid-area: 2 / 1; }
+  .pf-support { grid-area: 2 / 2; }
+  .pf-danger { grid-area: 3 / 2; }
 }
 
-.profile-identity > svg {
-  flex: none;
+/* 会员权益变更提示:全幅置顶,唯一实心主按钮 */
+.pf-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  margin-top: 18px;
+  padding: 10px 14px;
+  border: 1px solid hsl(var(--brand) / 0.35);
+  border-radius: 10px;
+  background: hsl(var(--brand) / 0.07);
+  font-size: 12.5px;
+}
+
+/* 身份面板 */
+.pf-identity__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.pf-avatar {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 4px;
+  place-items: center;
+  border: 1px solid hsl(var(--line));
+  border-radius: 12px;
+  background: hsl(var(--surface-2));
   color: hsl(var(--ink-dim));
 }
 
-.profile-support-actions {
+.pf-name {
+  font-family: var(--tw-display);
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+.pf-phone,
+.pf-expire {
+  color: hsl(var(--ink-dim));
+  font-family: var(--tw-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-expire {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+/* 用量:数据焦点,单一青绿强调 */
+.pf-usage-summary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  column-gap: 7px;
+}
+
+.pf-usage-summary strong {
+  overflow: hidden;
+  color: hsl(var(--brand));
+  font-family: var(--tw-mono);
+  font-size: 27px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pf-usage-summary span,
+.pf-usage-summary small {
+  color: hsl(var(--ink-dim));
+  font-size: 12px;
+}
+
+.pf-usage-summary small {
+  grid-column: 1 / -1;
+  margin-top: 9px;
+}
+
+.pf-usage-track {
+  height: 6px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: hsl(var(--line) / 0.8);
+}
+
+.pf-usage-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: hsl(var(--brand));
+  transition: width 0.3s var(--ease);
+}
+
+.pf-usage-detail {
+  display: grid;
+  gap: 7px;
+  margin-top: 13px;
+  color: hsl(var(--ink-dim));
+  font-size: 12px;
+}
+
+.pf-usage-detail span {
   display: flex;
-  flex-wrap: wrap;
+  align-items: baseline;
   justify-content: space-between;
+  gap: 10px;
+}
+
+.pf-usage-detail b {
+  color: hsl(var(--ink));
+  font-family: var(--tw-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-unlimited {
+  display: grid;
+  gap: 7px;
+  padding: 2px 0;
+}
+
+.pf-unlimited strong {
+  color: hsl(var(--brand));
+  font-family: var(--tw-display);
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.pf-unlimited span,
+.pf-state {
+  color: hsl(var(--ink-dim));
+  font-size: 12px;
+}
+
+/* 权益列表:细分隔行 + 品牌点节奏(与登录页品牌要点同构),不用色条 */
+.pf-benefit-list {
+  list-style: none;
+}
+
+.pf-benefit {
+  padding: 11px 0;
+}
+
+.pf-benefit + .pf-benefit {
+  border-top: 1px solid hsl(var(--line) / 0.6);
+}
+
+.pf-benefit b {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.pf-benefit b::before {
+  content: "";
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: hsl(var(--brand) / 0.95);
+  box-shadow: 0 0 0 3px hsl(var(--brand) / 0.16);
+}
+
+.pf-benefit p {
+  margin-top: 4px;
+  padding-left: 14px;
+  color: hsl(var(--ink-dim));
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.pf-state--action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* 支持:整行入口按钮 */
+.pf-support__body {
+  display: grid;
   gap: 8px;
+}
+
+.pf-contact {
+  justify-content: flex-start;
+}
+
+/* 退出:破坏性弱化为描边款;确认弹窗内保持实心负向色 */
+.pf-danger__body {
+  padding: 12px;
+}
+
+.pf-logout {
+  width: 100%;
+  justify-content: center;
+  background: hsl(var(--bad) / 0.1);
+  color: hsl(var(--bad-fg));
+  border-color: hsl(var(--bad) / 0.4);
+}
+
+.pf-logout:hover:not(:disabled) {
+  background: hsl(var(--bad) / 0.18);
+  border-color: hsl(var(--bad) / 0.6);
+}
+
+.pf-error {
+  margin-top: 14px;
+  padding: 8px 12px;
+  border: 1px solid hsl(var(--bad) / 0.3);
+  border-radius: 8px;
+  background: hsl(var(--bad) / 0.1);
+  color: hsl(var(--bad-fg));
+  font-size: 12.5px;
 }
 </style>

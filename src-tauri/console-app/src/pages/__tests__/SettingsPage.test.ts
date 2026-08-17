@@ -317,7 +317,11 @@ describe("SettingsPage", () => {
 });
 
 describe("SettingsPage appearance", () => {
-  it("defaults the theme mode to system and shows all choices", async () => {
+  it("defaults the theme mode to light and shows all choices", async () => {
+    mocks.consoleGetSettings.mockResolvedValueOnce({
+      theme_mode: "light",
+      theme_color: "teal",
+    });
     const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
     await flushPromises();
 
@@ -327,7 +331,9 @@ describe("SettingsPage appearance", () => {
       "light",
       "dark",
     ]);
-    expect(modeButtons[0].classes()).toContain("active");
+    expect(
+      wrapper.get('[data-test="theme-mode"] button[data-mode="light"]').classes(),
+    ).toContain("active");
     expect(wrapper.text()).toContain("跟随系统");
   });
 

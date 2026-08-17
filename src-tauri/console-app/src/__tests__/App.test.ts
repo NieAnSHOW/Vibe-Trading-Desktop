@@ -74,8 +74,9 @@ describe("App", () => {
   });
 
   it("keeps login and transition styles aligned with the console surface wrapper", () => {
-    expect(consoleStyles).toContain(
-      'body:has(> #app > .shell-content > [data-test="console-surface"] > .login-page)',
+    // 正则容忍格式化工具对长选择器的折行
+    expect(consoleStyles).toMatch(
+      /body:has\(\s*> #app > \.shell-content > \[data-test="console-surface"\] > \.login-page\s*\)/,
     );
     expect(appSource).toContain(
       '.shell-content:has(> [data-test="console-surface"] > .page-enter-active)',
@@ -99,6 +100,19 @@ describe("App", () => {
     expect(consoleStyles.match(/\.console\s*\{[^}]*\}/)?.[0]).toContain("width: 100%;");
     expect(consoleStyles.match(/\.profile\s*\{[^}]*\}/)?.[0]).toContain("width: 100%;");
     expect(settingsPageSource.match(/\.settings\s*\{[^}]*\}/)?.[0]).toContain("width: 100%;");
+  });
+
+  it("floats rail-aware console surfaces as rounded panels on the canvas", () => {
+    const panel = consoleStyles.match(
+      /\.shell-content--rail:not\(\.shell-content--standalone\)\s*>\s*\[data-test="console-surface"\]\s*\{[^}]*\}/,
+    )?.[0] ?? "";
+
+    expect(panel).toContain("border-radius:");
+    expect(panel).toContain("background:");
+    // 登录/引导等 standalone 门面不套面板
+    expect(consoleStyles).not.toContain(
+      '.shell-content--standalone:not(.shell-content--rail) > [data-test="console-surface"]',
+    );
   });
 
   it("removes the pre-rendered rail after the Vue app is mounted", () => {

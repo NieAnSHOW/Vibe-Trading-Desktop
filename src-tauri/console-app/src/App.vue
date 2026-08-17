@@ -105,6 +105,18 @@ onErrorCaptured((e) => {
   return false; // 阻止向上抛
 });
 
+// 面板滚动条平时隐藏、仅滚动期间浮现(见 console.css 的 .is-scrolling 规则)
+let surfaceScrollHideTimer: number | undefined;
+function onSurfaceScroll(event: Event) {
+  const surface = event.currentTarget as HTMLElement;
+  surface.classList.add("is-scrolling");
+  window.clearTimeout(surfaceScrollHideTimer);
+  surfaceScrollHideTimer = window.setTimeout(
+    () => surface.classList.remove("is-scrolling"),
+    600,
+  );
+}
+
 // 启动即拉取服务端公共配置（enableLogin/enableAd/checkUpdate 等），失败静默降级默认值
 onMounted(async () => {
   document.getElementById("console-rail-bootstrap")?.remove();
@@ -121,6 +133,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   unlistens.forEach((unlisten) => unlisten());
+  window.clearTimeout(surfaceScrollHideTimer);
   window.removeEventListener(THEME_MODE_EVENT, syncWebuiTheme);
   window.removeEventListener(THEME_COLOR_EVENT, syncWebuiTheme);
 });
@@ -146,7 +159,7 @@ onUnmounted(() => {
       }"
       data-test="shell-content"
     >
-      <div v-show="!webuiVisible" data-test="console-surface">
+      <div v-show="!webuiVisible" data-test="console-surface" @scroll.passive="onSurfaceScroll">
         <router-view v-slot="{ Component }">
           <Transition name="page" mode="out-in">
             <component :is="Component" />
