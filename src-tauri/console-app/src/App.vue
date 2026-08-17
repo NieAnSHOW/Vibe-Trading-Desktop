@@ -11,6 +11,7 @@ const errMsg = ref("");
 const route = useRoute();
 const isOnboarding = computed(() => route.path === "/");
 const isStandaloneSurface = computed(() => isOnboarding.value || route.path === "/login");
+const hasRail = computed(() => !isStandaloneSurface.value || webuiVisible.value);
 const webuiFrameUrl = ref<string | null>(null);
 const webuiVisible = ref(false);
 const webuiFrameActive = ref(false);
@@ -138,7 +139,11 @@ onUnmounted(() => {
     />
     <div
       class="shell-content"
-      :class="{ 'shell-content--onboarding': isOnboarding, 'shell-content--standalone': isStandaloneSurface }"
+      :class="{
+        'shell-content--onboarding': isOnboarding,
+        'shell-content--standalone': isStandaloneSurface,
+        'shell-content--rail': hasRail,
+      }"
       data-test="shell-content"
     >
       <div v-show="!webuiVisible" data-test="console-surface">

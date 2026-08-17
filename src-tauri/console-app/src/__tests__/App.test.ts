@@ -156,6 +156,7 @@ describe("App", () => {
     const content = wrapper.get('[data-test="shell-content"]');
     const page = wrapper.find(".onboarding-page");
     expect(content.classes()).toContain("shell-content--onboarding");
+    expect(content.classes()).not.toContain("shell-content--rail");
     expect(page.exists()).toBe(true);
     expect(content.element.contains(page.element)).toBe(true);
   });
@@ -170,6 +171,7 @@ describe("App", () => {
     expect(page.exists()).toBe(true);
     expect(wrapper.find(".rail").exists()).toBe(false);
     expect(content.classes()).toContain("shell-content--standalone");
+    expect(content.classes()).not.toContain("shell-content--rail");
     expect(content.element.contains(page.element)).toBe(true);
   });
 
@@ -186,6 +188,7 @@ describe("App", () => {
       const frame = wrapper.get('iframe[data-test="desktop-webui-frame"]');
       expect(frame.attributes("src")).toContain("shell=frame");
       expect(wrapper.find(".rail").exists()).toBe(true);
+      expect(wrapper.get('[data-test="shell-content"]').classes()).toContain("shell-content--rail");
       expect(wrapper.get('[data-test="console-surface"]').isVisible()).toBe(false);
 
       closeListener?.();
@@ -211,6 +214,13 @@ describe("App", () => {
     const frame = wrapper.get('iframe[data-test="desktop-webui-frame"]');
     const surface = wrapper.get('[data-test="shell-content"]');
     expect(surface.element.contains(frame.element)).toBe(false);
+  });
+
+  it("marks non-standalone routes as rail-aware", async () => {
+    await router.push("/next");
+    const wrapper = mount(App, { global: { plugins: [router, createPinia()] } });
+
+    expect(wrapper.get('[data-test="shell-content"]').classes()).toContain("shell-content--rail");
   });
 
   it("ignores a stale close animation when research is reopened", async () => {
