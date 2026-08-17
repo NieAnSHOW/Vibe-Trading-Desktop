@@ -10,6 +10,7 @@ import { onWebuiClose, onWebuiOpen } from "./ipc/events";
 const errMsg = ref("");
 const route = useRoute();
 const isOnboarding = computed(() => route.path === "/");
+const isStandaloneSurface = computed(() => isOnboarding.value || route.path === "/login");
 const webuiFrameUrl = ref<string | null>(null);
 const webuiVisible = ref(false);
 const webuiFrameActive = ref(false);
@@ -131,11 +132,15 @@ onUnmounted(() => {
   <template v-else>
     <!-- The rail belongs to the retained shell, never to the WebUI document. -->
     <Rail
-      v-if="!isOnboarding || webuiVisible"
+      v-if="!isStandaloneSurface || webuiVisible"
       :webui-active="webuiVisible"
       @navigate-console="returnToConsole"
     />
-    <div class="shell-content" :class="{ 'shell-content--onboarding': isOnboarding }" data-test="shell-content">
+    <div
+      class="shell-content"
+      :class="{ 'shell-content--onboarding': isOnboarding, 'shell-content--standalone': isStandaloneSurface }"
+      data-test="shell-content"
+    >
       <div v-show="!webuiVisible" data-test="console-surface">
         <router-view v-slot="{ Component }">
           <Transition name="page" mode="out-in">

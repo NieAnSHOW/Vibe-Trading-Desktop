@@ -801,6 +801,11 @@ body:has(> #app > .shell-content--onboarding) {
   padding: 0;
 }
 
+body:has(> #app > .shell-content--standalone) {
+  display: block;
+  padding: 0;
+}
+
 /* 登录页同样全屏展开(左右双栏门面),但保留自身 18px 呼吸边距 */
 body:has(> #app > .shell-content > [data-test="console-surface"] > .login-page) {
   display: block;
@@ -811,11 +816,17 @@ body:has(> #app > .shell-content > [data-test="console-surface"] > .login-page) 
   min-width: 0;
 }
 
+#app:has(> .shell-content--standalone) {
+  width: 100%;
+  min-width: 0;
+}
+
 body::before {
   display: none;
 }
 
 .shell-content--onboarding,
+.shell-content--standalone,
 .onboarding-page {
   display: flex;
   width: 100%;

@@ -34,7 +34,7 @@ const router = createRouter({
   routes: [
     { path: "/", component: { template: '<main class="onboarding-page"><p>first page</p></main>' } },
     { path: "/next", component: { template: "<p>next page</p>" } },
-    { path: "/login-facade", component: { template: '<main class="login-page" />' } },
+    { path: "/login", component: { template: '<main class="login-page" />' } },
   ],
 });
 
@@ -160,14 +160,16 @@ describe("App", () => {
     expect(content.element.contains(page.element)).toBe(true);
   });
 
-  it("keeps the login facade out of the centered console layout", async () => {
-    await router.push("/login-facade");
+  it("renders the login page as an independent startup surface", async () => {
+    await router.push("/login");
     const wrapper = mountAppAtDocumentRoot();
     await flushPromises();
 
     const content = wrapper.get('[data-test="shell-content"]');
     const page = wrapper.find(".login-page");
     expect(page.exists()).toBe(true);
+    expect(wrapper.find(".rail").exists()).toBe(false);
+    expect(content.classes()).toContain("shell-content--standalone");
     expect(content.element.contains(page.element)).toBe(true);
   });
 

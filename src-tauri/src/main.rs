@@ -189,10 +189,10 @@ pub fn open_url_with_system(url: &str) -> Result<(), String> {
 }
 
 /// 准备可写运行目录(会话/日志/venv 父目录就绪;runtime/ 代码刷新)。
-/// 非 Ready 环境停在控制台页(console.html),由用户经控制台按钮触发
-/// bootstrap / 启停;Ready 环境则自动拉起后端并由 webui_embed 内嵌 WebUI。
-fn should_auto_start(env: console::EnvStatus, service_running: bool) -> bool {
-    env == console::EnvStatus::Ready && !service_running
+/// 服务启动必须等待 Vue onboarding 完成环境与登录门控，避免原生 boot
+/// 绕过登录直接打开研究页。
+fn should_auto_start(_env: console::EnvStatus, _service_running: bool) -> bool {
+    false
 }
 
 fn boot(
@@ -277,8 +277,8 @@ mod tests {
     }
 
     #[test]
-    fn ready_environment_starts_even_when_legacy_autostart_is_disabled() {
-        assert!(should_auto_start(console::EnvStatus::Ready, false));
+    fn ready_environment_waits_for_the_frontend_start_gate() {
+        assert!(!should_auto_start(console::EnvStatus::Ready, false));
         assert!(!should_auto_start(console::EnvStatus::Incomplete, false));
         assert!(!should_auto_start(console::EnvStatus::NotInstalled, false));
         assert!(!should_auto_start(console::EnvStatus::Ready, true));

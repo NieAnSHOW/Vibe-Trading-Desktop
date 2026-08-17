@@ -3,7 +3,8 @@ import { nextTick } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
-import type { StatusReport } from "../../ipc/types";
+import type { AuthStatusView, StatusReport } from "../../ipc/types";
+import { config } from "../../config/prod";
 
 const mocks = vi.hoisted(() => ({
   consoleStatus: vi.fn(async (): Promise<StatusReport> => ({
@@ -11,12 +12,18 @@ const mocks = vi.hoisted(() => ({
     service_running: false,
     port: null,
   })),
+  consoleAuthStatus: vi.fn(async (): Promise<AuthStatusView> => ({
+    authenticated: true,
+    userInfo: { id: 1, nickName: "Tester", gender: 0, status: 1, loginType: 2 },
+    expireAt: 9999999999,
+  })),
   bootstrapExitHandler: null as ((code: number) => unknown) | null,
   unlisten: vi.fn(),
 }));
 
 vi.mock("../../ipc/commands", () => ({
   consoleStatus: mocks.consoleStatus,
+  consoleAuthStatus: mocks.consoleAuthStatus,
   consoleBootstrap: vi.fn(),
   consoleOpenWebui: vi.fn(),
   consoleQuit: vi.fn(),
@@ -32,7 +39,7 @@ vi.mock("../../ipc/commands", () => ({
     rewardQrCode: "",
     enableAd: true,
   })),
-  consoleStartService: vi.fn(),
+  consoleStartService: vi.fn(async () => 8899),
   consoleStopService: vi.fn(),
   consoleChannelsStatus: vi.fn(),
   consoleCheckUpdate: vi.fn(),
@@ -64,6 +71,7 @@ vi.mock("../../ipc/events", () => ({
 
 import OnboardingPage from "../OnboardingPage.vue";
 import LoginPage from "../LoginPage.vue";
+import { useAuthStore } from "../../stores/auth";
 
 const EmptyRoute = { template: "<div />" };
 
@@ -98,6 +106,7 @@ beforeAll(() => {
 beforeEach(async () => {
   vi.clearAllMocks();
   mocks.bootstrapExitHandler = null;
+  config.enableLogin = true;
   setActivePinia(createPinia());
   await router.push("/");
   await router.isReady();
@@ -134,9 +143,78 @@ describe("OnboardingPage", () => {
     await flushPromises();
 
     expect(wrapper.find(".onboarding-logo").exists()).toBe(true);
-    expect(wrapper.get(".onboarding-status").text()).toBe("应用启动中");
+    expect(wrapper.get(".onboarding-status").text()).toBe("应用启动中...");
     expect(wrapper.find('[data-test="repair-environment"]').exists()).toBe(false);
     expect(wrapper.find(".service-panel").exists()).toBe(false);
+  });
+
+  it("redirects signed-out users after the environment is ready", async () => {
+    const { consoleStartService } = await import("../../ipc/commands");
+    mocks.consoleAuthStatus.mockResolvedValueOnce({
+      authenticated: false,
+      userInfo: null,
+      expireAt: 0,
+    });
+
+    mount(OnboardingPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/login");
+    expect(consoleStartService).not.toHaveBeenCalled();
+  });
+
+  it("starts research without checking auth when login is disabled", async () => {
+    const { consoleStartService } = await import("../../ipc/commands");
+    config.enableLogin = false;
+
+    mount(OnboardingPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(mocks.consoleAuthStatus).not.toHaveBeenCalled();
+    expect(consoleStartService).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts research for an authenticated user in a ready environment", async () => {
+    const { consoleStartService, consoleOpenWebui } = await import("../../ipc/commands");
+
+    mount(OnboardingPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(mocks.consoleAuthStatus).toHaveBeenCalledTimes(1);
+    expect(consoleStartService).toHaveBeenCalledTimes(1);
+    expect(consoleOpenWebui).toHaveBeenCalledWith(8899);
+  });
+
+  it("resumes service startup after a user returns from login", async () => {
+    const { consoleStartService } = await import("../../ipc/commands");
+    const flowRouter = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: "/", component: OnboardingPage },
+        { path: "/login", component: EmptyRoute },
+      ],
+    });
+    mocks.consoleAuthStatus.mockResolvedValueOnce({
+      authenticated: false,
+      userInfo: null,
+      expireAt: 0,
+    });
+
+    await flowRouter.push("/");
+    await flowRouter.isReady();
+    mount({ template: "<router-view />" }, { global: { plugins: [flowRouter] } });
+    await flushPromises();
+    expect(flowRouter.currentRoute.value.path).toBe("/login");
+
+    useAuthStore().setFromLogin({
+      userInfo: { id: 1, nickName: "Tester", gender: 0, status: 1, loginType: 2 },
+      expireAt: 9999999999,
+    });
+    await flowRouter.replace("/");
+    await flushPromises();
+
+    expect(flowRouter.currentRoute.value.path).toBe("/");
+    expect(consoleStartService).toHaveBeenCalledTimes(1);
   });
 
   it("shows the repair button when the environment is incomplete", async () => {
@@ -150,7 +228,8 @@ describe("OnboardingPage", () => {
     await flushPromises();
 
     expect(wrapper.get('[data-test="repair-environment"]').text()).toContain("安装/修复环境");
-    expect(wrapper.get(".onboarding-status").text()).toBe("应用启动中");
+    expect(wrapper.get(".onboarding-status").text()).toBe("请先点击安装环境");
+    expect(mocks.consoleAuthStatus).not.toHaveBeenCalled();
   });
 
   it("starts bootstrap from the repair button", async () => {
@@ -185,6 +264,26 @@ describe("OnboardingPage", () => {
 
     expect(start).toHaveBeenCalledTimes(1);
     expect(open).toHaveBeenCalledWith(8899);
+  });
+
+  it("returns to login instead of starting service after bootstrap when signed out", async () => {
+    const { consoleStartService } = await import("../../ipc/commands");
+    mocks.consoleStatus
+      .mockResolvedValueOnce({ env: "not_installed", service_running: false, port: null })
+      .mockResolvedValue({ env: "ready", service_running: false, port: null });
+    mocks.consoleAuthStatus.mockResolvedValueOnce({
+      authenticated: false,
+      userInfo: null,
+      expireAt: 0,
+    });
+
+    mount(OnboardingPage, { global: { plugins: [router] } });
+    await flushPromises();
+    await mocks.bootstrapExitHandler?.(0);
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/login");
+    expect(consoleStartService).not.toHaveBeenCalled();
   });
 
   it("keeps the onboarding error visible when bootstrap fails", async () => {

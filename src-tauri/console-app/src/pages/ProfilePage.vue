@@ -173,7 +173,6 @@ onUnmounted(() => clearMemberUsage());
 
 <template>
   <main class="profile">
-    <AppButton variant="ghost" @click="router.push('/')">返回控制台</AppButton>
     <section class="profile-card profile-member-card">
       <div class="profile-identity">
         <CircleUserRound :size="48" stroke-width="1.3" aria-hidden="true" />

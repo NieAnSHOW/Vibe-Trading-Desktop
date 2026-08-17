@@ -28,20 +28,27 @@ export const config = reactive({
     rewardQrCode: "",
 });
 
-export async function loadPublicConfig(): Promise<void> {
-    try {
-        const remote = await consoleGetPublicConfig();
-        Object.assign(config, {
-            officialUrl: remote.officialUrl,
-            enableLogin: remote.enableLogin,
-            checkUpdate: remote.checkUpdate,
-            enableService: remote.enableService,
-            serviceQrCode: remote.serviceQrCode,
-            kefuQrCode: remote.kefuQrCode,
-            rewardQrCode: remote.rewardQrCode,
-            enableAd: remote.enableAd,
-        });
-    } catch {
-        // 静默失败：保留默认值
+let publicConfigLoading: Promise<void> | null = null;
+
+export function loadPublicConfig(): Promise<void> {
+    if (!publicConfigLoading) {
+        publicConfigLoading = (async () => {
+            try {
+                const remote = await consoleGetPublicConfig();
+                Object.assign(config, {
+                    officialUrl: remote.officialUrl,
+                    enableLogin: remote.enableLogin,
+                    checkUpdate: remote.checkUpdate,
+                    enableService: remote.enableService,
+                    serviceQrCode: remote.serviceQrCode,
+                    kefuQrCode: remote.kefuQrCode,
+                    rewardQrCode: remote.rewardQrCode,
+                    enableAd: remote.enableAd,
+                });
+            } catch {
+                // 静默失败：保留默认值
+            }
+        })();
     }
+    return publicConfigLoading;
 }

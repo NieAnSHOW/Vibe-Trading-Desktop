@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { storeToRefs } from "pinia";
+import { useRouter } from "vue-router";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { useEnvStore } from "../stores/env";
 import { useServiceStore } from "../stores/service";
 import { useBootstrapStore } from "../stores/bootstrap";
+import { useAuthStore } from "../stores/auth";
+import { config, loadPublicConfig } from "../config/prod";
 import { consoleBootstrap, consoleQuit } from "../ipc/commands";
 import {
   onBootstrapEvent,
@@ -21,6 +24,8 @@ import { Wrench } from "@lucide/vue";
 const env = useEnvStore();
 const service = useServiceStore();
 const bootstrap = useBootstrapStore();
+const auth = useAuthStore();
+const router = useRouter();
 const { env: envState, serviceRunning, error: envError } = storeToRefs(env);
 
 const pageReady = ref(false);
@@ -90,6 +95,22 @@ async function startResearchService() {
   }
 }
 
+async function continueStartup() {
+  if (envState.value !== "ready" || serviceRunning.value) return;
+
+  await loadPublicConfig();
+
+  if (config.enableLogin) {
+    await auth.refresh();
+    if (!auth.authenticated) {
+      await router.replace("/login");
+      return;
+    }
+  }
+
+  await startResearchService();
+}
+
 const quitDialogOpen = ref(false);
 const quitInstalling = ref(false);
 const quitText = computed(() =>
@@ -132,7 +153,7 @@ onMounted(async () => {
       installing.value = false;
       await env.refresh();
       if (code === 0 && envState.value === "ready" && !serviceRunning.value) {
-        await startResearchService();
+        await continueStartup();
       } else if (code === 0 && envState.value !== "ready") {
         setErr("安装完成，但运行环境尚未就绪，请重试安装");
       }
@@ -148,6 +169,7 @@ onMounted(async () => {
   ]);
 
   await env.refresh();
+  await continueStartup();
 });
 
 onUnmounted(() => {
