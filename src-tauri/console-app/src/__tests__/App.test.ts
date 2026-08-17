@@ -175,6 +175,21 @@ describe("App", () => {
     expect(content.element.contains(page.element)).toBe(true);
   });
 
+  it("adds the rail class when WebUI opens from a standalone route", async () => {
+    await router.push("/login");
+    const wrapper = mountAppAtDocumentRoot();
+    await flushPromises();
+
+    const content = wrapper.get('[data-test="shell-content"]');
+    expect(content.classes()).toContain("shell-content--standalone");
+    expect(content.classes()).not.toContain("shell-content--rail");
+
+    openListener?.("http://127.0.0.1:8899/?desktop=1&shell=frame");
+    await flushPromises();
+
+    expect(content.classes()).toContain("shell-content--rail");
+  });
+
   it("keeps the console document mounted while the WebUI frame is shown and hidden", async () => {
     vi.useFakeTimers();
     try {
