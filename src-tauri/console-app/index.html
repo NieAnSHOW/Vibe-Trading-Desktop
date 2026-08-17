@@ -33,8 +33,6 @@
     <style>
       /* Renders before the Vue bundle so native-window startup never exposes a blank rail. */
       .console-rail-bootstrap {
-        --bootstrap-surface: 220 20% 8%;
-        --bootstrap-line: 220 18% 18%;
         --bootstrap-ink: 220 10% 66%;
         --bootstrap-brand: 175 72% 40%;
         position: fixed;
@@ -46,17 +44,15 @@
         align-items: center;
         gap: 6px;
         padding: 14px 0;
-        border-right: 1px solid hsl(var(--bootstrap-line));
-        background: hsl(var(--bootstrap-surface) / 0.92);
+        background: #08090d;
         color: hsl(var(--bootstrap-ink));
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
         backdrop-filter: blur(8px);
         box-sizing: border-box;
       }
       html[data-theme="light"] .console-rail-bootstrap {
-        --bootstrap-surface: 0 0% 100%;
-        --bootstrap-line: 220 16% 84%;
         --bootstrap-ink: 220 12% 42%;
+        background: #f3f4f7;
       }
       html[data-brand="blue"] .console-rail-bootstrap { --bootstrap-brand: 217 76% 52%; }
       html[data-brand="purple"] .console-rail-bootstrap { --bootstrap-brand: 262 60% 55%; }

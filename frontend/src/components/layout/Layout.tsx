@@ -336,7 +336,7 @@ export function Layout() {
     to === "/" ? pathname === "/" : pathname.startsWith(to);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-[#f3f4f7] dark:bg-background">
       {/* 桌面壳层级导航(账户/研究/设置),仅内嵌模式渲染 */}
       {isDesktopEmbedded() && !isDesktopShellFrame() && (
         <DesktopShellRail
@@ -352,20 +352,20 @@ export function Layout() {
         {/* Sidebar */}
         <aside
           className={cn(
-            "border-r bg-card flex flex-col shrink-0 transition-all duration-200",
-            collapsed ? "w-12" : "w-60",
+            "bg-card flex flex-col shrink-0 transition-all duration-200 rounded-xl my-2 ml-[2px]",
+            collapsed ? "w-12" : "w-52",
           )}
         >
           {/* ── top: logo + primary nav ── */}
           <div
             className={cn(
-              "flex shrink-0 justify-center border-b",
+              "flex shrink-0 justify-center border-b border-[#f3f4f7] dark:border-border",
               collapsed ? " px-1 py-3" : "px-4 py-3.5",
             )}
           >
             <div className="flex items-center gap-2">
               <img
-                src="/favicon.png"
+                src={dark ? "/bright-favicon-icon.png" : "/favicon.png"}
                 alt="Trading Worker"
                 className="h-6 w-6 shrink-0 rounded"
               />
@@ -591,7 +591,7 @@ export function Layout() {
 
           {/* ── middle: sessions ── */}
           {!collapsed && (
-            <div className="flex-1 overflow-hidden border-t mt-2 flex flex-col min-h-[160px]">
+            <div className="flex-1 overflow-hidden border-t border-[#f3f4f7] dark:border-border mt-2 flex flex-col min-h-[160px]">
               <div className="flex items-center justify-between py-2 px-4">
                 <span className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider select-none">
                   {t("layout.sessions")}
@@ -750,7 +750,7 @@ export function Layout() {
           {/* ── bottom: language / collapse ── */}
           <div
             className={cn(
-              "border-t",
+              "border-t border-[#f3f4f7] dark:border-border",
               collapsed
                 ? "p-1 flex flex-col items-center gap-1"
                 : "px-3 py-2.5 flex items-center justify-between",

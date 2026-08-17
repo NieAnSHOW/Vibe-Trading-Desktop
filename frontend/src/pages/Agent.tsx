@@ -353,9 +353,7 @@ function consumeInlineThinkDelta(
   if (pendingTagStart >= 0) {
     const pendingTag = tail.slice(pendingTagStart);
     if (
-      INLINE_THINK_TAGS.some((tag) =>
-        tag.startsWith(pendingTag.toLowerCase()),
-      )
+      INLINE_THINK_TAGS.some((tag) => tag.startsWith(pendingTag.toLowerCase()))
     ) {
       if (!stream.isThinking) visibleText += tail.slice(0, pendingTagStart);
       stream.pendingTag = pendingTag;
@@ -1853,7 +1851,7 @@ export function Agent() {
         ref={listRef}
         className="flex-1 overflow-auto p-6 scroll-smooth relative"
       >
-        <div className="max-w-3xl mx-auto space-y-4">
+        <div className="max-w-5xl mx-auto space-y-4">
           {sessionLoading && (
             <div className="space-y-4 py-4">
               {[1, 2, 3].map((i) => (
@@ -1986,11 +1984,8 @@ export function Agent() {
         <ConversationTimeline messages={messages} containerRef={listRef} />
       </div>
 
-      <form
-        onSubmit={handleSubmit}
-        className="px-4 pb-4 bg-background/80 backdrop-blur-sm"
-      >
-        <div className="max-w-3xl mx-auto space-y-2">
+      <form onSubmit={handleSubmit} className="px-4 pb-4 backdrop-blur-sm">
+        <div className="max-w-5xl mx-auto space-y-2">
           {goalSnapshot && !goalComposerActive && (
             <div className="grid gap-2">
               <button
@@ -2518,7 +2513,7 @@ export function Agent() {
                       ? !input.trim()
                       : !input.trim() && !attachment)
                   }
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-white transition-opacity hover:opacity-90 disabled:opacity-40"
                 >
                   <Send className="h-4 w-4" />
                 </button>

@@ -277,6 +277,7 @@ onUnmounted(() => {
       </header>
 
       <div class="brand-body">
+        <p class="eyebrow">Local AI Research Workstation</p>
         <h1 class="brand-title">用自然语言，做专业级研究</h1>
         <p class="brand-desc">
           Trading Worker 是一款自然语言驱动的金融研究 AI 智能体桌面应用，内置 70+ 金融技能与回测引擎，覆盖投研对话、策略研究与回测分析。
@@ -483,6 +484,12 @@ onUnmounted(() => {
    body 默认是 flex + justify-content:center(为 580px 控制台服务),
    展开逻辑见 console.css 的 body:has(> #app > .shell-content > [data-test="console-surface"] > .login-page)。 */
 .login-page {
+  /* Trading Worker 设计系统令牌(局部作用域,不污染全局) */
+  --tw-font-display: "Playfair Display", "Noto Serif SC", "Songti SC", serif;
+  --tw-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --tw-gold: oklch(0.66 0.04 85);
+  --tw-accent: oklch(0.72 0.11 180);
+  --tw-accent-dim: oklch(0.72 0.11 180 / 0.16);
   position: relative;
   z-index: 1;
   display: grid;
@@ -494,10 +501,12 @@ onUnmounted(() => {
   max-width: 1240px;
 }
 
-/* ── 左栏:品牌 drenched 面板 ──
-   多层 teal 渐变 + 极淡噪点纹理,营造沉稳的质感纵深;
-   底色为实色叠层(非半透明白底),白色文字对比度仍 ≥ 4.5:1。 */
+/* ── 左栏:品牌面板(设计系统"近黑蓝研究底 + 青绿焦点") ──
+   底色近黑蓝,青绿焦点光只做氛围,金色微光呼应字号标签;
+   白色文字对比度仍 ≥ 4.5:1。 */
 .brand-panel {
+  /* 品牌面板恒为设计系统"深色研究底":局部固定米白 ink,不随亮暗主题变 */
+  --ink: 220 12% 93%;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -505,10 +514,10 @@ onUnmounted(() => {
   padding: 38px 42px 32px;
   border-radius: 20px;
   background:
-    radial-gradient(110% 75% at -8% -10%, hsl(176 58% 30% / 0.55), transparent 55%),
-    radial-gradient(70% 55% at 108% 112%, hsl(196 76% 42% / 0.14), transparent 60%),
-    linear-gradient(164deg, hsl(176 45% 13%) 0%, hsl(182 42% 9.5%) 100%);
-  border: 1px solid hsl(176 36% 22% / 0.85);
+    radial-gradient(110% 75% at -8% -10%, oklch(0.72 0.11 180 / 0.16), transparent 55%),
+    radial-gradient(70% 55% at 108% 112%, oklch(0.66 0.04 85 / 0.05), transparent 60%),
+    linear-gradient(164deg, oklch(0.058 0.007 222) 0%, oklch(0.042 0.006 214) 100%);
+  border: 1px solid oklch(0.96 0.01 90 / 0.1);
   box-shadow:
     0 1px 0 hsl(0 0% 100% / 0.06) inset,
     0 30px 80px -24px hsl(175 52% 4% / 0.7);
@@ -553,9 +562,22 @@ onUnmounted(() => {
 }
 
 .brand-name {
-  font-size: 17px;
-  font-weight: 680;
-  letter-spacing: -0.01em;
+  font-family: var(--tw-font-mono);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* 设计系统 eyebrow:金色等宽小标签,承载品牌语气 */
+.eyebrow {
+  margin-bottom: 14px;
+  color: var(--tw-gold);
+  font-family: var(--tw-font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
 }
 
 .brand-body {
@@ -565,10 +587,11 @@ onUnmounted(() => {
 }
 
 .brand-title {
-  font-size: clamp(28px, 3.1vw, 36px);
-  font-weight: 700;
-  letter-spacing: -0.028em;
-  line-height: 1.16;
+  font-family: var(--tw-font-display);
+  font-size: clamp(30px, 3.4vw, 40px);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
   text-wrap: balance;
   color: hsl(var(--ink));
 }
@@ -632,8 +655,9 @@ onUnmounted(() => {
 /* ── 右栏:表单卡片 ── */
 .panel-side {
   display: flex;
-  align-items: center;
+  align-items: safe center;
   justify-content: center;
+  overflow-y: auto;
 }
 
 .card {
@@ -773,6 +797,8 @@ onUnmounted(() => {
 .inline .field {
   flex: 1;
   min-width: 0;
+  font-family: var(--tw-font-mono);
+  font-size: 13.5px;
 }
 
 .captcha-btn {
@@ -784,7 +810,7 @@ onUnmounted(() => {
   padding: 0;
   background: hsl(var(--surface-2));
   border: 1px solid hsl(var(--line));
-  border-radius: 9px;
+  border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
   transition:
@@ -827,8 +853,9 @@ onUnmounted(() => {
   background: hsl(var(--surface-2));
   color: hsl(var(--brand));
   border: 1px solid hsl(var(--line));
-  border-radius: 9px;
-  font-size: 13px;
+  border-radius: 8px;
+  font-family: var(--tw-font-mono);
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -862,14 +889,16 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   margin-top: 4px;
-  padding: 12px 14px;
+  padding: 13px 14px;
   background: hsl(var(--brand));
   color: hsl(var(--on-brand));
   border: 0;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 650;
-  letter-spacing: 0.01em;
+  border-radius: 8px;
+  font-family: var(--tw-font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   cursor: pointer;
   box-shadow:
     0 1px 0 hsl(0 0% 100% / 0.2) inset,
@@ -917,7 +946,7 @@ onUnmounted(() => {
   background: transparent;
   color: hsl(var(--ink-dim));
   border: 1px solid hsl(var(--line));
-  border-radius: 999px;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 550;
   cursor: pointer;
@@ -996,6 +1025,32 @@ onUnmounted(() => {
   font-size: 12.5px;
   line-height: 1.5;
   word-break: break-word;
+}
+
+/* ── 矮窗口:压缩品牌面板垂直空间,内容不足时内部滚动 ── */
+@media (max-height: 760px) {
+  .brand-body {
+    padding: 26px 0;
+  }
+
+  .brand-points {
+    margin-top: 22px;
+    gap: 10px;
+  }
+
+  .brand-desc {
+    margin-top: 10px;
+  }
+}
+
+@media (max-height: 620px) {
+  .brand-panel {
+    overflow-y: auto;
+  }
+
+  .brand-body {
+    padding: 12px 0;
+  }
 }
 
 /* ── 窄屏:单栏堆叠,品牌面板退化为紧凑头 ── */

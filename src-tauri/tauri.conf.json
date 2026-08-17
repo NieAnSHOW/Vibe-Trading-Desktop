@@ -14,6 +14,7 @@
       {
         "title": "Trading Worker",
         "width": 1180,
+        "hiddenTitle": true,
         "height": 760,
         "minWidth": 900,
         "minHeight": 680,

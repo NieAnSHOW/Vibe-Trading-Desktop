@@ -335,8 +335,7 @@ async function openResearch() {
   gap: 6px;
   width: var(--rail-width);
   padding: 14px 0;
-  background: hsl(var(--surface-1) / 0.92);
-  border-right: 1px solid hsl(var(--line));
+  background: var(--rail-background);
   backdrop-filter: blur(8px);
 }
 
@@ -392,6 +391,7 @@ async function openResearch() {
    console.css 的 :root 默认深色,让亮/暗与主题色在整站生效。 */
 html[data-theme="light"] {
   color-scheme: light;
+  --rail-background: #f3f4f7;
   --bg: 220 20% 96%;
   --surface-1: 0 0% 100%;
   --surface-2: 220 18% 92%;
@@ -408,6 +408,7 @@ html[data-theme="light"] {
 
 html[data-theme="dark"] {
   color-scheme: dark;
+  --rail-background: #08090d;
   --bg: 220 24% 4%;
   --surface-1: 220 20% 8%;
   --surface-2: 220 20% 12%;
