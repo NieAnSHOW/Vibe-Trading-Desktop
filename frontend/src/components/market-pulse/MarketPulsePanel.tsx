@@ -12,6 +12,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/common/PageHeader";
 import { useMarketDashboardStore } from "@/stores/marketDashboard";
 import { useWatchlistStore } from "@/stores/watchlist";
 import {
@@ -180,36 +181,37 @@ export function MarketPulsePanel() {
   return (
     <div
       data-testid="market-pulse-panel"
-      className="flex h-full min-h-0 w-full flex-col gap-3 overflow-hidden p-3 lg:gap-3 lg:p-5"
+      className="tw-page max-w-none flex h-full min-h-0 w-full flex-col gap-3 overflow-hidden"
     >
-      <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <h1 className="text-xl font-bold">
-            {t("marketPulse.title", "市场异动")}
-          </h1>
-          <p className="text-sm text-muted-foreground">
+      <PageHeader
+        kicker="Pulse"
+        title={t("marketPulse.title", "市场异动")}
+        sub={
+          <>
             {t("marketPulse.description", "跟踪盘中股票异动和资金信号")}
-          </p>
-          {pulseAsOf && (
-            <p className="text-xs text-muted-foreground">
-              {t("marketPulse.asOf", "更新于 {{asOf}}", { asOf: pulseAsOf })}
-            </p>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => void refreshPulse()}
-          className="rounded-md border p-1.5 text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label={t("marketPulse.refresh", "刷新市场异动")}
-          title={t("marketPulse.refresh", "刷新市场异动")}
-          disabled={pulseLoading}
-        >
-          <RefreshCw
-            className={cn("h-4 w-4", pulseLoading && "animate-spin")}
-            aria-hidden="true"
-          />
-        </button>
-      </header>
+            {pulseAsOf && (
+              <span className="ml-2 text-xs text-muted-foreground">
+                {t("marketPulse.asOf", "更新于 {{asOf}}", { asOf: pulseAsOf })}
+              </span>
+            )}
+          </>
+        }
+        actions={
+          <button
+            type="button"
+            onClick={() => void refreshPulse()}
+            className="rounded-md border p-1.5 text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label={t("marketPulse.refresh", "刷新市场异动")}
+            title={t("marketPulse.refresh", "刷新市场异动")}
+            disabled={pulseLoading}
+          >
+            <RefreshCw
+              className={cn("h-4 w-4", pulseLoading && "animate-spin")}
+              aria-hidden="true"
+            />
+          </button>
+        }
+      />
 
       <section
         aria-labelledby="market-pulse-overview-title"
@@ -243,25 +245,23 @@ export function MarketPulsePanel() {
         <aside
           aria-labelledby="market-pulse-list-title"
           data-testid="market-pulse-event-card"
-          className="flex min-h-0 flex-col overflow-hidden rounded-lg border bg-card"
+          className="tw-panel flex min-h-0 flex-col overflow-hidden"
         >
           <div
             data-testid="market-pulse-event-controls"
-            className="shrink-0 border-b p-3"
+            className="shrink-0 border-b bg-muted/45 px-4 py-2.5"
           >
-            <div className="mb-3">
-              <h2 id="market-pulse-list-title" className="text-sm font-semibold">
-                {t("marketPulse.events", "异动事件")}
-              </h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {t("marketPulse.showing", "显示 {{count}} / {{total}}", {
-                  count: filteredEvents.length,
-                  total: pulse.length,
-                })}
-              </p>
-            </div>
+            <h2 id="market-pulse-list-title" className="tw-panel-label">
+              {t("marketPulse.events", "异动事件")}
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("marketPulse.showing", "显示 {{count}} / {{total}}", {
+                count: filteredEvents.length,
+                total: pulse.length,
+              })}
+            </p>
 
-            <label className="relative mb-3 block">
+            <label className="relative mt-3 mb-3 block">
               <Search
                 className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
                 aria-hidden="true"
@@ -472,7 +472,7 @@ export function MarketPulsePanel() {
           {filteredEvents.length > 0 && (
             <div
               data-testid="market-pulse-event-pagination"
-              className="flex shrink-0 items-center justify-between gap-2 border-t p-3"
+              className="flex shrink-0 items-center justify-between gap-2 border-t bg-muted/45 px-4 py-2.5"
             >
               <label className="flex items-center gap-1 text-xs text-muted-foreground">
                 <span className="sr-only">
@@ -530,13 +530,13 @@ export function MarketPulsePanel() {
 
         <section
           aria-labelledby="market-pulse-detail-title"
-          className="min-h-0 overflow-auto rounded-lg border bg-card p-4"
+          className="tw-panel min-h-0 overflow-auto"
         >
           {selectedEvent ? (
             <>
-              <div className="flex items-start justify-between gap-3 border-b pb-4">
+              <header className="tw-panel-head">
                 <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">
+                  <p className="tw-panel-label">
                     {t("marketPulse.detail", "事件详情")}
                   </p>
                   <h2
@@ -566,9 +566,10 @@ export function MarketPulsePanel() {
                     showLabel
                   />
                 </div>
-              </div>
+              </header>
 
-              <dl className="divide-y text-sm">
+              <div className="tw-panel-body">
+                <dl className="divide-y text-sm">
                 <DetailRow
                   label={t("marketPulse.time", "发生时间")}
                   value={selectedEvent.item.time}
@@ -613,9 +614,10 @@ export function MarketPulsePanel() {
                   tone={eventTone(selectedEvent.item.changeType)}
                 />
               </div>
+              </div>
             </>
           ) : (
-            <div className="flex h-full min-h-40 items-center justify-center text-center">
+            <div className="flex h-full min-h-40 items-center justify-center p-4 text-center">
               <div>
                 <h2
                   id="market-pulse-detail-title"

@@ -95,7 +95,7 @@ export const SwarmStatusCard = memo(function SwarmStatusCard({ status }: Props) 
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
         <Users className="h-4 w-4" />
       </div>
-      <div className="min-w-0 flex-1 rounded-lg border bg-background p-3 shadow-sm">
+      <div className="tw-panel min-w-0 flex-1 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <span className="truncate text-sm font-semibold text-foreground">{status.preset}</span>
@@ -117,14 +117,14 @@ export const SwarmStatusCard = memo(function SwarmStatusCard({ status }: Props) 
             showCount
             ariaLabel="Swarm agent progress"
           />
-          <div className="text-right font-mono text-[11px] text-muted-foreground">
+          <div className="tw-num text-right text-[11px] text-muted-foreground">
             {t('swarmStatus.layer', { current: layerCurrent, total: layerTotal })}
           </div>
         </div>
 
         <div className="mt-3 overflow-x-auto">
           <div className="min-w-[620px]">
-            <div className="grid grid-cols-[10rem_7rem_9rem_5rem_4rem_minmax(0,1fr)] gap-2 border-b pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="grid grid-cols-[10rem_7rem_9rem_5rem_4rem_minmax(0,1fr)] gap-2 border-b pb-1 tw-panel-label">
               <span>{t('swarmStatus.agent')}</span>
               <span>{t('swarmStatus.status')}</span>
               <span>{t('swarmStatus.tool')}</span>
@@ -151,10 +151,10 @@ export const SwarmStatusCard = memo(function SwarmStatusCard({ status }: Props) 
                   <div className="truncate font-mono text-[11px] text-muted-foreground" title={agent.tool || ""}>
                     {agent.tool ? localizeToolName(agent.tool, agent.tool) : "-"}
                   </div>
-                  <div className="text-right font-mono text-[11px] text-muted-foreground">
+                  <div className="tw-num text-right text-[11px] text-muted-foreground">
                     {formatElapsed(agent.elapsed_s)}
                   </div>
-                  <div className="text-right font-mono text-[11px] text-muted-foreground">
+                  <div className="tw-num text-right text-[11px] text-muted-foreground">
                     {agent.iterations ?? "-"}
                   </div>
                   <div className={["truncate text-[11px]", agent.error ? "text-destructive" : "text-muted-foreground"].join(" ")} title={agent.error || agent.lastText || ""}>

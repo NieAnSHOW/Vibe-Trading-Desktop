@@ -8,6 +8,7 @@ import { echarts, CHART_GROUP, connectCharts } from "@/lib/echarts";
 import { getChartTheme } from "@/lib/chart-theme";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { SkeletonChart, SkeletonMetrics } from "@/components/common/Skeleton";
+import { PageHeader } from "@/components/common/PageHeader";
 
 interface MetricDef {
   key: string;
@@ -255,10 +256,11 @@ export function Compare() {
   const hasData = Boolean(leftData || rightData);
 
   return (
-    <div className="p-8 max-w-4xl space-y-6">
-      <h1 className="text-xl font-bold flex items-center gap-2">
-        <GitCompare className="h-5 w-5" /> Strategy Comparison
-      </h1>
+    <div className="tw-page p-8 max-w-4xl space-y-6">
+      <PageHeader
+        kicker="Backtest"
+        title={i18n.t("compare.title")}
+      />
 
       {/* Selectors */}
       <div className="flex gap-4 items-end">
@@ -282,11 +284,15 @@ export function Compare() {
       {/* Loading state — show skeletons while a selected run's data is in flight */}
       {loading && !hasData && (
         <div className="space-y-6">
-          <div className="border rounded-xl p-4">
-            <h2 className="text-sm font-medium text-muted-foreground mb-2">{i18n.t("compare.equityDrawdown")}</h2>
-            <SkeletonChart height={320} />
+          <div className="tw-panel">
+            <header className="tw-panel-head">
+              <h2 className="tw-panel-label">{i18n.t("compare.equityDrawdown")}</h2>
+            </header>
+            <div className="tw-panel-body">
+              <SkeletonChart height={320} />
+            </div>
           </div>
-          <div className="border rounded-xl overflow-hidden">
+          <div className="tw-panel">
             <SkeletonMetrics />
           </div>
         </div>
@@ -294,20 +300,24 @@ export function Compare() {
 
       {/* Equity curve overlay */}
       {(leftCurve.length > 0 || rightCurve.length > 0) && (
-        <div className="border rounded-xl p-4">
-          <h2 className="text-sm font-medium text-muted-foreground mb-2">{i18n.t("compare.equityDrawdown")}</h2>
-          <EquityChartOverlay
-            leftCurve={leftCurve}
-            rightCurve={rightCurve}
-            leftLabel={leftRun ? truncatePrompt(leftRun.prompt, 20) || "Baseline" : "Baseline"}
-            rightLabel={rightRun ? truncatePrompt(rightRun.prompt, 20) || "Compare" : "Compare"}
-          />
+        <div className="tw-panel">
+          <header className="tw-panel-head">
+            <h2 className="tw-panel-label">{i18n.t("compare.equityDrawdown")}</h2>
+          </header>
+          <div className="tw-panel-body">
+            <EquityChartOverlay
+              leftCurve={leftCurve}
+              rightCurve={rightCurve}
+              leftLabel={leftRun ? truncatePrompt(leftRun.prompt, 20) || "Baseline" : "Baseline"}
+              rightLabel={rightRun ? truncatePrompt(rightRun.prompt, 20) || "Compare" : "Compare"}
+            />
+          </div>
         </div>
       )}
 
       {/* Metrics table */}
       {(leftData || rightData) && (
-        <div className="border rounded-xl overflow-hidden">
+        <div className="tw-panel">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40">
@@ -324,9 +334,9 @@ export function Compare() {
                 return (
                   <tr key={key} className="border-b last:border-0 hover:bg-muted/20">
                     <td className="px-4 py-2.5 font-medium">{label}</td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums">{fmt(lv, type)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums">{fmt(rv, type)}</td>
-                    <td className={cn("px-4 py-2.5 text-right font-mono tabular-nums font-semibold", diffClass(lv, rv, higherIsBetter))}>{diffStr(lv, rv, type)}</td>
+                    <td className="px-4 py-2.5 text-right tw-num">{fmt(lv, type)}</td>
+                    <td className="px-4 py-2.5 text-right tw-num">{fmt(rv, type)}</td>
+                    <td className={cn("px-4 py-2.5 text-right tw-num font-semibold", diffClass(lv, rv, higherIsBetter))}>{diffStr(lv, rv, type)}</td>
                   </tr>
                 );
               })}

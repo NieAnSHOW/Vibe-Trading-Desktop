@@ -95,7 +95,7 @@ function ToolRow({ entry, stepIndex, totalSteps, isHeader, connector = "none", e
         {icon}
         <span className="text-foreground truncate">{stepLabel}</span>
         {entry.elapsed_s != null && (
-          <span className="ml-auto sm:ml-0 tabular-nums text-[10px] text-muted-foreground/70 shrink-0">
+          <span className="tw-num ml-auto sm:ml-0 text-[10px] text-muted-foreground/70 shrink-0">
             {entry.elapsed_s.toFixed(0)}s
           </span>
         )}
@@ -117,7 +117,7 @@ function ToolRow({ entry, stepIndex, totalSteps, isHeader, connector = "none", e
             />
           )}
           {eta != null && (
-            <span className="text-[10px] text-muted-foreground/70 tabular-nums shrink-0">
+            <span className="tw-num text-[10px] text-muted-foreground/70 shrink-0">
               ~{eta}s left
             </span>
           )}

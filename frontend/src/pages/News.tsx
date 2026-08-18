@@ -17,6 +17,7 @@ import type {
   NewsTrackId,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/common/PageHeader";
 
 const TRACK_IDS: NewsTrackId[] = [
   "ai",
@@ -206,19 +207,18 @@ export function News() {
   return (
     <div
       data-testid="news-workspace"
-      className="flex h-full w-full min-w-0 flex-col gap-3 p-3 lg:grid lg:grid-cols-[minmax(15rem,0.36fr)_minmax(0,1fr)] lg:grid-rows-[auto_minmax(0,1fr)] lg:gap-3 lg:p-5"
+      className="tw-page max-w-none flex min-w-0 flex-col gap-3 lg:grid lg:grid-cols-[minmax(15rem,0.36fr)_minmax(0,1fr)] lg:grid-rows-[auto_minmax(0,1fr)]"
     >
-      <header className="flex min-w-0 items-start justify-between gap-3 lg:col-span-2">
-        <div className="flex min-w-0 items-start gap-2.5">
-          <div className="min-w-0">
-            <h1 className="break-words text-xl font-semibold leading-6">
-              {t("news.title")}
-            </h1>
-
-            <div
+      <PageHeader
+        className="lg:col-span-2"
+        kicker="News"
+        title={t("news.title")}
+        sub={
+          <span className="mt-2 block space-y-2">
+            <span
               role="radiogroup"
               aria-label={t("news.scope")}
-              className="mt-2 inline-flex rounded-md border bg-card p-0.5"
+              className="inline-flex rounded-md border bg-card p-0.5"
             >
               {NEWS_SCOPES.map((item) => (
                 <button
@@ -237,8 +237,8 @@ export function News() {
                   {t(`news.scopes.${item}`)}
                 </button>
               ))}
-            </div>
-            <div className="mt-2">
+            </span>
+            <span className="block">
               {snapshot && snapshotGeneratedAt && (
                 <time
                   dateTime={snapshot.generated_at}
@@ -248,33 +248,35 @@ export function News() {
                   {snapshotGeneratedAt}
                 </time>
               )}
-            </div>
-          </div>
-        </div>
-        <button
-          type="button"
-          aria-label={refreshLabel}
-          title={refreshLabel}
-          disabled={isRefreshing}
-          onClick={() => void refreshNews()}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-card text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <RefreshCw
-            className={cn("h-4 w-4", isRefreshing && "animate-spin")}
-            aria-hidden="true"
-          />
-        </button>
-      </header>
+            </span>
+          </span>
+        }
+        actions={
+          <button
+            type="button"
+            aria-label={refreshLabel}
+            title={refreshLabel}
+            disabled={isRefreshing}
+            onClick={() => void refreshNews()}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-card text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw
+              className={cn("h-4 w-4", isRefreshing && "animate-spin")}
+              aria-hidden="true"
+            />
+          </button>
+        }
+      />
 
       <aside
         data-testid="news-desktop-tracks"
         aria-label={t("news.trackList")}
-        className="hidden min-h-0 flex-col rounded-lg border bg-card p-3 lg:flex lg:overflow-auto"
+        className="tw-panel hidden min-h-0 flex-col rounded-lg lg:flex lg:overflow-auto"
       >
         <div
           role="tablist"
           aria-label={t("news.trackList")}
-          className="space-y-1"
+          className="space-y-1 p-3"
         >
           {TRACK_IDS.map((trackId) => {
             const track = snapshot?.tracks.find(
@@ -331,7 +333,7 @@ export function News() {
 
       <div
         data-testid="news-mobile-tracks"
-        className="rounded-lg border bg-card p-3 lg:hidden"
+        className="tw-panel rounded-lg lg:hidden"
       >
         <label htmlFor="news-track-select" className="sr-only">
           {t("news.selectTrack")}
@@ -353,8 +355,9 @@ export function News() {
 
       <section
         data-testid="news-detail-surface"
-        className="min-h-0 min-w-0 rounded-lg border bg-card p-4 lg:overflow-auto"
+        className="tw-panel min-h-0 min-w-0 rounded-lg lg:overflow-auto"
       >
+        <div className="tw-panel-body">
         {isRefreshing && refreshStatus && (
           <div
             role="status"
@@ -534,6 +537,7 @@ export function News() {
               {t("news.emptySnapshot")}
             </div>
           )}
+        </div>
         </div>
       </section>
     </div>

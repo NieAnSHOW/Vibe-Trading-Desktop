@@ -182,7 +182,8 @@ export function QVerisSettings() {
   const apiKeyPlaceholder = config?.api_key_masked || t("qveris.apiKeyPlaceholder");
 
   return (
-    <section className="rounded-lg border bg-card p-5 shadow-sm">
+    <section className="tw-panel">
+      <div className="tw-panel-body">
       <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -196,11 +197,7 @@ export function QVerisSettings() {
           target="_blank"
           rel="noreferrer"
           aria-disabled={!signupUrl}
-          className={`inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm transition ${
-            signupUrl
-              ? "text-muted-foreground hover:bg-muted hover:text-foreground"
-              : "pointer-events-none text-muted-foreground opacity-60"
-          }`}
+          className={`tw-btn-ghost ${signupUrl ? "" : "pointer-events-none opacity-60"}`}
         >
           <ExternalLink className="h-4 w-4" />
           {t("qveris.signupCta")}
@@ -297,7 +294,7 @@ export function QVerisSettings() {
           <button
             type="submit"
             disabled={loading || saving}
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+            className="tw-btn-primary"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {t("qveris.save")}
@@ -305,29 +302,29 @@ export function QVerisSettings() {
         </div>
 
         <div className="grid gap-4">
-          <div className="rounded-md border bg-muted/20 p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <span className="text-sm font-medium">{t("qveris.balance")}</span>
+          <div className="rounded-lg border bg-muted/25 p-4">
+            <div className="tw-panel-label mb-3 flex items-center justify-between gap-3">
+              {t("qveris.balance")}
               {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
             </div>
-            <div className="text-2xl font-semibold">
+            <div className="tw-num text-2xl font-semibold">
               {status?.remaining_credits ?? t("qveris.notConfigured")}
             </div>
             {status?.error ? <p className="mt-2 text-xs text-destructive">{status.error}</p> : null}
           </div>
 
-          <div className="rounded-md border bg-muted/20 p-4">
-            <div className="mb-3 text-sm font-medium">{t("qveris.recentUsage")}</div>
+          <div className="rounded-lg border bg-muted/25 p-4">
+            <div className="tw-panel-label mb-3">{t("qveris.recentUsage")}</div>
             {recent.length ? (
               <div className="space-y-2">
                 {recent.map((item) => (
-                  <div key={`${item.ts}-${item.tool_id}`} className="rounded-md border bg-background px-3 py-2 text-xs">
+                  <div key={`${item.ts}-${item.tool_id}`} className="rounded-md border bg-card px-3 py-2 text-xs">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="font-medium">{item.tool_id}</span>
-                      <span className="text-muted-foreground">{item.cost}</span>
+                      <span className="font-mono font-medium">{item.tool_id}</span>
+                      <span className="tw-num text-muted-foreground">{item.cost}</span>
                     </div>
                     <div className="mt-1 flex items-center justify-between gap-3 text-muted-foreground">
-                      <span>{item.ts}</span>
+                      <span className="tw-num">{item.ts}</span>
                       <span>{item.charge_outcome}</span>
                     </div>
                   </div>
@@ -338,13 +335,14 @@ export function QVerisSettings() {
             )}
           </div>
 
-          <div className="rounded-md border bg-muted/20 p-4">
-            <div className="mb-2 text-sm font-medium">{t("qveris.signupHint")}</div>
+          <div className="rounded-lg border bg-muted/25 p-4">
+            <div className="tw-panel-label mb-2">{t("qveris.signupHint")}</div>
             <div className="text-xs text-muted-foreground">{t("qveris.inviteCode")}</div>
             <div className="mt-1 break-all font-mono text-sm">{inviteCode || t("qveris.notConfigured")}</div>
           </div>
         </div>
       </form>
+      </div>
     </section>
   );
 }

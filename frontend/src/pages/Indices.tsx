@@ -19,6 +19,7 @@ import {
 } from "@/lib/stockSdk";
 import type { PriceBar } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/common/PageHeader";
 
 function formatNumber(value: number | null | undefined): string {
   return value == null ? "--" : value.toFixed(2);
@@ -209,18 +210,15 @@ export default function Indices() {
   };
 
   return (
-    <div className="flex h-full w-full flex-col gap-3 p-3 lg:gap-3 lg:p-5">
-      <header className="space-y-1">
-        <h1 className="text-xl font-bold tracking-tight">
-          {t("indices.title", "指数")}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {t(
-            "indices.description",
-            "查看主要 A 股宽基指数的当日行情和日线走势",
-          )}
-        </p>
-      </header>
+    <div className="tw-page max-w-none flex h-full min-h-0 w-full flex-col gap-3">
+      <PageHeader
+        kicker="Indices"
+        title={t("indices.title", "指数")}
+        sub={t(
+          "indices.description",
+          "查看主要 A 股宽基指数的当日行情和日线走势",
+        )}
+      />
 
       <section
         aria-labelledby="indices-overview-title"
@@ -279,11 +277,11 @@ export default function Indices() {
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(15rem,0.36fr)_minmax(0,1fr)] lg:gap-3">
         <aside
           aria-labelledby="indices-list-title"
-          className="min-h-0 rounded-lg border bg-card p-3 lg:overflow-auto"
+          className="tw-panel min-h-0 lg:overflow-auto"
         >
-          <div className="mb-3 flex items-center justify-between gap-2">
+          <header className="tw-panel-head">
             <div className="min-w-0">
-              <h2 id="indices-list-title" className="text-sm font-semibold">
+              <h2 id="indices-list-title" className="tw-panel-label">
                 {t("indices.supported", "支持的指数")}
               </h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
@@ -299,8 +297,9 @@ export default function Indices() {
                 aria-label={t("indices.loading", "指数行情加载中")}
               />
             )}
-          </div>
+          </header>
 
+          <div className="tw-panel-body">
           <label className="relative block">
             <Search
               className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
@@ -432,15 +431,16 @@ export default function Indices() {
               {t("indices.stale", "行情数据可能已过期")}
             </p>
           )}
+          </div>
         </aside>
 
         <section
           aria-labelledby="index-detail-title"
-          className="min-h-0 rounded-lg border bg-card p-4 lg:flex lg:flex-col lg:overflow-hidden"
+          className="tw-panel min-h-0 lg:flex lg:flex-col"
         >
           {selectedIndex ? (
             <div className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
-              <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
+              <header className="tw-panel-head flex-wrap">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <BarChart3
@@ -494,11 +494,11 @@ export default function Indices() {
                     </p>
                   </div>
                 </div>
-              </div>
+              </header>
 
               <div
                 data-testid="indices-chart-stack"
-                className="mt-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-4"
+                className="tw-panel-body lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-4"
               >
                 <div
                   data-testid="indices-daily-chart-region"
@@ -616,7 +616,7 @@ export default function Indices() {
               </div>
             </div>
           ) : (
-            <div className="flex min-h-60 items-center justify-center text-sm text-muted-foreground">
+            <div className="flex min-h-60 items-center justify-center p-4 text-sm text-muted-foreground">
               {t("indices.selectPrompt", "请选择一个指数")}
             </div>
           )}

@@ -207,7 +207,7 @@ function BrokerRow({
         <>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-md border bg-background/60 p-2">
-              <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="tw-panel-label inline-flex items-center gap-1">
                 <CircleDot
                   className={[
                     "h-2.5 w-2.5",
@@ -228,7 +228,7 @@ function BrokerRow({
               </div>
             </div>
             <div className="rounded-md border bg-background/60 p-2">
-              <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="tw-panel-label inline-flex items-center gap-1">
                 <Activity className="h-2.5 w-2.5" />
                 Last tick
               </div>
@@ -241,7 +241,7 @@ function BrokerRow({
           {mandate ? (
             <div className="rounded-md border bg-background/60 p-2">
               <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="tw-panel-label inline-flex items-center gap-1">
                   <ShieldCheck className="h-2.5 w-2.5" />
                   Active mandate
                 </div>
@@ -343,7 +343,7 @@ export const RunnerStatus = memo(function RunnerStatus({
   return (
     <div className="grid gap-2">
       {open && (
-        <div className="grid gap-2 rounded-xl border border-primary/20 bg-background/95 p-3 shadow-sm">
+        <div className="tw-panel grid gap-2 border-primary/20 p-3">
           {status.brokers.map((broker) => (
             <BrokerRow
               key={broker.auth.broker}

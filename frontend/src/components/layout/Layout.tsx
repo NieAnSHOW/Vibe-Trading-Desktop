@@ -201,7 +201,7 @@ function NavLink({
 // ── section label ──
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-3 pt-4 pb-1 text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider select-none">
+    <div className="px-3 pt-4 pb-1 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70 select-none">
       {children}
     </div>
   );
@@ -336,7 +336,7 @@ export function Layout() {
     to === "/" ? pathname === "/" : pathname.startsWith(to);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f3f4f7] dark:bg-background">
+    <div className="flex h-screen overflow-hidden bg-background">
       {/* 桌面壳层级导航(账户/研究/设置),仅内嵌模式渲染 */}
       {isDesktopEmbedded() && !isDesktopShellFrame() && (
         <DesktopShellRail
@@ -352,26 +352,26 @@ export function Layout() {
         {/* Sidebar */}
         <aside
           className={cn(
-            "bg-card flex flex-col shrink-0 transition-all duration-200 rounded-xl my-2 ml-[2px]",
+            "bg-card flex flex-col shrink-0 transition-all duration-200 rounded-xl my-2 ml-[2px] border border-border/60",
+            "shadow-[0_12px_32px_hsl(220_20%_40%/0.08)] dark:shadow-[0_18px_50px_hsl(220_60%_2%/0.35)]",
             collapsed ? "w-12" : "w-52",
           )}
-          style={{ boxShadow: "0 12px 32px hsl(220 20% 40% / 0.08)" }}
         >
           {/* ── top: logo + primary nav ── */}
           <div
             className={cn(
-              "flex shrink-0 justify-center border-b border-[#f3f4f7] dark:border-border",
+              "flex shrink-0 justify-center border-b border-border/60",
               collapsed ? " px-1 py-3" : "px-4 py-3.5",
             )}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <img
                 src={dark ? "/bright-favicon-icon.png" : "/favicon.png"}
                 alt="Trading Worker"
                 className="h-6 w-6 shrink-0 rounded"
               />
               {!collapsed && (
-                <span className="truncate font-semibold tracking-tight">
+                <span className="truncate font-display text-[15px] font-medium tracking-[0.01em]">
                   Trading Worker
                 </span>
               )}
@@ -592,9 +592,9 @@ export function Layout() {
 
           {/* ── middle: sessions ── */}
           {!collapsed && (
-            <div className="flex-1 overflow-hidden border-t border-[#f3f4f7] dark:border-border mt-2 flex flex-col min-h-[160px]">
+            <div className="flex-1 overflow-hidden border-t border-border/60 mt-2 flex flex-col min-h-[160px]">
               <div className="flex items-center justify-between py-2 px-4">
-                <span className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider select-none">
+                <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70 select-none">
                   {t("layout.sessions")}
                 </span>
                 <Link
@@ -751,7 +751,7 @@ export function Layout() {
           {/* ── bottom: language / collapse ── */}
           <div
             className={cn(
-              "border-t border-[#f3f4f7] dark:border-border",
+              "border-t border-border/60",
               collapsed
                 ? "p-1 flex flex-col items-center gap-1"
                 : "px-3 py-2.5 flex items-center justify-between",

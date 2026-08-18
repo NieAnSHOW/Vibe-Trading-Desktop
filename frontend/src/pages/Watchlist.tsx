@@ -11,6 +11,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/common/PageHeader";
 import { useWatchlistStore } from "@/stores/watchlist";
 import { useMarketDashboardStore } from "@/stores/marketDashboard";
 import { CandlestickChart as CandlestickChartView } from "@/components/charts/CandlestickChart";
@@ -222,9 +223,11 @@ function StockDetailSection({
 
   if (!code) {
     return (
-      <div className="flex h-full flex-col space-y-3">
-        <h2 className="text-sm font-semibold">{t("dashboard.stockDetail")}</h2>
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center">
+      <div className="flex h-full flex-col">
+        <header className="tw-panel-head">
+          <h2 className="tw-panel-label">{t("dashboard.stockDetail")}</h2>
+        </header>
+        <div className="tw-panel-body flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center">
           <TrendingUp className="h-6 w-6 text-muted-foreground/40" />
           <p className="text-xs text-muted-foreground">
             {t("dashboard.selectStockHint")}
@@ -235,25 +238,26 @@ function StockDetailSection({
   }
 
   return (
-    <div className="flex h-full flex-col space-y-3 lg:min-h-0 lg:flex-1">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold">
+    <div className="flex h-full min-h-0 flex-col lg:flex-1">
+      <header className="tw-panel-head">
+        <h2 className="tw-panel-label">
           {name || code}{" "}
-          <span className="text-muted-foreground font-normal text-xs">
+          <span className="font-normal text-xs normal-case text-muted-foreground">
             ({code})
           </span>
         </h2>
         <button
           type="button"
           onClick={() => onAnalyze(code, name || code)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
+          className="tw-btn-primary"
           aria-label={t("dashboard.sendToAgent")}
         >
           <Send className="h-3 w-3" />
           {t("dashboard.sendToAgent")}
         </button>
-      </div>
+      </header>
 
+      <div className="tw-panel-body flex min-h-0 flex-1 flex-col">
       <div
         data-testid="watchlist-chart-stack"
         className="space-y-3 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:space-y-0 lg:gap-4"
@@ -327,6 +331,7 @@ function StockDetailSection({
         {intradayBars.length > 0 && (
           <IntradayChart data={intradayBars} height={300} fill />
         )}
+      </div>
       </div>
       </div>
     </div>
@@ -523,7 +528,7 @@ export default function WatchlistPage() {
       <button
         type="submit"
         disabled={adding}
-        className="h-9 shrink-0 rounded-md bg-primary px-3 text-sm text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background transition-colors"
+        className="tw-btn-primary h-9 shrink-0 disabled:cursor-not-allowed"
       >
         {adding ? t("watchlist.adding", "添加中…") : t("watchlist.add", "添加")}
       </button>
@@ -531,7 +536,7 @@ export default function WatchlistPage() {
         <button
           onClick={handleSendToAgent}
           data-testid="send-to-agent"
-          className="flex text-center justify-center items-center gap-2  h-9 shrink-0 rounded-md bg-primary px-3 text-sm text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background transition-colors"
+          className="tw-btn-primary h-9 shrink-0"
         >
           <span>{t("watchlist.sendToAgent", "发给 AI")}</span>
           <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-primary-foreground/25 text-xs font-medium tabular-nums">
@@ -543,28 +548,25 @@ export default function WatchlistPage() {
   );
 
   return (
-    <div className="flex h-full w-full flex-col gap-3 p-3 lg:gap-3 lg:p-5">
-      <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <h1 className="text-xl font-bold tracking-tight">
-            {t("watchlist.title", "A股自选")}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {t("watchlist.description", "关注股票的实时行情与日线走势")}
-          </p>
-        </div>
-        <button
-          onClick={() => {
-            refresh();
-            refreshQuotes();
-          }}
-          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
-          title={t("watchlist.refresh", "刷新")}
-          aria-label={t("watchlist.refresh", "刷新")}
-        >
-          <RefreshCw size={16} className={cn(loading && "animate-spin")} />
-        </button>
-      </header>
+    <div className="tw-page max-w-none flex h-full w-full min-w-0 flex-col gap-3">
+      <PageHeader
+        kicker="Watchlist"
+        title={t("watchlist.title", "A股自选")}
+        sub={t("watchlist.description", "关注股票的实时行情与日线走势")}
+        actions={
+          <button
+            onClick={() => {
+              refresh();
+              refreshQuotes();
+            }}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
+            title={t("watchlist.refresh", "刷新")}
+            aria-label={t("watchlist.refresh", "刷新")}
+          >
+            <RefreshCw size={16} className={cn(loading && "animate-spin")} />
+          </button>
+        }
+      />
 
       <section
         aria-label={t("watchlist.marketOverview", "市场概览")}
@@ -649,24 +651,24 @@ export default function WatchlistPage() {
       {stocks.length > 0 && (
         <div
           data-testid="watchlist-workspace"
-          className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(19rem,0.42fr)_minmax(0,1fr)]"
+          className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(24rem,0.85fr)_minmax(0,1.35fr)]"
         >
           <aside
             data-testid="watchlist-list-panel"
-            className="min-h-0 min-w-0 space-y-3 rounded-lg border bg-card p-3 lg:overflow-auto"
+            className="tw-panel min-h-0 min-w-0 lg:order-1 lg:overflow-auto"
           >
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-semibold">
+            <header className="tw-panel-head">
+              <div className="flex min-w-0 items-baseline gap-3">
+                <h2 className="tw-panel-label">
                   {t("watchlist.listTitle", "自选列表")}
                 </h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+                <p className="tw-num text-xs text-muted-foreground">
                   {t("watchlist.showing", "共 {{count}} 只股票", {
                     count: stocks.length,
                   })}
                 </p>
               </div>
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -675,11 +677,12 @@ export default function WatchlistPage() {
                 />
                 {cardLabels.selectAll}
               </label>
-            </div>
+            </header>
 
-            {addForm}
+            <div className="tw-panel-body space-y-3">
+              {addForm}
 
-            <ul role="list" className="space-y-2">
+              <ul role="list" className="space-y-2">
               {stocks.map((stock) => (
                 <WatchlistStockCard
                   key={stock.code}
@@ -704,11 +707,12 @@ export default function WatchlistPage() {
                 />
               ))}
             </ul>
+            </div>
           </aside>
 
           <section
             data-testid="watchlist-chart-panel"
-            className="min-h-0 min-w-0 rounded-lg border bg-card p-4 lg:flex lg:flex-col"
+            className="tw-panel min-h-0 min-w-0 lg:order-2 lg:flex lg:flex-col"
           >
             <StockDetailSection
               code={activeSelectedCode}

@@ -28,6 +28,7 @@ import { LLMUsagePanel } from "@/components/chat/LLMUsagePanel";
 import { ValidationPanel } from "@/components/charts/ValidationPanel";
 import { Skeleton, SkeletonMetrics, SkeletonChart } from "@/components/common/Skeleton";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
+import { PageHeader } from "@/components/common/PageHeader";
 
 const rehypePlugins = [rehypeHighlight];
 
@@ -141,7 +142,7 @@ export function RunDetail() {
 
   if (loading) {
     return (
-      <div className="p-8 space-y-4">
+      <div className="tw-page space-y-4">
         <Skeleton className="h-6 w-48" />
         <SkeletonMetrics />
         <SkeletonChart height={400} />
@@ -149,8 +150,8 @@ export function RunDetail() {
     );
   }
   if (!run) return (
-    <div className="p-8 space-y-2">
-      <p className="text-red-500 font-medium">{i18n.t("runDetail.runNotFound")}</p>
+    <div className="tw-page space-y-2">
+      <p className="text-destructive font-medium">{i18n.t("runDetail.runNotFound")}</p>
       <p className="text-sm text-muted-foreground">
         {i18n.t("runDetail.runNotFoundDesc")}, or your browser may not have API access configured.
         Check that the API authentication key is set in Settings if accessing remotely.
@@ -244,44 +245,31 @@ export function RunDetail() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="tw-page flex h-full w-full flex-col gap-3 p-3 lg:gap-3 lg:p-5">
       {/* Header */}
-      <div className="border-b p-4 space-y-3">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-            title={i18n.t("runDetail.goBack")}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-          {ok ? <CheckCircle2 className="h-5 w-5 text-success" /> : <XCircle className="h-5 w-5 text-danger" />}
-          <h1 className="font-mono text-sm font-medium">{runId}</h1>
-          {run.elapsed_seconds && <span className="text-xs text-muted-foreground">{run.elapsed_seconds.toFixed(1)}s</span>}
-        </div>
-        {run.prompt && <p className="text-sm text-muted-foreground">{run.prompt}</p>}
-        {run.metrics && <MetricsCard metrics={run.metrics as Record<string, number>} />}
-        <LLMUsagePanel usage={run.llm_usage ?? null} />
-
-        <div className="flex items-center gap-1">
-          {TABS.filter(t => !t.hidden).map(({ id, label, icon: Icon }) => (
+      <PageHeader
+        kicker="Backtest"
+        title={
+          <span className="flex items-center gap-2.5">
             <button
-              key={id}
-              onClick={() => setTab(id)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors",
-                tab === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
-              )}
+              onClick={() => navigate(-1)}
+              className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              title={i18n.t("runDetail.goBack")}
             >
-              <Icon className="h-3.5 w-3.5" /> {label}
+              <ArrowLeft className="h-4 w-4" />
             </button>
-          ))}
-
-          <div className="ml-auto flex gap-1">
+            {ok ? <CheckCircle2 className="h-5 w-5 text-success" /> : <XCircle className="h-5 w-5 text-danger" />}
+            <span className="font-mono text-sm font-medium">{runId}</span>
+            {run.elapsed_seconds && <span className="tw-num text-xs text-muted-foreground">{run.elapsed_seconds.toFixed(1)}s</span>}
+          </span>
+        }
+        sub={run.prompt}
+        actions={
+          <div className="flex gap-1">
             {run.trade_log && run.trade_log.length > 0 && (
               <button
                 onClick={() => downloadCsv(`trades_${runId}.csv`, buildTradesCsv(run.trade_log!))}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs text-muted-foreground hover:bg-muted transition-colors"
+                className="tw-btn-ghost"
                 title={i18n.t("runDetail.downloadTradesCsv")}
               >
                 <Download className="h-3.5 w-3.5" /> {i18n.t("runDetail.downloadTradesCsv")}
@@ -290,14 +278,31 @@ export function RunDetail() {
             {run.metrics && (
               <button
                 onClick={() => downloadCsv(`metrics_${runId}.csv`, buildMetricsCsv(run.metrics!))}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs text-muted-foreground hover:bg-muted transition-colors"
+                className="tw-btn-ghost"
                 title={i18n.t("runDetail.downloadMetricsCsv")}
               >
                 <Download className="h-3.5 w-3.5" /> {i18n.t("runDetail.downloadMetricsCsv")}
               </button>
             )}
           </div>
-        </div>
+        }
+      />
+      {run.metrics && <MetricsCard metrics={run.metrics as Record<string, number>} />}
+      <LLMUsagePanel usage={run.llm_usage ?? null} />
+
+      <div className="flex items-center gap-1">
+        {TABS.filter(t => !t.hidden).map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors",
+              tab === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" /> {label}
+          </button>
+        ))}
       </div>
 
       <div className="flex-1 overflow-auto">
@@ -347,14 +352,18 @@ function RunCardTab({ card }: { card: RunCard }) {
       </div>
 
       {warnings.length > 0 && (
-        <section className="rounded-md border border-amber-500/25 bg-amber-500/5 p-3">
-          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-300">
-            <AlertTriangle className="h-4 w-4" />
-            {i18n.t("runDetail.warnings")}
+        <section className="tw-panel">
+          <header className="tw-panel-head">
+            <h2 className="tw-panel-label flex items-center gap-2 text-warning">
+              <AlertTriangle className="h-4 w-4" />
+              {i18n.t("runDetail.warnings")}
+            </h2>
+          </header>
+          <div className="tw-panel-body">
+            <ul className="space-y-1 text-xs text-muted-foreground">
+              {warnings.map((warning, index) => <li key={index}>{warning}</li>)}
+            </ul>
           </div>
-          <ul className="space-y-1 text-xs text-muted-foreground">
-            {warnings.map((warning, index) => <li key={index}>{warning}</li>)}
-          </ul>
         </section>
       )}
 
@@ -397,7 +406,7 @@ function RunCardTab({ card }: { card: RunCard }) {
                 {artifacts.map((artifact) => (
                   <tr key={`${artifact.path}-${artifact.sha256}`} className="border-b last:border-0">
                     <td className="py-2 pr-4 font-mono text-xs">{artifact.path}</td>
-                    <td className="py-2 pr-4 tabular-nums text-muted-foreground">{formatBytes(artifact.size_bytes)}</td>
+                    <td className="py-2 pr-4 tw-num text-muted-foreground">{formatBytes(artifact.size_bytes)}</td>
                     <td className="py-2 font-mono text-xs text-muted-foreground">{shortHash(artifact.sha256)}</td>
                   </tr>
                 ))}
@@ -414,21 +423,23 @@ function RunCardTab({ card }: { card: RunCard }) {
 
 function RunCardStat({ label, value, tone = "normal" }: { label: string; value: string; tone?: "normal" | "warning" }) {
   return (
-    <div className="rounded-md border bg-card p-3">
+    <div className="tw-panel p-3">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={cn("mt-1 truncate text-sm font-medium", tone === "warning" ? "text-amber-700 dark:text-amber-300" : "")}>{value}</div>
+      <div className={cn("tw-num mt-1 truncate text-sm font-medium", tone === "warning" ? "text-warning" : "")}>{value}</div>
     </div>
   );
 }
 
 function RunCardPanel({ title, icon: Icon, children }: { title: string; icon: typeof FileCheck2; children: ReactNode }) {
   return (
-    <section className="rounded-md border bg-card p-4">
-      <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-        <Icon className="h-4 w-4 text-muted-foreground" />
-        {title}
-      </div>
-      {children}
+    <section className="tw-panel">
+      <header className="tw-panel-head">
+        <div className="flex min-w-0 items-center gap-2">
+          <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <h2 className="tw-panel-label">{title}</h2>
+        </div>
+      </header>
+      <div className="tw-panel-body">{children}</div>
     </section>
   );
 }
@@ -444,7 +455,7 @@ function KeyValueTable({ data, empty, monospaceValues = false }: { data: Record<
         {entries.map(([key, value]) => (
           <tr key={key} className="border-b last:border-0">
             <td className="w-36 py-2 pr-4 align-top text-muted-foreground">{key}</td>
-            <td className={cn("py-2 align-top", monospaceValues ? "break-all font-mono text-xs" : "break-words text-right tabular-nums")}>{formatRunCardValue(value)}</td>
+            <td className={cn("py-2 align-top", monospaceValues ? "break-all font-mono text-xs" : "tw-num break-words text-right")}>{formatRunCardValue(value)}</td>
           </tr>
         ))}
       </tbody>
@@ -518,7 +529,8 @@ function ChartTab({
   return (
     <div className="p-4 space-y-4">
       {chartSymbols.length > 0 && (
-        <div className="rounded-md border bg-card p-3">
+        <div className="tw-panel">
+          <div className="tw-panel-body">
           <div className="flex flex-wrap items-center gap-2">
             <label className="text-xs font-medium text-muted-foreground" htmlFor="chart-symbol-select">
               {i18n.t("runDetail.symbol")}
@@ -582,13 +594,14 @@ function ChartTab({
             <div className="mt-3 space-y-1">
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>{i18n.t("runDetail.loadingCharts")}</span>
-                <span>{bulkProgress.done}/{bulkProgress.total}</span>
+                <span className="tw-num">{bulkProgress.done}/{bulkProgress.total}</span>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-muted">
                 <div className="h-full bg-primary transition-all" style={{ width: `${progressPercent}%` }} />
               </div>
             </div>
           )}
+          </div>
         </div>
       )}
       {entries.length === 0 && (
@@ -634,8 +647,8 @@ function TradesTab({ run }: { run: RunData }) {
               <td className="py-2 pr-4 font-mono text-xs">{tr.time || tr.timestamp}</td>
               <td className="py-2 pr-4">{tr.code}</td>
               <td className={cn("py-2 pr-4 font-medium", tr.side === "BUY" ? "text-success" : "text-danger")}>{tr.side}</td>
-              <td className="py-2 pr-4 tabular-nums">{tr.price}</td>
-              <td className="py-2 pr-4 tabular-nums">{tr.qty}</td>
+              <td className="py-2 pr-4 tw-num">{tr.price}</td>
+              <td className="py-2 pr-4 tw-num">{tr.qty}</td>
               <td className="py-2 text-muted-foreground">{tr.reason}</td>
             </tr>
           ))}

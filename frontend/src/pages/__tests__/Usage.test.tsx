@@ -157,11 +157,11 @@ describe("Usage", () => {
       "lg:grid-cols-[minmax(15rem,0.36fr)_minmax(0,1fr)]",
     );
     expect(container.querySelector("[data-usage-navigator]")).toHaveClass(
-      "rounded-lg",
+      "tw-panel",
       "bg-card",
     );
     expect(container.querySelector("[data-usage-detail]")).toHaveClass(
-      "rounded-lg",
+      "tw-panel",
       "bg-card",
     );
     // Detail surface defaults to the unselected overview; selecting a session

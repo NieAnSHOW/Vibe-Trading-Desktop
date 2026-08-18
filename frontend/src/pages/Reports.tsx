@@ -16,6 +16,7 @@ import {
 import { api, type RunListItem } from "@/lib/api";
 import { formatMetricVal } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/common/PageHeader";
 
 const REPORT_SCAN_LIMIT = 100;
 
@@ -112,51 +113,58 @@ export function Reports() {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col gap-3 p-3 lg:p-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">{t("reports.title")}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{t("reports.subtitle")}</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void loadReports("refresh")}
-          disabled={refreshing}
-          className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-muted disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-        >
-          {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          {t("reports.refresh")}
-        </button>
-      </header>
+    <div className="tw-page max-w-none flex h-full min-h-0 w-full min-w-0 flex-col gap-3">
+      <PageHeader
+        kicker="Reports"
+        title={t("reports.title")}
+        sub={t("reports.subtitle")}
+        actions={
+          <button
+            type="button"
+            onClick={() => void loadReports("refresh")}
+            disabled={refreshing}
+            className="tw-btn-ghost"
+          >
+            {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {t("reports.refresh")}
+          </button>
+        }
+      />
 
-      <section aria-labelledby="reports-overview-title" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <h2 id="reports-overview-title" className="sr-only">
-          {t("reports.overview")}
-        </h2>
-        <OverviewMetric label={t("reports.badge")} value={String(reportSummary.total)} />
-        <OverviewMetric label={t("reports.success")} value={String(reportSummary.completed)} />
-        <OverviewMetric
-          label={t("reports.return")}
-          value={formatOptionalMetric("total_return", reportSummary.averageReturn)}
-        />
-        <OverviewMetric
-          label={t("reports.sharpe")}
-          value={formatOptionalMetric("sharpe", reportSummary.averageSharpe)}
-        />
+      <section aria-labelledby="reports-overview-title" className="tw-panel">
+        <header className="tw-panel-head">
+          <h2 id="reports-overview-title" className="tw-panel-label">
+            {t("reports.overview")}
+          </h2>
+        </header>
+        <div className="tw-panel-body grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <OverviewMetric label={t("reports.badge")} value={String(reportSummary.total)} />
+          <OverviewMetric label={t("reports.success")} value={String(reportSummary.completed)} />
+          <OverviewMetric
+            label={t("reports.return")}
+            value={formatOptionalMetric("total_return", reportSummary.averageReturn)}
+          />
+          <OverviewMetric
+            label={t("reports.sharpe")}
+            value={formatOptionalMetric("sharpe", reportSummary.averageSharpe)}
+          />
+        </div>
       </section>
 
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(15rem,0.36fr)_minmax(0,1fr)]">
-        <aside aria-labelledby="reports-filters-title" className="rounded-lg border bg-card p-3 lg:overflow-auto">
-          <div className="mb-3">
-            <h2 id="reports-filters-title" className="text-sm font-semibold">
-              {t("reports.filters")}
-            </h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {t("reports.count", { shown: filtered.length, total: runs.length })}
-            </p>
-          </div>
+        <aside aria-labelledby="reports-filters-title" className="tw-panel lg:overflow-auto">
+          <header className="tw-panel-head">
+            <div className="flex min-w-0 items-baseline gap-3">
+              <h2 id="reports-filters-title" className="tw-panel-label">
+                {t("reports.filters")}
+              </h2>
+              <p className="tw-num text-xs text-muted-foreground">
+                {t("reports.count", { shown: filtered.length, total: runs.length })}
+              </p>
+            </div>
+          </header>
 
-          <div className="space-y-3">
+          <div className="tw-panel-body space-y-3">
             <label className="relative block">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <span className="sr-only">{t("reports.searchPlaceholder")}</span>
@@ -226,20 +234,21 @@ export function Reports() {
 
         <section
           aria-labelledby="reports-results-title"
-          className="min-h-0 rounded-lg border bg-card p-3 lg:overflow-auto"
+          className="tw-panel min-h-0 lg:overflow-auto"
         >
-          <div className="flex items-center justify-between gap-3 border-b pb-3">
+          <header className="tw-panel-head">
             <div className="flex min-w-0 items-center gap-2">
               <FileText className="h-4 w-4 shrink-0 text-primary" />
-              <h2 id="reports-results-title" className="truncate text-sm font-semibold">
+              <h2 id="reports-results-title" className="tw-panel-label">
                 {t("reports.results")}
               </h2>
             </div>
             {refreshing ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" /> : null}
-          </div>
+          </header>
 
+          <div className="tw-panel-body">
           {loading ? (
-            <div className="mt-3 grid gap-2">
+            <div className="grid gap-2">
               {[1, 2, 3, 4].map((item) => (
                 <div key={item} className="h-28 animate-pulse rounded-md bg-muted/40" />
               ))}
@@ -247,7 +256,7 @@ export function Reports() {
           ) : null}
 
           {!loading && error ? (
-            <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-4">
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-4">
               <div className="flex items-center gap-2 font-medium text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="h-4 w-4" />
                 {t("reports.unavailable")}
@@ -257,7 +266,7 @@ export function Reports() {
           ) : null}
 
           {!loading && !error && filtered.length === 0 ? (
-            <div className="mt-3 flex min-h-60 flex-col items-center justify-center rounded-md bg-muted p-4 text-center">
+            <div className="flex min-h-60 flex-col items-center justify-center rounded-md bg-muted p-4 text-center">
               <FileText className="h-8 w-8 text-muted-foreground" />
               <h2 className="mt-3 font-medium">
                 {runs.length === 0 ? t("reports.emptyTitle") : t("reports.noMatchesTitle")}
@@ -278,12 +287,13 @@ export function Reports() {
           ) : null}
 
           {!loading && !error && filtered.length > 0 ? (
-            <div className="mt-3 space-y-2">
+            <div className="space-y-2">
               {filtered.map((run) => (
                 <ReportRow key={run.run_id} run={run} />
               ))}
             </div>
           ) : null}
+          </div>
         </section>
       </div>
     </div>
@@ -293,51 +303,49 @@ export function Reports() {
 function ReportRow({ run }: { run: RunListItem }) {
   const { t } = useTranslation();
   return (
-    <article className="rounded-lg border p-4 transition hover:border-primary/40 hover:bg-muted/30">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={run.status} />
-            <Link to={`/runs/${run.run_id}`} className="truncate font-mono text-sm font-medium hover:text-primary">
-              {run.run_id}
-            </Link>
-            <span className="text-xs text-muted-foreground">{formatRunDate(run.created_at)}</span>
-          </div>
-          <p className="line-clamp-2 text-sm text-muted-foreground">{run.prompt || t("reports.noPrompt")}</p>
-          <div className="flex flex-wrap gap-1.5">
-            {(run.codes || []).slice(0, 6).map((code) => (
-              <span key={code} className="rounded border px-2 py-0.5 font-mono text-xs text-muted-foreground">
-                {code}
-              </span>
-            ))}
-            {run.start_date || run.end_date ? (
-              <span className="rounded border px-2 py-0.5 text-xs text-muted-foreground">
-                {run.start_date || "?"} {t("reports.to")} {run.end_date || "?"}
-              </span>
-            ) : null}
-          </div>
+    <article className="tw-panel transition hover:border-primary/40 hover:bg-muted/30">
+      <header className="tw-panel-head">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <StatusBadge status={run.status} />
+          <Link to={`/runs/${run.run_id}`} className="truncate font-mono text-sm font-medium hover:text-primary">
+            {run.run_id}
+          </Link>
+          <span className="text-xs text-muted-foreground">{formatRunDate(run.created_at)}</span>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <MetricPill label={t("reports.return")} value={formatOptionalMetric("total_return", run.total_return)} />
+          <MetricPill label={t("reports.sharpe")} value={formatOptionalMetric("sharpe", run.sharpe)} />
+        </div>
+      </header>
+      <div className="tw-panel-body space-y-2">
+        <p className="line-clamp-2 text-sm text-muted-foreground">{run.prompt || t("reports.noPrompt")}</p>
+        <div className="flex flex-wrap gap-1.5">
+          {(run.codes || []).slice(0, 6).map((code) => (
+            <span key={code} className="rounded border px-2 py-0.5 font-mono text-xs text-muted-foreground">
+              {code}
+            </span>
+          ))}
+          {run.start_date || run.end_date ? (
+            <span className="rounded border px-2 py-0.5 text-xs text-muted-foreground">
+              {run.start_date || "?"} {t("reports.to")} {run.end_date || "?"}
+            </span>
+          ) : null}
         </div>
 
-        <div className="flex flex-col gap-3 lg:items-end">
-          <div className="grid grid-cols-2 gap-2 text-right sm:flex sm:flex-wrap sm:justify-end">
-            <MetricPill label={t("reports.return")} value={formatOptionalMetric("total_return", run.total_return)} />
-            <MetricPill label={t("reports.sharpe")} value={formatOptionalMetric("sharpe", run.sharpe)} />
-          </div>
-          <div className="flex flex-wrap gap-2 lg:justify-end">
-            <Link
-              to={`/runs/${run.run_id}`}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-            >
-              {t("reports.fullReport")} <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-            <Link
-              to="/compare"
-              className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-            >
-              <GitCompare className="h-3.5 w-3.5" />
-              {t("reports.compare")}
-            </Link>
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to={`/runs/${run.run_id}`}
+            className="tw-btn-primary"
+          >
+            {t("reports.fullReport")} <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+          <Link
+            to="/compare"
+            className="tw-btn-ghost"
+          >
+            <GitCompare className="h-3.5 w-3.5" />
+            {t("reports.compare")}
+          </Link>
         </div>
       </div>
     </article>
@@ -363,8 +371,8 @@ function StatusBadge({ status }: { status: string }) {
 function MetricPill({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border px-3 py-1.5">
-      <div className="text-[11px] uppercase text-muted-foreground">{label}</div>
-      <div className="font-mono text-sm font-medium tabular-nums">{value}</div>
+      <div className="tw-panel-label">{label}</div>
+      <div className="tw-num text-sm font-medium">{value}</div>
     </div>
   );
 }
@@ -373,7 +381,7 @@ function OverviewMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border bg-card px-3 py-2.5">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 font-mono text-lg font-semibold tabular-nums">{value}</p>
+      <p className="tw-num mt-1 text-lg font-semibold">{value}</p>
     </div>
   );
 }

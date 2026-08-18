@@ -36,12 +36,12 @@ describe("Correlation responsive layout contract", () => {
     );
     expect(screen.getByTestId("correlation-controls")).toHaveClass(
       "rounded-lg",
-      "bg-card",
+      "tw-panel",
       "lg:overflow-auto",
     );
     expect(screen.getByTestId("correlation-results")).toHaveClass(
       "rounded-lg",
-      "bg-card",
+      "tw-panel",
       "lg:overflow-auto",
     );
     expect(screen.getByTestId("correlation-windows")).toHaveClass("flex-wrap");

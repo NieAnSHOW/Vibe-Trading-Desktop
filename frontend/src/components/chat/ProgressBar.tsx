@@ -64,7 +64,7 @@ export function ProgressBar({
         />
       </div>
       {showCount && (
-        <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+        <span className="tw-num text-[10px] text-muted-foreground shrink-0">
           {clamped}/{total}
         </span>
       )}

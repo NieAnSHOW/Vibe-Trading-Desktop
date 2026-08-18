@@ -31,6 +31,7 @@ import {
 } from "@/lib/api";
 import { getApiAuthKey, setApiAuthKey } from "@/lib/apiAuth";
 import { RuntimeStatus } from "@/components/settings/RuntimeStatus";
+import { PageHeader } from "@/components/common/PageHeader";
 
 interface LLMFormState {
   provider: string;
@@ -418,44 +419,43 @@ export function Settings() {
   };
 
   const localApiAccessSection = (
-    <form
-      onSubmit={submitLocalApiKey}
-      className="rounded-lg border bg-card p-5 shadow-sm"
-    >
-      <div className="mb-4 space-y-1">
-        <div className="flex items-center gap-2">
-          <KeyRound className="h-4 w-4 text-primary" />
-          <h2 className="text-base font-semibold">
+    <form onSubmit={submitLocalApiKey} className="tw-panel">
+      <header className="tw-panel-head">
+        <div className="flex min-w-0 items-center gap-2">
+          <KeyRound className="h-4 w-4 shrink-0 text-primary" />
+          <h2 className="tw-panel-label">
             {i18n.t("settings.localApiAccess")}
           </h2>
         </div>
-        <p className="text-sm text-muted-foreground">
+      </header>
+      <div className="tw-panel-body">
+        <p className="mb-4 text-sm text-muted-foreground">
           {i18n.t("settings.localApiAccessDesc")}
         </p>
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+          <label className="grid gap-2">
+            <span className={labelClass}>{i18n.t("settings.serverApiKey")}</span>
+            <input
+              type="password"
+              value={localApiKey}
+              onChange={(event) => setLocalApiKeyState(event.target.value)}
+              className={fieldClass}
+              placeholder={i18n.t("settings.storedInBrowser")}
+              autoComplete="current-password"
+            />
+          </label>
+          <button
+            type="submit"
+            className="tw-btn-primary self-end"
+          >
+            <Save className="h-4 w-4" />
+            {i18n.t("settings.save")}
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {i18n.t("settings.storedInBrowser")}
+        </p>
       </div>
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-        <label className="grid gap-2">
-          <span className={labelClass}>{i18n.t("settings.serverApiKey")}</span>
-          <input
-            type="password"
-            value={localApiKey}
-            onChange={(event) => setLocalApiKeyState(event.target.value)}
-            className={fieldClass}
-            placeholder={i18n.t("settings.storedInBrowser")}
-            autoComplete="current-password"
-          />
-        </label>
-        <button
-          type="submit"
-          className="inline-flex items-center justify-center gap-2 self-end rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-        >
-          <Save className="h-4 w-4" />
-          {i18n.t("settings.save")}
-        </button>
-      </div>
-      <p className="mt-2 text-xs text-muted-foreground">
-        {i18n.t("settings.storedInBrowser")}
-      </p>
     </form>
   );
 
@@ -463,20 +463,17 @@ export function Settings() {
     return (
       <div
         data-testid="settings-workspace"
-        className="flex h-full w-full flex-col gap-3 p-3 lg:gap-3 lg:p-5"
+        className="tw-page flex h-full w-full flex-col gap-3 p-3 lg:gap-3 lg:p-5"
       >
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {i18n.t("settings.title")}
-          </h1>
-          <p className="max-w-3xl text-sm text-muted-foreground">
-            {i18n.t("settings.subtitle")}
-          </p>
-        </div>
+        <PageHeader
+          kicker="Preferences"
+          title={i18n.t("settings.title")}
+          sub={i18n.t("settings.subtitle")}
+        />
         {localApiAccessSection}
-        <div className="rounded-lg border bg-card p-5 shadow-sm">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-base font-semibold">
+        <section className="tw-panel">
+          <header className="tw-panel-head">
+            <h2 className="tw-panel-label">
               {i18n.t("settings.usageData.title")}
             </h2>
             <button
@@ -490,12 +487,14 @@ export function Settings() {
                 className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${usageDataOn ? "left-[22px]" : "left-0.5"}`}
               />
             </button>
+          </header>
+          <div className="tw-panel-body">
+            <p className="text-sm text-muted-foreground">
+              {i18n.t("settings.usageData.description")}
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground">
-            {i18n.t("settings.usageData.description")}
-          </p>
-        </div>
-        <div className="flex min-h-32 items-center justify-center rounded-lg border bg-card p-5 text-sm text-muted-foreground">
+        </section>
+        <div className="tw-panel flex min-h-32 items-center justify-center p-5 text-sm text-muted-foreground">
           {settingsLoadError ? (
             <div className="text-center">
               <div className="font-medium text-foreground">
@@ -550,28 +549,28 @@ export function Settings() {
   return (
     <div
       data-testid="settings-workspace"
-      className="flex h-full w-full flex-col gap-3 p-3 lg:gap-3 lg:p-5"
+      className="tw-page flex h-full w-full flex-col gap-3 p-3 lg:gap-3 lg:p-5"
     >
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {i18n.t("settings.title")}
-        </h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          {i18n.t("settings.subtitle")}
-        </p>
-      </div>
+      <PageHeader
+        kicker="Preferences"
+        title={i18n.t("settings.title")}
+        sub={i18n.t("settings.subtitle")}
+      />
 
       {/* {localApiAccessSection} */}
       <div className="grid gap-1">
         <div className="grid content-start gap-3">
           <form onSubmit={submit} className="grid gap-3">
-            <section className="rounded-lg border bg-card p-4 shadow-sm">
-              <div className="mb-5 flex items-center gap-2">
-                <Server className="h-4 w-4 text-primary" />
-                <h2 className="text-base font-semibold">
-                  {i18n.t("settings.llmSettings")}
-                </h2>
-              </div>
+            <section className="tw-panel">
+              <header className="tw-panel-head">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Server className="h-4 w-4 shrink-0 text-primary" />
+                  <h2 className="tw-panel-label">
+                    {i18n.t("settings.llmSettings")}
+                  </h2>
+                </div>
+              </header>
+              <div className="tw-panel-body">
 
               <div
                 role="radiogroup"
@@ -650,7 +649,7 @@ export function Settings() {
                         <button
                           type="button"
                           onClick={() => applyProviderDefaults()}
-                          className="inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                          className="tw-btn-ghost shrink-0"
                           title={i18n.t("settings.useProviderDefaults")}
                         >
                           <RotateCcw className="h-4 w-4" />
@@ -721,7 +720,7 @@ export function Settings() {
                       <span className="font-medium text-foreground">
                         {i18n.t("settings.saved")}:{" "}
                       </span>
-                      <span className="break-all font-mono">
+                      <span className="tw-num break-all">
                         {settings.env_path}
                       </span>
                     </div>
@@ -729,7 +728,7 @@ export function Settings() {
                     <button
                       type="submit"
                       disabled={saving}
-                      className="w-full inline-flex items-center justify-center gap-2 justify-self-start rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+                      className="tw-btn-primary w-full justify-self-start"
                     >
                       {saving ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -743,24 +742,26 @@ export function Settings() {
                   </div>
                 </>
               )}
+              </div>
             </section>
           </form>
 
           <form
             onSubmit={submitDataSources}
-            className="rounded-lg border bg-card p-4 shadow-sm"
+            className="tw-panel"
           >
-            <div className="mb-5 space-y-1">
-              <div className="flex items-center gap-2">
-                <Database className="h-4 w-4 text-primary" />
-                <h2 className="text-base font-semibold">
+            <header className="tw-panel-head">
+              <div className="flex min-w-0 items-center gap-2">
+                <Database className="h-4 w-4 shrink-0 text-primary" />
+                <h2 className="tw-panel-label">
                   {i18n.t("settings.dataSourceSettings")}
                 </h2>
               </div>
-              <p className="text-sm text-muted-foreground">
+            </header>
+            <div className="tw-panel-body">
+              <p className="mb-5 text-sm text-muted-foreground">
                 {i18n.t("settings.dataSourceSettingsDesc")}
               </p>
-            </div>
 
             <div className="grid gap-5">
               <label className="grid gap-2">
@@ -802,7 +803,7 @@ export function Settings() {
                 <span className="font-medium text-foreground">
                   {i18n.t("settings.saved")}:{" "}
                 </span>
-                <span className="break-all font-mono">
+                <span className="tw-num break-all">
                   {dataSettings.env_path}
                 </span>
               </div>
@@ -810,7 +811,7 @@ export function Settings() {
               <button
                 type="submit"
                 disabled={dataSaving}
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+                className="tw-btn-primary justify-self-start"
               >
                 {dataSaving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -845,30 +846,26 @@ export function Settings() {
                 </div>
               </div>
             </div>
+            </div>
           </form>
         </div>
       </div>
 
       {/* IM channels */}
-      <section className="rounded-lg border bg-card p-4 shadow-sm">
-        <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <MessageSquareMore className="h-4 w-4 text-primary" />
-              <h2 className="text-base font-semibold">
-                {t("settings.channels.title")}
-              </h2>
-            </div>
-            <p className="max-w-3xl text-sm text-muted-foreground">
-              {t("settings.channels.description")}
-            </p>
+      <section className="tw-panel">
+        <header className="tw-panel-head">
+          <div className="flex min-w-0 items-center gap-2">
+            <MessageSquareMore className="h-4 w-4 shrink-0 text-primary" />
+            <h2 className="tw-panel-label">
+              {t("settings.channels.title")}
+            </h2>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={refreshChannelStatus}
               disabled={channelBusy}
-              className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              className="tw-btn-ghost"
             >
               {channelRefreshing ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -881,7 +878,7 @@ export function Settings() {
               type="button"
               onClick={() => setChannelsRunning("start")}
               disabled={channelControlsDisabled}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              className="tw-btn-primary"
             >
               {channelAction === "start" ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -894,7 +891,7 @@ export function Settings() {
               type="button"
               onClick={() => setChannelsRunning("stop")}
               disabled={channelControlsDisabled}
-              className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              className="tw-btn-ghost"
             >
               {channelAction === "stop" ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -904,38 +901,39 @@ export function Settings() {
               {t("settings.channels.stop")}
             </button>
           </div>
-        </div>
+        </header>
 
-        <div className="mb-4 grid gap-3 md:grid-cols-4">
-          <div className="rounded-md border bg-muted/20 px-3 py-2">
-            <div className="text-xs text-muted-foreground">
-              {t("settings.channels.runtime")}
+        <div className="tw-panel-body">
+          <div className="mb-4 grid gap-3 md:grid-cols-4">
+            <div className="rounded-md border bg-muted/20 px-3 py-2">
+              <div className="text-xs text-muted-foreground">
+                {t("settings.channels.runtime")}
+              </div>
+              <div className="tw-num text-sm font-medium">
+                {channelStatus?.running
+                  ? t("settings.channels.running")
+                  : t("settings.channels.stopped")}
+              </div>
             </div>
-            <div className="text-sm font-medium">
-              {channelStatus?.running
-                ? t("settings.channels.running")
-                : t("settings.channels.stopped")}
+            <div className="rounded-md border bg-muted/20 px-3 py-2">
+              <div className="text-xs text-muted-foreground">
+                {t("settings.channels.enabled")}
+              </div>
+              <div className="tw-num text-sm font-medium">{channelEnabledCount}</div>
+            </div>
+            <div className="rounded-md border bg-muted/20 px-3 py-2">
+              <div className="text-xs text-muted-foreground">
+                {t("settings.channels.loaded")}
+              </div>
+              <div className="tw-num text-sm font-medium">{channelLoadedCount}</div>
+            </div>
+            <div className="rounded-md border bg-muted/20 px-3 py-2">
+              <div className="text-xs text-muted-foreground">
+                {t("settings.channels.unavailable")}
+              </div>
+              <div className="tw-num text-sm font-medium">{channelUnavailableCount}</div>
             </div>
           </div>
-          <div className="rounded-md border bg-muted/20 px-3 py-2">
-            <div className="text-xs text-muted-foreground">
-              {t("settings.channels.enabled")}
-            </div>
-            <div className="text-sm font-medium">{channelEnabledCount}</div>
-          </div>
-          <div className="rounded-md border bg-muted/20 px-3 py-2">
-            <div className="text-xs text-muted-foreground">
-              {t("settings.channels.loaded")}
-            </div>
-            <div className="text-sm font-medium">{channelLoadedCount}</div>
-          </div>
-          <div className="rounded-md border bg-muted/20 px-3 py-2">
-            <div className="text-xs text-muted-foreground">
-              {t("settings.channels.unavailable")}
-            </div>
-            <div className="text-sm font-medium">{channelUnavailableCount}</div>
-          </div>
-        </div>
 
         <div className="overflow-hidden rounded-md border">
           <table className="w-full text-sm">
@@ -1041,7 +1039,7 @@ export function Settings() {
           <button
             type="submit"
             disabled={pairingBusy || !pairingCommand.trim()}
-            className="inline-flex items-center justify-center gap-2 self-end rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="tw-btn-primary self-end"
           >
             {pairingBusy ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -1051,6 +1049,7 @@ export function Settings() {
             {i18n.t("settings.runPairing")}
           </button>
         </form>
+        </div>
       </section>
 
       <RuntimeStatus />
@@ -1062,15 +1061,15 @@ export function Settings() {
           onClick={() => setWeixinQr(null)}
         >
           <div
-            className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm"
+            className="rounded-lg border bg-card p-6 max-w-sm"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold mb-4">
               {i18n.t("settings.weixin.scanTitle")}
             </h3>
             <div className="flex flex-col items-center gap-3 py-4">
-              <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
-              <p className="text-sm text-gray-500 text-center">
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground text-center">
                 {i18n.t("settings.weixin.scanHint")}
                 <br />
                 {i18n.t("settings.weixin.autoDetect")}
@@ -1080,7 +1079,7 @@ export function Settings() {
                   onClick={() =>
                     window.open(weixinQr.image, "_blank", "noopener,noreferrer")
                   }
-                  className="text-xs text-blue-600 hover:underline"
+                  className="text-xs text-primary hover:underline"
                 >
                   {i18n.t("settings.weixin.reopenLink")}
                 </button>
@@ -1088,7 +1087,7 @@ export function Settings() {
             </div>
             <button
               onClick={() => setWeixinQr(null)}
-              className="mt-4 w-full rounded-md border px-3 py-2 text-sm"
+              className="tw-btn-ghost mt-4 w-full"
             >
               {i18n.t("settings.cancel")}
             </button>

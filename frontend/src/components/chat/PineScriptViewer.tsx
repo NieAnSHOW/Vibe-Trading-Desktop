@@ -32,19 +32,19 @@ export const PineScriptViewer = memo(function PineScriptViewer({ code, onClose }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="relative w-full max-w-3xl max-h-[80vh] mx-4 rounded-xl border bg-background shadow-2xl flex flex-col"
+        className="relative w-full max-w-3xl max-h-[80vh] mx-4 rounded-xl border bg-card flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b">
+        <div className="tw-panel-head">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold">{t("pineViewer.pineScript")}</span>
+            <span className="tw-panel-label">{t("pineViewer.pineScript")}</span>
             <span className="text-xs text-muted-foreground">strategy.pine</span>
           </div>
           <div className="flex items-center gap-1.5">
             <button
               onClick={handleCopy}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+              className="tw-btn-primary"
             >
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               {copied ? t("pineViewer.copied") : t("pineViewer.copy")}

@@ -226,10 +226,11 @@ export function WelcomeScreen({ onExample }: Props) {
         <img
           src="/trading-worker-logo.png"
           alt="Trading Worker"
-          className="h-16 w-16 mx-auto drop-shadow-lg"
+          className="h-16 w-16 mx-auto"
         />
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
+        <div className="space-y-2">
+          <p className="tw-kicker">Research</p>
+          <h2 className="font-display text-[26px] font-normal leading-[1.22] tracking-[0.01em]">
             {t("welcome.title")}
           </h2>
           <p className="text-sm text-muted-foreground mt-2 max-w-md leading-relaxed mx-auto">

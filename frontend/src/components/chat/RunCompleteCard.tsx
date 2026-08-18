@@ -71,7 +71,7 @@ export const RunCompleteCard = memo(function RunCompleteCard({ msg }: Props) {
   return (
     <div className="flex gap-3">
       <AgentAvatar />
-      <div className="flex-1 min-w-0 space-y-2">
+      <div className="tw-panel flex-1 min-w-0 space-y-2 p-3">
         {msg.metrics && Object.keys(msg.metrics).length > 0 && (
           <MetricsCard metrics={msg.metrics} compact />
         )}
@@ -92,7 +92,7 @@ export const RunCompleteCard = memo(function RunCompleteCard({ msg }: Props) {
             <button
               onClick={handlePineClick}
               disabled={pineLoading}
-              className="text-sm text-emerald-600 dark:text-emerald-400 hover:underline inline-flex items-center gap-1.5 font-medium disabled:opacity-50"
+              className="text-sm text-primary hover:underline inline-flex items-center gap-1.5 font-medium disabled:opacity-50"
             >
               {pineLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Code2 className="h-3.5 w-3.5" />}
               Pine Script
@@ -104,14 +104,14 @@ export const RunCompleteCard = memo(function RunCompleteCard({ msg }: Props) {
                 href={`/shadow-reports/${encodeURIComponent(msg.shadowId)}?format=html`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm text-teal-600 dark:text-teal-400 hover:underline inline-flex items-center gap-1.5 font-medium"
+                className="text-sm text-primary hover:underline inline-flex items-center gap-1.5 font-medium"
               >
                 <FileText className="h-3.5 w-3.5" />
                 Shadow Report
               </a>
               <button
                 onClick={(e) => { e.preventDefault(); exportPdf(); try { track("feature_use", {}, { name: "export_pdf" }); } catch {} }}
-                className="text-sm text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1.5 font-medium"
+                className="text-sm text-primary hover:underline inline-flex items-center gap-1.5 font-medium"
               >
                 <Printer className="h-3.5 w-3.5" />
                 {t("runComplete.shadowReportPdf")}

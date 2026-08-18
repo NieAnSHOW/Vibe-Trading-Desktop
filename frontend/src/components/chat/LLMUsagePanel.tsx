@@ -14,7 +14,7 @@ export function LLMUsagePanel({ usage, compact = false }: Props) {
   if (usage === null) {
     return (
       <section
-        className={cn("border border-border/70 bg-muted/20 p-3 text-xs", compact ? "max-w-xl" : "w-full")}
+        className={cn("tw-panel p-3 text-xs", compact ? "max-w-xl" : "w-full")}
         aria-label={t("llmUsage.title")}
       >
         <p className="text-muted-foreground">{t("llmUsage.noUsage")}</p>
@@ -43,14 +43,14 @@ export function LLMUsagePanel({ usage, compact = false }: Props) {
 
   return (
     <section
-      className={cn("border border-border/70 bg-muted/20 p-3 text-xs", compact ? "max-w-xl" : "w-full")}
+      className={cn("tw-panel p-3 text-xs", compact ? "max-w-xl" : "w-full")}
       aria-label={t("llmUsage.title")}
     >
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
         {fields.map(([label, value]) => (
           <div key={label} className="min-w-0">
             <dt className="text-muted-foreground">{label}</dt>
-            <dd className="truncate font-medium tabular-nums" title={value}>{value}</dd>
+            <dd className="tw-num truncate font-medium" title={value}>{value}</dd>
           </div>
         ))}
       </dl>

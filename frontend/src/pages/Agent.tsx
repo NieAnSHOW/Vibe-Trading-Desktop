@@ -2002,13 +2002,13 @@ export function Agent() {
                   {goalSnapshot.goal.ui_summary || goalSnapshot.goal.objective}
                 </span>
                 {goalProgress.metLabel && (
-                  <span className="shrink-0 font-mono text-[11px] text-emerald-600 dark:text-emerald-400">
+                  <span className="shrink-0 font-mono text-[11px] tabular-nums text-emerald-600 dark:text-emerald-400">
                     {goalProgress.metLabel}
                   </span>
                 )}
                 {goalProgress.evidenceTotal > 0 && (
                   <span
-                    className="shrink-0 rounded bg-background px-1 font-mono text-[10px] text-primary"
+                    className="shrink-0 rounded bg-background px-1 font-mono text-[10px] tabular-nums text-primary"
                     title={t("agent.evidenceCollectedTitle")}
                   >
                     {t("agent.evidenceCount", {
@@ -2025,7 +2025,7 @@ export function Agent() {
                 />
               </button>
               {goalDetailsOpen && (
-                <div className="grid gap-3 rounded-xl border border-primary/20 bg-background/95 p-3 text-xs shadow-sm">
+                <div className="grid gap-3 rounded-xl border border-primary/20 bg-background/95 p-3 text-xs">
                   {goalEditActive ? (
                     <div className="grid gap-2">
                       <textarea
@@ -2063,18 +2063,18 @@ export function Agent() {
                   )}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="rounded-lg border bg-muted/20 p-2.5">
-                      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      <div className="tw-panel-label">
                         {t("agent.criteria")}
                       </div>
-                      <div className="mt-1 font-mono text-base font-semibold text-foreground">
+                      <div className="mt-1 font-mono text-base tabular-nums font-semibold text-foreground">
                         {goalProgress.label || "0/0"}
                       </div>
                     </div>
                     <div className="rounded-lg border bg-muted/20 p-2.5">
-                      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      <div className="tw-panel-label">
                         {t("agent.evidence")}
                       </div>
-                      <div className="mt-1 font-mono text-base font-semibold text-foreground">
+                      <div className="mt-1 font-mono text-base tabular-nums font-semibold text-foreground">
                         {goalProgress.evidenceTotal}
                       </div>
                     </div>
@@ -2106,7 +2106,7 @@ export function Agent() {
                               {displayStatus}
                             </span>
                           </span>
-                          <span className="rounded-full border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                          <span className="rounded-full border px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-muted-foreground">
                             {evidenceCount} ev
                           </span>
                         </div>
@@ -2115,7 +2115,7 @@ export function Agent() {
                   </div>
                   {goalSnapshot.evidence.length > 0 && (
                     <div className="grid gap-1.5 border-t pt-2">
-                      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      <div className="tw-panel-label">
                         {t("agent.recentEvidence")}
                       </div>
                       {latestGoalEvidence(goalSnapshot).map((item) => (
@@ -2212,7 +2212,7 @@ export function Agent() {
           )}
           <div
             data-testid="agent-composer"
-            className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-2 shadow-lg transition-[border-color,box-shadow] focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20"
+            className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-2 transition-[border-color,box-shadow] focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20"
           >
             {(swarmPreset || goalComposerActive || attachment) && (
               <div className="order-first flex w-full flex-wrap items-center gap-1.5 px-1 pt-1">
@@ -2499,7 +2499,7 @@ export function Agent() {
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-destructive text-destructive-foreground transition-opacity hover:opacity-90"
+                  className="tw-btn-ghost h-9 w-9 !px-0 shrink-0 text-destructive hover:text-destructive"
                   title={t("agent.stopGeneration")}
                 >
                   <Square className="h-4 w-4" />
@@ -2513,7 +2513,7 @@ export function Agent() {
                       ? !input.trim()
                       : !input.trim() && !attachment)
                   }
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                  className="tw-btn-primary h-9 w-9 !px-0 shrink-0"
                 >
                   <Send className="h-4 w-4" />
                 </button>

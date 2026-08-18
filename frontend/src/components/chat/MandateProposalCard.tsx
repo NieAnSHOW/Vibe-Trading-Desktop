@@ -167,7 +167,7 @@ function ProfileTile({
           type="button"
           onClick={onCommit}
           disabled={disabled}
-          className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+          className="tw-btn-primary mt-3 w-full"
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
           {busy ? "Committing…" : `Commit “${profile.label}”`}
@@ -252,7 +252,7 @@ export const MandateProposalCard = memo(function MandateProposalCard({ proposal,
   return (
     <div className="flex gap-3">
       <AgentAvatar />
-      <div className="flex-1 min-w-0 space-y-3 rounded-2xl border border-primary/20 bg-background/95 p-4 shadow-sm">
+      <div className="tw-panel flex-1 min-w-0 space-y-3 border-primary/20 p-4">
         <div className="flex items-start gap-2">
           {isReauth ? (
             <ShieldAlert className="h-4 w-4 shrink-0 text-amber-500" />

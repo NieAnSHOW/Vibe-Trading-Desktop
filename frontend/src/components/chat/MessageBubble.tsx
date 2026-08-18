@@ -70,7 +70,7 @@ export const MessageBubble = memo(function MessageBubble({
   if (msg.type === "user") {
     return (
       <div className="flex justify-end gap-3 group">
-        <div className="max-w-[72%] rounded-2xl rounded-tr-sm bg-primary text-white  px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap">
+        <div className="max-w-[72%] rounded-2xl rounded-tr-sm bg-primary text-primary-foreground px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap">
           {msg.content}
           {ts && (
             <span className="block text-[9px] opacity-50 text-right mt-1">
@@ -89,7 +89,7 @@ export const MessageBubble = memo(function MessageBubble({
     return (
       <div className="flex gap-3 group">
         <AgentAvatar />
-        <div className="flex-1 min-w-0 relative rounded-2xl  px-4 py-2.5 rounded-tl-sm bg-white dark:bg-[#161616]">
+        <div className="flex-1 min-w-0 relative rounded-2xl px-4 py-2.5 rounded-tl-sm border bg-card">
           <CopyButton text={msg.content} />
           <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed prose-table:border prose-table:border-border/50 prose-th:bg-muted/30 prose-th:px-3 prose-th:py-1.5 prose-td:px-3 prose-td:py-1.5 prose-th:text-left prose-th:text-xs prose-th:font-medium prose-td:text-xs prose-hr:hidden">
             <ReactMarkdown

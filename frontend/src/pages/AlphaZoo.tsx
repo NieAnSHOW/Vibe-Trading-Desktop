@@ -18,7 +18,6 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { track } from "@/lib/telemetry";
 import {
-  Layers,
   Search,
   Play,
   ArrowLeft,
@@ -42,6 +41,7 @@ import {
 import { echarts } from "@/lib/echarts";
 import { getChartTheme } from "@/lib/chart-theme";
 import { useDarkMode } from "@/hooks/useDarkMode";
+import { PageHeader } from "@/components/common/PageHeader";
 
 /* ---------- Constants ---------- */
 
@@ -213,21 +213,15 @@ function BrowseView() {
   const visible = filtered.slice(0, visibleCount);
 
   return (
-    <div className="w-full p-4 md:p-6 space-y-4" data-testid="alpha-zoo-workspace">
+    <div className="tw-page w-full max-w-none p-4 md:p-6 space-y-4" data-testid="alpha-zoo-workspace">
       {/* Workspace header */}
-      <div className="space-y-1 border-b pb-3">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wide">
-          <Layers className="h-3.5 w-3.5" aria-hidden="true" /> {i18n.t("alphaZoo.title")}
-        </div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-          {loading
-            ? i18n.t("alphaZoo.prebuiltAlphaLoading")
-            : i18n.t("alphaZoo.prebuiltAlpha", { count: total })}
-        </h1>
-        <p className="text-sm text-muted-foreground max-w-2xl">
-          {i18n.t("alphaZoo.browseDesc")}
-        </p>
-      </div>
+      <PageHeader
+        kicker="Alpha Zoo"
+        title={loading
+          ? i18n.t("alphaZoo.prebuiltAlphaLoading")
+          : i18n.t("alphaZoo.prebuiltAlpha", { count: total })}
+        sub={i18n.t("alphaZoo.browseDesc")}
+      />
 
       {/* Zoo cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -342,7 +336,7 @@ function BrowseView() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2 pt-1">
             <Link
               to={compareHref}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted hover:text-foreground transition"
+              className="tw-btn-ghost"
               title={i18n.t("alphaZoo.compareTooltip")}
             >
               <ArrowLeftRight className="h-3.5 w-3.5" aria-hidden="true" /> {i18n.t("alphaZoo.compare")}
@@ -350,7 +344,7 @@ function BrowseView() {
             </Link>
             <Link
               to="/alpha-zoo/bench"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
+              className="tw-btn-primary"
             >
               <Play className="h-3.5 w-3.5" aria-hidden="true" /> {i18n.t("alphaZoo.runBenchmark")}
             </Link>
@@ -359,7 +353,7 @@ function BrowseView() {
 
         {/* Catalogue */}
         {/* TODO(v0.2): switch to react-window if alpha count exceeds 5000 */}
-        <section data-testid="alpha-zoo-catalogue" className="min-w-0 border rounded-lg bg-card overflow-hidden lg:overflow-auto">
+        <section data-testid="alpha-zoo-catalogue" className="tw-panel min-w-0 rounded-lg lg:overflow-auto">
           <div className="overflow-x-auto">
           <table className="w-full text-sm" aria-label={i18n.t("alphaZoo.alphaCatalogue")}>
             <caption className="sr-only">{i18n.t("alphaZoo.alphaCatalogue")}</caption>
@@ -448,13 +442,13 @@ function BrowseView() {
         </div>
         {!loading && visible.length < filtered.length && (
           <div className="border-t p-3 flex items-center justify-between text-xs text-muted-foreground">
-            <span>
+            <span className="tw-num">
               {i18n.t("alphaZoo.showingOf", { visible: visible.length, total: filtered.length })}
             </span>
             <button
               type="button"
               onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-              className="px-3 py-1 rounded-md border hover:bg-muted hover:text-foreground transition"
+              className="tw-btn-ghost"
             >
               {i18n.t("alphaZoo.loadMore")}
             </button>
@@ -502,7 +496,7 @@ function DetailView({ alphaId }: DetailProps) {
 
   if (loading) {
     return (
-      <div className="w-full p-4 md:p-6 flex items-center justify-center text-muted-foreground">
+      <div className="tw-page w-full p-4 md:p-6 flex items-center justify-center text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" /> {i18n.t("alphaZoo.loadingAlpha", { id: alphaId })}
       </div>
     );
@@ -510,15 +504,17 @@ function DetailView({ alphaId }: DetailProps) {
 
   if (error || !detail) {
     return (
-      <div className="w-full p-4 md:p-6 max-w-4xl mx-auto space-y-4">
+      <div className="tw-page max-w-4xl space-y-4">
         <Link to="/alpha-zoo" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> {i18n.t("alphaZoo.backToAlphaZoo")}
         </Link>
-        <div className="border rounded-lg p-5 bg-card">
-          <h2 className="font-semibold text-sm mb-1 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-warning" aria-hidden="true" /> {i18n.t("alphaZoo.couldNotLoad")}
-          </h2>
-          <p className="text-sm text-muted-foreground">{error || i18n.t("alphaZoo.unknownError")}</p>
+        <div className="tw-panel">
+          <div className="tw-panel-body">
+            <h2 className="tw-panel-label mb-1 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-warning" aria-hidden="true" /> {i18n.t("alphaZoo.couldNotLoad")}
+            </h2>
+            <p className="text-sm text-muted-foreground">{error || i18n.t("alphaZoo.unknownError")}</p>
+          </div>
         </div>
       </div>
     );
@@ -537,7 +533,7 @@ function DetailView({ alphaId }: DetailProps) {
     : `/alpha-zoo/bench?zoo=${encodeURIComponent(a.zoo)}&period=2020-2025`;
 
   return (
-    <div className="w-full p-4 md:p-6 max-w-5xl mx-auto space-y-4">
+    <div className="tw-page max-w-5xl space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <Link
           to="/alpha-zoo"
@@ -548,39 +544,44 @@ function DetailView({ alphaId }: DetailProps) {
         <button
           type="button"
           onClick={() => navigate(benchHref)}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition"
+          className="tw-btn-primary"
         >
           <Play className="h-3.5 w-3.5" aria-hidden="true" /> {i18n.t("alphaZoo.runBenchmark")}
         </button>
       </div>
 
       {/* Title */}
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h1 className="font-mono text-xl md:text-2xl font-bold tracking-tight">
-            {a.id}
-          </h1>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-            {a.zoo}
+      <PageHeader
+        kicker="Alpha Zoo"
+        title={
+          <span className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono">{a.id}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+              {a.zoo}
+            </span>
           </span>
-        </div>
-        {nickname && (
-          <p className="text-sm text-muted-foreground">{nickname}</p>
-        )}
-      </div>
+        }
+        sub={nickname || undefined}
+      />
 
       {/* Formula */}
-      <section className="space-y-2">
-        <h2 className="text-sm font-medium text-muted-foreground">{i18n.t("alphaZoo.formula")}</h2>
-        <pre className="border rounded-lg bg-muted/30 p-4 overflow-x-auto text-xs leading-relaxed">
-          <code>{formulaLatex || i18n.t("alphaZoo.noFormula")}</code>
-        </pre>
+      <section className="tw-panel">
+        <header className="tw-panel-head">
+          <h2 className="tw-panel-label">{i18n.t("alphaZoo.formula")}</h2>
+        </header>
+        <div className="tw-panel-body">
+          <pre className="rounded-lg bg-muted/30 p-4 overflow-x-auto text-xs leading-relaxed">
+            <code>{formulaLatex || i18n.t("alphaZoo.noFormula")}</code>
+          </pre>
+        </div>
       </section>
 
       {/* Metadata */}
-      <section className="space-y-2">
-        <h2 className="text-sm font-medium text-muted-foreground">{i18n.t("alphaZoo.metadata")}</h2>
-        <div className="border rounded-lg overflow-hidden bg-card">
+      <section className="tw-panel">
+        <header className="tw-panel-head">
+          <h2 className="tw-panel-label">{i18n.t("alphaZoo.metadata")}</h2>
+        </header>
+        <div className="tw-panel-body p-0">
           <table className="w-full text-sm">
             <tbody>
               <MetaRow
@@ -615,16 +616,20 @@ function DetailView({ alphaId }: DetailProps) {
       </section>
 
       {/* Source code */}
-      <section className="space-y-2">
-        <h2 className="text-sm font-medium text-muted-foreground">{i18n.t("alphaZoo.sourceCode")}</h2>
-        <details className="border rounded-lg bg-card group">
-          <summary className="cursor-pointer px-4 py-3 text-sm font-medium hover:bg-muted/40 select-none">
-            {i18n.t("alphaZoo.viewSource", { lines: (detail.source_code || "").split("\n").length })}
-          </summary>
-          <pre className="border-t bg-muted/30 p-4 overflow-x-auto text-xs leading-relaxed">
-            <code>{detail.source_code || i18n.t("alphaZoo.noSource")}</code>
-          </pre>
-        </details>
+      <section className="tw-panel">
+        <header className="tw-panel-head">
+          <h2 className="tw-panel-label">{i18n.t("alphaZoo.sourceCode")}</h2>
+        </header>
+        <div className="tw-panel-body p-0">
+          <details className="group">
+            <summary className="cursor-pointer px-4 py-3 text-sm font-medium hover:bg-muted/40 select-none">
+              {i18n.t("alphaZoo.viewSource", { lines: (detail.source_code || "").split("\n").length })}
+            </summary>
+            <pre className="border-t bg-muted/30 p-4 overflow-x-auto text-xs leading-relaxed">
+              <code>{detail.source_code || i18n.t("alphaZoo.noSource")}</code>
+            </pre>
+          </details>
+        </div>
       </section>
     </div>
   );
@@ -781,7 +786,7 @@ function BenchView() {
   const busy = status === "submitting" || status === "streaming";
 
   return (
-    <div className="w-full p-4 md:p-6 max-w-6xl mx-auto space-y-4">
+    <div className="tw-page max-w-6xl space-y-4">
       <Link
         to="/alpha-zoo"
         className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
@@ -789,108 +794,104 @@ function BenchView() {
         <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> {i18n.t("alphaZoo.backToAlphaZoo")}
       </Link>
 
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wide">
-          <Play className="h-3.5 w-3.5" aria-hidden="true" /> {i18n.t("alphaZoo.benchRunner")}
-        </div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-          {i18n.t("alphaZoo.scoreZoo")}
-        </h1>
-        <p className="text-sm text-muted-foreground max-w-2xl">
-          {i18n.t("alphaZoo.scoreDesc")}
-        </p>
-      </div>
+      <PageHeader
+        kicker="Alpha Zoo"
+        title={i18n.t("alphaZoo.scoreZoo")}
+        sub={i18n.t("alphaZoo.scoreDesc")}
+      />
 
       {/* Form */}
       <form
         onSubmit={startBench}
-        className="border rounded-lg p-4 bg-card grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end"
+        className="tw-panel"
       >
-        <div>
-          <label htmlFor="bench-zoo" className="text-xs text-muted-foreground block mb-1">{i18n.t("alphaZoo.zoo")}</label>
-          <select
-            id="bench-zoo"
-            value={zoo}
-            onChange={(e) => setZoo(e.target.value)}
-            disabled={busy}
-            className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
-          >
-            {ZOO_CARDS.map((z) => (
-              <option key={z.id} value={z.id}>
-                {i18n.t("alphaZoo.zooCardTitle." + z.id as any, { defaultValue: z.title })}
-              </option>
-            ))}
-          </select>
+        <div className="tw-panel-body grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+          <div>
+            <label htmlFor="bench-zoo" className="text-xs text-muted-foreground block mb-1">{i18n.t("alphaZoo.zoo")}</label>
+            <select
+              id="bench-zoo"
+              value={zoo}
+              onChange={(e) => setZoo(e.target.value)}
+              disabled={busy}
+              className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
+            >
+              {ZOO_CARDS.map((z) => (
+                <option key={z.id} value={z.id}>
+                  {i18n.t("alphaZoo.zooCardTitle." + z.id as any, { defaultValue: z.title })}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="bench-universe" className="text-xs text-muted-foreground block mb-1">{i18n.t("alphaZoo.universe")}</label>
+            <select
+              id="bench-universe"
+              value={universe}
+              onChange={(e) => setUniverse(e.target.value)}
+              disabled={busy}
+              className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
+            >
+              {UNIVERSE_OPTIONS.map((u) => (
+                <option key={u.value} value={u.value}>
+                  {i18n.t("alphaZoo.universeOption." + u.value as any, { defaultValue: u.label })}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="bench-period" className="text-xs text-muted-foreground block mb-1">{i18n.t("alphaZoo.period")}</label>
+            <input
+              id="bench-period"
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              disabled={busy}
+              placeholder="2020-2025"
+              className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
+            />
+          </div>
+          <div>
+            <label htmlFor="bench-top" className="text-xs text-muted-foreground block mb-1">{i18n.t("alphaZoo.top")}</label>
+            <input
+              id="bench-top"
+              type="number"
+              min={1}
+              max={500}
+              value={Number.isFinite(top) ? top : ""}
+              onChange={(e) =>
+                // Empty input → fall back to default; submit also clamps
+                // to a safe value so NaN never reaches the API.
+                setTop(e.target.value === "" ? 20 : Number(e.target.value))
+              }
+              disabled={busy}
+              className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <button
+              type="submit"
+              disabled={busy}
+              className="tw-btn-primary"
+            >
+              {busy ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> {i18n.t("alphaZoo.running")}
+                </>
+              ) : (
+                <>
+                  <Play className="h-3.5 w-3.5" aria-hidden="true" /> {i18n.t("alphaZoo.runBenchmark")}
+                </>
+              )}
+            </button>
+          </div>
+          {formError && (
+            <p
+              className="sm:col-span-2 lg:col-span-5 text-xs text-red-600 dark:text-red-400"
+              role="alert"
+            >
+              {formError}
+            </p>
+          )}
         </div>
-        <div>
-          <label htmlFor="bench-universe" className="text-xs text-muted-foreground block mb-1">{i18n.t("alphaZoo.universe")}</label>
-          <select
-            id="bench-universe"
-            value={universe}
-            onChange={(e) => setUniverse(e.target.value)}
-            disabled={busy}
-            className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
-          >
-            {UNIVERSE_OPTIONS.map((u) => (
-              <option key={u.value} value={u.value}>
-                {i18n.t("alphaZoo.universeOption." + u.value as any, { defaultValue: u.label })}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="bench-period" className="text-xs text-muted-foreground block mb-1">{i18n.t("alphaZoo.period")}</label>
-          <input
-            id="bench-period"
-            value={period}
-            onChange={(e) => setPeriod(e.target.value)}
-            disabled={busy}
-            placeholder="2020-2025"
-            className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
-          />
-        </div>
-        <div>
-          <label htmlFor="bench-top" className="text-xs text-muted-foreground block mb-1">{i18n.t("alphaZoo.top")}</label>
-          <input
-            id="bench-top"
-            type="number"
-            min={1}
-            max={500}
-            value={Number.isFinite(top) ? top : ""}
-            onChange={(e) =>
-              // Empty input → fall back to default; submit also clamps
-              // to a safe value so NaN never reaches the API.
-              setTop(e.target.value === "" ? 20 : Number(e.target.value))
-            }
-            disabled={busy}
-            className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <button
-            type="submit"
-            disabled={busy}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition disabled:opacity-50"
-          >
-            {busy ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> {i18n.t("alphaZoo.running")}
-              </>
-            ) : (
-              <>
-                <Play className="h-3.5 w-3.5" aria-hidden="true" /> {i18n.t("alphaZoo.runBenchmark")}
-              </>
-            )}
-          </button>
-        </div>
-        {formError && (
-          <p
-            className="sm:col-span-2 lg:col-span-5 text-xs text-red-600 dark:text-red-400"
-            role="alert"
-          >
-            {formError}
-          </p>
-        )}
       </form>
 
       {/* Progress */}
@@ -915,29 +916,31 @@ function ProgressPanel({
     ? Math.min(100, Math.round((progress.n_done / progress.n_total) * 100))
     : 0;
   return (
-    <div className="border rounded-xl p-4 bg-card space-y-3">
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-          {jobId ? `Job ${jobId.slice(0, 12)}…` : "Submitting…"}
-        </span>
-        {progress && (
-          <span className="font-mono tabular-nums">
-            {progress.n_done} / {progress.n_total}
+    <div className="tw-panel">
+      <div className="tw-panel-body space-y-3">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            {jobId ? `Job ${jobId.slice(0, 12)}…` : "Submitting…"}
           </span>
+          {progress && (
+            <span className="tw-num">
+              {progress.n_done} / {progress.n_total}
+            </span>
+          )}
+        </div>
+        <div className="h-2 rounded-full bg-muted overflow-hidden">
+          <div
+            className="h-full bg-primary transition-all duration-300"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        {progress?.current_alpha_id && (
+          <p className="text-xs text-muted-foreground font-mono truncate">
+            {i18n.t("alphaZoo.computing", { id: progress.current_alpha_id })}
+          </p>
         )}
       </div>
-      <div className="h-2 rounded-full bg-muted overflow-hidden">
-        <div
-          className="h-full bg-primary transition-all duration-300"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      {progress?.current_alpha_id && (
-        <p className="text-xs text-muted-foreground font-mono truncate">
-          {i18n.t("alphaZoo.computing", { id: progress.current_alpha_id })}
-        </p>
-      )}
     </div>
   );
 }
@@ -1003,11 +1006,11 @@ function ResultPanel({ result }: { result: AlphaBenchResult }) {
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {totals.map(({ label, value, icon: Icon, tone }) => (
-          <div key={label} className="border rounded-xl p-4 bg-card flex items-center gap-3">
+          <div key={label} className="tw-panel flex items-center gap-3 p-4">
             <Icon className={cn("h-5 w-5 shrink-0", tone)} aria-hidden="true" />
             <div>
               <p className="text-xs text-muted-foreground">{label}</p>
-              <p className="text-xl font-bold tabular-nums">{value}</p>
+              <p className="tw-num text-xl font-bold">{value}</p>
             </div>
           </div>
         ))}
@@ -1021,11 +1024,13 @@ function ResultPanel({ result }: { result: AlphaBenchResult }) {
 
       {/* By-theme breakdown */}
       {result.by_theme && Object.keys(result.by_theme).length > 0 && (
-        <div className="border rounded-xl p-4 bg-card">
-          <h3 className="text-sm font-medium text-muted-foreground mb-2">
-            {i18n.t("alphaZoo.byTheme")}
-          </h3>
-          <div ref={chartRef} style={{ height: 240 }} />
+        <div className="tw-panel">
+          <div className="tw-panel-body">
+            <h3 className="tw-panel-label mb-2">
+              {i18n.t("alphaZoo.byTheme")}
+            </h3>
+            <div ref={chartRef} style={{ height: 240 }} />
+          </div>
         </div>
       )}
     </div>
@@ -1034,12 +1039,12 @@ function ResultPanel({ result }: { result: AlphaBenchResult }) {
 
 function TopTable({ title, rows }: { title: string; rows: AlphaBenchTopRow[] }) {
   return (
-    <div className="border rounded-xl overflow-hidden bg-card">
-      <div className="px-4 py-2.5 border-b bg-muted/40">
-        <h3 className="text-sm font-medium">{title}</h3>
+    <div className="tw-panel">
+      <div className="tw-panel-head">
+        <h3 className="tw-panel-label">{title}</h3>
       </div>
       {rows.length === 0 ? (
-        <div className="px-4 py-6 text-xs text-muted-foreground text-center">
+        <div className="tw-panel-body px-4 py-6 text-xs text-muted-foreground text-center">
           {i18n.t("alphaZoo.noRows")}
         </div>
       ) : (
@@ -1250,7 +1255,7 @@ function CompareView() {
   const busy = status === "submitting" || status === "streaming";
 
   return (
-    <div className="w-full p-4 md:p-6 max-w-6xl mx-auto space-y-4">
+    <div className="tw-page max-w-6xl space-y-4">
       <Link
         to="/alpha-zoo"
         className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
@@ -1258,19 +1263,14 @@ function CompareView() {
         <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> {i18n.t("alphaZoo.backToAlphaZoo")}
       </Link>
 
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wide">
-          <ArrowLeftRight className="h-3.5 w-3.5" aria-hidden="true" /> {i18n.t("alphaZoo.headToHeadCompare")}
-        </div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-          {i18n.t("alphaZoo.compareAlphas")}
-        </h1>
-        <p className="text-sm text-muted-foreground max-w-2xl">
-          {i18n.t("alphaZoo.compareDesc")}
-        </p>
-      </div>
+      <PageHeader
+        kicker="Alpha Zoo"
+        title={i18n.t("alphaZoo.compareAlphas")}
+        sub={i18n.t("alphaZoo.compareDesc")}
+      />
 
-      <form onSubmit={startCompare} className="border rounded-lg p-4 bg-card space-y-3">
+      <form onSubmit={startCompare} className="tw-panel">
+        <div className="tw-panel-body space-y-3">
         <div>
           <label htmlFor="compare-ids" className="text-xs text-muted-foreground block mb-1">
             {i18n.t("alphaZoo.alphaIds")}{ids.length > 0 ? ` (${ids.length} ${i18n.t("alphaZoo.selected")})` : ""}
@@ -1339,7 +1339,7 @@ function CompareView() {
           <button
             type="submit"
             disabled={busy || ids.length < 2}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition disabled:opacity-50"
+            className="tw-btn-primary"
           >
             {busy ? (
               <>
@@ -1361,6 +1361,7 @@ function CompareView() {
             {formError}
           </p>
         )}
+        </div>
       </form>
 
       {(status === "submitting" || status === "streaming") && (
@@ -1396,7 +1397,7 @@ function CompareResultPanel({ result }: { result: AlphaCompareResult }) {
         )}
       </div>
 
-      <div className="border rounded-xl overflow-hidden">
+      <div className="tw-panel">
         <div className="overflow-x-auto">
           <table className="w-full text-sm" aria-label={i18n.t("alphaZoo.alphaComparisonRanking")}>
             <thead>

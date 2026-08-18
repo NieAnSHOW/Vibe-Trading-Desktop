@@ -24,7 +24,7 @@ function Badge({ value, good }: { value: string; good: boolean | null }) {
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="text-center py-2">
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</p>
+      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
       <p className="text-sm font-bold font-mono tabular-nums">{value}</p>
       {sub && <p className="text-[10px] text-muted-foreground">{sub}</p>}
     </div>
@@ -41,7 +41,7 @@ function MonteCarloSection({ mc }: { mc: NonNullable<ValidationData["monte_carlo
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <h4 className="text-sm font-semibold">{i18n.t("validation.monteCarlo")}</h4>
+        <h4 className="tw-panel-label">{i18n.t("validation.monteCarlo")}</h4>
         <Badge value={sig ? i18n.t("validation.significant") : i18n.t("validation.notSignificant")} good={sig} />
       </div>
       <p className="text-xs text-muted-foreground">
@@ -75,7 +75,7 @@ function BootstrapSection({ bs }: { bs: NonNullable<ValidationData["bootstrap"]>
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <h4 className="text-sm font-semibold">{i18n.t("validation.bootstrap")}</h4>
+        <h4 className="tw-panel-label">{i18n.t("validation.bootstrap")}</h4>
         <Badge value={reliable ? i18n.t("validation.ciAbove0") : i18n.t("validation.ciIncludes0")} good={reliable} />
       </div>
       <p className="text-xs text-muted-foreground">
@@ -108,7 +108,7 @@ function WalkForwardSection({ wf }: { wf: NonNullable<ValidationData["walk_forwa
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <h4 className="text-sm font-semibold">{i18n.t("validation.walkForward")}</h4>
+        <h4 className="tw-panel-label">{i18n.t("validation.walkForward")}</h4>
         <Badge value={i18n.t("validation.profitable", { profitable: wf.profitable_windows, total: wf.n_windows })} good={consistent ? true : wf.consistency_rate >= 0.5 ? null : false} />
       </div>
       <p className="text-xs text-muted-foreground">

@@ -1,8 +1,8 @@
 import i18n from '@/i18n';
 import { useEffect, useState } from "react";
-import { BarChart3 } from "lucide-react";
 import { track } from "@/lib/telemetry";
 import { CorrelationMatrix } from "@/components/charts/CorrelationMatrix";
+import { PageHeader } from "@/components/common/PageHeader";
 
 const WINDOWS = [30, 60, 90, 180, 365] as const;
 
@@ -37,13 +37,11 @@ export function Correlation() {
   };
 
   return (
-    <div className="flex h-full w-full flex-col gap-3 p-3 lg:gap-3 lg:p-5">
-      <header className="flex items-center gap-2">
-        <BarChart3 className="h-5 w-5 text-primary" aria-hidden="true" />
-        <h1 className="text-xl font-bold tracking-tight">
-          {i18n.t("correlation.title")}
-        </h1>
-      </header>
+    <div className="tw-page flex h-full w-full flex-col gap-3 p-3 lg:gap-3 lg:p-5">
+      <PageHeader
+        kicker="Research"
+        title={i18n.t("correlation.title")}
+      />
 
       <div
         data-testid="correlation-workspace"
@@ -51,7 +49,7 @@ export function Correlation() {
       >
         <aside
           data-testid="correlation-controls"
-          className="flex flex-col gap-4 rounded-lg border bg-card p-3 lg:min-h-0 lg:overflow-auto"
+          className="tw-panel flex flex-col gap-4 rounded-lg p-3 lg:min-h-0 lg:overflow-auto"
         >
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium">{i18n.t("correlation.assetCodes")}</label>
@@ -116,7 +114,7 @@ export function Correlation() {
           <button
             onClick={compute}
             disabled={loading}
-            className="self-start px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+            className="tw-btn-primary self-start"
           >
             {loading ? i18n.t("correlation.loading") : i18n.t("correlation.compute")}
           </button>
@@ -124,7 +122,7 @@ export function Correlation() {
 
         <section
           data-testid="correlation-results"
-          className="min-h-[20rem] rounded-lg border bg-card p-3 lg:min-h-0 lg:overflow-auto"
+          className="tw-panel min-h-[20rem] rounded-lg p-3 lg:min-h-0 lg:overflow-auto"
         >
           {error && (
             <div className="rounded border border-danger/30 bg-danger/5 p-3 text-sm text-danger">

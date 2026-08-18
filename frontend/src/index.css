@@ -4,28 +4,33 @@
 
 @layer base {
   :root {
+    /* Trading Worker 设计系统令牌:衬线展示字体 / 等宽标签字体 / 金色 kicker */
+    --tw-display: "Playfair Display", "Noto Serif SC", "Songti SC", serif;
+    --tw-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --tw-gold: oklch(0.55 0.06 85);
+
     /* Light mode surfaces */
-    --background: 220 20% 98%;
-    --foreground: 220 20% 10%;
+    --background: 220 20% 96%;
+    --foreground: 220 18% 16%;
     --card: 0 0% 100%;
-    --card-foreground: 220 20% 10%;
+    --card-foreground: 220 18% 16%;
 
     /* Popover: a slightly elevated surface used for floating menus,
        tooltips, and the language switcher dropdown. Falls back to a
        solid white (light) or surface-1 (dark) so dropdowns never
        appear transparent and let underlying content bleed through. */
     --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 10%;
+    --popover-foreground: 220 18% 16%;
 
     /* Brand accent */
     --primary: 175 72% 40%;
     --primary-foreground: 26 0% 100%;
 
-    --muted: 220 14% 92%;
-    --muted-foreground: 220 14% 46%;
+    --muted: 220 18% 92%;
+    --muted-foreground: 220 12% 42%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 14% 87%;
+    --border: 220 16% 84%;
     --radius: 0.5rem;
 
     /* Semantic colors */
@@ -43,23 +48,26 @@
   }
 
   .dark {
-    /* Dark mode: 4-level surface system */
-    --background: 220 20% 5%; /* bg-base */
-    --foreground: 220 10% 92%;
-    --card: 220 20% 8%; /* surface-1 */
-    --card-foreground: 220 10% 92%;
+    /* Dark mode: Trading Worker 近黑蓝面板体系(与桌面控制台同源)。
+       分层靠边框与表面明度,不加阴影。 */
+    --tw-gold: oklch(0.66 0.04 85);
 
-    --popover: 220 20% 9%; /* surface-1.5 (slightly lighter than card) */
-    --popover-foreground: 220 10% 92%;
+    --background: 210 24% 5%; /* bg-base */
+    --foreground: 190 18% 94%;
+    --card: 207 22% 8%; /* surface-1 */
+    --card-foreground: 190 18% 94%;
+
+    --popover: 207 22% 9%; /* surface-1.5 (slightly lighter than card) */
+    --popover-foreground: 190 18% 94%;
 
     --primary: 175 72% 40%;
     --primary-foreground: 26 0% 100%;
 
-    --muted: 220 20% 13%; /* surface-2 */
-    --muted-foreground: 220 10% 55%;
+    --muted: 205 19% 12%; /* surface-2 */
+    --muted-foreground: 194 10% 67%;
     --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 20% 18%; /* surface-3 */
+    --border: 201 14% 23%; /* surface-3 */
 
     /* Semantic colors */
     --success: 142 71% 45%;
@@ -237,4 +245,63 @@ html.desktop-shell-leaving .desktop-shell-content {
 /* RTL: mirror directional icons (chevrons, arrows) automatically */
 [dir="rtl"] .rtl\:flip-x {
   transform: scaleX(-1);
+}
+
+/* ── Trading Worker 设计系统:WebUI 共享词汇 ──────────────────────────
+   取自桌面控制台(OD 设计系统):近黑蓝面板 + 衬线标题 + 等宽大写标签 +
+   金色 kicker + 单一青绿焦点。分层靠边框与表面明度,不加阴影。
+   用法参照 tw-page 结构:<main class="tw-page"><header class="tw-page-head">… */
+@layer components {
+  /* 页面容器:居中限宽,给每页一致的左右呼吸 */
+  .tw-page {
+    @apply mx-auto w-full min-w-0 max-w-[1120px] px-4 pb-10 pt-6 sm:px-6;
+  }
+
+  /* 页头:金色等宽 kicker + 衬线标题(kicker 每页只出现一次,不做逐节 eyebrow) */
+  .tw-kicker {
+    @apply font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-gold;
+  }
+
+  .tw-page-title {
+    @apply mt-2 font-display text-[26px] font-normal leading-[1.22] tracking-[0.01em] text-foreground;
+  }
+
+  .tw-page-sub {
+    @apply mt-1.5 max-w-2xl text-[12.5px] leading-[1.55] text-muted-foreground;
+  }
+
+  /* 面板:1px 边框 + 圆角 + 卡片底;头部为等宽大写标签栏 */
+  .tw-panel {
+    @apply min-w-0 overflow-hidden rounded-xl border bg-card;
+  }
+
+  .tw-panel-head {
+    @apply flex items-center justify-between gap-3 border-b bg-muted/45 px-4 py-2.5;
+  }
+
+  .tw-panel-label {
+    @apply font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground;
+  }
+
+  .tw-panel-body {
+    @apply p-4;
+  }
+
+  /* 面板语境按钮:8px 圆角 + 等宽字标签(设计系统按钮规范) */
+  .tw-btn {
+    @apply inline-flex min-h-[34px] items-center justify-center gap-2 rounded-lg px-3.5 py-1.5 font-mono text-xs font-semibold tracking-[0.04em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-40;
+  }
+
+  .tw-btn-primary {
+    @apply tw-btn bg-primary text-primary-foreground hover:bg-primary/90;
+  }
+
+  .tw-btn-ghost {
+    @apply tw-btn border bg-muted text-foreground hover:bg-border/60;
+  }
+
+  /* 数字读数:等宽 + 表格数字,用于行情/指标数值 */
+  .tw-num {
+    @apply font-mono tabular-nums;
+  }
 }

@@ -88,11 +88,11 @@ export function RuntimeStatus() {
   const summary = useMemo(() => summarizeRuntime(status), [status]);
 
   return (
-    <section className="rounded-lg border bg-card p-5 shadow-sm">
-      <div className="flex flex-col gap-6">
+    <section className="tw-panel">
+      <div className="flex flex-col gap-6 tw-panel-body">
         <div className="flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground">
+            <div className="tw-panel-label inline-flex items-center gap-2">
               <Activity className="h-3.5 w-3.5" />
               {t("runtime.monitorBadge")}
             </div>
@@ -108,7 +108,7 @@ export function RuntimeStatus() {
             type="button"
             onClick={() => loadStatus("refresh")}
             disabled={refreshing}
-            className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
+            className="tw-btn-ghost"
           >
             {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             {t("runtime.refresh")}
@@ -195,9 +195,9 @@ function isCurrentStatusRequest(
 
 function SummaryTile({ label, value, tone, icon: Icon }: SummaryTileProps) {
   return (
-    <div className="rounded-md border p-4">
+    <div className="rounded-lg border bg-muted/25 p-4">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-medium uppercase text-muted-foreground">{label}</span>
+        <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</span>
         <Icon
           className={cn(
             "h-4 w-4",
@@ -209,7 +209,7 @@ function SummaryTile({ label, value, tone, icon: Icon }: SummaryTileProps) {
       </div>
       <div
         className={cn(
-          "mt-3 text-2xl font-semibold",
+          "tw-num mt-3 text-2xl font-semibold",
           tone === "success" && "text-success",
           tone === "danger" && "text-danger",
         )}
@@ -239,11 +239,11 @@ function BrokerRuntimeCard({
   const mandateCountdown = formatCountdown(mandate?.expires_at, t, nowMs);
 
   return (
-    <article className="rounded-md border p-4">
+    <article className="rounded-lg border bg-muted/20 p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-semibold capitalize">{brokerKey}</h2>
+            <h2 className="font-mono text-sm font-semibold capitalize">{brokerKey}</h2>
             <StatusPill
               label={broker.auth.oauth_token_present ? t("runtime.authPresent") : t("runtime.authMissing")}
               tone={broker.auth.oauth_token_present ? "success" : "neutral"}
@@ -290,8 +290,8 @@ function BrokerRuntimeCard({
 
 function RuntimePanel({ title, icon: Icon, children }: { title: string; icon: typeof Activity; children: ReactNode }) {
   return (
-    <section className="rounded-md border bg-muted/20 p-3">
-      <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
+    <section className="rounded-lg border bg-card p-3">
+      <div className="tw-panel-label mb-3 flex items-center gap-2">
         <Icon className="h-3.5 w-3.5" />
         {title}
       </div>
@@ -303,8 +303,8 @@ function RuntimePanel({ title, icon: Icon, children }: { title: string; icon: ty
 function KeyValue({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[11px] uppercase text-muted-foreground">{label}</div>
-      <div className="font-mono text-sm">{value || "-"}</div>
+      <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</div>
+      <div className="tw-num text-sm">{value || "-"}</div>
     </div>
   );
 }
@@ -313,11 +313,11 @@ function StatusPill({ label, tone }: { label: string; tone: "success" | "danger"
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded px-2 py-0.5 text-xs font-medium",
-        tone === "success" && "bg-success/10 text-success",
-        tone === "danger" && "bg-danger/10 text-danger",
-        tone === "warning" && "bg-amber-500/10 text-amber-700 dark:text-amber-300",
-        tone === "neutral" && "bg-muted text-muted-foreground",
+        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
+        tone === "success" && "border-success/25 bg-success/10 text-success",
+        tone === "danger" && "border-danger/25 bg-danger/10 text-danger",
+        tone === "warning" && "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+        tone === "neutral" && "border-border bg-muted text-muted-foreground",
       )}
     >
       {label}

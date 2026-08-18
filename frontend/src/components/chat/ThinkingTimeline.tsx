@@ -123,7 +123,7 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ messages, isLat
               {step.status === "running" ? (
                 <span className="text-[10px] text-primary/60">{t('thinking.running')}</span>
               ) : step.elapsed_ms != null ? (
-                <span className="text-[10px] text-muted-foreground/40 tabular-nums">{(step.elapsed_ms / 1000).toFixed(1)}s</span>
+                <span className="tw-num text-[10px] text-muted-foreground/40">{(step.elapsed_ms / 1000).toFixed(1)}s</span>
               ) : null}
             </div>
           ))}

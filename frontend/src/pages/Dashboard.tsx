@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { RefreshCw, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/common/PageHeader";
 import { useMarketDashboardStore } from "@/stores/marketDashboard";
 import type {
   DashboardIndex,
@@ -143,17 +144,17 @@ function MarketCard({
   return (
     <section
       data-testid={testId}
-      className="flex h-full flex-col rounded-lg border bg-card p-3"
+      className="tw-panel flex h-full flex-col"
     >
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold">{title}</h2>
+      <header className="tw-panel-head">
+        <h2 className="tw-panel-label">{title}</h2>
         {error && hasData && (
           <span className="shrink-0 text-[10px] text-muted-foreground">
             {t("dashboard.stale")}
           </span>
         )}
-      </div>
-      <div className="mt-2.5 flex min-h-0 flex-1 flex-col">
+      </header>
+      <div className="tw-panel-body flex min-h-0 flex-1 flex-col">
         {!hasData && loading && (
           <p className="text-xs text-muted-foreground">
             {t("dashboard.loading")}
@@ -1000,16 +1001,19 @@ export default function Dashboard() {
   }, [initialize, startPolling, stopPolling]);
 
   return (
-    <div className="w-full space-y-3 p-3 sm:p-4 lg:space-y-3 lg:p-5">
+    <div className="tw-page max-w-none w-full space-y-3">
       {/* Market Overview */}
       <section aria-labelledby="market-overview" className="space-y-3">
-        <div className="flex items-baseline gap-3">
-          <h1 id="market-overview" className="text-xl font-bold tracking-tight">
-            {t("dashboard.title")}
-          </h1>
-          {indexesLoading && (
-            <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-          )}
+        <div id="market-overview">
+          <PageHeader
+            kicker="Market"
+            title={t("dashboard.title")}
+            actions={
+              indexesLoading && (
+                <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              )
+            }
+          />
         </div>
         <IndexStrip indexes={indexes} />
         {indexesError && indexes.length > 0 && (
