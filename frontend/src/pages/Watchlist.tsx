@@ -548,7 +548,7 @@ export default function WatchlistPage() {
   );
 
   return (
-    <div className="tw-page max-w-none flex h-full w-full min-w-0 flex-col gap-3">
+    <div className="tw-page max-w-none flex h-full min-h-0 w-full min-w-0 flex-col gap-3">
       <PageHeader
         kicker="Watchlist"
         title={t("watchlist.title", "A股自选")}
@@ -655,7 +655,7 @@ export default function WatchlistPage() {
         >
           <aside
             data-testid="watchlist-list-panel"
-            className="tw-panel min-h-0 min-w-0 lg:order-1 lg:overflow-auto"
+            className="tw-panel min-h-0 min-w-0 lg:order-1 lg:flex lg:flex-col lg:overflow-hidden"
           >
             <header className="tw-panel-head">
               <div className="flex min-w-0 items-baseline gap-3">
@@ -679,10 +679,10 @@ export default function WatchlistPage() {
               </label>
             </header>
 
-            <div className="tw-panel-body space-y-3">
+            <div className="tw-panel-body flex min-h-0 flex-1 flex-col gap-3">
               {addForm}
 
-              <ul role="list" className="space-y-2">
+              <ul role="list" className="min-h-0 space-y-2 lg:flex-1 lg:overflow-y-auto">
               {stocks.map((stock) => (
                 <WatchlistStockCard
                   key={stock.code}

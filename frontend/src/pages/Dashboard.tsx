@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { RefreshCw, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -84,6 +84,47 @@ function combineSnapshotAreas(
 /** Horizontal strip of major A-share index cards */
 function IndexStrip({ indexes }: { indexes: DashboardIndex[] }) {
   const { t } = useTranslation();
+  const stripRef = useRef<HTMLDivElement>(null);
+  const pausedRef = useRef(false);
+
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip || indexes.length < 2) return;
+
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) return;
+
+    let isVisible = true;
+    const observer =
+      "IntersectionObserver" in window
+        ? new IntersectionObserver(([entry]) => {
+            isVisible = entry.isIntersecting;
+          })
+        : null;
+    observer?.observe(strip);
+
+    const timer = window.setInterval(() => {
+      if (
+        pausedRef.current ||
+        document.hidden ||
+        !isVisible ||
+        strip.scrollWidth <= strip.clientWidth + 1
+      ) {
+        return;
+      }
+      const firstCard = strip.firstElementChild as HTMLElement | null;
+      if (!firstCard) return;
+      const gap = Number.parseFloat(getComputedStyle(strip).columnGap || "0");
+      const step = firstCard.getBoundingClientRect().width + gap;
+      const atEnd = strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - step / 2;
+      strip.scrollTo({ left: atEnd ? 0 : strip.scrollLeft + step, behavior: "smooth" });
+    }, 4500);
+
+    return () => {
+      window.clearInterval(timer);
+      observer?.disconnect();
+    };
+  }, [indexes.length]);
 
   if (indexes.length === 0) {
     return (
@@ -94,7 +135,24 @@ function IndexStrip({ indexes }: { indexes: DashboardIndex[] }) {
   }
 
   return (
-    <div className="dashboard-index-strip" aria-label={t("dashboard.marketSnapshot")}>
+    <div
+      ref={stripRef}
+      className="dashboard-index-strip"
+      aria-label={t("dashboard.marketSnapshot")}
+      data-autoplay="true"
+      onMouseEnter={() => {
+        pausedRef.current = true;
+      }}
+      onMouseLeave={() => {
+        pausedRef.current = false;
+      }}
+      onFocus={() => {
+        pausedRef.current = true;
+      }}
+      onBlur={() => {
+        pausedRef.current = false;
+      }}
+    >
       {indexes.map((idx) => {
         const color = changeColor(idx.changePct);
         return (
@@ -915,56 +973,67 @@ function MarketRankingsSection({
   snapshot,
   loading,
   error,
+  scope = "all",
 }: {
   snapshot: DashboardMarketSnapshot | null;
   loading: boolean;
   error: string | null;
+  scope?: "primary" | "secondary" | "all";
 }) {
   const { t } = useTranslation();
   const marketArea = snapshot?.areas.market;
   const marketError =
     marketArea?.error ?? snapshot?.errors?.market ?? (snapshot ? null : error);
 
+  const showPrimary = scope === "primary" || scope === "all";
+  const showSecondary = scope === "secondary" || scope === "all";
+
   return (
-    <section aria-label={t("dashboard.rankings")}>
-      <div className="dashboard-rankings-grid">
-        <StockRankCard
-          testId="top-gainers-card"
-          title={t("dashboard.topGainers")}
-          rows={snapshot?.topGainers ?? null}
-          mode="gain"
-          loading={loading}
-          error={marketError}
-          status={marketArea}
-        />
-        <StockRankCard
-          testId="top-losers-card"
-          title={t("dashboard.topLosers")}
-          rows={snapshot?.topLosers ?? null}
-          mode="loss"
-          loading={loading}
-          error={marketError}
-          status={marketArea}
-        />
-        <StockRankCard
-          testId="turnover-leaders-card"
-          title={t("dashboard.turnoverLeaders")}
-          rows={snapshot?.turnoverLeaders ?? null}
-          mode="amount"
-          loading={loading}
-          error={marketError}
-          status={marketArea}
-        />
-        <StockRankCard
-          testId="active-leaders-card"
-          title={t("dashboard.activeLeaders")}
-          rows={snapshot?.activeLeaders ?? null}
-          mode="active"
-          loading={loading}
-          error={marketError}
-          status={marketArea}
-        />
-      </div>
+    <section aria-label={t("dashboard.rankings")} className="dashboard-rankings-grid space-y-3">
+      {showPrimary && (
+        <div className="dashboard-primary-rankings-grid">
+          <StockRankCard
+            testId="top-gainers-card"
+            title={t("dashboard.topGainers")}
+            rows={snapshot?.topGainers ?? null}
+            mode="gain"
+            loading={loading}
+            error={marketError}
+            status={marketArea}
+          />
+          <StockRankCard
+            testId="top-losers-card"
+            title={t("dashboard.topLosers")}
+            rows={snapshot?.topLosers ?? null}
+            mode="loss"
+            loading={loading}
+            error={marketError}
+            status={marketArea}
+          />
+        </div>
+      )}
+      {showSecondary && (
+        <div className="dashboard-secondary-rankings-grid">
+          <StockRankCard
+            testId="turnover-leaders-card"
+            title={t("dashboard.turnoverLeaders")}
+            rows={snapshot?.turnoverLeaders ?? null}
+            mode="amount"
+            loading={loading}
+            error={marketError}
+            status={marketArea}
+          />
+          <StockRankCard
+            testId="active-leaders-card"
+            title={t("dashboard.activeLeaders")}
+            rows={snapshot?.activeLeaders ?? null}
+            mode="active"
+            loading={loading}
+            error={marketError}
+            status={marketArea}
+          />
+        </div>
+      )}
     </section>
   );
 }
@@ -1023,6 +1092,13 @@ export default function Dashboard() {
         )}
       </section>
 
+      <MarketRankingsSection
+        snapshot={marketSnapshot}
+        loading={marketSnapshotLoading}
+        error={marketSnapshotError}
+        scope="primary"
+      />
+
       <MarketSnapshotSection
         snapshot={marketSnapshot}
         loading={marketSnapshotLoading}
@@ -1033,6 +1109,7 @@ export default function Dashboard() {
         snapshot={marketSnapshot}
         loading={marketSnapshotLoading}
         error={marketSnapshotError}
+        scope="secondary"
       />
     </div>
   );

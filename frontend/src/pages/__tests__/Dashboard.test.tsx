@@ -222,7 +222,7 @@ describe("Dashboard page", () => {
 
     it("renders industry heat and ranking cards from the snapshot", () => {
       stateWithMarketData();
-      renderDashboard();
+      const { container } = renderDashboard();
 
       expect(screen.getByTestId("market-industries-card")).toHaveTextContent("半导体");
       expect(screen.queryByTestId("market-pulse-card")).toBeNull();
@@ -230,6 +230,29 @@ describe("Dashboard page", () => {
       expect(screen.getByTestId("top-losers-card")).toHaveTextContent("万科A");
       expect(screen.getByTestId("turnover-leaders-card")).toHaveTextContent("中国平安");
       expect(screen.getByTestId("active-leaders-card")).toHaveTextContent("宁德时代");
+
+      const primaryRankings = container.querySelector(".dashboard-primary-rankings-grid");
+      const snapshotGrid = container.querySelector(".dashboard-snapshot-grid");
+      const secondaryRankings = container.querySelector(".dashboard-secondary-rankings-grid");
+      expect(primaryRankings).not.toBeNull();
+      expect(snapshotGrid).not.toBeNull();
+      expect(secondaryRankings).not.toBeNull();
+      expect(primaryRankings!.compareDocumentPosition(snapshotGrid!)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+      expect(snapshotGrid!.compareDocumentPosition(secondaryRankings!)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    });
+
+    it("marks the index strip for autoplay without exposing a scrollbar", () => {
+      stateWithMarketData();
+      const { container } = renderDashboard();
+
+      expect(container.querySelector(".dashboard-index-strip")).toHaveAttribute(
+        "data-autoplay",
+        "true",
+      );
     });
 
     it("lets dashboard data-card lists expand without internal scrolling", () => {

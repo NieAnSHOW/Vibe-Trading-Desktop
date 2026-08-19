@@ -277,7 +277,7 @@ export default function Indices() {
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(15rem,0.36fr)_minmax(0,1fr)] lg:gap-3">
         <aside
           aria-labelledby="indices-list-title"
-          className="tw-panel min-h-0 lg:overflow-auto"
+          className="tw-panel min-h-0 lg:flex lg:flex-col lg:overflow-hidden"
         >
           <header className="tw-panel-head">
             <div className="min-w-0">
@@ -299,7 +299,7 @@ export default function Indices() {
             )}
           </header>
 
-          <div className="tw-panel-body">
+          <div className="tw-panel-body flex min-h-0 flex-1 flex-col">
           <label className="relative block">
             <Search
               className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
@@ -364,7 +364,10 @@ export default function Indices() {
             </p>
           )}
 
-          <div className="mt-3 space-y-1" aria-busy={indexesLoading}>
+          <div
+            className="mt-3 min-h-0 space-y-1 lg:flex-1 lg:overflow-y-auto"
+            aria-busy={indexesLoading}
+          >
             {filteredIndexes.map((index) => {
               const active = index.code === selectedCode;
               return (
