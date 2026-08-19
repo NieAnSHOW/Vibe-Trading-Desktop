@@ -44,6 +44,8 @@ fn main() {
                 "console_member_usage",
                 "console_member_benefits",
                 "console_logout",
+                "console_custom_llm_readiness",
+                "console_logout_to_custom",
                 "console_fetch_ads",
                 "console_get_public_config",
                 "console_check_update",

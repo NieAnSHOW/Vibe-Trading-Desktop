@@ -385,6 +385,31 @@ mod tests {
     }
 
     #[test]
+    fn custom_command_removes_all_vip_runtime_environment_values() {
+        let cmd = build_cmd_with_vip(
+            Path::new("/fake/python3"),
+            Path::new("/fake/agent"),
+            8899,
+            Path::new("/fake/libs"),
+            Path::new("/fake/sessions"),
+            None,
+        );
+
+        for key in [
+            "VIBE_DESKTOP_VIP_PROVISIONED",
+            "VIBE_DESKTOP_VIP_API_KEY",
+            "VIBE_DESKTOP_VIP_BASE_URL",
+            "VIBE_DESKTOP_VIP_MODELS_JSON",
+        ] {
+            assert!(
+                cmd.get_envs()
+                    .any(|(name, value)| name == key && value.is_none()),
+                "{key} must be explicitly removed for custom mode"
+            );
+        }
+    }
+
+    #[test]
     fn boot_const_is_valid() {
         // BOOT is the -c argument for Python, which imports cli and calls cli.main
         assert!(BOOT.contains("cli.main"));

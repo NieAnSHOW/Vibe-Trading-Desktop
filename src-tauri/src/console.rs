@@ -274,6 +274,167 @@ pub struct AuthStatusView {
     pub membership_changed: bool,
 }
 
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+struct PythonCustomReadiness {
+    custom_configured: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomReadinessView {
+    pub custom_configured: bool,
+}
+
+fn map_custom_readiness(payload: PythonCustomReadiness) -> CustomReadinessView {
+    CustomReadinessView {
+        custom_configured: payload.custom_configured,
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct StagedProvider {
+    name: String,
+    #[serde(default)]
+    api_key_env: Option<String>,
+    base_url_env: String,
+    default_model: String,
+    default_base_url: String,
+    api_key_required: bool,
+    #[serde(default)]
+    auth_type: String,
+}
+
+fn configured_secret(value: Option<&str>) -> bool {
+    let value = value.unwrap_or_default().trim();
+    !value.is_empty()
+        && !matches!(
+            value.to_ascii_lowercase().as_str(),
+            "xxx" | "sk-xxx" | "sk-or-v1-your-key-here" | "gsk_xxx" | "your-api-key"
+        )
+}
+
+fn stopped_custom_readiness(layout: &Layout) -> CustomReadinessView {
+    let result: Result<bool, String> = (|| {
+        let values =
+            auth::parse_env_to_map(&fs::read_to_string(&layout.user_env).unwrap_or_default());
+        let provider_name = values
+            .get("LANGCHAIN_PROVIDER")
+            .map(|value| value.trim().to_ascii_lowercase())
+            .unwrap_or_else(|| "openai".into());
+        let config_path = layout
+            .runtime_agent
+            .join("src/providers/llm_providers.json");
+        let config = fs::read_to_string(config_path).map_err(|error| error.to_string())?;
+        let providers: Vec<StagedProvider> =
+            serde_json::from_str(&config).map_err(|error| error.to_string())?;
+        let provider = providers
+            .into_iter()
+            .find(|provider| provider.name == provider_name)
+            .ok_or_else(|| format!("unknown provider {provider_name}"))?;
+        if provider.name == "vip_server" || provider.auth_type == "oauth" {
+            return Ok(false);
+        }
+        let model = values
+            .get("LANGCHAIN_MODEL_NAME")
+            .map(String::as_str)
+            .unwrap_or(provider.default_model.as_str())
+            .trim();
+        let base_url = values
+            .get(&provider.base_url_env)
+            .map(String::as_str)
+            .unwrap_or(provider.default_base_url.as_str())
+            .trim();
+        if model.is_empty() || base_url.is_empty() {
+            return Ok(false);
+        }
+        if provider.api_key_required
+            && !configured_secret(
+                provider
+                    .api_key_env
+                    .as_deref()
+                    .and_then(|key| values.get(key).map(String::as_str)),
+            )
+        {
+            return Ok(false);
+        }
+        Ok(true)
+    })();
+    CustomReadinessView {
+        custom_configured: result.unwrap_or(false),
+    }
+}
+
+async fn custom_readiness_for_port(port: u16) -> Result<CustomReadinessView, String> {
+    let body = proxy_settings(
+        port,
+        reqwest::Method::POST,
+        "/settings/llm/desktop-exit-vip",
+        None,
+    )
+    .await?;
+    serde_json::from_str::<PythonCustomReadiness>(&body)
+        .map(map_custom_readiness)
+        .map_err(|error| format!("解析自定义 LLM 状态失败: {error}"))
+}
+
+async fn logout_to_custom_inner(
+    service_port: &SharedPort,
+    auth_state: &AuthState,
+    runtime_operation: &RuntimeOperationLock,
+    layout: &Layout,
+) -> Result<CustomReadinessView, String> {
+    let _operation = runtime_operation
+        .try_acquire()
+        .ok_or_else(|| "运行环境正在维护，请等待当前操作完成".to_string())?;
+    let current_port = *service_port.lock().unwrap();
+    let readiness = if let Some(port) = current_port {
+        let readiness = custom_readiness_for_port(port).await?;
+        auth::persist_custom_mode_and_clear_token_section(layout)
+            .map_err(|error| error.to_string())?;
+        readiness
+    } else {
+        auth::persist_custom_mode_and_clear_token_section(layout)
+            .map_err(|error| error.to_string())?;
+        stopped_custom_readiness(layout)
+    };
+    invalidate_authentication(auth_state, || Ok(())).map_err(|error| error.to_string())?;
+    Ok(readiness)
+}
+
+#[tauri::command]
+pub async fn console_custom_llm_readiness(
+    service_port: State<'_, SharedPort>,
+) -> Result<CustomReadinessView, String> {
+    let layout = Layout::from_home()?;
+    let current_port = *service_port.lock().unwrap();
+    if let Some(port) = current_port {
+        Ok(custom_readiness_for_port(port)
+            .await
+            .unwrap_or(CustomReadinessView {
+                custom_configured: false,
+            }))
+    } else {
+        Ok(stopped_custom_readiness(&layout))
+    }
+}
+
+#[tauri::command]
+pub async fn console_logout_to_custom(
+    service_port: State<'_, SharedPort>,
+    auth_state: State<'_, AuthState>,
+    runtime_operation: State<'_, RuntimeOperationLock>,
+) -> Result<CustomReadinessView, String> {
+    let layout = Layout::from_home()?;
+    logout_to_custom_inner(
+        service_port.inner(),
+        auth_state.inner(),
+        runtime_operation.inner(),
+        &layout,
+    )
+    .await
+}
+
 fn membership_level_changed(
     previous: Option<&auth::MemberLevel>,
     current: Option<&auth::MemberLevel>,
@@ -469,8 +630,8 @@ pub async fn start_service_inner(
     runtime_operation: &RuntimeOperationLock,
 ) -> Result<u16, ServiceStartError> {
     let _operation = runtime_operation.try_acquire().ok_or_else(|| ServiceStartError::Other {
-        message: "运行环境正在维护，请等待当前操作完成".to_string(),
-    })?;
+            message: "运行环境正在维护，请等待当前操作完成".to_string(),
+        })?;
     let layout = Layout::from_home().map_err(|e| ServiceStartError::Other { message: e })?;
     crate::sidecar::log_vip_runtime_event(&layout.logs_dir, "service start requested");
     if compute_env_status(&layout) != EnvStatus::Ready {
@@ -1718,9 +1879,9 @@ fn find_registry_legacy_uninstaller(display_name: &str) -> Option<RegistryUninst
     views
         .iter()
         .find_map(|&view| {
-            find_registry_legacy_entry(HKEY_LOCAL_MACHINE, view, display_name)
-                .or_else(|| find_registry_legacy_entry(HKEY_CURRENT_USER, view, display_name))
-        })
+        find_registry_legacy_entry(HKEY_LOCAL_MACHINE, view, display_name)
+            .or_else(|| find_registry_legacy_entry(HKEY_CURRENT_USER, view, display_name))
+    })
 }
 
 #[cfg(windows)]
@@ -2246,6 +2407,231 @@ mod tests {
             .recv_timeout(std::time::Duration::from_secs(1))
             .unwrap();
         worker.join().unwrap();
+    }
+
+    fn authenticated_state(layout: &Layout) -> AuthState {
+        let session = auth::UserSession {
+            token: "access-token".into(),
+            refresh_token: "refresh-token".into(),
+            expire_at: 1_800_000_000,
+            refresh_expire_at: 1_900_000_000,
+            remember_until: Some(1_900_000_000),
+            user_info: None,
+            vip: None,
+        };
+        auth::write_env_token_section(layout, &session).unwrap();
+        AuthState(Arc::new(Mutex::new(Some(session))))
+    }
+
+    fn spawn_exit_vip_server(status: &str, body: &str) -> (u16, mpsc::Receiver<String>) {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let status = status.to_string();
+        let body = body.to_string();
+        let (request_sender, request_receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0_u8; 2048];
+            let read = stream.read(&mut request).unwrap();
+            request_sender
+                .send(String::from_utf8_lossy(&request[..read]).into_owned())
+                .unwrap();
+            write!(
+                stream,
+                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .unwrap();
+        });
+        (port, request_receiver)
+    }
+
+    #[test]
+    fn logout_to_custom_running_service_clears_auth_only_after_successful_post() {
+        tauri::async_runtime::block_on(async {
+            let tmp = tempfile::tempdir().unwrap();
+            let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+            let auth_state = authenticated_state(&layout);
+            let (port, request) = spawn_exit_vip_server("200 OK", r#"{"custom_configured":true}"#);
+            let service_port = Arc::new(Mutex::new(Some(port)));
+
+            let readiness = logout_to_custom_inner(
+                &service_port,
+                &auth_state,
+                &RuntimeOperationLock::new(),
+                &layout,
+            )
+            .await
+            .unwrap();
+
+            assert!(readiness.custom_configured);
+            assert!(auth_state.0.lock().unwrap().is_none());
+            assert_eq!(auth::read_llm_mode(&layout), auth::DesktopLlmMode::Custom);
+            assert!(auth::read_env_token_section_at(&layout, 1_700_000_000).is_none());
+            let request = request.recv_timeout(Duration::from_secs(1)).unwrap();
+            assert!(request.starts_with("POST /settings/llm/desktop-exit-vip HTTP/1.1"));
+        });
+    }
+
+    #[test]
+    fn logout_to_custom_running_service_preserves_auth_when_post_fails() {
+        tauri::async_runtime::block_on(async {
+            let tmp = tempfile::tempdir().unwrap();
+            let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+            let auth_state = authenticated_state(&layout);
+            let (port, _) = spawn_exit_vip_server("500 Internal Server Error", "failed");
+            let service_port = Arc::new(Mutex::new(Some(port)));
+
+            let result = logout_to_custom_inner(
+                &service_port,
+                &auth_state,
+                &RuntimeOperationLock::new(),
+                &layout,
+            )
+            .await;
+
+            assert!(result.is_err());
+            assert!(auth_state.0.lock().unwrap().is_some());
+            assert_eq!(auth::read_llm_mode(&layout), auth::DesktopLlmMode::Vip);
+            assert!(auth::read_env_token_section_at(&layout, 1_700_000_000).is_some());
+        });
+    }
+
+    #[test]
+    fn logout_to_custom_rejects_busy_runtime_without_clearing_auth() {
+        tauri::async_runtime::block_on(async {
+            let tmp = tempfile::tempdir().unwrap();
+            let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+            let auth_state = authenticated_state(&layout);
+            let runtime_operation = RuntimeOperationLock::new();
+            let _held = runtime_operation.try_acquire().unwrap();
+
+            let result = logout_to_custom_inner(
+                &Arc::new(Mutex::new(None)),
+                &auth_state,
+                &runtime_operation,
+                &layout,
+            )
+            .await;
+
+            assert_eq!(result.unwrap_err(), "运行环境正在维护，请等待当前操作完成");
+            assert!(auth_state.0.lock().unwrap().is_some());
+            assert_eq!(auth::read_llm_mode(&layout), auth::DesktopLlmMode::Vip);
+        });
+    }
+
+    #[test]
+    fn logout_to_custom_preserves_auth_when_atomic_persistence_fails() {
+        tauri::async_runtime::block_on(async {
+            let tmp = tempfile::tempdir().unwrap();
+            let layout = Layout::new(&tmp.path().join("not-a-directory"));
+            fs::write(&layout.root, "blocks mkdir").unwrap();
+            let auth_state = AuthState(Arc::new(Mutex::new(Some(auth::UserSession {
+                token: "access-token".into(),
+                refresh_token: "refresh-token".into(),
+                expire_at: 1_800_000_000,
+                refresh_expire_at: 1_900_000_000,
+                remember_until: Some(1_900_000_000),
+                user_info: None,
+                vip: None,
+            }))));
+
+            let result = logout_to_custom_inner(
+                &Arc::new(Mutex::new(None)),
+                &auth_state,
+                &RuntimeOperationLock::new(),
+                &layout,
+            )
+            .await;
+
+            assert!(result.is_err());
+            assert!(auth_state.0.lock().unwrap().is_some());
+        });
+    }
+
+    #[test]
+    fn logout_to_custom_stopped_service_persists_custom_without_vip_environment() {
+        tauri::async_runtime::block_on(async {
+            let tmp = tempfile::tempdir().unwrap();
+            let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+            let auth_state = authenticated_state(&layout);
+            let service_port = Arc::new(Mutex::new(None));
+
+            logout_to_custom_inner(
+                &service_port,
+                &auth_state,
+                &RuntimeOperationLock::new(),
+                &layout,
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(auth::read_llm_mode(&layout), auth::DesktopLlmMode::Custom);
+            let cmd = crate::sidecar::build_cmd_with_vip(
+                Path::new("/fake/python"),
+                Path::new("/fake/agent"),
+                8899,
+                Path::new("/fake/libs"),
+                Path::new("/fake/sessions"),
+                None,
+            );
+            for key in [
+                "VIBE_DESKTOP_VIP_PROVISIONED",
+                "VIBE_DESKTOP_VIP_API_KEY",
+                "VIBE_DESKTOP_VIP_BASE_URL",
+                "VIBE_DESKTOP_VIP_MODELS_JSON",
+            ] {
+                assert!(cmd
+                    .get_envs()
+                    .any(|(name, value)| name == key && value.is_none()));
+            }
+        });
+    }
+
+    #[test]
+    fn stopped_custom_readiness_uses_staged_provider_defaults_and_rejects_placeholders() {
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        let providers = layout.runtime_agent.join("src/providers");
+        fs::create_dir_all(&providers).unwrap();
+        fs::write(
+            providers.join("llm_providers.json"),
+            r#"[{"name":"openai","api_key_env":"OPENAI_API_KEY","base_url_env":"OPENAI_BASE_URL","default_model":"gpt-test","default_base_url":"https://api.example/v1","api_key_required":true},{"name":"openai-codex","api_key_env":null,"base_url_env":"CODEX_BASE_URL","default_model":"codex","default_base_url":"https://oauth.example","api_key_required":false,"auth_type":"oauth"},{"name":"ollama","api_key_env":null,"base_url_env":"OLLAMA_BASE_URL","default_model":"qwen","default_base_url":"http://localhost:11434","api_key_required":false}]"#,
+        )
+        .unwrap();
+        fs::create_dir_all(&layout.root).unwrap();
+
+        fs::write(
+            &layout.user_env,
+            "LANGCHAIN_PROVIDER=openai\nOPENAI_API_KEY=real-key\n",
+        )
+        .unwrap();
+        assert!(stopped_custom_readiness(&layout).custom_configured);
+
+        fs::write(
+            &layout.user_env,
+            "LANGCHAIN_PROVIDER=openai\nOPENAI_API_KEY=sk-xxx\n",
+        )
+        .unwrap();
+        assert!(!stopped_custom_readiness(&layout).custom_configured);
+
+        fs::write(&layout.user_env, "LANGCHAIN_PROVIDER=openai-codex\n").unwrap();
+        assert!(!stopped_custom_readiness(&layout).custom_configured);
+
+        fs::write(&layout.user_env, "LANGCHAIN_PROVIDER=ollama\n").unwrap();
+        assert!(stopped_custom_readiness(&layout).custom_configured);
+
+        fs::write(providers.join("llm_providers.json"), "not-json").unwrap();
+        assert!(!stopped_custom_readiness(&layout).custom_configured);
+    }
+
+    #[test]
+    fn custom_readiness_maps_python_snake_case_to_tauri_camel_case() {
+        let python: PythonCustomReadiness =
+            serde_json::from_str(r#"{"custom_configured":true}"#).unwrap();
+        let tauri = serde_json::to_value(map_custom_readiness(python)).unwrap();
+
+        assert_eq!(tauri, serde_json::json!({ "customConfigured": true }));
     }
     use std::fs;
 

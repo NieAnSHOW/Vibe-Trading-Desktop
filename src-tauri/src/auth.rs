@@ -209,7 +209,7 @@ pub enum DesktopLlmMode {
 }
 
 impl DesktopLlmMode {
-    fn as_env_value(self) -> &'static str {
+    pub(crate) fn as_env_value(self) -> &'static str {
         match self {
             Self::Vip => "vip",
             Self::Custom => "custom",
@@ -396,6 +396,28 @@ pub fn clear_env_token_section(layout: &Layout) -> Result<(), AuthError> {
     ));
     let new_content = rewrite_env_keys(&content, &updates);
     write_env_atomic(path, &new_content)
+}
+
+/// Atomically select custom LLM mode and remove the persisted desktop-login
+/// token section. Provider and data-source settings remain untouched.
+pub fn persist_custom_mode_and_clear_token_section(layout: &Layout) -> Result<(), AuthError> {
+    let content = fs::read_to_string(&layout.user_env).unwrap_or_default();
+    let mut updates = vec![(
+        ENV_KEY_LLM_MODE.to_string(),
+        DesktopLlmMode::Custom.as_env_value().to_string(),
+    )];
+    updates.extend(
+        [
+            ENV_KEY_ACCESS,
+            ENV_KEY_REFRESH,
+            ENV_KEY_EXPIRE,
+            ENV_KEY_REFRESH_EXPIRE,
+            ENV_KEY_REMEMBER_UNTIL,
+        ]
+        .into_iter()
+        .map(|key| (key.to_string(), String::new())),
+    );
+    write_env_atomic(&layout.user_env, &rewrite_env_keys(&content, &updates))
 }
 
 /// 从 layout.user_env 读回 session（重启恢复用）。机密 VIP 凭据绝不从磁盘读取。
@@ -2133,6 +2155,50 @@ mod tests {
         assert!(text.contains("OPENAI_API_KEY=custom-key"));
         assert!(text.contains("OPENAI_BASE_URL=https://custom.example/v1"));
         assert!(text.contains("LANGCHAIN_MODEL_NAME=custom-model"));
+    }
+
+    #[test]
+    fn persist_custom_mode_and_clear_token_section_preserves_custom_and_data_source_keys() {
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        fs::create_dir_all(&layout.root).unwrap();
+        fs::write(
+            &layout.user_env,
+            "DESKTOP_LLM_MODE=vip\nLANGCHAIN_PROVIDER=openai\nLANGCHAIN_MODEL_NAME=custom-model\nOPENAI_API_KEY=custom-key\nTUSHARE_TOKEN=data-source-token\nUSER_ACCESS_TOKEN=access\nUSER_REFRESH_TOKEN=refresh\nUSER_TOKEN_EXPIRE=1\nUSER_REFRESH_EXPIRE=2\nUSER_REMEMBER_UNTIL=3\n",
+        )
+        .unwrap();
+
+        persist_custom_mode_and_clear_token_section(&layout).unwrap();
+
+        let values = parse_env_to_map(&fs::read_to_string(&layout.user_env).unwrap());
+        assert_eq!(
+            values.get(ENV_KEY_LLM_MODE).map(String::as_str),
+            Some("custom")
+        );
+        for key in [
+            ENV_KEY_ACCESS,
+            ENV_KEY_REFRESH,
+            ENV_KEY_EXPIRE,
+            ENV_KEY_REFRESH_EXPIRE,
+            ENV_KEY_REMEMBER_UNTIL,
+        ] {
+            assert!(
+                values.get(key).map(String::is_empty).unwrap_or(true),
+                "{key}"
+            );
+        }
+        assert_eq!(
+            values.get("OPENAI_API_KEY").map(String::as_str),
+            Some("custom-key")
+        );
+        assert_eq!(
+            values.get("LANGCHAIN_MODEL_NAME").map(String::as_str),
+            Some("custom-model")
+        );
+        assert_eq!(
+            values.get("TUSHARE_TOKEN").map(String::as_str),
+            Some("data-source-token")
+        );
     }
 
     #[test]

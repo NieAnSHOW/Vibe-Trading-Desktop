@@ -85,6 +85,8 @@ fn main() {
             console::console_member_usage,
             console::console_member_benefits,
             console::console_logout,
+            console::console_custom_llm_readiness,
+            console::console_logout_to_custom,
             console::console_fetch_ads,
             console::console_get_public_config,
             console::console_check_update,
