@@ -225,6 +225,12 @@
           "markdownDescription": "Enables the console_close_webui command without any pre-configured scope."
         },
         {
+          "description": "Enables the console_custom_llm_readiness command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-custom-llm-readiness",
+          "markdownDescription": "Enables the console_custom_llm_readiness command without any pre-configured scope."
+        },
+        {
           "description": "Enables the console_download_update command without any pre-configured scope.",
           "type": "string",
           "const": "allow-console-download-update",
@@ -313,6 +319,12 @@
           "type": "string",
           "const": "allow-console-logout",
           "markdownDescription": "Enables the console_logout command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_logout_to_custom command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-logout-to-custom",
+          "markdownDescription": "Enables the console_logout_to_custom command without any pre-configured scope."
         },
         {
           "description": "Enables the console_member_benefits command without any pre-configured scope.",
@@ -507,6 +519,12 @@
           "markdownDescription": "Denies the console_close_webui command without any pre-configured scope."
         },
         {
+          "description": "Denies the console_custom_llm_readiness command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-custom-llm-readiness",
+          "markdownDescription": "Denies the console_custom_llm_readiness command without any pre-configured scope."
+        },
+        {
           "description": "Denies the console_download_update command without any pre-configured scope.",
           "type": "string",
           "const": "deny-console-download-update",
@@ -595,6 +613,12 @@
           "type": "string",
           "const": "deny-console-logout",
           "markdownDescription": "Denies the console_logout command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_logout_to_custom command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-logout-to-custom",
+          "markdownDescription": "Denies the console_logout_to_custom command without any pre-configured scope."
         },
         {
           "description": "Denies the console_member_benefits command without any pre-configured scope.",
