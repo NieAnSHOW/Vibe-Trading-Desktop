@@ -11,6 +11,8 @@ import {
 } from "../ipc/commands";
 import type { Captcha, LoginResultView } from "../ipc/types";
 import { useAuthStore } from "../stores/auth";
+import { useEnvStore } from "../stores/env";
+import { useServiceStore } from "../stores/service";
 import { useBusy } from "../composables/useBusy";
 import SetPasswordModal from "../components/SetPasswordModal.vue";
 import logoPng from "../assets/128x128@2x.png";
@@ -18,6 +20,8 @@ import { Layers, MessageCircle, ShieldCheck } from "@lucide/vue";
 
 const router = useRouter();
 const auth = useAuthStore();
+const env = useEnvStore();
+const service = useServiceStore();
 
 const tab = ref<"sms" | "password" | "register">("sms");
 const captcha = ref<Captcha | null>(null);
@@ -164,6 +168,25 @@ async function sendRegisterCode() {
 }
 
 const submitBusy = useBusy();
+const continueCustomBusy = useBusy();
+
+async function continueWithCustom() {
+  err.value = "";
+  await continueCustomBusy.run("启动中", async () => {
+    try {
+      await env.refresh();
+      if (!env.serviceRunning) {
+        const port = await service.start({ openWebui: false });
+        env.setPort(port);
+        env.serviceRunning = true;
+      }
+      if (env.port == null) throw new Error("无法获取本地服务端口");
+      await router.replace("/settings");
+    } catch (error) {
+      err.value = responseMessage(error, "本地服务启动失败");
+    }
+  });
+}
 
 async function finishLogin(
   view: LoginResultView,
@@ -433,7 +456,10 @@ onUnmounted(() => {
         <p v-if="err" class="err" role="alert">{{ err }}</p>
 
         <footer class="login-links">
-          <button type="button" class="skip-btn" @click="router.replace('/')">回到首页</button>
+          <button data-test="continue-custom" type="button" class="skip-btn"
+            :disabled="continueCustomBusy.busy.value" @click="continueWithCustom">
+            {{ continueCustomBusy.busy.value ? "启动中…" : "使用自定义模型继续" }}
+          </button>
           <button v-if="tab !== 'register'" data-test="register-entry" type="button" class="register-entry"
             @click="showRegister">
             没有账号？注册

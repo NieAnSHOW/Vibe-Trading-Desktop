@@ -2,9 +2,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { createPinia, setActivePinia } from "pinia";
+import type { StatusReport } from "../../ipc/types";
 
 // vi.mock 工厂在提升阶段执行，变量必须通过 vi.hoisted() 声明
 const mocks = vi.hoisted(() => ({
+  consoleStatus: vi.fn(async (): Promise<StatusReport> => ({
+    env: "ready" as const,
+    service_running: false,
+    port: null,
+  })),
+  consoleStartService: vi.fn(async () => 8899),
+  consoleOpenWebui: vi.fn(async () => true),
   consoleAuthStatus: vi.fn(async () => ({
     authenticated: false,
     userInfo: null,
@@ -37,6 +45,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../ipc/commands", () => ({
+  consoleStatus: mocks.consoleStatus,
+  consoleStartService: mocks.consoleStartService,
+  consoleOpenWebui: mocks.consoleOpenWebui,
   consoleAuthStatus: mocks.consoleAuthStatus,
   consoleLoginCaptcha: mocks.consoleLoginCaptcha,
   consoleLoginSendSms: mocks.consoleLoginSendSms,
@@ -48,23 +59,68 @@ vi.mock("../../ipc/commands", () => ({
 
 import LoginPage from "../LoginPage.vue";
 import { useAuthStore } from "../../stores/auth";
+import { useEnvStore } from "../../stores/env";
 
 const router = createRouter({
   history: createMemoryHistory(),
   routes: [
     { path: "/", component: { template: "<div>home</div>" } },
     { path: "/login", component: LoginPage },
+    { path: "/settings", component: { template: "<div>settings</div>" } },
   ],
 });
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  mocks.consoleStatus.mockResolvedValue({
+    env: "ready",
+    service_running: false,
+    port: null,
+  });
+  mocks.consoleStartService.mockResolvedValue(8899);
+  mocks.consoleOpenWebui.mockResolvedValue(true);
   setActivePinia(createPinia());
   await router.push("/login");
   await router.isReady();
 });
 
 describe("LoginPage", () => {
+  it("continues to settings without starting an already running local service", async () => {
+    mocks.consoleStatus.mockResolvedValueOnce({
+      env: "ready",
+      service_running: true,
+      port: 8899,
+    });
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    await w.get('[data-test="continue-custom"]').trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/settings");
+    expect(mocks.consoleStartService).not.toHaveBeenCalled();
+    expect(mocks.consoleOpenWebui).not.toHaveBeenCalled();
+  });
+
+  it("starts a stopped local service without opening WebUI before continuing to settings", async () => {
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    await w.get('[data-test="continue-custom"]').trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleStartService).toHaveBeenCalledTimes(1);
+    expect(mocks.consoleOpenWebui).not.toHaveBeenCalled();
+    expect(useEnvStore().port).toBe(8899);
+    expect(router.currentRoute.value.path).toBe("/settings");
+  });
+
+  it("keeps the login route and shows the startup error when custom continuation fails", async () => {
+    mocks.consoleStartService.mockRejectedValueOnce(new Error("服务启动失败"));
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    await w.get('[data-test="continue-custom"]').trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/login");
+    expect(w.get('[role="alert"]').text()).toContain("服务启动失败");
+  });
+
   it("redirects a remembered token-only session after restoring auth status", async () => {
     mocks.consoleAuthStatus.mockResolvedValueOnce({
       authenticated: true,
