@@ -14,8 +14,8 @@ use windows_sys::Win32::{
     Foundation::ERROR_MORE_DATA,
     System::Registry::{
         RegCloseKey, RegEnumKeyExW, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_CURRENT_USER,
-        HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_32KEY, KEY_WOW64_64KEY, REG_EXPAND_SZ, REG_SAM_FLAGS,
-        REG_SZ,
+        HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_32KEY, KEY_WOW64_64KEY, REG_EXPAND_SZ,
+        REG_SAM_FLAGS, REG_SZ,
     },
 };
 
@@ -298,8 +298,6 @@ struct StagedProvider {
     #[serde(default)]
     api_key_env: Option<String>,
     base_url_env: String,
-    default_model: String,
-    default_base_url: String,
     api_key_required: bool,
     #[serde(default)]
     auth_type: String,
@@ -338,12 +336,12 @@ fn stopped_custom_readiness(layout: &Layout) -> CustomReadinessView {
         let model = values
             .get("LANGCHAIN_MODEL_NAME")
             .map(String::as_str)
-            .unwrap_or(provider.default_model.as_str())
+            .unwrap_or("")
             .trim();
         let base_url = values
             .get(&provider.base_url_env)
             .map(String::as_str)
-            .unwrap_or(provider.default_base_url.as_str())
+            .unwrap_or("")
             .trim();
         if model.is_empty() || base_url.is_empty() {
             return Ok(false);
@@ -368,8 +366,8 @@ fn stopped_custom_readiness(layout: &Layout) -> CustomReadinessView {
 async fn custom_readiness_for_port(port: u16) -> Result<CustomReadinessView, String> {
     let body = proxy_settings(
         port,
-        reqwest::Method::POST,
-        "/settings/llm/desktop-exit-vip",
+        reqwest::Method::GET,
+        "/settings/llm/custom-readiness",
         None,
     )
     .await?;
@@ -387,18 +385,31 @@ async fn logout_to_custom_inner(
     let _operation = runtime_operation
         .try_acquire()
         .ok_or_else(|| "运行环境正在维护，请等待当前操作完成".to_string())?;
+    let original_env = fs::read_to_string(&layout.user_env).unwrap_or_default();
+    auth::persist_custom_mode(layout).map_err(|error| error.to_string())?;
     let current_port = *service_port.lock().unwrap();
     let readiness = if let Some(port) = current_port {
-        let readiness = custom_readiness_for_port(port).await?;
-        auth::persist_custom_mode_and_clear_token_section(layout)
-            .map_err(|error| error.to_string())?;
-        readiness
+        match proxy_settings(
+            port,
+            reqwest::Method::POST,
+            "/settings/llm/desktop-exit-vip",
+            None,
+        )
+        .await
+        {
+            Ok(body) => serde_json::from_str::<PythonCustomReadiness>(&body)
+                .map(map_custom_readiness)
+                .map_err(|error| format!("解析自定义 LLM 状态失败: {error}"))?,
+            Err(error) => {
+                let _ = auth::write_env_atomic(&layout.user_env, &original_env);
+                return Err(error);
+            }
+        }
     } else {
-        auth::persist_custom_mode_and_clear_token_section(layout)
-            .map_err(|error| error.to_string())?;
         stopped_custom_readiness(layout)
     };
-    invalidate_authentication(auth_state, || Ok(())).map_err(|error| error.to_string())?;
+    invalidate_authentication(auth_state, || auth::clear_env_token_section(layout))
+        .map_err(|error| format!("自定义模型已切换，但清理登录信息失败；请重试退出：{error}"))?;
     Ok(readiness)
 }
 
@@ -533,7 +544,11 @@ pub fn console_status(
     let layout = Layout::from_home()?;
     let running = state.lock().unwrap().is_some();
     let port = *service_port.lock().unwrap();
-    Ok(build_status_report(compute_env_status(&layout), running, port))
+    Ok(build_status_report(
+        compute_env_status(&layout),
+        running,
+        port,
+    ))
 }
 
 /// 触发依赖 bootstrap:spawn `vibe-trading bootstrap --sse`,把 SSE 帧解析为
@@ -629,7 +644,9 @@ pub async fn start_service_inner(
     auth_state: &AuthState,
     runtime_operation: &RuntimeOperationLock,
 ) -> Result<u16, ServiceStartError> {
-    let _operation = runtime_operation.try_acquire().ok_or_else(|| ServiceStartError::Other {
+    let _operation = runtime_operation
+        .try_acquire()
+        .ok_or_else(|| ServiceStartError::Other {
             message: "运行环境正在维护，请等待当前操作完成".to_string(),
         })?;
     let layout = Layout::from_home().map_err(|e| ServiceStartError::Other { message: e })?;
@@ -828,8 +845,8 @@ pub struct EnvironmentReport {
 #[tauri::command]
 pub fn console_check_environment(app: AppHandle) -> Result<EnvironmentReport, String> {
     let layout = Layout::from_home()?;
-    let resources = crate::resources::Resources::resolve(&app)
-        .map_err(|e| format!("resources: {e}"))?;
+    let resources =
+        crate::resources::Resources::resolve(&app).map_err(|e| format!("resources: {e}"))?;
     let bundle = fs::read_to_string(&resources.version_file)
         .map_err(|e| format!("read bundle VERSION: {e}"))?;
     let installed = fs::read_to_string(&layout.marker).ok();
@@ -864,8 +881,8 @@ pub async fn console_repair_environment(
         .try_acquire()
         .ok_or("运行环境正在维护，请等待当前操作完成")?;
     let layout = Layout::from_home()?;
-    let resources = crate::resources::Resources::resolve(&app)
-        .map_err(|e| format!("resources: {e}"))?;
+    let resources =
+        crate::resources::Resources::resolve(&app).map_err(|e| format!("resources: {e}"))?;
     let shared = state.inner().clone();
     let service_port = service_port.inner().clone();
     // 停服 + 同步代码都在阻塞线程池执行，避免卡 Tauri 主线程。
@@ -987,7 +1004,10 @@ pub fn console_set_theme_mode(mode: String) -> Result<(), String> {
 /// 保存桌面端主题色。
 #[tauri::command]
 pub fn console_set_theme_color(color: String) -> Result<(), String> {
-    if !matches!(color.as_str(), "teal" | "blue" | "purple" | "pink" | "orange" | "green") {
+    if !matches!(
+        color.as_str(),
+        "teal" | "blue" | "purple" | "pink" | "orange" | "green"
+    ) {
         return Err("主题色无效".to_string());
     }
     let layout = Layout::from_home()?;
@@ -1484,7 +1504,9 @@ async fn proxy_settings(
             .map_err(|e| format!("构建 HTTP 客户端: {e}"))?;
         let mut req = client.request(method, &url);
         if let Some(b) = body.as_deref() {
-            req = req.header("Content-Type", "application/json").body(b.to_string());
+            req = req
+                .header("Content-Type", "application/json")
+                .body(b.to_string());
         }
         let resp = req.send().map_err(|e| format!("调用 {path} 失败: {e}"))?;
         let status = resp.status();
@@ -1520,9 +1542,14 @@ pub async fn console_get_data_source_settings(port: u16) -> Result<String, Strin
 /// 保存数据源设置(PUT /settings/data-sources)。
 #[tauri::command]
 pub async fn console_set_data_source_settings(port: u16, body: String) -> Result<String, String> {
-    proxy_settings(port, reqwest::Method::PUT, "/settings/data-sources", Some(body)).await
+    proxy_settings(
+        port,
+        reqwest::Method::PUT,
+        "/settings/data-sources",
+        Some(body),
+    )
+    .await
 }
-
 
 /// 消息渠道状态:转发 GET /channels/status,供控制台展示运行/未登录/失效。
 /// backend 对 loopback 免 auth,无需鉴权头。服务未运行时由调用方决定不触发。
@@ -1561,13 +1588,25 @@ pub async fn console_stop_channels(port: u16) -> Result<String, String> {
 /// body 为前端构造的 JSON({channel, command})。
 #[tauri::command]
 pub async fn console_run_pairing_command(port: u16, body: String) -> Result<String, String> {
-    proxy_settings(port, reqwest::Method::POST, "/channels/pairing/command", Some(body)).await
+    proxy_settings(
+        port,
+        reqwest::Method::POST,
+        "/channels/pairing/command",
+        Some(body),
+    )
+    .await
 }
 
 /// 发起微信扫码登录:转发 POST /channels/weixin/login/start。
 #[tauri::command]
 pub async fn console_weixin_login_start(port: u16) -> Result<String, String> {
-    proxy_settings(port, reqwest::Method::POST, "/channels/weixin/login/start", None).await
+    proxy_settings(
+        port,
+        reqwest::Method::POST,
+        "/channels/weixin/login/start",
+        None,
+    )
+    .await
 }
 
 /// 查询微信扫码登录状态:转发 GET /channels/weixin/login/status?login_id=…。
@@ -1674,8 +1713,8 @@ pub async fn console_clear_venv(
         .try_acquire()
         .ok_or("运行环境正在维护，请等待当前操作完成")?;
     let layout = Layout::from_home()?;
-    let resources = crate::resources::Resources::resolve(&app)
-        .map_err(|e| format!("resources: {e}"))?;
+    let resources =
+        crate::resources::Resources::resolve(&app).map_err(|e| format!("resources: {e}"))?;
     let shared = state.inner().clone();
     let service_port = service_port.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -1786,14 +1825,28 @@ fn read_registry_string(hkey: HKEY, value_name: &str) -> Option<String> {
     let mut size: u32 = 0;
     let mut kind: u32 = 0;
     let status = unsafe {
-        RegQueryValueExW(hkey, name.as_ptr(), std::ptr::null(), &mut kind, std::ptr::null_mut(), &mut size)
+        RegQueryValueExW(
+            hkey,
+            name.as_ptr(),
+            std::ptr::null(),
+            &mut kind,
+            std::ptr::null_mut(),
+            &mut size,
+        )
     };
     if status != 0 && status != ERROR_MORE_DATA {
         return None;
     }
     let mut buf = vec![0u8; size as usize];
     let status = unsafe {
-        RegQueryValueExW(hkey, name.as_ptr(), std::ptr::null(), &mut kind, buf.as_mut_ptr(), &mut size)
+        RegQueryValueExW(
+            hkey,
+            name.as_ptr(),
+            std::ptr::null(),
+            &mut kind,
+            buf.as_mut_ptr(),
+            &mut size,
+        )
     };
     if status != 0 || (kind != REG_SZ && kind != REG_EXPAND_SZ) {
         return None;
@@ -1853,7 +1906,9 @@ fn find_registry_legacy_entry(
             let display = read_registry_string(child, "DisplayName");
             if display.as_deref() == Some(display_name) {
                 let uninstall_string = read_registry_string(child, "UninstallString");
-                if let Some((executable, args)) = uninstall_string.as_deref().and_then(parse_uninstall_string) {
+                if let Some((executable, args)) =
+                    uninstall_string.as_deref().and_then(parse_uninstall_string)
+                {
                     entry = Some(RegistryUninstallInfo {
                         executable,
                         args,
@@ -1876,9 +1931,7 @@ fn find_registry_legacy_entry(
 /// 遍历 HKLM/HKCU × 32/64 视图，在注册表中查找旧版应用的卸载信息。
 fn find_registry_legacy_uninstaller(display_name: &str) -> Option<RegistryUninstallInfo> {
     let views = [KEY_WOW64_64KEY, KEY_WOW64_32KEY];
-    views
-        .iter()
-        .find_map(|&view| {
+    views.iter().find_map(|&view| {
         find_registry_legacy_entry(HKEY_LOCAL_MACHINE, view, display_name)
             .or_else(|| find_registry_legacy_entry(HKEY_CURRENT_USER, view, display_name))
     })
@@ -2603,7 +2656,7 @@ mod tests {
 
         fs::write(
             &layout.user_env,
-            "LANGCHAIN_PROVIDER=openai\nOPENAI_API_KEY=real-key\n",
+            "LANGCHAIN_PROVIDER=openai\nLANGCHAIN_MODEL_NAME=gpt-test\nOPENAI_BASE_URL=https://api.example/v1\nOPENAI_API_KEY=real-key\n",
         )
         .unwrap();
         assert!(stopped_custom_readiness(&layout).custom_configured);
@@ -2618,7 +2671,11 @@ mod tests {
         fs::write(&layout.user_env, "LANGCHAIN_PROVIDER=openai-codex\n").unwrap();
         assert!(!stopped_custom_readiness(&layout).custom_configured);
 
-        fs::write(&layout.user_env, "LANGCHAIN_PROVIDER=ollama\n").unwrap();
+        fs::write(
+            &layout.user_env,
+            "LANGCHAIN_PROVIDER=ollama\nLANGCHAIN_MODEL_NAME=llama3\nOLLAMA_BASE_URL=http://localhost:11434\n",
+        )
+        .unwrap();
         assert!(stopped_custom_readiness(&layout).custom_configured);
 
         fs::write(providers.join("llm_providers.json"), "not-json").unwrap();
@@ -2873,10 +2930,7 @@ mod tests {
         });
         assert!(result.is_err(), "exe 缺失时不应成功");
         let err = result.unwrap_err();
-        assert!(
-            err.contains("未找到旧版 Vibe Trading"),
-            "应报未找到: {err}"
-        );
+        assert!(err.contains("未找到旧版 Vibe Trading"), "应报未找到: {err}");
     }
 
     #[cfg(windows)]
@@ -2951,9 +3005,15 @@ mod tests {
     fn runtime_operation_lock_rejects_concurrent_operations() {
         let lock = RuntimeOperationLock::new();
         let operation = lock.try_acquire().expect("first operation acquires lock");
-        assert!(lock.try_acquire().is_none(), "second operation must be rejected");
+        assert!(
+            lock.try_acquire().is_none(),
+            "second operation must be rejected"
+        );
         drop(operation);
-        assert!(lock.try_acquire().is_some(), "lock releases when operation completes");
+        assert!(
+            lock.try_acquire().is_some(),
+            "lock releases when operation completes"
+        );
     }
 
     #[test]
@@ -2972,7 +3032,8 @@ mod tests {
         let (deps, runtime) = decide_environment(EnvStatus::Ready, false, Some("1.0.0"), "1.0.0");
         assert!(deps && !runtime, "runtime/agent 缺失视为运行时代码不全");
         // 依赖未完成 + 版本落后
-        let (deps, runtime) = decide_environment(EnvStatus::Incomplete, true, Some("0.9.0"), "1.0.0");
+        let (deps, runtime) =
+            decide_environment(EnvStatus::Incomplete, true, Some("0.9.0"), "1.0.0");
         assert!(!deps && !runtime);
     }
 

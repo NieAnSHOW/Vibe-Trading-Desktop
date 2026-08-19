@@ -23,7 +23,8 @@ use crate::runtime_dir::Layout;
 // 业务接口（captcha/sms/login/person...），独立于大模型 MaaS 接口。
 // 默认值与 frontend/src/pages/auth/Login.tsx 对齐。 https://trading-server.nieanshow.cn
 pub fn user_api_url() -> String {
-    std::env::var("VIBE_USER_API_URL").unwrap_or_else(|_| "https://trading-server.nieanshow.cn".into())
+    std::env::var("VIBE_USER_API_URL")
+        .unwrap_or_else(|_| "https://trading-server.nieanshow.cn".into())
 }
 // ── .env 中由本模块管辖的 key（其余 key 不动）──
 pub const ENV_KEY_ACCESS: &str = "USER_ACCESS_TOKEN";
@@ -400,8 +401,34 @@ pub fn clear_env_token_section(layout: &Layout) -> Result<(), AuthError> {
 
 /// Atomically select custom LLM mode and remove the persisted desktop-login
 /// token section. Provider and data-source settings remain untouched.
+pub fn persist_custom_mode(layout: &Layout) -> Result<(), AuthError> {
+    let content = match fs::read_to_string(&layout.user_env) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => {
+            return Err(AuthError::EnvWrite {
+                message: format!("read .env: {error}"),
+            })
+        }
+    };
+    let updates = vec![(
+        ENV_KEY_LLM_MODE.to_string(),
+        DesktopLlmMode::Custom.as_env_value().to_string(),
+    )];
+    let new_content = rewrite_env_keys(&content, &updates);
+    write_env_atomic(&layout.user_env, &new_content)
+}
+
 pub fn persist_custom_mode_and_clear_token_section(layout: &Layout) -> Result<(), AuthError> {
-    let content = fs::read_to_string(&layout.user_env).unwrap_or_default();
+    let content = match fs::read_to_string(&layout.user_env) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => {
+            return Err(AuthError::EnvWrite {
+                message: format!("read .env: {error}"),
+            })
+        }
+    };
     let mut updates = vec![(
         ENV_KEY_LLM_MODE.to_string(),
         DesktopLlmMode::Custom.as_env_value().to_string(),

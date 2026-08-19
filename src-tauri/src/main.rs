@@ -252,9 +252,7 @@ fn boot(
                     if let Err(e) = console::console_open_webui(app.clone(), port) {
                         eprintln!("warn: auto open webui failed: {e}");
                     }
-                    let _ = win.eval(
-                        "var e=document.getElementById('err');if(e)e.textContent='';",
-                    );
+                    let _ = win.eval("var e=document.getElementById('err');if(e)e.textContent='';");
                 }
                 Err(error) => {
                     // 失败不阻塞控制台:保留错误信息在 err 栏,用户仍可手动启动。

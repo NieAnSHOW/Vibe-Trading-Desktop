@@ -665,6 +665,17 @@ def register_settings_routes(
         """Restore the persisted custom LLM runtime after desktop logout."""
         return restore_custom_runtime()
 
+    @app.get(
+        "/settings/llm/custom-readiness",
+        response_model=CustomLLMReadinessResponse,
+        dependencies=[Depends(require_local_or_auth)],
+    )
+    async def custom_llm_readiness():
+        """Inspect persisted custom settings without changing runtime state."""
+        return CustomLLMReadinessResponse(
+            custom_configured=_custom_llm_configured(_read_settings_env_values())
+        )
+
     @app.put(
         "/settings/llm",
         response_model=LLMSettingsResponse,

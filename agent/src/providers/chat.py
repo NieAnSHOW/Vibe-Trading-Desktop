@@ -85,7 +85,14 @@ class LLMResponse:
 class ProviderStreamError(RuntimeError):
     """Raised when provider streaming fails before a complete response."""
 
-    def __init__(self, *, provider: str, model: str, original: Exception) -> None:
+    def __init__(
+        self,
+        *,
+        provider: str,
+        model: str,
+        original: Exception,
+        sensitive_values: Optional[List[str]] = None,
+    ) -> None:
         """Initialize a provider-contextual stream error.
 
         Args:
@@ -97,7 +104,7 @@ class ProviderStreamError(RuntimeError):
         self.model = model
         self.original = original
         self.status_code: Optional[int] = getattr(original, "status_code", None)
-        safe_message = _redact_provider_error(str(original))
+        safe_message = _redact_provider_error(str(original), sensitive_values)
         super().__init__(
             f"provider_stream_error provider={provider} model={model}: "
             f"{type(original).__name__}: {safe_message}"
@@ -119,7 +126,7 @@ class ProviderStreamError(RuntimeError):
         return not 400 <= self.status_code < 500
 
 
-def _redact_provider_error(message: str) -> str:
+def _redact_provider_error(message: str, extra_sensitive_values: Optional[List[str]] = None) -> str:
     """Redact configured secret, proxy, and private VIP endpoint values."""
     redacted = message
     sensitive_markers = ("KEY", "TOKEN", "SECRET", "PASSWORD", "PASS", "PROXY")
@@ -138,6 +145,9 @@ def _redact_provider_error(message: str) -> str:
         key=len,
         reverse=True,
     )
+    if extra_sensitive_values:
+        sensitive_values.extend(value for value in extra_sensitive_values if value and len(value) >= 8)
+        sensitive_values.sort(key=len, reverse=True)
     for value in sensitive_values:
         redacted = redacted.replace(value, "[redacted]")
     return redacted
@@ -242,6 +252,14 @@ class ChatLLM:
             model_name: Model name; defaults to the environment variable value.
         """
         self.model_name = model_name
+        self._provider_context = os.getenv("LANGCHAIN_PROVIDER", "openai").strip().lower() or "openai"
+        self._model_context = model_name or os.getenv("LANGCHAIN_MODEL_NAME", "").strip() or "(unset)"
+        self._redaction_context = [
+            os.getenv("VIBE_DESKTOP_VIP_API_KEY", ""),
+            os.getenv("VIBE_DESKTOP_VIP_BASE_URL", ""),
+            os.getenv("VIP_API_KEY", ""),
+            os.getenv("VIP_BASE_URL", ""),
+        ]
         self._llm = build_llm(model_name=model_name)
 
     def chat(self, messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]] = None, timeout: Optional[int] = None) -> LLMResponse:
@@ -356,9 +374,17 @@ class ChatLLM:
                 on_text_chunk(pending_text)
             return response
         except Exception as exc:
-            provider = os.getenv("LANGCHAIN_PROVIDER", "openai").strip().lower() or "openai"
-            model = self.model_name or os.getenv("LANGCHAIN_MODEL_NAME", "").strip() or "(unset)"
-            raise ProviderStreamError(provider=provider, model=model, original=exc) from exc
+            raise ProviderStreamError(
+                provider=getattr(self, "_provider_context", None)
+                or os.getenv("LANGCHAIN_PROVIDER", "openai").strip().lower()
+                or "openai",
+                model=getattr(self, "_model_context", None)
+                or self.model_name
+                or os.getenv("LANGCHAIN_MODEL_NAME", "").strip()
+                or "(unset)",
+                original=exc,
+                sensitive_values=getattr(self, "_redaction_context", None),
+            ) from exc
 
     @staticmethod
     def _tool_call_thought_signature_maps(ai_message: Any) -> tuple[dict[str, str], dict[int, str]]:

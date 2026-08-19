@@ -175,6 +175,7 @@ async function continueWithCustom() {
   await continueCustomBusy.run("启动中", async () => {
     try {
       await env.refresh();
+      if (env.error) throw new Error(env.error);
       if (!env.serviceRunning) {
         const port = await service.start({ openWebui: false });
         env.setPort(port);
