@@ -357,6 +357,12 @@
           "markdownDescription": "Enables the console_repair_environment command without any pre-configured scope."
         },
         {
+          "description": "Enables the console_run_pairing_command command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-run-pairing-command",
+          "markdownDescription": "Enables the console_run_pairing_command command without any pre-configured scope."
+        },
+        {
           "description": "Enables the console_set_api_auth_key command without any pre-configured scope.",
           "type": "string",
           "const": "allow-console-set-api-auth-key",
@@ -411,6 +417,12 @@
           "markdownDescription": "Enables the console_status command without any pre-configured scope."
         },
         {
+          "description": "Enables the console_stop_channels command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-stop-channels",
+          "markdownDescription": "Enables the console_stop_channels command without any pre-configured scope."
+        },
+        {
           "description": "Enables the console_stop_service command without any pre-configured scope.",
           "type": "string",
           "const": "allow-console-stop-service",
@@ -427,6 +439,18 @@
           "type": "string",
           "const": "allow-console-uninstall-legacy-app",
           "markdownDescription": "Enables the console_uninstall_legacy_app command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_weixin_login_start command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-weixin-login-start",
+          "markdownDescription": "Enables the console_weixin_login_start command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_weixin_login_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-weixin-login-status",
+          "markdownDescription": "Enables the console_weixin_login_status command without any pre-configured scope."
         },
         {
           "description": "Enables the open_external_url command without any pre-configured scope.",
@@ -615,6 +639,12 @@
           "markdownDescription": "Denies the console_repair_environment command without any pre-configured scope."
         },
         {
+          "description": "Denies the console_run_pairing_command command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-run-pairing-command",
+          "markdownDescription": "Denies the console_run_pairing_command command without any pre-configured scope."
+        },
+        {
           "description": "Denies the console_set_api_auth_key command without any pre-configured scope.",
           "type": "string",
           "const": "deny-console-set-api-auth-key",
@@ -669,6 +699,12 @@
           "markdownDescription": "Denies the console_status command without any pre-configured scope."
         },
         {
+          "description": "Denies the console_stop_channels command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-stop-channels",
+          "markdownDescription": "Denies the console_stop_channels command without any pre-configured scope."
+        },
+        {
           "description": "Denies the console_stop_service command without any pre-configured scope.",
           "type": "string",
           "const": "deny-console-stop-service",
@@ -685,6 +721,18 @@
           "type": "string",
           "const": "deny-console-uninstall-legacy-app",
           "markdownDescription": "Denies the console_uninstall_legacy_app command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_weixin_login_start command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-weixin-login-start",
+          "markdownDescription": "Denies the console_weixin_login_start command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_weixin_login_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-weixin-login-status",
+          "markdownDescription": "Denies the console_weixin_login_status command without any pre-configured scope."
         },
         {
           "description": "Denies the open_external_url command without any pre-configured scope.",

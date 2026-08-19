@@ -104,6 +104,25 @@ export const consoleSetDataSourceSettings = (
 export const consoleInstallChannelDep = (channel: string): Promise<void> =>
   invoke<void>("console_install_channel_dep", { channel });
 
+// ── 消息渠道(自 WebUI 设置页迁移;Rust 代理转发本地 backend,返回原始 JSON 文本) ──
+export const consoleStopChannels = (port: number): Promise<string> =>
+  invoke<string>("console_stop_channels", { port });
+
+export const consoleRunPairingCommand = (
+  port: number,
+  body: Record<string, unknown>,
+): Promise<string> =>
+  invoke<string>("console_run_pairing_command", {
+    port,
+    body: JSON.stringify(body),
+  });
+
+export const consoleWeixinLoginStart = (port: number): Promise<string> =>
+  invoke<string>("console_weixin_login_start", { port });
+
+export const consoleWeixinLoginStatus = (port: number, loginId: string): Promise<string> =>
+  invoke<string>("console_weixin_login_status", { port, loginId });
+
 export const consoleQuit = (): Promise<void> =>
   invoke<void>("console_quit");
 

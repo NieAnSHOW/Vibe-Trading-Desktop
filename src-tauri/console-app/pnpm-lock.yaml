@@ -17,6 +17,9 @@ importers:
       pinia:
         specifier: ^2.2.6
         version: 2.3.1(typescript@5.8.3)(vue@3.5.39(typescript@5.8.3))
+      qrcode-generator:
+        specifier: ^2.0.4
+        version: 2.0.4
       vue:
         specifier: ^3.5.13
         version: 3.5.39(typescript@5.8.3)
@@ -24,6 +27,9 @@ importers:
         specifier: ^4.4.5
         version: 4.6.4(vue@3.5.39(typescript@5.8.3))
     devDependencies:
+      '@types/qrcode-generator':
+        specifier: ^1.0.6
+        version: 1.0.6
       '@vitejs/plugin-vue':
         specifier: ^5.2.0
         version: 5.2.4(vite@5.4.21)(vue@3.5.39(typescript@5.8.3))
@@ -396,6 +402,10 @@ packages:
 
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
+
+  '@types/qrcode-generator@1.0.6':
+    resolution: {integrity: sha512-XasuPjhHBC4hyOJ/pHaUNTj+tNxA1SyZpXaS/FOUxEVX03D1gFM8UmMKSIs+pPHLAmRZpU6j9KYxvo+lfsvhKw==}
+    deprecated: This is a stub types definition for qrcode-generator (https://github.com/kazuhikoarase/qrcode-generator). qrcode-generator provides its own type definitions, so you don't need @types/qrcode-generator installed!
 
   '@vitejs/plugin-vue@5.2.4':
     resolution: {integrity: sha512-7Yx/SXSOcQq5HiiV3orevHUFn+pmMB4cgbEkDYgnkUWb0WfeQ/wa2yFv6D5ICiCQOVpjA7vYDXrC7AGO8yjDHA==}
@@ -859,6 +869,9 @@ packages:
   punycode@2.3.1:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
+
+  qrcode-generator@2.0.4:
+    resolution: {integrity: sha512-mZSiP6RnbHl4xL2Ap5HfkjLnmxfKcPWpWe/c+5XxCuetEenqmNFf1FH/ftXPCtFG5/TDobjsjz6sSNL0Sr8Z9g==}
 
   rollup@4.62.2:
     resolution: {integrity: sha512-RFnrW4lhXA3s3eqHDZvN654g8OTjzRfqpIRJYczCGB6HzphckVAi/Qh4tbPUbRuDi7s1Llv8g/NspLkttY3gTA==}
@@ -1330,6 +1343,10 @@ snapshots:
   '@tauri-apps/api@2.11.1': {}
 
   '@types/estree@1.0.9': {}
+
+  '@types/qrcode-generator@1.0.6':
+    dependencies:
+      qrcode-generator: 2.0.4
 
   '@vitejs/plugin-vue@5.2.4(vite@5.4.21)(vue@3.5.39(typescript@5.8.3))':
     dependencies:
@@ -1842,6 +1859,8 @@ snapshots:
   proto-list@1.2.4: {}
 
   punycode@2.3.1: {}
+
+  qrcode-generator@2.0.4: {}
 
   rollup@4.62.2:
     dependencies:

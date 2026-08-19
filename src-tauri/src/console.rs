@@ -1390,6 +1390,42 @@ pub async fn console_channels_status(port: u16) -> Result<String, String> {
     .and_then(|r| r)
 }
 
+/// 停止消息渠道:转发 POST /channels/stop(自 WebUI 设置页迁移)。
+#[tauri::command]
+pub async fn console_stop_channels(port: u16) -> Result<String, String> {
+    proxy_settings(port, reqwest::Method::POST, "/channels/stop", None).await
+}
+
+/// 运行配对命令(审批等):转发 POST /channels/pairing/command,
+/// body 为前端构造的 JSON({channel, command})。
+#[tauri::command]
+pub async fn console_run_pairing_command(port: u16, body: String) -> Result<String, String> {
+    proxy_settings(port, reqwest::Method::POST, "/channels/pairing/command", Some(body)).await
+}
+
+/// 发起微信扫码登录:转发 POST /channels/weixin/login/start。
+#[tauri::command]
+pub async fn console_weixin_login_start(port: u16) -> Result<String, String> {
+    proxy_settings(port, reqwest::Method::POST, "/channels/weixin/login/start", None).await
+}
+
+/// 查询微信扫码登录状态:转发 GET /channels/weixin/login/status?login_id=…。
+/// login_id 仅做最小百分号编码(login_id 由后端生成,含字母数字与连字符)。
+#[tauri::command]
+pub async fn console_weixin_login_status(port: u16, login_id: String) -> Result<String, String> {
+    let encoded: String = login_id
+        .bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect();
+    let path = format!("/channels/weixin/login/status?login_id={encoded}");
+    proxy_settings(port, reqwest::Method::GET, &path, None).await
+}
+
 /// 安装单个消息渠道的可选依赖:用 venv 解释器 spawn
 /// `pip install --no-input 'vibe-trading-ai[<channel>]'`,逐行 emit "channeldep://progress"。
 /// pip 进度几乎全走 stderr,故 stdout/stderr 各开一线程转发,避免日志空白。

@@ -581,20 +581,6 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(settings),
     }),
-  getChannelStatus: () => request<ChannelRuntimeStatus>("/channels/status"),
-  startChannels: () => request<ChannelRuntimeActionResponse>("/channels/start", { method: "POST" }),
-  stopChannels: () => request<ChannelRuntimeActionResponse>("/channels/stop", { method: "POST" }),
-  runChannelPairingCommand: (body: ChannelPairingCommandRequest) =>
-    request<ChannelPairingCommandResponse>("/channels/pairing/command", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-
-  // WeChat QR login (channel-management-ui 6.3)
-  startWeixinLogin: () =>
-    request<{ login_id: string; qr_image: string }>("/channels/weixin/login/start", { method: "POST" }),
-  weixinLoginStatus: (loginId: string) =>
-    request<{ status: string }>(`/channels/weixin/login/status?login_id=${encodeURIComponent(loginId)}`),
 
   // Alpha Zoo API
   listAlphas: (params: AlphaListParams = {}) => {
@@ -775,41 +761,6 @@ export interface DataSourceSettings {
 export interface UpdateDataSourceSettingsRequest {
   tushare_token?: string;
   clear_tushare_token?: boolean;
-}
-
-export interface ChannelAdapterStatus {
-  name: string;
-  display_name: string;
-  configured: boolean;
-  enabled: boolean;
-  available: boolean;
-  loaded: boolean;
-  running: boolean;
-  health?: string;
-  error?: string;
-  install_hint?: string;
-}
-
-export interface ChannelRuntimeStatus {
-  running: boolean;
-  inbound_queue: number;
-  outbound_queue: number;
-  session_count: number;
-  channels: Record<string, ChannelAdapterStatus>;
-}
-
-export interface ChannelRuntimeActionResponse extends ChannelRuntimeStatus {
-  status: string;
-}
-
-export interface ChannelPairingCommandRequest {
-  channel: string;
-  command: string;
-}
-
-export interface ChannelPairingCommandResponse {
-  channel: string;
-  reply: string;
 }
 
 // --- Types matching backend API contracts ---

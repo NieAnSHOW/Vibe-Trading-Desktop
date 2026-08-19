@@ -4,7 +4,7 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import { useRoute } from "vue-router";
 import { loadPublicConfig } from "./config/prod";
 import Rail, { THEME_COLOR_EVENT, THEME_MODE_EVENT } from "./components/Rail.vue";
-import { consoleCloseWebui, consoleTakePendingWebui } from "./ipc/commands";
+import { consoleCloseWebui, consoleOpenExternalUrl, consoleTakePendingWebui } from "./ipc/commands";
 import { onWebuiClose, onWebuiOpen } from "./ipc/events";
 
 const errMsg = ref("");
@@ -45,8 +45,27 @@ function syncWebuiTheme() {
   }
 }
 
-function openWebui(url: string) {
-  if (!url) return;
+// iframe 内的 WebUI 拿不到 Tauri IPC(仅注入主框架),外链经消息桥委托此处
+// 调 open_external_url 拉起系统浏览器。只信任自家 frame 的消息,且仅放行
+// http/https(Rust 侧 open_external_url 会再校验一次)。
+function isWebUrl(value: string): boolean {
+  try {
+    const protocol = new URL(value).protocol;
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function onWebuiMessage(event: MessageEvent) {
+  if (event.source !== webuiFrame.value?.contentWindow) return;
+  const data = event.data as { type?: string; url?: string } | null;
+  if (data?.type !== "vibe-shell:open-external" || typeof data.url !== "string") return;
+  if (!isWebUrl(data.url)) return;
+  void consoleOpenExternalUrl(data.url);
+}
+
+function openWebui(url: string) {  if (!url) return;
   const generation = ++transitionGeneration;
   closeTransition = null;
   if (webuiFrameUrl.value !== url) webuiFrameUrl.value = url;
@@ -126,6 +145,7 @@ onMounted(async () => {
   unlistens = await Promise.all([onWebuiOpen(openWebui), onWebuiClose(() => void animateCloseWebui())]);
   window.addEventListener(THEME_MODE_EVENT, syncWebuiTheme);
   window.addEventListener(THEME_COLOR_EVENT, syncWebuiTheme);
+  window.addEventListener("message", onWebuiMessage);
   const pendingUrl = await consoleTakePendingWebui();
   if (pendingUrl) openWebui(pendingUrl);
   void loadPublicConfig();
@@ -136,6 +156,7 @@ onUnmounted(() => {
   window.clearTimeout(surfaceScrollHideTimer);
   window.removeEventListener(THEME_MODE_EVENT, syncWebuiTheme);
   window.removeEventListener(THEME_COLOR_EVENT, syncWebuiTheme);
+  window.removeEventListener("message", onWebuiMessage);
 });
 </script>
 

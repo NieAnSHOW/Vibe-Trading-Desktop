@@ -29,6 +29,7 @@ import {
 import { cn } from "@/lib/utils";
 import { api, type SessionItem } from "@/lib/api";
 import { useAgentStore } from "@/stores/agent";
+import { installExternalLinkInterceptor, openExternalUrl } from "@/lib/externalLinks";
 import {
   dismissDesktopRailBootstrap,
   isDesktopEmbedded,
@@ -163,7 +164,8 @@ function NavLink({
           try {
             track("feature_use", { nav_target: to }, { name: "nav_sidebar" });
           } catch {}
-          if (onExternalOpen) {
+          // 捕获阶段的全局拦截器已 preventDefault 时说明外链已被处理,勿重复打开。
+          if (onExternalOpen && !event.defaultPrevented) {
             event.preventDefault();
             onExternalOpen(to);
           }
@@ -322,14 +324,11 @@ export function Layout() {
     setRenameTarget(null);
   };
 
-  const openExternalUrl = async (url: string) => {
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("open_external_url", { url });
-    } catch {
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
-  };
+  // 桌面 webview 不处理新窗口:把页面内所有外源链接改道到桌面壳打开。
+  useEffect(() => {
+    if (!isDesktopEmbedded()) return;
+    return installExternalLinkInterceptor();
+  }, []);
 
   // ── route helpers ──
   const isActive = (to: string) =>

@@ -6,10 +6,7 @@ import { Settings } from "../Settings";
 const apiMock = vi.hoisted(() => ({
   getLLMSettings: vi.fn(),
   getDataSourceSettings: vi.fn(),
-  getChannelStatus: vi.fn(),
   getLiveStatus: vi.fn(),
-  startChannels: vi.fn(),
-  stopChannels: vi.fn(),
   updateLLMSettings: vi.fn(),
   updateDataSourceSettings: vi.fn(),
 }));
@@ -75,16 +72,6 @@ function dataSourceSettings() {
   };
 }
 
-function channelStatus() {
-  return {
-    running: false,
-    inbound_queue: 0,
-    outbound_queue: 0,
-    session_count: 0,
-    channels: {},
-  };
-}
-
 function qverisConfig(overrides = {}) {
   return {
     enabled: true,
@@ -147,10 +134,7 @@ describe("Settings QVeris card", () => {
     window.localStorage.clear();
     apiMock.getLLMSettings.mockResolvedValue(llmSettings());
     apiMock.getDataSourceSettings.mockResolvedValue(dataSourceSettings());
-    apiMock.getChannelStatus.mockResolvedValue(channelStatus());
     apiMock.getLiveStatus.mockResolvedValue({ global_halted: false, brokers: [] });
-    apiMock.startChannels.mockResolvedValue(channelStatus());
-    apiMock.stopChannels.mockResolvedValue(channelStatus());
   });
 
   afterEach(() => {

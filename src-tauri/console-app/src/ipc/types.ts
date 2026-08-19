@@ -45,6 +45,43 @@ export interface ChannelInfo {
   health?: "ok" | "expired" | string;
 }
 
+// ── 消息渠道(镜像 backend /channels/*,自 WebUI src/lib/api.ts 迁移) ──
+
+export interface ChannelAdapterStatus {
+  name: string;
+  display_name: string;
+  configured: boolean;
+  enabled: boolean;
+  available: boolean;
+  loaded: boolean;
+  running: boolean;
+  health?: string;
+  error?: string;
+  install_hint?: string;
+}
+
+export interface ChannelRuntimeStatus {
+  running: boolean;
+  inbound_queue: number;
+  outbound_queue: number;
+  session_count: number;
+  channels: Record<string, ChannelAdapterStatus>;
+}
+
+export interface ChannelPairingCommandResponse {
+  channel: string;
+  reply: string;
+}
+
+export interface WeixinLoginStartResponse {
+  login_id: string;
+  qr_image: string;
+}
+
+export interface WeixinLoginStatusResponse {
+  status: string;
+}
+
 // ── LLM / 数据源设置(镜像 backend /settings/llm 与 /settings/data-sources,
 //    自 WebUI src/lib/api.ts 迁移) ─────────────────────────────────
 

@@ -208,8 +208,39 @@ describe("Layout sidebar", () => {
 
     await user.click(screen.getByRole("link", { name: /文档/i }));
 
+    expect(invoke).toHaveBeenCalledTimes(1);
     expect(invoke).toHaveBeenCalledWith("open_external_url", {
       url: "https://agent.nieanshow.cn/column/04-ai-trading/",
     });
+  });
+
+  it("routes plain external anchors in page content through the desktop shell", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route
+              path="/"
+              element={
+                <a href="https://stockapp.finance.qq.com/" target="_blank" rel="noreferrer">
+                  quote
+                </a>
+              }
+            />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockClear();
+
+    await user.click(screen.getByRole("link", { name: "quote" }));
+
+    await vi.waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("open_external_url", {
+        url: "https://stockapp.finance.qq.com/",
+      }),
+    );
   });
 });

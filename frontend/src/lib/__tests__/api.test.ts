@@ -127,10 +127,10 @@ describe("api request helper", () => {
 
     const { api } = await loadApiModule();
 
-    await expect(api.getChannelStatus()).rejects.toMatchObject({
+    await expect(api.getLLMSettings()).rejects.toMatchObject({
       name: "ApiError",
       status: 200,
-      message: expect.stringContaining("Expected JSON from /channels/status, got text/html"),
+      message: expect.stringContaining("Expected JSON from /settings/llm, got text/html"),
     } satisfies Partial<ApiError>);
   });
 
@@ -147,10 +147,10 @@ describe("api request helper", () => {
 
     const { api } = await loadApiModule();
 
-    await expect(api.getChannelStatus()).rejects.toMatchObject({
+    await expect(api.getLLMSettings()).rejects.toMatchObject({
       name: "ApiError",
       status: 200,
-      message: "Invalid JSON response from /channels/status",
+      message: "Invalid JSON response from /settings/llm",
     } satisfies Partial<ApiError>);
   });
 

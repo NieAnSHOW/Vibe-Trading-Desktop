@@ -31,6 +31,7 @@ vi.mock("../ipc/events", () => ({
 }));
 vi.mock("../ipc/commands", () => ({
   consoleTakePendingWebui: vi.fn(async () => null),
+  consoleOpenExternalUrl: vi.fn(async () => undefined),
 }));
 
 const router = createRouter({
@@ -314,5 +315,67 @@ describe("App", () => {
       { type: "vibe-shell:theme", dark: true, color: "blue" },
       "http://127.0.0.1:8899",
     );
+  });
+
+  it("opens external URLs requested by the retained WebUI frame", async () => {
+    const { consoleOpenExternalUrl } = await import("../ipc/commands");
+    vi.mocked(consoleOpenExternalUrl).mockClear();
+    await router.push("/next");
+    const wrapper = mountAppAtDocumentRoot();
+    await flushPromises();
+    openListener?.("http://127.0.0.1:8899/?desktop=1&shell=frame");
+    await flushPromises();
+
+    const frame = wrapper.get('iframe[data-test="desktop-webui-frame"]');
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: (frame.element as HTMLIFrameElement).contentWindow,
+        data: { type: "vibe-shell:open-external", url: "https://www.10jqka.com.cn/" },
+      }),
+    );
+    await flushPromises();
+
+    expect(consoleOpenExternalUrl).toHaveBeenCalledWith("https://www.10jqka.com.cn/");
+  });
+
+  it("ignores external-open requests from sources other than the WebUI frame", async () => {
+    const { consoleOpenExternalUrl } = await import("../ipc/commands");
+    vi.mocked(consoleOpenExternalUrl).mockClear();
+    await router.push("/next");
+    mountAppAtDocumentRoot();
+    await flushPromises();
+    openListener?.("http://127.0.0.1:8899/?desktop=1&shell=frame");
+    await flushPromises();
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: window,
+        data: { type: "vibe-shell:open-external", url: "https://www.10jqka.com.cn/" },
+      }),
+    );
+    await flushPromises();
+
+    expect(consoleOpenExternalUrl).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-web URLs requested by the WebUI frame", async () => {
+    const { consoleOpenExternalUrl } = await import("../ipc/commands");
+    vi.mocked(consoleOpenExternalUrl).mockClear();
+    await router.push("/next");
+    const wrapper = mountAppAtDocumentRoot();
+    await flushPromises();
+    openListener?.("http://127.0.0.1:8899/?desktop=1&shell=frame");
+    await flushPromises();
+
+    const frame = wrapper.get('iframe[data-test="desktop-webui-frame"]');
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: (frame.element as HTMLIFrameElement).contentWindow,
+        data: { type: "vibe-shell:open-external", url: "file:///etc/passwd" },
+      }),
+    );
+    await flushPromises();
+
+    expect(consoleOpenExternalUrl).not.toHaveBeenCalled();
   });
 });

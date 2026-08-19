@@ -12,7 +12,6 @@ import { Settings } from "../Settings";
 const apiMock = vi.hoisted(() => ({
   getLLMSettings: vi.fn(),
   getDataSourceSettings: vi.fn(),
-  getChannelStatus: vi.fn(),
   getLiveStatus: vi.fn(),
   updateLLMSettings: vi.fn(),
 }));
@@ -72,16 +71,6 @@ function dataSourceSettings() {
   };
 }
 
-function channelStatus() {
-  return {
-    running: false,
-    inbound_queue: 0,
-    outbound_queue: 0,
-    session_count: 0,
-    channels: {},
-  };
-}
-
 function jsonResponse(body: unknown) {
   return new Response(JSON.stringify(body), {
     headers: { "content-type": "application/json" },
@@ -94,7 +83,6 @@ describe("Settings workspace layout", () => {
     await i18n.changeLanguage("en");
     apiMock.getLLMSettings.mockResolvedValue(llmSettings());
     apiMock.getDataSourceSettings.mockResolvedValue(dataSourceSettings());
-    apiMock.getChannelStatus.mockResolvedValue(channelStatus());
     apiMock.getLiveStatus.mockResolvedValue({
       global_halted: false,
       brokers: [],
@@ -188,9 +176,6 @@ describe("Settings workspace layout", () => {
     ).not.toBeNull();
     expect(
       screen.getByRole("button", { name: "Save data source settings" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "IM Channels" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Live / Paper Runtime Status" }),

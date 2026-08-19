@@ -2,7 +2,12 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createMemoryHistory } from "vue-router";
 import { createPinia, setActivePinia } from "pinia";
-import type { EnvironmentReport, LLMSettings, DataSourceSettings } from "../../ipc/types";
+import type {
+  EnvironmentReport,
+  LLMSettings,
+  DataSourceSettings,
+  ChannelRuntimeStatus,
+} from "../../ipc/types";
 
 // 与组件交互语义一致的 LLM / 数据源 fixture(custom 模式,单提供商)
 const fakeLlm: LLMSettings = {
@@ -81,6 +86,13 @@ const mocks = vi.hoisted(() => ({
     runtimeOk: true,
   })),
   consoleRepairEnvironment: vi.fn(async () => undefined),
+  consoleChannelsStatus: vi.fn(),
+  consoleStartChannels: vi.fn(),
+  consoleStopChannels: vi.fn(),
+  consoleRunPairingCommand: vi.fn(),
+  consoleWeixinLoginStart: vi.fn(),
+  consoleWeixinLoginStatus: vi.fn(),
+  consoleOpenExternalUrl: vi.fn(async () => undefined),
 }));
 
 vi.mock("../../ipc/commands", () => ({
@@ -100,6 +112,13 @@ vi.mock("../../ipc/commands", () => ({
   consoleStopService: mocks.consoleStopService,
   consoleCheckEnvironment: mocks.consoleCheckEnvironment,
   consoleRepairEnvironment: mocks.consoleRepairEnvironment,
+  consoleChannelsStatus: mocks.consoleChannelsStatus,
+  consoleStartChannels: mocks.consoleStartChannels,
+  consoleStopChannels: mocks.consoleStopChannels,
+  consoleRunPairingCommand: mocks.consoleRunPairingCommand,
+  consoleWeixinLoginStart: mocks.consoleWeixinLoginStart,
+  consoleWeixinLoginStatus: mocks.consoleWeixinLoginStatus,
+  consoleOpenExternalUrl: mocks.consoleOpenExternalUrl,
 }));
 
 import SettingsPage from "../SettingsPage.vue";
@@ -485,6 +504,286 @@ describe("SettingsPage", () => {
     expect(mocks.consoleStopService.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.consoleClearVenv.mock.invocationCallOrder[0],
     );
+  });
+});
+
+// 消息渠道 fixture:runtime 停止,微信渠道启用/加载/未运行;
+// 附带 telegram 证明桌面端与 WebUI 同口径——仅微信露出。
+function channelStatusFixture(overrides: Partial<ChannelRuntimeStatus> = {}): ChannelRuntimeStatus {
+  return {
+    running: false,
+    inbound_queue: 0,
+    outbound_queue: 0,
+    session_count: 0,
+    channels: {
+      weixin: {
+        name: "weixin",
+        display_name: "微信",
+        configured: true,
+        enabled: true,
+        available: true,
+        loaded: true,
+        running: false,
+        health: "ok",
+        error: "",
+        install_hint: "",
+      },
+      telegram: {
+        name: "telegram",
+        display_name: "Telegram",
+        configured: false,
+        enabled: false,
+        available: true,
+        loaded: false,
+        running: false,
+        error: "",
+        install_hint: "",
+      },
+    },
+    ...overrides,
+  };
+}
+
+describe("SettingsPage channels (migrated from WebUI settings)", () => {
+  function mockServiceRunning() {
+    mocks.consoleStatus.mockResolvedValueOnce({
+      env: "ready" as const,
+      service_running: true,
+      port: 8899,
+    });
+    mocks.consoleGetLlmSettings.mockResolvedValueOnce(fakeLlm);
+    mocks.consoleGetDataSourceSettings.mockResolvedValueOnce(fakeDataSource);
+  }
+
+  it("shows the channels service hint and skips loading when the service is off", async () => {
+    // 上一个用例以 mockResolvedValue(持久)设定过 service_running=true,
+    // clearAllMocks 不清除实现,这里用 Once 覆盖本次挂载的刷新。
+    mocks.consoleStatus.mockResolvedValueOnce({
+      env: "ready" as const,
+      service_running: false,
+      port: null,
+    });
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(wrapper.get('[data-test="channels-service-hint"]').text()).toContain("服务未运行");
+    expect(mocks.consoleChannelsStatus).not.toHaveBeenCalled();
+  });
+
+  it("renders the weixin channel runtime status and hides other channels", async () => {
+    mockServiceRunning();
+    mocks.consoleChannelsStatus.mockResolvedValueOnce(JSON.stringify(channelStatusFixture()));
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(mocks.consoleChannelsStatus).toHaveBeenCalledWith(8899);
+    const panel = wrapper.get('[data-test="channels-panel"]');
+    expect(panel.text()).toContain("微信");
+    expect(panel.text()).toContain("已启用");
+    expect(panel.text()).toContain("已加载");
+    expect(panel.text()).toContain("已停止");
+    expect(panel.text()).not.toContain("Telegram");
+    // 扫码登录入口在微信行可用
+    expect(panel.find('[data-test="weixin-scan-login-action"]').exists()).toBe(true);
+  });
+
+  it("flags login-expired when health=expired despite the poll loop running", async () => {
+    mockServiceRunning();
+    mocks.consoleChannelsStatus.mockResolvedValueOnce(
+      JSON.stringify(
+        channelStatusFixture({
+          running: true,
+          channels: {
+            weixin: {
+              ...channelStatusFixture().channels.weixin,
+              running: true,
+              health: "expired",
+            },
+          },
+        }),
+      ),
+    );
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    const panel = wrapper.get('[data-test="channels-panel"]');
+    expect(panel.text()).toContain("登录失效 · 需重新扫码");
+    expect(panel.find('[data-test="weixin-scan-login-action"]').exists()).toBe(true);
+  });
+
+  it("starts and stops channels through the backend proxy", async () => {
+    mockServiceRunning();
+    mocks.consoleChannelsStatus.mockResolvedValue(JSON.stringify(channelStatusFixture()));
+    mocks.consoleStartChannels.mockResolvedValueOnce(
+      JSON.stringify(channelStatusFixture({ running: true })),
+    );
+    mocks.consoleStopChannels.mockResolvedValueOnce(JSON.stringify(channelStatusFixture()));
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper.get('[data-test="channels-start-action"]').trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleStartChannels).toHaveBeenCalledWith(8899);
+    expect(wrapper.get('[data-test="channels-notice"]').text()).toBe("IM 通道已启动");
+    expect(wrapper.get('[data-test="channels-panel"]').text()).toContain("运行中");
+
+    await wrapper.get('[data-test="channels-stop-action"]').trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleStopChannels).toHaveBeenCalledWith(8899);
+    expect(wrapper.get('[data-test="channels-notice"]').text()).toBe("IM 通道已停止");
+  });
+
+  it("refreshes the channel status from the control surface", async () => {
+    mockServiceRunning();
+    mocks.consoleChannelsStatus.mockResolvedValue(JSON.stringify(channelStatusFixture()));
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper.get('[data-test="channels-refresh-action"]').trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleChannelsStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps start/stop disabled when the channel status is unknown", async () => {
+    mockServiceRunning();
+    mocks.consoleChannelsStatus.mockRejectedValueOnce(
+      new Error("Expected JSON from /channels/status, got text/html"),
+    );
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(wrapper.get('[data-test="channels-error"]').text()).toContain("加载消息渠道状态失败");
+    expect(
+      (wrapper.get('[data-test="channels-start-action"]').element as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (wrapper.get('[data-test="channels-stop-action"]').element as HTMLButtonElement).disabled,
+    ).toBe(true);
+    // 刷新仍可用:状态未知只是不盲目启停
+    expect(
+      (wrapper.get('[data-test="channels-refresh-action"]').element as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
+  it("runs pairing approval commands through the backend proxy", async () => {
+    mockServiceRunning();
+    mocks.consoleChannelsStatus.mockResolvedValueOnce(JSON.stringify(channelStatusFixture()));
+    mocks.consoleRunPairingCommand.mockResolvedValueOnce(
+      JSON.stringify({ channel: "weixin", reply: "approved UM59-EGIT" }),
+    );
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper.get('[data-test="pairing-command-input"]').setValue("approve UM59-EGIT");
+    await wrapper.get('[data-test="pairing-form"]').trigger("submit");
+    await flushPromises();
+
+    expect(mocks.consoleRunPairingCommand).toHaveBeenCalledWith(8899, {
+      channel: "weixin",
+      command: "approve UM59-EGIT",
+    });
+    expect(wrapper.get('[data-test="channels-notice"]').text()).toContain("approved UM59-EGIT");
+    expect(
+      (wrapper.get('[data-test="pairing-command-input"]').element as HTMLInputElement).value,
+    ).toBe("");
+  });
+
+  it("renders a pairing command error from the backend proxy", async () => {
+    mockServiceRunning();
+    mocks.consoleChannelsStatus.mockResolvedValueOnce(JSON.stringify(channelStatusFixture()));
+    mocks.consoleRunPairingCommand.mockRejectedValueOnce(new Error("unknown pairing code"));
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper.get('[data-test="pairing-command-input"]').setValue("approve NOPE");
+    await wrapper.get('[data-test="pairing-form"]').trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.get('[data-test="channels-error"]').text()).toContain("unknown pairing code");
+  });
+
+  it("shows the login QR code in-app instead of opening a browser", async () => {
+    mockServiceRunning();
+    mocks.consoleChannelsStatus.mockResolvedValue(JSON.stringify(channelStatusFixture()));
+    mocks.consoleWeixinLoginStart.mockResolvedValueOnce(
+      JSON.stringify({ login_id: "qid-1", qr_image: "https://open.weixin.example/qr" }),
+    );
+    mocks.consoleWeixinLoginStatus.mockResolvedValue(JSON.stringify({ status: "wait" }));
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper.get('[data-test="weixin-scan-login-action"]').trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleWeixinLoginStart).toHaveBeenCalledWith(8899);
+    // 二维码直接渲染在应用内,不再自动拉起系统浏览器
+    expect(mocks.consoleOpenExternalUrl).not.toHaveBeenCalled();
+    const qrImg = wrapper.get('[data-test="weixin-login-qr"]');
+    expect(
+      (qrImg.element as HTMLImageElement).src.startsWith("data:image/svg+xml"),
+    ).toBe(true);
+    // 浏览器打开降级为弹窗内的手动链接
+    expect(wrapper.find('[data-test="weixin-open-external"]').exists()).toBe(true);
+    expect(wrapper.get('[data-test="weixin-login-modal"]').text()).toContain("微信扫码登录");
+
+    await wrapper.get('[data-test="weixin-login-cancel"]').trigger("click");
+    expect(wrapper.find('[data-test="weixin-login-modal"]').exists()).toBe(false);
+  });
+
+  it("closes the modal and refreshes status when the login is confirmed", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mockServiceRunning();
+      mocks.consoleChannelsStatus.mockResolvedValue(JSON.stringify(channelStatusFixture()));
+      mocks.consoleWeixinLoginStart.mockResolvedValueOnce(
+        JSON.stringify({ login_id: "qid-1", qr_image: "https://open.weixin.example/qr" }),
+      );
+      mocks.consoleWeixinLoginStatus.mockResolvedValue(JSON.stringify({ status: "confirmed" }));
+      const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      await wrapper.get('[data-test="weixin-scan-login-action"]').trigger("click");
+      await flushPromises();
+      expect(wrapper.get('[data-test="weixin-login-modal"]').text()).toContain("微信扫码登录");
+
+      // 越过一个 2s 轮询周期:confirmed 关闭弹窗并刷新状态
+      await vi.advanceTimersByTimeAsync(2500);
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="weixin-login-modal"]').exists()).toBe(false);
+      expect(wrapper.get('[data-test="channels-notice"]').text()).toBe("微信登录成功");
+      // 挂载 1 次 + 确认后刷新 ≥1 次
+      expect(mocks.consoleChannelsStatus.mock.calls.length).toBeGreaterThanOrEqual(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports an expired QR code and keeps the panel usable", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mockServiceRunning();
+      mocks.consoleChannelsStatus.mockResolvedValue(JSON.stringify(channelStatusFixture()));
+      mocks.consoleWeixinLoginStart.mockResolvedValueOnce(
+        JSON.stringify({ login_id: "qid-1", qr_image: "https://open.weixin.example/qr" }),
+      );
+      mocks.consoleWeixinLoginStatus.mockResolvedValue(JSON.stringify({ status: "expired" }));
+      const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      await wrapper.get('[data-test="weixin-scan-login-action"]').trigger("click");
+      await flushPromises();
+      await vi.advanceTimersByTimeAsync(2500);
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="weixin-login-modal"]').exists()).toBe(false);
+      expect(wrapper.get('[data-test="channels-error"]').text()).toContain("二维码已过期");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
