@@ -100,44 +100,52 @@ describe("Layout sidebar", () => {
     expect(screen.getByText("Usage route content")).toBeInTheDocument();
   });
 
-  it("groups reports, alpha zoo and correlation under a collapsible research menu", async () => {
+  it("groups research tools under a collapsible research menu", async () => {
     const user = userEvent.setup();
     renderLayout();
 
     expect(screen.queryByRole("link", { name: "报告" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "运行时" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /投研工具/i }));
 
     const reports = screen.getByRole("link", { name: "报告" });
     const alphaZoo = screen.getByRole("link", { name: "Alpha 因子库" });
     const correlation = screen.getByRole("link", { name: "相关性矩阵" });
+    const runtime = screen.getByRole("link", { name: "运行时" });
     expect(reports).toHaveAttribute("href", "/reports");
     expect(alphaZoo).toHaveAttribute("href", "/alpha-zoo");
     expect(correlation).toHaveAttribute("href", "/correlation");
+    expect(runtime).toHaveAttribute("href", "/runtime");
     expect(
       Boolean(reports.compareDocumentPosition(alphaZoo) & Node.DOCUMENT_POSITION_FOLLOWING),
     ).toBe(true);
     expect(
       Boolean(alphaZoo.compareDocumentPosition(correlation) & Node.DOCUMENT_POSITION_FOLLOWING),
     ).toBe(true);
+    expect(
+      Boolean(correlation.compareDocumentPosition(runtime) & Node.DOCUMENT_POSITION_FOLLOWING),
+    ).toBe(true);
 
     await user.click(screen.getByRole("button", { name: /投研工具/i }));
     expect(screen.queryByRole("link", { name: "报告" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "运行时" })).not.toBeInTheDocument();
   });
 
-  it("sits the research menu beside settings and external shortcuts in the tools section", () => {
+  it("sits the research menu between workspace links and external shortcuts", () => {
     renderLayout();
 
-    const settings = screen.getByRole("link", { name: "设置" });
+    const usage = screen.getByRole("link", { name: "LLM 用量" });
     const research = screen.getByRole("button", { name: /投研工具/i });
     const shortcuts = screen.getByRole("button", { name: /快捷入口/i });
 
     expect(
-      Boolean(settings.compareDocumentPosition(research) & Node.DOCUMENT_POSITION_FOLLOWING),
+      Boolean(usage.compareDocumentPosition(research) & Node.DOCUMENT_POSITION_FOLLOWING),
     ).toBe(true);
     expect(
       Boolean(research.compareDocumentPosition(shortcuts) & Node.DOCUMENT_POSITION_FOLLOWING),
     ).toBe(true);
+    expect(screen.queryByRole("link", { name: "设置" })).not.toBeInTheDocument();
   });
 
   it("keeps the main area constrained", () => {

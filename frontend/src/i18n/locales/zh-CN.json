@@ -20,8 +20,7 @@
   "layout": {
     "news": "投资资讯",
     "section": {
-      "workspace": "工作区",
-      "tools": "工具"
+      "workspace": "工作区"
     },
     "researchTools": "投研工具",
     "agent": "智能体",

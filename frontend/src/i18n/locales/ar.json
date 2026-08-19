@@ -4,7 +4,7 @@
   },
   "layout": {
     "news": "أخبار الاستثمار",
-    "section": { "workspace": "Workspace", "tools": "Tools" },
+    "section": { "workspace": "Workspace" },
     "researchTools": "أدوات البحث",
     "agent": "الوكيل",
     "usage": "استخدام LLM",

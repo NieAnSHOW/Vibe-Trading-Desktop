@@ -11,8 +11,8 @@ const RunDetail = lazy(() =>
 const Compare = lazy(() =>
   import("@/pages/Compare").then((m) => ({ default: m.Compare })),
 );
-const Settings = lazy(() =>
-  import("@/pages/Settings").then((m) => ({ default: m.Settings })),
+const Runtime = lazy(() =>
+  import("@/pages/Runtime").then((m) => ({ default: m.Runtime })),
 );
 const Reports = lazy(() =>
   import("@/pages/Reports").then((m) => ({ default: m.Reports })),
@@ -55,9 +55,10 @@ export const router = createBrowserRouter([
       { path: "/", element: wrap(Dashboard) },
       { path: "/agent", element: wrap(Agent) },
       { path: "/usage", element: wrap(Usage) },
-      { path: "/runtime", element: <Navigate to="/settings" replace /> },
+      { path: "/runtime", element: wrap(Runtime) },
       { path: "/reports", element: wrap(Reports) },
-      { path: "/settings", element: wrap(Settings) },
+      // 旧版设置页路径:页面已更名为运行时,保留别名兼容既有链接。
+      { path: "/settings", element: <Navigate to="/runtime" replace /> },
       { path: "/runs/:runId", element: wrap(RunDetail) },
       { path: "/compare", element: wrap(Compare) },
       { path: "/correlation", element: wrap(Correlation) },

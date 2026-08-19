@@ -5,8 +5,8 @@ vi.mock("@/components/layout/Layout", () => ({
   Layout: () => <Outlet />,
 }));
 
-vi.mock("@/pages/Settings", () => ({
-  Settings: () => <div>Settings page</div>,
+vi.mock("@/pages/Runtime", () => ({
+  Runtime: () => <div>Runtime page</div>,
 }));
 
 vi.mock("@/pages/Dashboard", () => ({
@@ -29,16 +29,16 @@ describe("dashboard routes", () => {
   });
 });
 
-describe("legacy runtime route", () => {
-  it("redirects to settings", async () => {
+describe("legacy settings route", () => {
+  it("redirects to runtime", async () => {
     render(<RouterProvider router={router} />);
 
     await act(async () => {
-      await router.navigate("/runtime");
+      await router.navigate("/settings");
     });
 
-    await waitFor(() => expect(router.state.location.pathname).toBe("/settings"));
-    expect(screen.getByText("Settings page")).toBeInTheDocument();
+    await waitFor(() => expect(router.state.location.pathname).toBe("/runtime"));
+    expect(screen.getByText("Runtime page")).toBeInTheDocument();
   });
 });
 

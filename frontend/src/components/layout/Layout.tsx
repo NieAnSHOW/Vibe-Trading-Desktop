@@ -13,7 +13,7 @@ import {
   Pencil,
   ChevronsLeft,
   ChevronsRight,
-  Settings,
+  Gauge,
   Layers,
   Loader2,
   Globe2,
@@ -436,17 +436,6 @@ export function Layout() {
               collapsed={collapsed}
               isActive={isActive("/usage")}
             />
-            {!collapsed && (
-              <SectionLabel>{t("layout.section.tools")}</SectionLabel>
-            )}
-            <NavLink
-              to="/settings"
-              icon={Settings}
-              label={t("layout.settings")}
-              collapsed={collapsed}
-              isActive={isActive("/settings")}
-            />
-
             {/* research — collapsible group */}
             {!collapsed && (
               <button
@@ -493,6 +482,14 @@ export function Layout() {
                     label={t("layout.correlation")}
                     collapsed={collapsed}
                     isActive={isActive("/correlation")}
+                    indent
+                  />
+                  <NavLink
+                    to="/runtime"
+                    icon={Gauge}
+                    label={t("layout.runtime")}
+                    collapsed={collapsed}
+                    isActive={isActive("/runtime")}
                     indent
                   />
                 </div>

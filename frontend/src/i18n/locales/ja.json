@@ -4,7 +4,7 @@
   },
   "layout": {
     "news": "投資ニュース",
-    "section": { "workspace": "Workspace", "tools": "Tools" },
+    "section": { "workspace": "Workspace" },
     "researchTools": "投研ツール",
     "agent": "エージェント",
     "usage": "LLM 使用量",
