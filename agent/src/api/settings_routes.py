@@ -458,9 +458,7 @@ def restore_custom_runtime() -> CustomLLMReadinessResponse:
             {
                 "LANGCHAIN_PROVIDER": provider.name,
                 "LANGCHAIN_MODEL_NAME": values.get("LANGCHAIN_MODEL_NAME", "").strip(),
-                provider.base_url_env: values.get(
-                    provider.base_url_env, provider.default_base_url
-                ).strip(),
+                provider.base_url_env: values.get(provider.base_url_env, "").strip(),
             }
         )
         for key in (
@@ -477,6 +475,17 @@ def restore_custom_runtime() -> CustomLLMReadinessResponse:
     _rewrite_env_values(host._resolve_settings_env_path(), updates, drop_keys=_llm_env_keys())
     if provider is not None and provider.name != "vip_server":
         _sync_runtime_env(provider, updates)
+    else:
+        # Without a valid persisted custom provider, no runtime aliases are
+        # safe to retain: they may still point to the just-exited VIP service.
+        for key in (
+            "LANGCHAIN_PROVIDER",
+            "LANGCHAIN_MODEL_NAME",
+            "OPENAI_API_KEY",
+            "OPENAI_API_BASE",
+            "OPENAI_BASE_URL",
+        ):
+            os.environ.pop(key, None)
 
     persisted_values = host._read_env_values(host._resolve_settings_env_path())
     logger.info(

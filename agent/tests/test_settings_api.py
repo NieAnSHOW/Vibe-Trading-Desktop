@@ -463,9 +463,58 @@ def test_restore_custom_runtime_reports_incomplete_required_key(
     assert settings_routes.restore_custom_runtime().custom_configured is False
 
 
+@pytest.mark.parametrize("provider_line", ["LANGCHAIN_PROVIDER=not-a-provider\n", ""])
+def test_restore_custom_runtime_clears_vip_aliases_for_invalid_or_missing_provider(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, provider_line: str,
+) -> None:
+    settings_env = tmp_path / ".env"
+    settings_env.write_text(
+        "DESKTOP_LLM_MODE=vip\n" + provider_line + "LANGCHAIN_MODEL_NAME=vip-model\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api_server, "ENV_PATH", settings_env)
+    monkeypatch.setattr(api_server, "ENV_EXAMPLE_PATH", tmp_path / ".env.example")
+    monkeypatch.setattr(api_server, "USER_ENV_PATH", tmp_path / "home" / ".vibe-trading" / ".env")
+    for key, value in {
+        "LANGCHAIN_PROVIDER": "vip_server",
+        "LANGCHAIN_MODEL_NAME": "vip-model",
+        "VIP_API_KEY": "member-key",
+        "VIP_BASE_URL": "https://member.example/v1",
+        "OPENAI_API_KEY": "member-key",
+        "OPENAI_API_BASE": "https://member.example/v1",
+        "OPENAI_BASE_URL": "https://member.example/v1",
+    }.items():
+        monkeypatch.setenv(key, value)
+
+    result = settings_routes.restore_custom_runtime()
+
+    assert result.custom_configured is False
+    assert os.environ.get("LANGCHAIN_PROVIDER") != "vip_server"
+    assert os.environ.get("LANGCHAIN_MODEL_NAME") != "vip-model"
+    for key in ("VIP_API_KEY", "VIP_BASE_URL", "OPENAI_API_KEY", "OPENAI_API_BASE", "OPENAI_BASE_URL"):
+        assert key not in os.environ
+
+
+def test_custom_llm_readiness_requires_persisted_base_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings_env = tmp_path / ".env"
+    settings_env.write_text(
+        "DESKTOP_LLM_MODE=vip\nLANGCHAIN_PROVIDER=ollama\n"
+        "LANGCHAIN_MODEL_NAME=llama3\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api_server, "ENV_PATH", settings_env)
+    monkeypatch.setattr(api_server, "ENV_EXAMPLE_PATH", tmp_path / ".env.example")
+    monkeypatch.setattr(api_server, "USER_ENV_PATH", tmp_path / "home" / ".vibe-trading" / ".env")
+
+    assert settings_routes.restore_custom_runtime().custom_configured is False
+
+
 def test_desktop_exit_vip_route_is_redacted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (tmp_path / ".env").write_text(
-        "LANGCHAIN_PROVIDER=ollama\nLANGCHAIN_MODEL_NAME=llama3\n",
+        "LANGCHAIN_PROVIDER=ollama\nLANGCHAIN_MODEL_NAME=llama3\n"
+        "OLLAMA_BASE_URL=http://localhost:11434\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(api_server, "ENV_PATH", tmp_path / ".env")
