@@ -2,18 +2,67 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createMemoryHistory } from "vue-router";
 import { createPinia, setActivePinia } from "pinia";
-import type { EnvironmentReport } from "../../ipc/types";
+import type { EnvironmentReport, LLMSettings, DataSourceSettings } from "../../ipc/types";
+
+// 与组件交互语义一致的 LLM / 数据源 fixture(custom 模式,单提供商)
+const fakeLlm: LLMSettings = {
+  provider: "openrouter",
+  model_name: "qwen/max",
+  base_url: "https://openrouter.ai/api/v1",
+  api_key_env: "OPENROUTER_API_KEY",
+  api_key_configured: true,
+  api_key_hint: null,
+  api_key_required: true,
+  temperature: 0.2,
+  timeout_seconds: 120,
+  max_retries: 2,
+  reasoning_effort: "medium",
+  sse_timeout_seconds: 300,
+  env_path: "/home/u/.vibe-trading/runtime/agent/.env",
+  providers: [
+    {
+      name: "openrouter",
+      label: "OpenRouter",
+      api_key_env: "OPENROUTER_API_KEY",
+      base_url_env: "LLM_BASE_URL",
+      default_model: "qwen/max",
+      default_base_url: "https://openrouter.ai/api/v1",
+      api_key_required: true,
+      auth_type: "api_key",
+      login_command: null,
+    },
+  ],
+  desktop_login_provisioned: false,
+  desktop_llm_mode: "custom",
+  desktop_vip_available: true,
+};
+
+const fakeDataSource: DataSourceSettings = {
+  tushare_token_configured: false,
+  tushare_token_hint: null,
+  baostock_supported: true,
+  baostock_installed: true,
+  baostock_message: "loader ok",
+  env_path: "/home/u/.vibe-trading/runtime/agent/.env",
+};
 
 const mocks = vi.hoisted(() => ({
   consoleGetSettings: vi.fn<() => Promise<{
     theme_mode: "system" | "light" | "dark";
     theme_color: "teal" | "blue" | "purple" | "pink" | "orange" | "green";
+    api_auth_key: string;
   }>>(async () => ({
     theme_mode: "system" as const,
     theme_color: "teal" as const,
+    api_auth_key: "",
   })),
   consoleSetThemeMode: vi.fn(async () => undefined),
   consoleSetThemeColor: vi.fn(async () => undefined),
+  consoleSetApiAuthKey: vi.fn(async () => undefined),
+  consoleGetLlmSettings: vi.fn(),
+  consoleSetLlmSettings: vi.fn(),
+  consoleGetDataSourceSettings: vi.fn(),
+  consoleSetDataSourceSettings: vi.fn(),
   consoleStatus: vi.fn(async () => ({
     env: "ready" as const,
     service_running: false,
@@ -38,6 +87,11 @@ vi.mock("../../ipc/commands", () => ({
   consoleGetSettings: mocks.consoleGetSettings,
   consoleSetThemeMode: mocks.consoleSetThemeMode,
   consoleSetThemeColor: mocks.consoleSetThemeColor,
+  consoleSetApiAuthKey: mocks.consoleSetApiAuthKey,
+  consoleGetLlmSettings: mocks.consoleGetLlmSettings,
+  consoleSetLlmSettings: mocks.consoleSetLlmSettings,
+  consoleGetDataSourceSettings: mocks.consoleGetDataSourceSettings,
+  consoleSetDataSourceSettings: mocks.consoleSetDataSourceSettings,
   consoleStatus: mocks.consoleStatus,
   consoleOpenLogs: mocks.consoleOpenLogs,
   consoleClearLogs: mocks.consoleClearLogs,
@@ -101,6 +155,124 @@ describe("SettingsPage", () => {
     expect(wrapper.get('[data-test="clear-logs-action"]').text()).toBe("清理");
     expect(wrapper.get('[data-test="uninstall-legacy-action"]').text()).toBe("卸载老版本");
     expect(wrapper.get('[data-test="check-environment-action"]').text()).toBe("检查");
+  });
+
+  it("saves the local API access key migrated from the WebUI settings", async () => {
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    // 已配置的密钥回填输入框
+    mocks.consoleGetSettings.mockResolvedValueOnce({
+      theme_mode: "light" as const,
+      theme_color: "teal" as const,
+      api_auth_key: "sk-legacy",
+    });
+    const withKey = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+    expect((withKey.get('[data-test="api-key-input"]').element as HTMLInputElement).value).toBe(
+      "sk-legacy",
+    );
+
+    await wrapper.get('[data-test="api-key-input"]').setValue("sk-new");
+    await wrapper.get('[data-test="save-api-key-action"]').trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleSetApiAuthKey).toHaveBeenCalledWith("sk-new");
+    expect(wrapper.text()).toContain("本地 API 密钥已保存");
+  });
+
+  it("shows LLM / data source service hints and skips loading when the service is off", async () => {
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(wrapper.get('[data-test="llm-service-hint"]').text()).toContain("服务未运行");
+    expect(wrapper.get('[data-test="datasource-service-hint"]').text()).toContain("服务未运行");
+    expect(mocks.consoleGetLlmSettings).not.toHaveBeenCalled();
+    expect(mocks.consoleGetDataSourceSettings).not.toHaveBeenCalled();
+  });
+
+  it("loads and saves LLM settings through the backend proxy", async () => {
+    mocks.consoleStatus.mockResolvedValueOnce({
+      env: "ready",
+      service_running: true,
+      port: 8899,
+    });
+    mocks.consoleGetLlmSettings.mockResolvedValueOnce(fakeLlm);
+    mocks.consoleGetDataSourceSettings.mockResolvedValueOnce(fakeDataSource);
+    mocks.consoleSetLlmSettings.mockResolvedValueOnce(fakeLlm);
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(mocks.consoleGetLlmSettings).toHaveBeenCalledWith(8899);
+    expect(
+      (wrapper.get('[data-test="llm-model-input"]').element as HTMLInputElement).value,
+    ).toBe("qwen/max");
+    expect(wrapper.text()).toContain(fakeLlm.env_path);
+
+    await wrapper.get('[data-test="llm-model-input"]').setValue("qwen/plus");
+    await wrapper.get('[data-test="save-llm-action"]').trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleSetLlmSettings).toHaveBeenCalledWith(8899, {
+      mode: "custom",
+      provider: "openrouter",
+      model_name: "qwen/plus",
+      base_url: "https://openrouter.ai/api/v1",
+      api_key: undefined,
+      clear_api_key: false,
+    });
+    expect(wrapper.text()).toContain("LLM 设置已保存");
+  });
+
+  it("switches to VIP mode through the backend proxy", async () => {
+    mocks.consoleStatus.mockResolvedValueOnce({
+      env: "ready",
+      service_running: true,
+      port: 8899,
+    });
+    mocks.consoleGetLlmSettings.mockResolvedValueOnce(fakeLlm);
+    mocks.consoleGetDataSourceSettings.mockResolvedValueOnce(fakeDataSource);
+    mocks.consoleSetLlmSettings.mockResolvedValueOnce({
+      ...fakeLlm,
+      desktop_llm_mode: "vip" as const,
+    });
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper.get('[data-test="llm-mode"] button[data-mode="vip"]').trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleSetLlmSettings).toHaveBeenCalledWith(8899, { mode: "vip" });
+    expect(wrapper.get('[data-test="vip-status"]').text()).toContain("VIP 服务可用");
+  });
+
+  it("saves data source settings through the backend proxy", async () => {
+    mocks.consoleStatus.mockResolvedValueOnce({
+      env: "ready",
+      service_running: true,
+      port: 8899,
+    });
+    mocks.consoleGetLlmSettings.mockResolvedValueOnce(fakeLlm);
+    mocks.consoleGetDataSourceSettings.mockResolvedValueOnce(fakeDataSource);
+    mocks.consoleSetDataSourceSettings.mockResolvedValueOnce({
+      ...fakeDataSource,
+      tushare_token_configured: true,
+    });
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("BaoStock");
+    expect(wrapper.text()).toContain("loader ok");
+
+    await wrapper.get('[data-test="tushare-token-input"]').setValue("tok-1");
+    await wrapper.get('[data-test="save-datasource-action"]').trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleSetDataSourceSettings).toHaveBeenCalledWith(8899, {
+      tushare_token: "tok-1",
+      clear_tushare_token: false,
+    });
+    expect(wrapper.text()).toContain("数据源设置已保存");
   });
 
   it("reports a healthy environment after checking", async () => {
@@ -321,6 +493,7 @@ describe("SettingsPage appearance", () => {
     mocks.consoleGetSettings.mockResolvedValueOnce({
       theme_mode: "light",
       theme_color: "teal",
+      api_auth_key: "",
     });
     const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
     await flushPromises();
@@ -375,6 +548,7 @@ describe("SettingsPage appearance", () => {
     mocks.consoleGetSettings.mockResolvedValueOnce({
       theme_mode: "light",
       theme_color: "green",
+      api_auth_key: "",
     });
     const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
     await flushPromises();

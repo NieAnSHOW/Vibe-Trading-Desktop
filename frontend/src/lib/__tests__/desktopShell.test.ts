@@ -13,6 +13,7 @@ import {
   returnToConsoleWithTransition,
   shellConsolePageUrl,
 } from "@/lib/desktopShell";
+import { getApiAuthKey } from "@/lib/apiAuth";
 import webuiDocument from "../../../index.html?raw";
 
 function setSearch(search: string) {
@@ -22,6 +23,7 @@ function setSearch(search: string) {
 describe("desktopShell", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
+    window.localStorage.clear();
     setSearch("/");
   });
 
@@ -56,6 +58,24 @@ describe("desktopShell", () => {
 
     expect(getDesktopThemeMode()).toBe("dark");
     expect(getDesktopThemeColor()).toBe("blue");
+  });
+
+  it("captures the api key passed by the desktop console (empty clears)", () => {
+    setSearch("/?desktop=1&api_key=sk-from-console");
+    initDesktopShell();
+    expect(getApiAuthKey()).toBe("sk-from-console");
+
+    // 桌面侧清除(空值)后,下次内嵌加载同步清掉 WebUI 本地存储
+    setSearch("/?desktop=1&api_key=");
+    initDesktopShell();
+    expect(getApiAuthKey()).toBe("");
+  });
+
+  it("leaves the api key untouched on plain browser visits", () => {
+    window.localStorage.setItem("vibe_trading_api_auth_key", "sk-manual");
+    setSearch("/agent");
+    initDesktopShell();
+    expect(getApiAuthKey()).toBe("sk-manual");
   });
 
   it("clears a stale theme color when the desktop shell does not provide one", () => {

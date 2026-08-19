@@ -16,8 +16,11 @@ import {
 } from "../components/Rail.vue";
 import {
   consoleGetSettings,
-  // consoleSetThemeColor,
   consoleSetThemeMode,
+  consoleGetLlmSettings,
+  consoleSetLlmSettings,
+  consoleGetDataSourceSettings,
+  consoleSetDataSourceSettings,
   consoleOpenLogs,
   consoleClearLogs,
   consoleClearVenv,
@@ -26,7 +29,7 @@ import {
   consoleCheckEnvironment,
   consoleRepairEnvironment,
 } from "../ipc/commands";
-import type { EnvironmentReport } from "../ipc/types";
+import type { EnvironmentReport, LLMSettings, DataSourceSettings } from "../ipc/types";
 import { config as ProdConfig } from "../config/prod";
 import douyinPng from "../assets/douyin.png";
 import tauriConf from "../../../tauri.conf.json";
@@ -52,16 +55,6 @@ async function selectThemeMode(mode: ThemeMode) {
   }
 }
 
-// async function selectThemeColor(color: ThemeColorId) {
-//   try {
-//     await consoleSetThemeColor(color);
-//     themeColor.value = color;
-//     window.dispatchEvent(new CustomEvent(THEME_COLOR_EVENT, { detail: color }));
-//   } catch (error) {
-//     notice.value = `保存失败：${String(error)}`;
-//   }
-// }
-
 function onThemeModeEvent(e: Event) {
   const mode = (e as CustomEvent<ThemeMode>).detail;
   if (mode === "system" || mode === "light" || mode === "dark") themeMode.value = mode;
@@ -86,8 +79,175 @@ async function load() {
     if (THEME_COLORS.some((option) => option.id === settings.theme_color)) {
       themeColor.value = settings.theme_color;
     }
+    apiKey.value = settings.api_auth_key ?? "";
   } catch (error) {
     loadError.value = String(error);
+  }
+}
+
+// ── 本地 API 访问(自 WebUI 设置页迁移;密钥持久化在 ~/.vibe-trading/settings.json,
+//    打开 WebUI 时随 URL 传入并落入其 localStorage) ──────────────────
+const apiKey = ref("");
+
+// ── LLM 设置 + 数据源设置(自 WebUI 设置页迁移;经 Rust 代理读写本地 backend,
+//    交互语义与 WebUI 一致:切换 VIP 即落库,切自定义仅本地态、保存时落库) ──
+const llm = ref<LLMSettings | null>(null);
+const llmForm = ref({ provider: "", model_name: "", base_url: "" });
+const llmMode = ref<"vip" | "custom">("custom");
+const llmApiKey = ref("");
+const clearApiKey = ref(false);
+const llmBusy = useBusy();
+const llmError = ref("");
+const llmNotice = ref("");
+
+const dataSettings = ref<DataSourceSettings | null>(null);
+const tushareToken = ref("");
+const clearTushareToken = ref(false);
+const dataBusy = useBusy();
+const dataError = ref("");
+const dataNotice = ref("");
+
+const settingsPort = computed(() => (env.serviceRunning ? env.port : null));
+
+const providers = computed(() => llm.value?.providers ?? []);
+const selectedProvider = computed(() =>
+  providers.value.find((p) => p.name === llmForm.value.provider),
+);
+const oauthProvider = computed(() => selectedProvider.value?.auth_type === "oauth");
+const apiKeyDisabled = computed(
+  () => !selectedProvider.value?.api_key_required || clearApiKey.value,
+);
+const keyStatus = computed(() => {
+  const s = llm.value;
+  if (!s) return "";
+  if (s.api_key_configured) return "已配置";
+  if (s.api_key_required) return "留空以保留当前密钥";
+  if (oauthProvider.value && selectedProvider.value?.login_command)
+    return `该提供商使用 OAuth。请运行: ${selectedProvider.value.login_command}`;
+  return "此提供商不需要 API 密钥。";
+});
+const tushareStatus = computed(() =>
+  dataSettings.value?.tushare_token_configured ? "已配置" : "留空以保留当前 Token",
+);
+
+function applyLlm(data: LLMSettings) {
+  llm.value = data;
+  llmForm.value = {
+    provider: data.provider,
+    model_name: data.model_name,
+    base_url: data.base_url,
+  };
+  llmMode.value = data.desktop_llm_mode;
+}
+
+function onProviderChange(name: string) {
+  const provider = providers.value.find((item) => item.name === name);
+  if (!provider) return;
+  llmForm.value = {
+    provider: provider.name,
+    model_name: provider.default_model,
+    base_url: provider.default_base_url,
+  };
+  llmApiKey.value = "";
+  clearApiKey.value = false;
+}
+
+function applyProviderDefaults() {
+  const provider = selectedProvider.value;
+  if (!provider) return;
+  llmForm.value = {
+    ...llmForm.value,
+    model_name: provider.default_model,
+    base_url: provider.default_base_url,
+  };
+}
+
+function onToggleClearApiKey(event: Event) {
+  clearApiKey.value = (event.target as HTMLInputElement).checked;
+  if (clearApiKey.value) llmApiKey.value = "";
+}
+
+function onToggleClearTushare(event: Event) {
+  clearTushareToken.value = (event.target as HTMLInputElement).checked;
+  if (clearTushareToken.value) tushareToken.value = "";
+}
+
+async function switchToVip() {
+  const port = settingsPort.value;
+  if (port == null) return;
+  await llmBusy.run("切换中", async () => {
+    llmError.value = "";
+    llmNotice.value = "";
+    try {
+      applyLlm(await consoleSetLlmSettings(port, { mode: "vip" }));
+    } catch (e) {
+      llmError.value = String(e);
+    }
+  });
+}
+
+function switchToCustom() {
+  // 与 WebUI 一致:切到自定义仅本地态,保存时才落库
+  if (llm.value) llmMode.value = "custom";
+}
+
+async function saveLlm() {
+  const port = settingsPort.value;
+  if (port == null) return;
+  await llmBusy.run("保存中", async () => {
+    llmError.value = "";
+    llmNotice.value = "";
+    try {
+      const updated = await consoleSetLlmSettings(port, {
+        mode: "custom",
+        ...llmForm.value,
+        api_key: llmApiKey.value.trim() || undefined,
+        clear_api_key: clearApiKey.value,
+      });
+      applyLlm(updated);
+      llmApiKey.value = "";
+      clearApiKey.value = false;
+      llmNotice.value = "LLM 设置已保存";
+    } catch (e) {
+      llmError.value = String(e);
+    }
+  });
+}
+
+async function saveDataSources() {
+  const port = settingsPort.value;
+  if (port == null) return;
+  await dataBusy.run("保存中", async () => {
+    dataError.value = "";
+    dataNotice.value = "";
+    try {
+      dataSettings.value = await consoleSetDataSourceSettings(port, {
+        tushare_token: tushareToken.value.trim() || undefined,
+        clear_tushare_token: clearTushareToken.value,
+      });
+      tushareToken.value = "";
+      clearTushareToken.value = false;
+      dataNotice.value = "数据源设置已保存";
+    } catch (e) {
+      dataError.value = String(e);
+    }
+  });
+}
+
+async function loadRuntimeSettings() {
+  llmError.value = "";
+  dataError.value = "";
+  const port = settingsPort.value;
+  if (port == null) return;
+  try {
+    applyLlm(await consoleGetLlmSettings(port));
+  } catch (e) {
+    llmError.value = String(e);
+  }
+  try {
+    dataSettings.value = await consoleGetDataSourceSettings(port);
+  } catch (e) {
+    dataError.value = String(e);
   }
 }
 
@@ -243,6 +403,8 @@ onMounted(async () => {
   await load();
   // 取真实服务状态:清理运行环境时若服务在跑需先停,venv 占用删除会失败
   await env.refresh();
+  // 服务在跑时加载 LLM / 数据源设置(经 Rust 代理)
+  await loadRuntimeSettings();
 });
 
 onUnmounted(() => {
@@ -259,7 +421,7 @@ onUnmounted(() => {
       <p class="tw-page-sub">外观偏好与本地运行时维护。</p>
     </header>
 
-    <!-- DOM 顺序 = 窄屏优先级流:外观 → 维护 → 关于;桌面位由网格指定 -->
+    <!-- DOM 顺序 = 窄屏优先级流:外观 → 本地 API 访问 → LLM → 数据源 → 维护 → 关于;桌面位由网格指定 -->
     <div class="tw-grid">
       <section class="tw-panel st-appearance" aria-label="外观">
         <header class="tw-panel__head">
@@ -285,32 +447,139 @@ onUnmounted(() => {
               </button>
             </div>
           </div>
-          <!-- <div class="settings-row">
-            <div class="settings-row__text">
-              <p class="settings-row__name">主题色</p>
-              <p class="settings-row__desc">选择应用主色，用于高亮与选中态。</p>
-            </div>
-            <div class="theme-colors" role="group" aria-label="主题色" data-test="theme-color">
-              <button
-                v-for="c in THEME_COLORS"
-                :key="c.id"
-                type="button"
-                class="theme-swatch"
-                :class="{ active: themeColor === c.id }"
-                :data-color="c.id"
-                :title="c.label"
-                :aria-label="`主题色：${c.label}`"
-                :aria-pressed="themeColor === c.id"
-                :style="{ '--swatch': `hsl(${c.hsl})` }"
-                @click="selectThemeColor(c.id)"
-              ></button>
-            </div>
-          </div> -->
         </div>
         <p v-if="loadError" class="settings-notice settings-notice--bad">
           设置加载失败：{{ loadError }}
         </p>
         <p v-else-if="notice" class="settings-notice">{{ notice }}</p>
+      </section>
+
+      <section class="tw-panel st-llm" aria-label="LLM 设置">
+        <header class="tw-panel__head">
+          <h2 class="tw-panel__label">LLM 设置</h2>
+        </header>
+        <div class="tw-panel__body settings-form">
+          <p v-if="settingsPort == null" class="settings-row__desc" data-test="llm-service-hint">
+            服务未运行，启动服务后可在此配置模型与密钥。
+          </p>
+          <template v-else-if="llm">
+            <div class="theme-segment llm-mode" role="radiogroup" aria-label="LLM 模式" data-test="llm-mode">
+              <button type="button" :class="{ active: llmMode === 'vip' }"
+                data-mode="vip"
+                @click="switchToVip">使用 VIP 服务</button>
+              <button type="button" :class="{ active: llmMode === 'custom' }"
+                data-mode="custom"
+                @click="switchToCustom">使用自定义模型</button>
+            </div>
+
+            <p v-if="llmMode === 'vip'" class="llm-vip-box" data-test="vip-status">
+              {{ llm.desktop_vip_available ? "VIP 服务可用，配置由桌面应用管理。" : "VIP 服务不可用。请选择自定义模型继续。" }}
+            </p>
+
+            <template v-else>
+              <label class="form-field">
+                <span class="form-field__label">提供商</span>
+                <select class="form-field__input" data-test="llm-provider-select"
+                  :value="llmForm.provider"
+                  @change="onProviderChange(($event.target as HTMLSelectElement).value)">
+                  <option v-for="p in providers" :key="p.name" :value="p.name">{{ p.label }}</option>
+                </select>
+                <span class="form-field__hint">更换提供商会自动更新推荐的模型与端点。</span>
+              </label>
+
+              <div class="form-field">
+                <span class="form-field__label">模型</span>
+                <div class="form-field__row">
+                  <input class="form-field__input" v-model="llmForm.model_name"
+                    data-test="llm-model-input" required />
+                  <AppButton variant="ghost" data-test="llm-defaults-action" @click="applyProviderDefaults">
+                    使用默认
+                  </AppButton>
+                </div>
+                <span class="form-field__hint">使用提供商所需的准确模型 ID。</span>
+              </div>
+
+              <label class="form-field">
+                <span class="form-field__label">基础 URL</span>
+                <input class="form-field__input" v-model="llmForm.base_url"
+                  :placeholder="selectedProvider?.default_base_url ?? ''" :disabled="oauthProvider" />
+              </label>
+
+              <div class="form-field">
+                <span class="form-field__label">{{ oauthProvider ? "OAuth" : "API 密钥" }}</span>
+                <input class="form-field__input" type="password" v-model="llmApiKey"
+                  data-test="llm-api-key-input" :placeholder="keyStatus"
+                  autocomplete="current-password" :disabled="apiKeyDisabled" />
+                <span class="form-field__meta">
+                  <span class="form-field__hint">{{ keyStatus }}</span>
+                  <label v-if="selectedProvider?.api_key_required" class="form-check">
+                    <input type="checkbox" :checked="clearApiKey" data-test="clear-api-key-check"
+                      @change="onToggleClearApiKey" />
+                    清除已保存的 API 密钥
+                  </label>
+                </span>
+              </div>
+
+              <p class="env-path">设置已保存：<span>{{ llm.env_path }}</span></p>
+              <AppButton variant="primary" :busy="llmBusy.busy.value" busy-label="保存中"
+                data-test="save-llm-action" @click="saveLlm">保存 LLM 设置</AppButton>
+            </template>
+
+            <p v-if="llmError" class="settings-notice settings-notice--bad">{{ llmError }}</p>
+            <p v-else-if="llmNotice" class="settings-notice">{{ llmNotice }}</p>
+          </template>
+          <p v-else class="settings-row__desc">{{ llmError || "加载中…" }}</p>
+        </div>
+      </section>
+
+      <section class="tw-panel st-datasource" aria-label="数据源设置">
+        <header class="tw-panel__head">
+          <h2 class="tw-panel__label">数据源设置</h2>
+        </header>
+        <div class="tw-panel__body settings-form">
+          <p v-if="settingsPort == null" class="settings-row__desc" data-test="datasource-service-hint">
+            服务未运行，启动服务后可在此配置数据源凭证。
+          </p>
+          <template v-else-if="dataSettings">
+            <p class="settings-row__desc">配置回测引擎和研究智能体使用的可选市场数据凭证。</p>
+
+            <div class="form-field">
+              <span class="form-field__label">Tushare Token</span>
+              <input class="form-field__input" type="password" v-model="tushareToken"
+                data-test="tushare-token-input" :placeholder="tushareStatus"
+                autocomplete="current-password" :disabled="clearTushareToken" />
+              <span class="form-field__meta">
+                <span class="form-field__hint">用于 A 股、期货、基金和宏观数据。若未设置，项目会在可用时回退到 AKShare。</span>
+                <label class="form-check">
+                  <input type="checkbox" :checked="clearTushareToken" data-test="clear-tushare-check"
+                    @change="onToggleClearTushare" />
+                  清除已保存的 Tushare Token
+                </label>
+              </span>
+            </div>
+
+            <p class="env-path">设置已保存：<span>{{ dataSettings.env_path }}</span></p>
+            <AppButton variant="primary" :busy="dataBusy.busy.value" busy-label="保存中"
+              data-test="save-datasource-action" @click="saveDataSources">保存数据源设置</AppButton>
+
+            <div class="baostock-card">
+              <div class="baostock-card__head">
+                <span class="baostock-card__name">BaoStock</span>
+                <span :class="['env-badge', { ok: dataSettings.baostock_supported }]">
+                  {{ dataSettings.baostock_supported ? "加载器可用" : "无项目加载器" }}
+                </span>
+              </div>
+              <p class="baostock-card__msg">{{ dataSettings.baostock_message }}</p>
+              <p class="baostock-card__msg">
+                {{ dataSettings.baostock_installed ? "Python 包已安装" : "Python 包未安装" }}
+              </p>
+            </div>
+          </template>
+          <p v-else class="settings-row__desc">{{ dataError || "加载中…" }}</p>
+
+          <p v-if="dataError" class="settings-notice settings-notice--bad">{{ dataError }}</p>
+          <p v-else-if="dataNotice" class="settings-notice">{{ dataNotice }}</p>
+        </div>
       </section>
 
       <section class="tw-panel st-maintenance" aria-label="维护">
@@ -445,6 +714,7 @@ onUnmounted(() => {
   .st-appearance { grid-area: 1 / 2; }
   .st-maintenance { grid-area: 1 / 1; }
   .st-about { grid-area: 2 / 2; }
+  .st-access { grid-area: 2 / 1; }
 
   /* 右侧上下文列窄(≤316px),"文字+控件"同行会把文字压成竖排;
      与 WebUI 侧栏卡片同构,改为纵向堆叠:文字在上、控件在下 */
@@ -580,6 +850,184 @@ onUnmounted(() => {
   font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+/* 本地 API 访问:密码输入 + 保存;窄列/窄屏时纵向堆叠 */
+.apikey-field {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.apikey-field input {
+  width: 180px;
+  padding: 6px 10px;
+  border: 1px solid hsl(var(--line));
+  border-radius: 8px;
+  background: hsl(var(--surface-2));
+  color: hsl(var(--ink));
+  font-size: 12.5px;
+  font-family: var(--tw-mono);
+}
+
+.apikey-field input:focus-visible {
+  outline: 2px solid hsl(var(--brand));
+  outline-offset: 1px;
+}
+
+@media (max-width: 560px) {
+  .apikey-field {
+    width: 100%;
+    margin-left: auto;
+  }
+
+  .apikey-field input {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* LLM / 数据源设置面板:tw-panel__body 内的纵向表单,字段 = 标签 + 输入 + 提示 */
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* 面板体内的 notice 不再需要水平留白(body 已有 padding) */
+.settings-form .settings-notice {
+  margin: 0;
+}
+
+.llm-mode {
+  align-self: start;
+}
+
+.llm-vip-box {
+  padding: 10px 12px;
+  border: 1px solid hsl(var(--line));
+  border-radius: 8px;
+  background: hsl(var(--surface-2) / 0.6);
+  color: hsl(var(--ink-dim));
+  font-size: 12.5px;
+}
+
+.form-field {
+  display: grid;
+  gap: 6px;
+}
+
+.form-field__label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.form-field__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.form-field__row .form-field__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.form-field__input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid hsl(var(--line));
+  border-radius: 8px;
+  background: hsl(var(--surface-2));
+  color: hsl(var(--ink));
+  font-size: 12.5px;
+}
+
+.form-field__input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.form-field__input:focus-visible {
+  outline: 2px solid hsl(var(--brand));
+  outline-offset: 1px;
+}
+
+.form-field__hint {
+  color: hsl(var(--ink-dim));
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.form-field__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.form-field__meta .form-field__hint {
+  flex: 1;
+  min-width: 0;
+}
+
+.form-check {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: hsl(var(--ink-dim));
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.form-check input {
+  width: 13px;
+  height: 13px;
+  accent-color: hsl(var(--brand));
+}
+
+.env-path {
+  padding: 7px 10px;
+  border: 1px solid hsl(var(--line));
+  border-radius: 8px;
+  background: hsl(var(--surface-2) / 0.6);
+  color: hsl(var(--ink-dim));
+  font-size: 11.5px;
+}
+
+.env-path span {
+  font-family: var(--tw-mono);
+  word-break: break-all;
+}
+
+/* BaoStock 状态卡:名称 + 徽标(复用 env-badge 状态词汇) + 两行说明 */
+.baostock-card {
+  padding: 12px 14px;
+  border: 1px solid hsl(var(--line));
+  border-radius: 10px;
+  background: hsl(var(--surface-2) / 0.4);
+}
+
+.baostock-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.baostock-card__name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.baostock-card__msg {
+  margin-top: 6px;
+  color: hsl(var(--ink-dim));
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 /* 外观:主题模式分段控件 + 主题色色块 */

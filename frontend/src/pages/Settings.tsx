@@ -1,23 +1,15 @@
-import {
-  getConsent,
-  setConsent,
-  // flushNow
-} from "@/lib/telemetry";
+import { getConsent, setConsent } from "@/lib/telemetry";
 import i18n from "@/i18n";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
-  Database,
   KeyRound,
   Loader2,
   MessageSquareMore,
   Play,
   QrCode,
   RefreshCw,
-  RotateCcw,
   Save,
-  Server,
   Square,
-  // Upload,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -26,7 +18,6 @@ import {
   isAuthRequiredError,
   type ChannelRuntimeStatus,
   type DataSourceSettings,
-  type LLMProviderOption,
   type LLMSettings,
 } from "@/lib/api";
 import { getApiAuthKey, setApiAuthKey } from "@/lib/apiAuth";
@@ -46,7 +37,6 @@ interface LLMFormState {
 const fieldClass =
   "w-full rounded-md border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60";
 const labelClass = "text-sm font-medium";
-const hintClass = "text-xs text-muted-foreground";
 
 // ponytail: 直接映射后端 GET /settings/llm 的 .env 真实值,不再用前端默认值覆盖。
 // 否则换浏览器/清缓存/origin 端口变化时,用户已配置的 temperature 等会被重写成默认值。
@@ -71,14 +61,8 @@ export function Settings() {
   const [channelStatus, setChannelStatus] =
     useState<ChannelRuntimeStatus | null>(null);
   const [form, setForm] = useState<LLMFormState | null>(null);
-  const [apiKey, setApiKey] = useState("");
   const [localApiKey, setLocalApiKeyState] = useState(() => getApiAuthKey());
-  const [clearApiKey, setClearApiKey] = useState(false);
-  const [tushareToken, setTushareToken] = useState("");
-  const [clearTushareToken, setClearTushareToken] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [dataSaving, setDataSaving] = useState(false);
   const [channelRefreshing, setChannelRefreshing] = useState(false);
   const [channelAction, setChannelAction] = useState<"start" | "stop" | null>(
     null,
@@ -104,29 +88,6 @@ export function Settings() {
       on ? i18n.t("settings.usageData.on") : i18n.t("settings.usageData.off"),
     );
   };
-
-  // 手动触发一次埋点上传（含当天），用于验证上传通路；正常流程是隔天启动自动 flush。
-  // const handleTestUpload = async () => {
-  //   setFlushing(true);
-  //   try {
-  //     const { uploaded, retained } = await flushNow({ forceAll: true });
-  //     if (uploaded > 0) {
-  //       toast.success(
-  //         `已上传 ${uploaded} 个埋点批次${retained ? `,${retained} 个保留重试` : ""}`,
-  //       );
-  //     } else if (retained > 0) {
-  //       toast.error(`上传失败,${retained} 个批次保留待重试`);
-  //     } else {
-  //       toast.info("没有待上传的埋点数据");
-  //     }
-  //   } catch (error) {
-  //     toast.error(
-  //       `上传失败:${error instanceof Error ? error.message : t("settings.unknownError")}`,
-  //     );
-  //   } finally {
-  //     setFlushing(false);
-  //   }
-  // };
 
   useEffect(() => {
     let alive = true;
@@ -306,116 +267,11 @@ export function Settings() {
     };
   }, [weixinQr]);
 
-  const providers = settings?.providers ?? [];
-  const selectedProvider = useMemo<LLMProviderOption | undefined>(
-    () => providers.find((provider) => provider.name === form?.provider),
-    [form?.provider, providers],
-  );
-
-  const applyProviderDefaults = (provider = selectedProvider) => {
-    if (!provider || !form) return;
-    setForm({
-      ...form,
-      model_name: provider.default_model,
-      base_url: provider.default_base_url,
-    });
-  };
-
-  const onProviderChange = (name: string) => {
-    const provider = providers.find((item) => item.name === name);
-    if (!provider || !form) return;
-    setForm({
-      ...form,
-      provider: provider.name,
-      model_name: provider.default_model,
-      base_url: provider.default_base_url,
-    });
-    setApiKey("");
-    setClearApiKey(false);
-  };
-
   const submitLocalApiKey = (event: FormEvent) => {
     event.preventDefault();
     setApiAuthKey(localApiKey);
     toast.success(t("settings.localApiKeySaved"));
     window.location.reload();
-  };
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!form) return;
-    setSaving(true);
-    try {
-      const updated = await api.updateLLMSettings({
-        mode: "custom",
-        ...form,
-        api_key: apiKey.trim() || undefined,
-        clear_api_key: clearApiKey,
-      });
-      setSettings(updated);
-      setForm(toForm(updated));
-      setApiKey("");
-      setClearApiKey(false);
-      toast.success(t("settings.llmSettingsSaved"));
-    } catch (error) {
-      toast.error(
-        t("settings.saveLlmSettingsFailed", {
-          message:
-            error instanceof Error ? error.message : t("settings.unknownError"),
-        }),
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const setVipMode = async () => {
-    setSaving(true);
-    try {
-      const updated = await api.updateLLMSettings({ mode: "vip" });
-      setSettings(updated);
-      setForm(toForm(updated));
-      setApiKey("");
-      setClearApiKey(false);
-      toast.success(t("settings.llmSettingsSaved"));
-    } catch (error) {
-      toast.error(
-        t("settings.saveLlmSettingsFailed", {
-          message:
-            error instanceof Error ? error.message : t("settings.unknownError"),
-        }),
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const setCustomMode = () => {
-    setSettings({ ...settings!, desktop_llm_mode: "custom" });
-  };
-
-  const submitDataSources = async (event: FormEvent) => {
-    event.preventDefault();
-    setDataSaving(true);
-    try {
-      const updated = await api.updateDataSourceSettings({
-        tushare_token: tushareToken.trim() || undefined,
-        clear_tushare_token: clearTushareToken,
-      });
-      setDataSettings(updated);
-      setTushareToken("");
-      setClearTushareToken(false);
-      toast.success(t("settings.dataSourceSettingsSaved"));
-    } catch (error) {
-      toast.error(
-        t("settings.saveDataSourceSettingsFailed", {
-          message:
-            error instanceof Error ? error.message : t("settings.unknownError"),
-        }),
-      );
-    } finally {
-      setDataSaving(false);
-    }
   };
 
   const localApiAccessSection = (
@@ -434,7 +290,9 @@ export function Settings() {
         </p>
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
           <label className="grid gap-2">
-            <span className={labelClass}>{i18n.t("settings.serverApiKey")}</span>
+            <span className={labelClass}>
+              {i18n.t("settings.serverApiKey")}
+            </span>
             <input
               type="password"
               value={localApiKey}
@@ -444,10 +302,7 @@ export function Settings() {
               autoComplete="current-password"
             />
           </label>
-          <button
-            type="submit"
-            className="tw-btn-primary self-end"
-          >
+          <button type="submit" className="tw-btn-primary self-end">
             <Save className="h-4 w-4" />
             {i18n.t("settings.save")}
           </button>
@@ -513,21 +368,6 @@ export function Settings() {
     );
   }
 
-  const keyStatus = settings.api_key_configured
-    ? t("settings.configured")
-    : settings.api_key_required
-      ? t("settings.keepCurrentKey")
-      : selectedProvider?.auth_type === "oauth" &&
-          selectedProvider.login_command
-        ? t("settings.providerUsesOauth", {
-            command: selectedProvider.login_command,
-          })
-        : t("settings.noApiKeyRequired");
-  const apiKeyDisabled = !selectedProvider?.api_key_required || clearApiKey;
-  const vipActive = settings.desktop_llm_mode === "vip";
-  const tushareStatus = dataSettings.tushare_token_configured
-    ? t("settings.configured")
-    : t("settings.keepCurrentToken");
   // ponytail: 仅展示微信渠道。其他 IM 渠道暂不开放,不在 WebUI 中露出。
   const channelRows = Object.entries(channelStatus?.channels ?? {})
     .filter(([name]) => name === "weixin")
@@ -557,308 +397,12 @@ export function Settings() {
         sub={i18n.t("settings.subtitle")}
       />
 
-      {/* {localApiAccessSection} */}
-      <div className="grid gap-1">
-        <div className="grid content-start gap-3">
-          <form onSubmit={submit} className="grid gap-3">
-            <section className="tw-panel">
-              <header className="tw-panel-head">
-                <div className="flex min-w-0 items-center gap-2">
-                  <Server className="h-4 w-4 shrink-0 text-primary" />
-                  <h2 className="tw-panel-label">
-                    {i18n.t("settings.llmSettings")}
-                  </h2>
-                </div>
-              </header>
-              <div className="tw-panel-body">
-
-              <div
-                role="radiogroup"
-                aria-label={t("settings.llmMode")}
-                className="mb-5 grid grid-cols-2 rounded-md border p-1"
-              >
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={vipActive}
-                  onClick={setVipMode}
-                  disabled={saving || vipActive}
-                  className={`rounded px-3 py-2 text-sm font-medium transition ${vipActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-                >
-                  {t("settings.useVipService")}
-                </button>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={!vipActive}
-                  onClick={setCustomMode}
-                  disabled={!vipActive}
-                  className={`rounded px-3 py-2 text-sm font-medium transition ${!vipActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-                >
-                  {t("settings.useCustomModel")}
-                </button>
-              </div>
-
-              {vipActive ? (
-                <div className="flex items-center gap-3 rounded-md border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
-                  <Server className="h-4 w-4 shrink-0 text-primary" />
-                  <span>
-                    {settings.desktop_vip_available
-                      ? t("settings.vipAvailable")
-                      : t("settings.vipUnavailable")}
-                  </span>
-                </div>
-              ) : (
-                <>
-                  <div className="grid gap-4">
-                    <label className="grid gap-2">
-                      <span className={labelClass}>
-                        {i18n.t("settings.provider")}
-                      </span>
-                      <select
-                        value={form.provider}
-                        onChange={(event) =>
-                          onProviderChange(event.target.value)
-                        }
-                        className={fieldClass}
-                      >
-                        {providers.map((provider) => (
-                          <option key={provider.name} value={provider.name}>
-                            {provider.label}
-                          </option>
-                        ))}
-                      </select>
-                      <span className={hintClass}>
-                        {i18n.t("settings.providerChangeHint")}
-                      </span>
-                    </label>
-
-                    <label className="grid gap-2">
-                      <span className={labelClass}>
-                        {i18n.t("settings.model")}
-                      </span>
-                      <div className="flex gap-2">
-                        <input
-                          value={form.model_name}
-                          onChange={(event) =>
-                            setForm({ ...form, model_name: event.target.value })
-                          }
-                          className={fieldClass}
-                          required
-                        />
-                        <button
-                          type="button"
-                          onClick={() => applyProviderDefaults()}
-                          className="tw-btn-ghost shrink-0"
-                          title={i18n.t("settings.useProviderDefaults")}
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                          <span className="hidden sm:inline">
-                            {i18n.t("settings.useProviderDefaults")}
-                          </span>
-                        </button>
-                      </div>
-                      <span className={hintClass}>
-                        {i18n.t("settings.modelIdHint")}
-                      </span>
-                    </label>
-
-                    <label className="grid gap-2">
-                      <span className={labelClass}>
-                        {i18n.t("settings.baseUrl")}
-                      </span>
-                      <input
-                        value={form.base_url}
-                        onChange={(event) =>
-                          setForm({ ...form, base_url: event.target.value })
-                        }
-                        className={fieldClass}
-                        placeholder={selectedProvider?.default_base_url}
-                        disabled={selectedProvider?.auth_type === "oauth"}
-                      />
-                    </label>
-
-                    <label className="grid gap-2">
-                      <span className={labelClass}>
-                        {selectedProvider?.auth_type === "oauth"
-                          ? i18n.t("settings.oauth")
-                          : i18n.t("settings.apiKey")}
-                      </span>
-                      <div className="relative">
-                        <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <input
-                          type="password"
-                          value={apiKey}
-                          onChange={(event) => setApiKey(event.target.value)}
-                          className={`${fieldClass} pl-9`}
-                          placeholder={keyStatus}
-                          autoComplete="current-password"
-                          disabled={apiKeyDisabled}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <span className={hintClass}>{keyStatus}</span>
-                        {selectedProvider?.api_key_required ? (
-                          <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-                            <input
-                              type="checkbox"
-                              checked={clearApiKey}
-                              onChange={(event) => {
-                                setClearApiKey(event.target.checked);
-                                if (event.target.checked) setApiKey("");
-                              }}
-                              className="h-3.5 w-3.5 accent-primary"
-                            />
-                            {i18n.t("settings.clearApiKey")}
-                          </label>
-                        ) : null}
-                      </div>
-                    </label>
-                  </div>
-                  <div className="mt-5 grid gap-4 border-t pt-5">
-                    <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground">
-                        {i18n.t("settings.saved")}:{" "}
-                      </span>
-                      <span className="tw-num break-all">
-                        {settings.env_path}
-                      </span>
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={saving}
-                      className="tw-btn-primary w-full justify-self-start"
-                    >
-                      {saving ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Save className="h-4 w-4" />
-                      )}
-                      {saving
-                        ? i18n.t("settings.saving")
-                        : i18n.t("settings.saveLlmSettings")}
-                    </button>
-                  </div>
-                </>
-              )}
-              </div>
-            </section>
-          </form>
-
-          <form
-            onSubmit={submitDataSources}
-            className="tw-panel"
-          >
-            <header className="tw-panel-head">
-              <div className="flex min-w-0 items-center gap-2">
-                <Database className="h-4 w-4 shrink-0 text-primary" />
-                <h2 className="tw-panel-label">
-                  {i18n.t("settings.dataSourceSettings")}
-                </h2>
-              </div>
-            </header>
-            <div className="tw-panel-body">
-              <p className="mb-5 text-sm text-muted-foreground">
-                {i18n.t("settings.dataSourceSettingsDesc")}
-              </p>
-
-            <div className="grid gap-5">
-              <label className="grid gap-2">
-                <span className={labelClass}>
-                  {i18n.t("settings.tushareToken")}
-                </span>
-                <div className="relative">
-                  <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <input
-                    type="password"
-                    value={tushareToken}
-                    onChange={(event) => setTushareToken(event.target.value)}
-                    className={`${fieldClass} pl-9`}
-                    placeholder={tushareStatus}
-                    autoComplete="current-password"
-                    disabled={clearTushareToken}
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className={hintClass}>
-                    {i18n.t("settings.tushareTokenHint")}
-                  </span>
-                  <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      checked={clearTushareToken}
-                      onChange={(event) => {
-                        setClearTushareToken(event.target.checked);
-                        if (event.target.checked) setTushareToken("");
-                      }}
-                      className="h-3.5 w-3.5 accent-primary"
-                    />
-                    {i18n.t("settings.clearTushareToken")}
-                  </label>
-                </div>
-              </label>
-
-              <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">
-                  {i18n.t("settings.saved")}:{" "}
-                </span>
-                <span className="tw-num break-all">
-                  {dataSettings.env_path}
-                </span>
-              </div>
-
-              <button
-                type="submit"
-                disabled={dataSaving}
-                className="tw-btn-primary justify-self-start"
-              >
-                {dataSaving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                {dataSaving
-                  ? i18n.t("settings.saving")
-                  : i18n.t("settings.saveDataSourceSettings")}
-              </button>
-
-              <div className="rounded-md border bg-muted/20 p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium">
-                    {i18n.t("settings.baostock")}
-                  </span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs ${dataSettings.baostock_supported ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}
-                  >
-                    {dataSettings.baostock_supported
-                      ? i18n.t("settings.loaderAvailable")
-                      : i18n.t("settings.noProjectLoader")}
-                  </span>
-                </div>
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  <p>{dataSettings.baostock_message}</p>
-                  <p>
-                    {dataSettings.baostock_installed
-                      ? i18n.t("settings.pythonPackageInstalled")
-                      : i18n.t("settings.pythonPackageNotInstalled")}
-                  </p>
-                </div>
-              </div>
-            </div>
-            </div>
-          </form>
-        </div>
-      </div>
-
       {/* IM channels */}
       <section className="tw-panel">
         <header className="tw-panel-head">
           <div className="flex min-w-0 items-center gap-2">
             <MessageSquareMore className="h-4 w-4 shrink-0 text-primary" />
-            <h2 className="tw-panel-label">
-              {t("settings.channels.title")}
-            </h2>
+            <h2 className="tw-panel-label">{t("settings.channels.title")}</h2>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -919,136 +463,144 @@ export function Settings() {
               <div className="text-xs text-muted-foreground">
                 {t("settings.channels.enabled")}
               </div>
-              <div className="tw-num text-sm font-medium">{channelEnabledCount}</div>
+              <div className="tw-num text-sm font-medium">
+                {channelEnabledCount}
+              </div>
             </div>
             <div className="rounded-md border bg-muted/20 px-3 py-2">
               <div className="text-xs text-muted-foreground">
                 {t("settings.channels.loaded")}
               </div>
-              <div className="tw-num text-sm font-medium">{channelLoadedCount}</div>
+              <div className="tw-num text-sm font-medium">
+                {channelLoadedCount}
+              </div>
             </div>
             <div className="rounded-md border bg-muted/20 px-3 py-2">
               <div className="text-xs text-muted-foreground">
                 {t("settings.channels.unavailable")}
               </div>
-              <div className="tw-num text-sm font-medium">{channelUnavailableCount}</div>
+              <div className="tw-num text-sm font-medium">
+                {channelUnavailableCount}
+              </div>
             </div>
           </div>
 
-        <div className="overflow-hidden rounded-md border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-xs text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 text-left font-medium">
-                  {t("settings.channels.channel")}
-                </th>
-                <th className="px-3 py-2 text-left font-medium">
-                  {t("settings.channels.state")}
-                </th>
-                <th className="px-3 py-2 text-left font-medium">
-                  {t("settings.channels.recovery")}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {channelRows.map(([name, item]) => (
-                <tr key={name} className="border-t">
-                  <td className="px-3 py-2 align-top">
-                    <div className="font-medium">
-                      {item.display_name || name}
-                    </div>
-                    <div className="text-xs text-muted-foreground">{name}</div>
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    <div className="flex flex-wrap gap-1.5">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs ${item.enabled ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}
-                      >
-                        {item.enabled
-                          ? t("settings.channels.enabled")
-                          : t("settings.channels.disabled")}
-                      </span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs ${item.loaded ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}
-                      >
-                        {item.loaded
-                          ? t("settings.channels.loaded")
-                          : t("settings.channels.notLoaded")}
-                      </span>
-                      {item.health === "expired" ? (
-                        <span className="rounded-full px-2 py-0.5 text-xs bg-destructive/10 text-destructive">
-                          {t("settings.channels.loginExpired")}
-                        </span>
-                      ) : (
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs ${item.running ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}
-                        >
-                          {item.running
-                            ? t("settings.channels.running")
-                            : t("settings.channels.stopped")}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="max-w-md px-3 py-2 align-top text-xs text-muted-foreground">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span>
-                        {item.install_hint ||
-                          item.error ||
-                          t("settings.channels.noRecovery")}
-                      </span>
-                      {name === "weixin" && item.enabled && (
-                        <button
-                          type="button"
-                          disabled={weixinPolling}
-                          onClick={startWeixinQrLogin}
-                          className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {weixinPolling ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <QrCode className="h-3 w-3" />
-                          )}
-                          {i18n.t("settings.weixin.scanLogin")}
-                        </button>
-                      )}
-                    </div>
-                  </td>
+          <div className="overflow-hidden rounded-md border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">
+                    {t("settings.channels.channel")}
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium">
+                    {t("settings.channels.state")}
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium">
+                    {t("settings.channels.recovery")}
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {channelRows.map(([name, item]) => (
+                  <tr key={name} className="border-t">
+                    <td className="px-3 py-2 align-top">
+                      <div className="font-medium">
+                        {item.display_name || name}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {name}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 align-top">
+                      <div className="flex flex-wrap gap-1.5">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs ${item.enabled ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}
+                        >
+                          {item.enabled
+                            ? t("settings.channels.enabled")
+                            : t("settings.channels.disabled")}
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs ${item.loaded ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}
+                        >
+                          {item.loaded
+                            ? t("settings.channels.loaded")
+                            : t("settings.channels.notLoaded")}
+                        </span>
+                        {item.health === "expired" ? (
+                          <span className="rounded-full px-2 py-0.5 text-xs bg-destructive/10 text-destructive">
+                            {t("settings.channels.loginExpired")}
+                          </span>
+                        ) : (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs ${item.running ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}
+                          >
+                            {item.running
+                              ? t("settings.channels.running")
+                              : t("settings.channels.stopped")}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="max-w-md px-3 py-2 align-top text-xs text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>
+                          {item.install_hint ||
+                            item.error ||
+                            t("settings.channels.noRecovery")}
+                        </span>
+                        {name === "weixin" && item.enabled && (
+                          <button
+                            type="button"
+                            disabled={weixinPolling}
+                            onClick={startWeixinQrLogin}
+                            className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {weixinPolling ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <QrCode className="h-3 w-3" />
+                            )}
+                            {i18n.t("settings.weixin.scanLogin")}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-        {/* ponytail: 仅微信开放,channel 固定 weixin,不再展示渠道选择器 */}
-        <form
-          onSubmit={submitPairingCommand}
-          className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]"
-        >
-          <label className="grid gap-2">
-            <span className={labelClass}>
-              {i18n.t("settings.pairingCommand")}
-            </span>
-            <input
-              value={pairingCommand}
-              onChange={(event) => setPairingCommand(event.target.value)}
-              className={fieldClass}
-              placeholder={"approve UM59-EGIT"}
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={pairingBusy || !pairingCommand.trim()}
-            className="tw-btn-primary self-end"
+          {/* ponytail: 仅微信开放,channel 固定 weixin,不再展示渠道选择器 */}
+          <form
+            onSubmit={submitPairingCommand}
+            className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]"
           >
-            {pairingBusy ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <MessageSquareMore className="h-4 w-4" />
-            )}
-            {i18n.t("settings.runPairing")}
-          </button>
-        </form>
+            <label className="grid gap-2">
+              <span className={labelClass}>
+                {i18n.t("settings.pairingCommand")}
+              </span>
+              <input
+                value={pairingCommand}
+                onChange={(event) => setPairingCommand(event.target.value)}
+                className={fieldClass}
+                placeholder={"approve UM59-EGIT"}
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={pairingBusy || !pairingCommand.trim()}
+              className="tw-btn-primary self-end"
+            >
+              {pairingBusy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MessageSquareMore className="h-4 w-4" />
+              )}
+              {i18n.t("settings.runPairing")}
+            </button>
+          </form>
         </div>
       </section>
 

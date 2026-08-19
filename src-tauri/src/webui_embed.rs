@@ -48,6 +48,7 @@ pub fn webui_url(
     port: u16,
     theme_mode: &str,
     theme_color: &str,
+    api_key: &str,
 ) -> Result<tauri::Url, String> {
     let mut url = tauri::Url::parse(&format!("http://127.0.0.1:{port}/"))
         .map_err(|e| format!("invalid webui url: {e}"))?;
@@ -58,6 +59,9 @@ pub fn webui_url(
         pairs.append_pair("theme", theme_mode);
         pairs.append_pair("theme_color", theme_color);
         pairs.append_pair("transition", "1");
+        // API 密钥始终随桌面 URL 传入(空=清除),WebUI 首载同步进 localStorage;
+        // 桌面控制台是该密钥的唯一管理者(自 WebUI 设置页迁移而来)。
+        pairs.append_pair("api_key", api_key);
     }
     Ok(url)
 }
@@ -77,7 +81,7 @@ pub fn prepare_frame(app: &AppHandle, port: u16) -> Result<String, String> {
         }
         _ => "teal",
     };
-    let target = webui_url(port, theme_mode, theme_color)?;
+    let target = webui_url(port, theme_mode, theme_color, settings.api_auth_key.trim())?;
     let target = target.to_string();
     state.begin_embed();
     state.queue_frame_url(target.clone());
@@ -98,7 +102,7 @@ mod tests {
 
     #[test]
     fn webui_url_points_to_loopback_root() {
-        let url = webui_url(8899, "system", "teal").expect("parse");
+        let url = webui_url(8899, "system", "teal", "").expect("parse");
         assert_eq!(url.scheme(), "http");
         assert_eq!(url.host_str(), Some("127.0.0.1"));
         assert_eq!(url.port(), Some(8899));
@@ -106,8 +110,16 @@ mod tests {
         assert!(url.query_pairs().any(|(key, value)| key == "shell" && value == "frame"));
         assert_eq!(
             url.query(),
-            Some("desktop=1&shell=frame&theme=system&theme_color=teal&transition=1")
+            Some("desktop=1&shell=frame&theme=system&theme_color=teal&transition=1&api_key=")
         );
+    }
+
+    #[test]
+    fn webui_url_always_carries_api_key_pair() {
+        let url = webui_url(8899, "system", "teal", "sk-test").expect("parse");
+        assert!(url.query_pairs().any(|(key, value)| key == "api_key" && value == "sk-test"));
+        let url = webui_url(8899, "system", "teal", "").expect("parse");
+        assert!(url.query_pairs().any(|(key, value)| key == "api_key" && value == ""));
     }
 
     #[test]
@@ -124,7 +136,7 @@ mod tests {
 
     #[test]
     fn webui_url_never_carries_a_console_return_url() {
-        let url = webui_url(9000, "dark", "blue").expect("parse");
+        let url = webui_url(9000, "dark", "blue", "").expect("parse");
         let query: Vec<(String, String)> = url.query_pairs().into_owned().collect();
         assert!(query.contains(&("desktop".to_string(), "1".to_string())));
         assert!(query.contains(&("shell".to_string(), "frame".to_string())));

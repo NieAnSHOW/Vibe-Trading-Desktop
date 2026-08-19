@@ -237,6 +237,18 @@
           "markdownDescription": "Enables the console_fetch_ads command without any pre-configured scope."
         },
         {
+          "description": "Enables the console_get_data_source_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-get-data-source-settings",
+          "markdownDescription": "Enables the console_get_data_source_settings command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_get_llm_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-get-llm-settings",
+          "markdownDescription": "Enables the console_get_llm_settings command without any pre-configured scope."
+        },
+        {
           "description": "Enables the console_get_public_config command without any pre-configured scope.",
           "type": "string",
           "const": "allow-console-get-public-config",
@@ -345,10 +357,28 @@
           "markdownDescription": "Enables the console_repair_environment command without any pre-configured scope."
         },
         {
+          "description": "Enables the console_set_api_auth_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-set-api-auth-key",
+          "markdownDescription": "Enables the console_set_api_auth_key command without any pre-configured scope."
+        },
+        {
           "description": "Enables the console_set_autostart command without any pre-configured scope.",
           "type": "string",
           "const": "allow-console-set-autostart",
           "markdownDescription": "Enables the console_set_autostart command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_set_data_source_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-set-data-source-settings",
+          "markdownDescription": "Enables the console_set_data_source_settings command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the console_set_llm_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-console-set-llm-settings",
+          "markdownDescription": "Enables the console_set_llm_settings command without any pre-configured scope."
         },
         {
           "description": "Enables the console_set_theme_color command without any pre-configured scope.",
@@ -465,6 +495,18 @@
           "markdownDescription": "Denies the console_fetch_ads command without any pre-configured scope."
         },
         {
+          "description": "Denies the console_get_data_source_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-get-data-source-settings",
+          "markdownDescription": "Denies the console_get_data_source_settings command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_get_llm_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-get-llm-settings",
+          "markdownDescription": "Denies the console_get_llm_settings command without any pre-configured scope."
+        },
+        {
           "description": "Denies the console_get_public_config command without any pre-configured scope.",
           "type": "string",
           "const": "deny-console-get-public-config",
@@ -573,10 +615,28 @@
           "markdownDescription": "Denies the console_repair_environment command without any pre-configured scope."
         },
         {
+          "description": "Denies the console_set_api_auth_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-set-api-auth-key",
+          "markdownDescription": "Denies the console_set_api_auth_key command without any pre-configured scope."
+        },
+        {
           "description": "Denies the console_set_autostart command without any pre-configured scope.",
           "type": "string",
           "const": "deny-console-set-autostart",
           "markdownDescription": "Denies the console_set_autostart command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_set_data_source_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-set-data-source-settings",
+          "markdownDescription": "Denies the console_set_data_source_settings command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the console_set_llm_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-console-set-llm-settings",
+          "markdownDescription": "Denies the console_set_llm_settings command without any pre-configured scope."
         },
         {
           "description": "Denies the console_set_theme_color command without any pre-configured scope.",

@@ -22,6 +22,7 @@ export interface Settings {
   autostart_service: boolean;
   theme_mode: "system" | "light" | "dark";
   theme_color: "teal" | "blue" | "purple" | "pink" | "orange" | "green";
+  api_auth_key: string;
 }
 
 export type BootstrapStage =
@@ -42,6 +43,51 @@ export interface ChannelInfo {
   loaded?: boolean;
   running?: boolean;
   health?: "ok" | "expired" | string;
+}
+
+// ── LLM / 数据源设置(镜像 backend /settings/llm 与 /settings/data-sources,
+//    自 WebUI src/lib/api.ts 迁移) ─────────────────────────────────
+
+export interface LLMProviderOption {
+  name: string;
+  label: string;
+  api_key_env?: string | null;
+  base_url_env: string;
+  default_model: string;
+  default_base_url: string;
+  api_key_required: boolean;
+  auth_type?: string;
+  login_command?: string | null;
+}
+
+export interface LLMSettings {
+  provider: string;
+  model_name: string;
+  base_url: string;
+  api_key_env?: string | null;
+  api_key_configured: boolean;
+  api_key_hint?: string | null;
+  api_key_required: boolean;
+  temperature: number;
+  timeout_seconds: number;
+  max_retries: number;
+  reasoning_effort: string;
+  sse_timeout_seconds: number;
+  env_path: string;
+  providers: LLMProviderOption[];
+  desktop_login_provisioned?: boolean;
+  desktop_llm_mode: "vip" | "custom";
+  desktop_vip_available: boolean;
+  vip_models?: string[];
+}
+
+export interface DataSourceSettings {
+  tushare_token_configured: boolean;
+  tushare_token_hint?: string | null;
+  baostock_supported: boolean;
+  baostock_installed: boolean;
+  baostock_message: string;
+  env_path: string;
 }
 
 export interface ChannelStatus {

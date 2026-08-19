@@ -516,7 +516,7 @@ button:focus-visible {
 }
 .btn-primary {
   background: hsl(var(--brand));
-  color: hsl(var(--on-brand));
+  color: white;
 }
 .btn-primary:hover:not(:disabled) {
   background: hsl(var(--brand-strong));

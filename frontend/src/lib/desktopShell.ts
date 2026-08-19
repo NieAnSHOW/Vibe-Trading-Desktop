@@ -1,3 +1,5 @@
+import { setApiAuthKey } from "@/lib/apiAuth";
+
 /**
  * 桌面壳(Tauri)内嵌探测与返回控制台。
  *
@@ -53,6 +55,13 @@ export function initDesktopShell(): void {
       window.sessionStorage.setItem(THEME_COLOR_KEY, themeColor!);
     } else {
       window.sessionStorage.removeItem(THEME_COLOR_KEY);
+    }
+    // 桌面控制台「本地 API 访问」保存的密钥随 URL 传入(始终携带,空=清除);
+    // 落入 localStorage 后由 SPA 路由丢弃查询串。非桌面 URL 不带该参数,不影响
+    // 远程部署在 WebUI 内手输的密钥。
+    const apiKey = params.get("api_key");
+    if (apiKey !== null) {
+      setApiAuthKey(apiKey);
     }
   } catch {
     // sessionStorage 不可用(隐私模式极端情况)时静默降级:入口按 URL 探测。

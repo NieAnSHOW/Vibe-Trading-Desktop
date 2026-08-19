@@ -835,6 +835,16 @@ pub fn console_set_theme_color(color: String) -> Result<(), String> {
     crate::settings::save(&layout.root, &settings)
 }
 
+/// 保存服务器 API 密钥(API_AUTH_KEY)。打开 WebUI 时随 URL 传入并落入其
+/// localStorage;留空即清除。自 WebUI 设置页的「本地 API 访问」迁移而来。
+#[tauri::command]
+pub fn console_set_api_auth_key(key: String) -> Result<(), String> {
+    let layout = Layout::from_home()?;
+    let mut settings = crate::settings::load(&layout.root);
+    settings.api_auth_key = key.trim().to_string();
+    crate::settings::save(&layout.root, &settings)
+}
+
 #[tauri::command]
 pub async fn console_login_captcha() -> Result<Captcha, AuthError> {
     run_blocking(auth::fetch_captcha)
@@ -1243,7 +1253,14 @@ pub fn console_close_webui(app: AppHandle) {
 /// 在系统默认浏览器打开 WebUI(次要入口;主入口为主窗口内嵌导航)。
 #[tauri::command]
 pub fn console_open_webui_external(port: u16) -> Result<(), String> {
-    let url = format!("http://127.0.0.1:{port}/");
+    // API 密钥始终随 URL 传入(空=清除),WebUI 首载同步进 localStorage。
+    let layout = Layout::from_home()?;
+    let settings = crate::settings::load(&layout.root);
+    let key = settings.api_auth_key.trim();
+    let mut url = tauri::Url::parse(&format!("http://127.0.0.1:{port}/"))
+        .map_err(|e| format!("invalid webui url: {e}"))?;
+    url.query_pairs_mut().append_pair("api_key", key);
+    let url = url.to_string();
     crate::validate_external_url(&url)?;
     crate::open_url_with_system(&url)
 }
@@ -1284,6 +1301,67 @@ pub async fn console_start_channels(port: u16) -> Result<String, String> {
 pub fn channels_status_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}/channels/status")
 }
+
+// ── LLM / 数据源设置代理(自 WebUI 设置页迁移) ─────────────────────
+// loopback 免 auth,无需鉴权头;服务未运行时由调用方决定不触发。
+
+/// 转发本地 backend 的设置读写请求,返回原始 JSON 文本。
+/// async + spawn_blocking:同 console_start_channels,避免 reqwest::blocking
+/// 占住 Tauri 异步运行时线程导致 webview 假死。
+async fn proxy_settings(
+    port: u16,
+    method: reqwest::Method,
+    path: &str,
+    body: Option<String>,
+) -> Result<String, String> {
+    let url = format!("http://127.0.0.1:{port}{path}");
+    let path = path.to_string();
+    tauri::async_runtime::spawn_blocking(move || {
+        let client = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .map_err(|e| format!("构建 HTTP 客户端: {e}"))?;
+        let mut req = client.request(method, &url);
+        if let Some(b) = body.as_deref() {
+            req = req.header("Content-Type", "application/json").body(b.to_string());
+        }
+        let resp = req.send().map_err(|e| format!("调用 {path} 失败: {e}"))?;
+        let status = resp.status();
+        let text = resp.text().map_err(|e| format!("读取响应: {e}"))?;
+        if !status.is_success() {
+            return Err(format!("后端返回 {status}: {text}"));
+        }
+        Ok(text)
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking join: {e}"))
+    .and_then(|r| r)
+}
+
+/// 读取 LLM 设置(GET /settings/llm)。
+#[tauri::command]
+pub async fn console_get_llm_settings(port: u16) -> Result<String, String> {
+    proxy_settings(port, reqwest::Method::GET, "/settings/llm", None).await
+}
+
+/// 保存 LLM 设置(PUT /settings/llm,body 为前端构造的 JSON,含 vip/custom 模式)。
+#[tauri::command]
+pub async fn console_set_llm_settings(port: u16, body: String) -> Result<String, String> {
+    proxy_settings(port, reqwest::Method::PUT, "/settings/llm", Some(body)).await
+}
+
+/// 读取数据源设置(GET /settings/data-sources)。
+#[tauri::command]
+pub async fn console_get_data_source_settings(port: u16) -> Result<String, String> {
+    proxy_settings(port, reqwest::Method::GET, "/settings/data-sources", None).await
+}
+
+/// 保存数据源设置(PUT /settings/data-sources)。
+#[tauri::command]
+pub async fn console_set_data_source_settings(port: u16, body: String) -> Result<String, String> {
+    proxy_settings(port, reqwest::Method::PUT, "/settings/data-sources", Some(body)).await
+}
+
 
 /// 消息渠道状态:转发 GET /channels/status,供控制台展示运行/未登录/失效。
 /// backend 对 loopback 免 auth,无需鉴权头。服务未运行时由调用方决定不触发。

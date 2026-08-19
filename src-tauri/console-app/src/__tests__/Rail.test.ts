@@ -9,6 +9,7 @@ vi.mock("../ipc/commands", () => ({
     autostart_service: false,
     theme_mode: "system",
     theme_color: "teal",
+    api_auth_key: "",
   })),
   consoleSetThemeMode: vi.fn(async () => undefined),
   consoleAuthStatus: vi.fn(async () => ({
@@ -252,6 +253,7 @@ describe("Rail theme", () => {
           autostart_service: false,
           theme_mode: "dark",
           theme_color: "blue",
+            api_auth_key: "",
         });
       }),
     );
@@ -283,6 +285,7 @@ describe("Rail theme", () => {
       autostart_service: false,
       theme_mode: "light",
       theme_color: "teal",
+        api_auth_key: "",
     });
     await mountRail();
 
@@ -324,6 +327,7 @@ describe("Rail theme", () => {
       autostart_service: false,
       theme_mode: "system",
       theme_color: "blue",
+        api_auth_key: "",
     });
     await mountRail();
 

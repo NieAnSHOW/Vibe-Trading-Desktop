@@ -12,6 +12,8 @@ import type {
   UpdateInfo,
   Settings,
   PublicConfig,
+  LLMSettings,
+  DataSourceSettings,
 } from "./types";
 
 // 与 src-tauri/src/console.rs 的 #[tauri::command] 一一对应。
@@ -65,11 +67,39 @@ export const consoleSetThemeMode = (mode: Settings["theme_mode"]): Promise<void>
 export const consoleSetThemeColor = (color: Settings["theme_color"]): Promise<void> =>
   invoke<void>("console_set_theme_color", { color });
 
+export const consoleSetApiAuthKey = (key: string): Promise<void> =>
+  invoke<void>("console_set_api_auth_key", { key });
+
 export const consoleStartChannels = (port: number): Promise<string> =>
   invoke<string>("console_start_channels", { port });
 
 export const consoleChannelsStatus = (port: number): Promise<string> =>
   invoke<string>("console_channels_status", { port });
+
+// LLM / 数据源设置:Rust 代理转发本地 backend,返回原始 JSON 文本,这里解析为类型。
+export const consoleGetLlmSettings = (port: number): Promise<LLMSettings> =>
+  invoke<string>("console_get_llm_settings", { port }).then((raw) => JSON.parse(raw));
+
+export const consoleSetLlmSettings = (
+  port: number,
+  settings: Record<string, unknown>,
+): Promise<LLMSettings> =>
+  invoke<string>("console_set_llm_settings", {
+    port,
+    body: JSON.stringify(settings),
+  }).then((raw) => JSON.parse(raw));
+
+export const consoleGetDataSourceSettings = (port: number): Promise<DataSourceSettings> =>
+  invoke<string>("console_get_data_source_settings", { port }).then((raw) => JSON.parse(raw));
+
+export const consoleSetDataSourceSettings = (
+  port: number,
+  settings: Record<string, unknown>,
+): Promise<DataSourceSettings> =>
+  invoke<string>("console_set_data_source_settings", {
+    port,
+    body: JSON.stringify(settings),
+  }).then((raw) => JSON.parse(raw));
 
 export const consoleInstallChannelDep = (channel: string): Promise<void> =>
   invoke<void>("console_install_channel_dep", { channel });

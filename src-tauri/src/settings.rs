@@ -17,6 +17,10 @@ pub struct Settings {
     /// 应用主题色: teal / blue / purple / pink / orange / green。
     #[serde(default = "default_theme_color")]
     pub theme_color: String,
+    /// 服务器 API 密钥(API_AUTH_KEY)。打开 WebUI 时随 URL 传入并落入其
+    /// localStorage,供非 loopback 访问鉴权;本机 loopback 访问可留空。
+    #[serde(default)]
+    pub api_auth_key: String,
 }
 
 fn default_theme_mode() -> String {
@@ -33,6 +37,7 @@ impl Default for Settings {
             autostart_service: false,
             theme_mode: default_theme_mode(),
             theme_color: default_theme_color(),
+            api_auth_key: String::new(),
         }
     }
 }
@@ -93,12 +98,14 @@ mod tests {
                 autostart_service: true,
                 theme_mode: "dark".to_string(),
                 theme_color: "blue".to_string(),
+                api_auth_key: "sk-test".to_string(),
             },
         )
         .unwrap();
         assert!(load(tmp.path()).autostart_service);
         assert_eq!(load(tmp.path()).theme_mode, "dark");
         assert_eq!(load(tmp.path()).theme_color, "blue");
+        assert_eq!(load(tmp.path()).api_auth_key, "sk-test");
         // 再次保存会覆盖,且目录已存在。
         save(tmp.path(), &Settings::default()).unwrap();
         assert!(!load(tmp.path()).autostart_service);

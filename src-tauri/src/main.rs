@@ -54,6 +54,10 @@ fn main() {
             console::console_open_webui_external,
             console::console_start_channels,
             console::console_channels_status,
+            console::console_get_llm_settings,
+            console::console_set_llm_settings,
+            console::console_get_data_source_settings,
+            console::console_set_data_source_settings,
             console::console_install_channel_dep,
             console::console_quit,
             console::console_open_logs,
@@ -66,6 +70,7 @@ fn main() {
             console::console_set_autostart,
             console::console_set_theme_mode,
             console::console_set_theme_color,
+            console::console_set_api_auth_key,
             console::console_login_captcha,
             console::console_login_send_sms,
             console::console_login_by_phone,
@@ -304,10 +309,10 @@ mod tests {
             .expect("parse tauri.conf.json");
         let window = &cfg["app"]["windows"][0];
 
-        assert_eq!(window["width"], 1180);
-        assert_eq!(window["height"], 760);
+        assert_eq!(window["width"], 1380);
+        assert_eq!(window["height"], 940);
         assert_eq!(window["minWidth"], 900);
-        assert_eq!(window["minHeight"], 680);
+        assert_eq!(window["minHeight"], 780);
         assert_eq!(window["resizable"], true);
         assert_eq!(window["maximizable"], true);
     }
