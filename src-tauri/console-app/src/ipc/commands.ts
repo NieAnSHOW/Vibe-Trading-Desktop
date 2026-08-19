@@ -14,6 +14,7 @@ import type {
   PublicConfig,
   LLMSettings,
   DataSourceSettings,
+  CustomLLMReadiness,
 } from "./types";
 
 // 与 src-tauri/src/console.rs 的 #[tauri::command] 一一对应。
@@ -172,6 +173,12 @@ export const consoleMemberBenefits = (): Promise<MemberBenefitsView> =>
 
 export const consoleLogout = (): Promise<void> =>
   invoke<void>("console_logout");
+
+export const consoleCustomLlmReadiness = (): Promise<CustomLLMReadiness> =>
+  invoke<CustomLLMReadiness>("console_custom_llm_readiness");
+
+export const consoleLogoutToCustom = (): Promise<CustomLLMReadiness> =>
+  invoke<CustomLLMReadiness>("console_logout_to_custom");
 
 export const consoleFetchAds = (position: string): Promise<AdItem[]> =>
   invoke<AdItem[]>("console_fetch_ads", { position });

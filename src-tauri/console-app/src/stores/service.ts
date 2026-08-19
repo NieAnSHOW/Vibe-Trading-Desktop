@@ -13,11 +13,14 @@ export const useServiceStore = defineStore("service", () => {
     running.value = b;
   }
 
-  async function start() {
+  async function start(options: { openWebui?: boolean } = {}) {
+    const { openWebui = true } = options;
     // 返回 port;调用方负责 setPort 与自动打开 WebUI。
     const port = await consoleStartService();
     running.value = true;
-    await consoleOpenWebui(port);
+    if (openWebui) {
+      await consoleOpenWebui(port);
+    }
     return port;
   }
 

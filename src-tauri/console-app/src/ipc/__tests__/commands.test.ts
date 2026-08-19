@@ -17,6 +17,8 @@ import {
   consoleInstallChannelDep,
   consoleUninstallLegacyApp,
   consoleGetPublicConfig,
+  consoleCustomLlmReadiness,
+  consoleLogoutToCustom,
 } from "../commands";
 
 describe("ipc/commands", () => {
@@ -85,5 +87,17 @@ describe("ipc/commands", () => {
     const r = await consoleGetPublicConfig();
     expect(invokeMock).toHaveBeenCalledWith("console_get_public_config");
     expect(r.enableLogin).toBe(true);
+  });
+
+  it("consoleCustomLlmReadiness invokes the readiness command", async () => {
+    invokeMock.mockResolvedValue({ customConfigured: true });
+    await expect(consoleCustomLlmReadiness()).resolves.toEqual({ customConfigured: true });
+    expect(invokeMock).toHaveBeenCalledWith("console_custom_llm_readiness");
+  });
+
+  it("consoleLogoutToCustom invokes the logout command", async () => {
+    invokeMock.mockResolvedValue({ customConfigured: false });
+    await expect(consoleLogoutToCustom()).resolves.toEqual({ customConfigured: false });
+    expect(invokeMock).toHaveBeenCalledWith("console_logout_to_custom");
   });
 });

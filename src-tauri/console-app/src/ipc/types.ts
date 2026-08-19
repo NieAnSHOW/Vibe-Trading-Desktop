@@ -8,6 +8,10 @@ export interface StatusReport {
   port: number | null;
 }
 
+export interface CustomLLMReadiness {
+  customConfigured: boolean;
+}
+
 // 镜像 src-tauri/src/console.rs 的 EnvironmentReport。
 export interface EnvironmentReport {
   env: EnvState;
@@ -201,6 +205,7 @@ export interface AuthError {
     | "Api"
     | "LoginExpired"
     | "EnvWrite"
+    | "Credential"
     | "NotAuthenticated";
   message?: string;
   code?: number;
