@@ -70,6 +70,12 @@ class LLMSettingsResponse(BaseModel):
     vip_models: List[str] = Field(default_factory=list)
 
 
+class CustomLLMReadinessResponse(BaseModel):
+    """Whether the restored custom LLM configuration is ready to use."""
+
+    custom_configured: bool
+
+
 class UpdateLLMSettingsRequest(BaseModel):
     """Update LLM settings persisted to agent/.env."""
 
@@ -137,7 +143,14 @@ def _load_llm_providers() -> List[LLMProviderOption]:
 LLM_PROVIDERS = _load_llm_providers()
 LLM_PROVIDER_BY_NAME = {provider.name: provider for provider in LLM_PROVIDERS}
 LLM_REASONING_EFFORTS = {"", "low", "medium", "high", "max"}
-LLM_API_KEY_PLACEHOLDERS = {"", "sk-or-v1-your-key-here", "sk-xxx", "xxx", "gsk_xxx"}
+LLM_API_KEY_PLACEHOLDERS = {
+    "",
+    "sk-or-v1-your-key-here",
+    "sk-xxx",
+    "xxx",
+    "gsk_xxx",
+    "your-api-key",
+}
 TUSHARE_TOKEN_PLACEHOLDERS = {"", "your-tushare-token"}
 DESKTOP_LLM_MODE_KEY = "DESKTOP_LLM_MODE"
 VIP_RUNTIME_ENV = {
@@ -397,6 +410,84 @@ def _sync_runtime_env(provider: LLMProviderOption, updates: Dict[str, str]) -> N
     )
 
 
+def _custom_llm_configured(values: Dict[str, str]) -> bool:
+    """Return whether persisted settings describe a usable custom LLM runtime."""
+    provider = LLM_PROVIDER_BY_NAME.get(values.get("LANGCHAIN_PROVIDER", "").strip().lower())
+    if provider is None or provider.name == "vip_server":
+        return False
+
+    if not values.get("LANGCHAIN_MODEL_NAME", "").strip():
+        return False
+    if not values.get(provider.base_url_env, "").strip():
+        return False
+
+    if provider.auth_type == "oauth":
+        try:
+            from src.providers.openai_codex import get_openai_codex_login_status
+
+            return bool(get_openai_codex_login_status())
+        except Exception:
+            return False
+    if not provider.api_key_required:
+        return True
+    return bool(
+        provider.api_key_env
+        and _host()._is_configured_secret(
+            values.get(provider.api_key_env, ""), LLM_API_KEY_PLACEHOLDERS
+        )
+    )
+
+
+def restore_custom_runtime() -> CustomLLMReadinessResponse:
+    """Exit transient desktop VIP mode and restore persisted custom settings."""
+    global _vip_selected_model
+
+    host = _host()
+    values = _read_settings_env_values()
+    provider = LLM_PROVIDER_BY_NAME.get(values.get("LANGCHAIN_PROVIDER", "").strip().lower())
+
+    # VIP credentials belong only to the current desktop session.  Clear them
+    # before applying aliases from the saved custom provider configuration.
+    for key in (*VIP_RUNTIME_ENV.values(), *LEGACY_VIP_DOTENV_KEYS):
+        os.environ.pop(key, None)
+    _vip_selected_model = None
+
+    updates: Dict[str, str] = {DESKTOP_LLM_MODE_KEY: "custom"}
+    if provider is not None and provider.name != "vip_server":
+        updates.update(
+            {
+                "LANGCHAIN_PROVIDER": provider.name,
+                "LANGCHAIN_MODEL_NAME": values.get("LANGCHAIN_MODEL_NAME", "").strip(),
+                provider.base_url_env: values.get(
+                    provider.base_url_env, provider.default_base_url
+                ).strip(),
+            }
+        )
+        for key in (
+            "LANGCHAIN_TEMPERATURE",
+            "LANGCHAIN_REASONING_EFFORT",
+            "TIMEOUT_SECONDS",
+            "MAX_RETRIES",
+        ):
+            if key in values:
+                updates[key] = values[key]
+        if provider.api_key_env and provider.api_key_env in values:
+            updates[provider.api_key_env] = values[provider.api_key_env]
+
+    _rewrite_env_values(host._resolve_settings_env_path(), updates, drop_keys=_llm_env_keys())
+    if provider is not None and provider.name != "vip_server":
+        _sync_runtime_env(provider, updates)
+
+    persisted_values = host._read_env_values(host._resolve_settings_env_path())
+    logger.info(
+        "Desktop VIP runtime exited (custom_configured=%s)",
+        _custom_llm_configured(persisted_values),
+    )
+    return CustomLLMReadinessResponse(
+        custom_configured=_custom_llm_configured(persisted_values)
+    )
+
+
 def _vip_runtime_model_name(models: Optional[List[str]] = None) -> str:
     """Select a runtime model from the hidden sidecar-provided model list."""
     global _vip_selected_model
@@ -555,6 +646,15 @@ def register_settings_routes(
             response.desktop_login_provisioned,
         )
         return response
+
+    @app.post(
+        "/settings/llm/desktop-exit-vip",
+        response_model=CustomLLMReadinessResponse,
+        dependencies=[Depends(require_local_or_auth)],
+    )
+    async def desktop_exit_vip():
+        """Restore the persisted custom LLM runtime after desktop logout."""
+        return restore_custom_runtime()
 
     @app.put(
         "/settings/llm",

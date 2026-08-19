@@ -105,3 +105,24 @@ def test_startup_keeps_custom_dotenv_untouched_without_injected_vip_runtime(
 
     assert activate_desktop_vip_runtime_at_startup() is False
     assert env_path.read_text(encoding="utf-8") == original
+
+
+def test_startup_accepts_incomplete_custom_settings(tmp_path, monkeypatch) -> None:
+    """An incomplete custom setup remains a valid startup configuration."""
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "DESKTOP_LLM_MODE=custom\n"
+        "LANGCHAIN_PROVIDER=openai\n"
+        "LANGCHAIN_MODEL_NAME=gpt-4o\n"
+        "OPENAI_API_KEY=your-api-key\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api_server, "_resolve_settings_env_path", lambda: env_path)
+    monkeypatch.delenv("VIBE_DESKTOP_VIP_PROVISIONED", raising=False)
+    monkeypatch.delenv("VIBE_DESKTOP_VIP_API_KEY", raising=False)
+    monkeypatch.delenv("VIBE_DESKTOP_VIP_BASE_URL", raising=False)
+
+    from src.api.settings_routes import activate_desktop_vip_runtime_at_startup
+
+    assert activate_desktop_vip_runtime_at_startup() is False
+    assert "DESKTOP_LLM_MODE=custom" in env_path.read_text(encoding="utf-8")

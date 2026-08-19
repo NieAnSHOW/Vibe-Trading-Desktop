@@ -14,6 +14,7 @@ import httpx
 
 import api_server
 from src.api import helpers
+from src.api import settings_routes
 
 
 def test_env_updates_are_atomic_and_owner_only(tmp_path: Path) -> None:
@@ -405,6 +406,82 @@ def test_custom_save_keeps_mode_and_custom_env_after_vip_mode(
     assert "OPENROUTER_API_KEY=or-secret-value" in env_text
     assert "VIBE_DESKTOP_VIP" not in env_text
     assert "member-key" not in env_text
+
+
+def test_restore_custom_runtime_clears_every_vip_variable_and_selected_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings_env = tmp_path / ".env"
+    settings_env.write_text(
+        "DESKTOP_LLM_MODE=vip\nLANGCHAIN_PROVIDER=openai\n"
+        "LANGCHAIN_MODEL_NAME=gpt-4o\nOPENAI_API_KEY=custom-key\n"
+        "OPENAI_BASE_URL=https://api.openai.com/v1\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api_server, "ENV_PATH", settings_env)
+    monkeypatch.setattr(api_server, "ENV_EXAMPLE_PATH", tmp_path / ".env.example")
+    monkeypatch.setattr(api_server, "USER_ENV_PATH", tmp_path / "home" / ".vibe-trading" / ".env")
+    for key, value in {
+        "VIBE_DESKTOP_VIP_PROVISIONED": "1",
+        "VIBE_DESKTOP_VIP_API_KEY": "member-key",
+        "VIBE_DESKTOP_VIP_BASE_URL": "https://member.example",
+        "VIBE_DESKTOP_VIP_MODELS_JSON": '["vip-model"]',
+        "VIP_API_KEY": "member-key",
+        "VIP_BASE_URL": "https://member.example/v1",
+    }.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr(settings_routes, "_vip_selected_model", "vip-model")
+
+    result = settings_routes.restore_custom_runtime()
+
+    assert result.custom_configured is True
+    saved = dict(line.split("=", 1) for line in settings_env.read_text().splitlines() if "=" in line)
+    assert saved["DESKTOP_LLM_MODE"] == "custom"
+    assert settings_routes._vip_selected_model is None
+    for key in (
+        "VIBE_DESKTOP_VIP_PROVISIONED", "VIBE_DESKTOP_VIP_API_KEY",
+        "VIBE_DESKTOP_VIP_BASE_URL", "VIBE_DESKTOP_VIP_MODELS_JSON",
+        "VIP_API_KEY", "VIP_BASE_URL",
+    ):
+        assert key not in os.environ
+    assert os.environ["OPENAI_API_KEY"] == "custom-key"
+
+
+def test_restore_custom_runtime_reports_incomplete_required_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings_env = tmp_path / ".env"
+    settings_env.write_text(
+        "DESKTOP_LLM_MODE=vip\nLANGCHAIN_PROVIDER=openai\n"
+        "LANGCHAIN_MODEL_NAME=gpt-4o\nOPENAI_API_KEY=your-api-key\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api_server, "ENV_PATH", settings_env)
+    monkeypatch.setattr(api_server, "ENV_EXAMPLE_PATH", tmp_path / ".env.example")
+    monkeypatch.setattr(api_server, "USER_ENV_PATH", tmp_path / "home" / ".vibe-trading" / ".env")
+
+    assert settings_routes.restore_custom_runtime().custom_configured is False
+
+
+def test_desktop_exit_vip_route_is_redacted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / ".env").write_text(
+        "LANGCHAIN_PROVIDER=ollama\nLANGCHAIN_MODEL_NAME=llama3\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api_server, "ENV_PATH", tmp_path / ".env")
+    monkeypatch.setattr(api_server, "ENV_EXAMPLE_PATH", tmp_path / ".env.example")
+    monkeypatch.setattr(api_server, "USER_ENV_PATH", tmp_path / "home" / ".vibe-trading" / ".env")
+
+    async def exit_vip() -> httpx.Response:
+        transport = httpx.ASGITransport(app=api_server.app, client=("127.0.0.1", 50000))
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            return await client.post("/settings/llm/desktop-exit-vip")
+
+    response = asyncio.run(exit_vip())
+
+    assert response.status_code == 200
+    assert response.json() == {"custom_configured": True}
+    assert "api_key" not in response.text.lower()
 
 
 def test_vip_mode_without_transient_credential_is_not_reported_as_active(
