@@ -5,7 +5,12 @@ import { storeToRefs } from "pinia";
 import { useAuthStore } from "../stores/auth";
 import { useEnvStore } from "../stores/env";
 import { useServiceStore } from "../stores/service";
-import { consoleLogout, consoleMemberBenefits, consoleMemberUsage } from "../ipc/commands";
+import {
+  consoleCustomLlmReadiness,
+  consoleLogoutToCustom,
+  consoleMemberBenefits,
+  consoleMemberUsage,
+} from "../ipc/commands";
 import type { MemberBenefit, MemberUsageView } from "../ipc/types";
 import AppButton from "../components/AppButton.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
@@ -24,6 +29,7 @@ const loadError = ref("");
 const actionError = ref("");
 const logoutOpen = ref(false);
 const logoutBusy = useBusy();
+const customConfigured = ref(false);
 const accountName = computed(() => auth.userInfo?.nickName || auth.userInfo?.phone || "已登录");
 const level = computed(() => auth.userInfo?.memberLevel);
 const memberTier = computed(() => {
@@ -38,7 +44,9 @@ const memberTier = computed(() => {
       : "member";
   return { name, tone, label: name.includes("会员") ? name : `${name} 会员` };
 });
-const logoutText = computed(() => serviceRunning.value ? "若您退出登录，当前服务将会重启，正在任务中的智能体也会被强制关闭，确认操作吗？" : "若您退出登录，则需要您手动配置大模型，确认操作吗？");
+const logoutText = computed(() => customConfigured.value
+  ? "退出后，正在运行的会员任务将继续完成；后续任务将使用本机自定义模型配置。"
+  : "退出后，正在运行的会员任务将继续完成；后续任务需要先配置本机自定义模型，否则无法执行。");
 const kefuDialogOpen = ref(false);
 const rewardDialogOpen = ref(false);
 const membershipUpdateNotice = ref(false);
@@ -145,13 +153,27 @@ async function loadBenefits() {
     loadError.value = "权益暂时无法加载";
   } finally { loading.value = false; }
 }
+async function openLogout() {
+  actionError.value = "";
+  try {
+    customConfigured.value = (await consoleCustomLlmReadiness()).customConfigured;
+  } catch {
+    customConfigured.value = false;
+  }
+  logoutOpen.value = true;
+}
+
 async function onLogout(v: "ok" | "cancel") {
   logoutOpen.value = false;
   if (v !== "ok") return;
   await logoutBusy.run("退出中", async () => {
-    await consoleLogout(); auth.clear();
-    if (serviceRunning.value) { await service.stop(); env.setPort(null); env.setPort(await service.start()); }
-    await router.replace("/");
+    try {
+      await consoleLogoutToCustom();
+      auth.clear();
+      await router.replace("/login");
+    } catch (error) {
+      actionError.value = String(error);
+    }
   });
 }
 onMounted(async () => {
@@ -308,7 +330,7 @@ onUnmounted(() => clearMemberUsage());
 
       <section class="tw-panel pf-danger" aria-label="账户操作">
         <div class="tw-panel__body pf-danger__body">
-          <AppButton variant="danger" class="pf-logout" :busy="logoutBusy.busy.value" @click="logoutOpen = true">
+          <AppButton variant="danger" class="pf-logout" :busy="logoutBusy.busy.value" data-test="logout-action" @click="openLogout">
             退出登录
           </AppButton>
         </div>
@@ -332,7 +354,7 @@ onUnmounted(() => clearMemberUsage());
       会员权益已更新，需要重启本地服务才能使用新的会员配置。<b>重启会中断正在执行的任务</b>，确认继续吗？
       <template #confirm-text>重启并刷新</template>
     </ConfirmDialog>
-    <ConfirmDialog :open="logoutOpen" title="确认退出登录？" @close="onLogout">{{ logoutText }}<template #confirm-text>确认退出</template></ConfirmDialog>
+    <ConfirmDialog data-test="logout-dialog" :open="logoutOpen" title="确认退出登录？" @close="onLogout">{{ logoutText }}<template #confirm-text>确认退出</template></ConfirmDialog>
   </main>
 </template>
 

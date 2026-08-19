@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   consoleMemberUsage: vi.fn(),
   consoleMemberBenefits: vi.fn(),
   consoleLogout: vi.fn(),
+  consoleCustomLlmReadiness: vi.fn(),
+  consoleLogoutToCustom: vi.fn(),
   consoleStartService: vi.fn(),
   consoleStopService: vi.fn(),
   consoleOpenWebui: vi.fn(),
@@ -17,6 +19,8 @@ vi.mock("../../ipc/commands", () => ({
   consoleAuthStatus: mocks.consoleAuthStatus,
   consoleMemberUsage: mocks.consoleMemberUsage,
   consoleLogout: mocks.consoleLogout,
+  consoleCustomLlmReadiness: mocks.consoleCustomLlmReadiness,
+  consoleLogoutToCustom: mocks.consoleLogoutToCustom,
   consoleStartService: mocks.consoleStartService,
   consoleStopService: mocks.consoleStopService,
   consoleOpenWebui: mocks.consoleOpenWebui,
@@ -65,6 +69,8 @@ beforeEach(async () => {
     unlimited_quota: false,
   });
   mocks.consoleLogout.mockResolvedValue(undefined);
+  mocks.consoleCustomLlmReadiness.mockResolvedValue({ customConfigured: false });
+  mocks.consoleLogoutToCustom.mockResolvedValue({ customConfigured: false });
   mocks.consoleStartService.mockResolvedValue(8899);
   mocks.consoleStopService.mockResolvedValue(undefined);
   mocks.consoleOpenWebui.mockResolvedValue(undefined);
@@ -213,5 +219,74 @@ describe("ProfilePage", () => {
 
     expect(wrapper.get('[data-test="member-kefu-entry"]').text()).toContain("联系客服");
     expect(wrapper.get('[data-test="member-reward-entry"]').text()).toContain("支持作者");
+  });
+
+  it("uses ready copy and logs out without restarting the service", async () => {
+    mocks.consoleAuthStatus.mockResolvedValueOnce({
+      authenticated: true,
+      userInfo: { id: 1, nickName: "Tester", gender: 0, status: 1 },
+      expireAt: 9999999999,
+    });
+    mocks.consoleCustomLlmReadiness.mockResolvedValueOnce({ customConfigured: true });
+    const wrapper = mount(ProfilePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+    await wrapper.get('[data-test="logout-action"]').trigger("click");
+    await flushPromises();
+
+    const dialog = wrapper.get('[data-test="logout-dialog"]');
+    expect(dialog.text()).toContain("退出后，正在运行的会员任务将继续完成；后续任务将使用本机自定义模型配置。");
+    wrapper.findAllComponents(ConfirmDialog)
+      .find((dialog) => dialog.attributes("data-test") === "logout-dialog")
+      ?.vm.$emit("close", "ok");
+    await flushPromises();
+
+    expect(mocks.consoleLogoutToCustom).toHaveBeenCalledTimes(1);
+    expect(useAuthStore().authenticated).toBe(false);
+    expect(router.currentRoute.value.path).toBe("/login");
+    expect(mocks.consoleStopService).not.toHaveBeenCalled();
+    expect(mocks.consoleStartService).not.toHaveBeenCalled();
+    expect(mocks.consoleOpenWebui).not.toHaveBeenCalled();
+  });
+
+  it("uses not-ready copy when custom readiness is unavailable", async () => {
+    mocks.consoleAuthStatus.mockResolvedValueOnce({
+      authenticated: true,
+      userInfo: { id: 1, nickName: "Tester", gender: 0, status: 1 },
+      expireAt: 9999999999,
+    });
+    mocks.consoleCustomLlmReadiness.mockRejectedValueOnce(new Error("readiness failed"));
+    const wrapper = mount(ProfilePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+    await wrapper.get('[data-test="logout-action"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get('[data-test="logout-dialog"]').text()).toContain(
+      "退出后，正在运行的会员任务将继续完成；后续任务需要先配置本机自定义模型，否则无法执行。",
+    );
+  });
+
+  it("keeps auth and shows an error when coordinated logout fails", async () => {
+    mocks.consoleAuthStatus.mockResolvedValueOnce({
+      authenticated: true,
+      userInfo: { id: 1, nickName: "Tester", gender: 0, status: 1 },
+      expireAt: 9999999999,
+    });
+    mocks.consoleCustomLlmReadiness.mockResolvedValueOnce({ customConfigured: true });
+    mocks.consoleLogoutToCustom.mockRejectedValueOnce(new Error("runtime switch failed"));
+    const wrapper = mount(ProfilePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+    await wrapper.get('[data-test="logout-action"]').trigger("click");
+    await flushPromises();
+    wrapper.findAllComponents(ConfirmDialog)
+      .find((dialog) => dialog.attributes("data-test") === "logout-dialog")
+      ?.vm.$emit("close", "ok");
+    await flushPromises();
+
+    expect(useAuthStore().authenticated).toBe(true);
+    expect(router.currentRoute.value.path).toBe("/profile");
+    expect(wrapper.get('[role="alert"]').text()).toContain("runtime switch failed");
   });
 });
