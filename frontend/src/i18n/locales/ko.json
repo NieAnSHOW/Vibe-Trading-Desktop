@@ -462,6 +462,11 @@
   },
   "correlation": {
     "title": "상관 행렬",
+    "subtitle": "피어슨 및 스피어만 방식을 지원하는 다중 자산 수익률 상관 히트맵.",
+    "controls": "계산 매개변수",
+    "results": "상관 결과",
+    "emptyTitle": "아직 결과 없음",
+    "emptyBody": "자산 코드를 입력하고 '계산'을 클릭하면 상관 히트맵이 표시됩니다.",
     "assetCodes": "자산 코드",
     "assetCodesHint": "쉼표로 구분된 티커 심볼(예: BTC-USDT,ETH-USDT,AAPL,SPY)",
     "windowDays": "윈도우(일)",

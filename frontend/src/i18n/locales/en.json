@@ -556,6 +556,11 @@
   },
   "correlation": {
     "title": "Correlation Matrix",
+    "subtitle": "Cross-asset return correlation heatmap with Pearson and Spearman methods.",
+    "controls": "Parameters",
+    "results": "Results",
+    "emptyTitle": "No results yet",
+    "emptyBody": "Enter asset codes and click Compute to render the correlation heatmap.",
     "assetCodes": "Asset codes",
     "assetCodesHint": "Comma-separated ticker symbols, e.g. 000001.SZ,600519.SH,000858.SZ",
     "windowDays": "Window (days)",

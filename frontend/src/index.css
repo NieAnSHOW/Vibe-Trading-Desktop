@@ -257,6 +257,95 @@ html.desktop-shell-leaving .desktop-shell-content {
     @apply mx-auto w-full min-w-0 max-w-[1120px] px-4 pb-10 pt-6 sm:px-6;
   }
 
+  /* Dashboard responds to the width left by the desktop shell, not the viewport. */
+  .dashboard-page {
+    container: dashboard / inline-size;
+  }
+
+  .dashboard-index-strip {
+    display: flex;
+    gap: 0.5rem;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    padding-bottom: 0.15rem;
+    scrollbar-width: thin;
+  }
+
+  .dashboard-index-strip > * {
+    flex: 0 0 10rem;
+  }
+
+  .dashboard-snapshot-grid,
+  .dashboard-detail-grid,
+  .dashboard-rankings-grid {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .dashboard-snapshot-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-detail-grid,
+  .dashboard-rankings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-snapshot-grid > .tw-panel,
+  .dashboard-detail-grid > .tw-panel,
+  .dashboard-rankings-grid > .tw-panel {
+    align-self: start;
+  }
+
+  @container dashboard (min-width: 720px) {
+    .dashboard-snapshot-grid,
+    .dashboard-detail-grid,
+    .dashboard-rankings-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @container dashboard (min-width: 1220px) {
+    .dashboard-snapshot-grid {
+      grid-template-columns: minmax(0, 1.3fr) repeat(2, minmax(0, 0.85fr));
+    }
+
+    .dashboard-snapshot-grid > :first-child {
+      grid-row: span 2;
+    }
+
+    .dashboard-snapshot-grid > :nth-child(4) {
+      grid-column: span 2;
+    }
+
+    .dashboard-rankings-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  @container dashboard (min-width: 1560px) {
+    .dashboard-snapshot-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .dashboard-snapshot-grid > :first-child,
+    .dashboard-snapshot-grid > :nth-child(4) {
+      grid-column: auto;
+      grid-row: auto;
+    }
+
+    .dashboard-index-strip {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      overflow-x: visible;
+    }
+
+    .dashboard-index-strip > * {
+      min-width: 0;
+    }
+  }
+
   /* 页头:金色等宽 kicker + 衬线标题(kicker 每页只出现一次,不做逐节 eyebrow) */
   .tw-kicker {
     @apply font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-gold;

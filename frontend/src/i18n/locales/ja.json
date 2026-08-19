@@ -462,6 +462,11 @@
   },
   "correlation": {
     "title": "相関行列",
+    "subtitle": "ピアソンおよびスピアマン方式に対応した複数資産のリターン相関ヒートマップ。",
+    "controls": "計算パラメータ",
+    "results": "相関結果",
+    "emptyTitle": "結果はまだありません",
+    "emptyBody": "資産コードを入力して「計算」をクリックすると、相関ヒートマップが表示されます。",
     "assetCodes": "アセットコード",
     "assetCodesHint": "カンマ区切りのティッカーシンボル(例: BTC-USDT,ETH-USDT,AAPL,SPY)",
     "windowDays": "ウィンドウ(日)",

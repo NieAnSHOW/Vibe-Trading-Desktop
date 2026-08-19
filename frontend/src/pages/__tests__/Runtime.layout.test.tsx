@@ -39,10 +39,10 @@ describe("Runtime workspace layout", () => {
     );
 
     expect(screen.getByTestId("runtime-workspace")).toHaveClass(
+      "max-w-none",
       "flex",
       "w-full",
-      "p-3",
-      "lg:p-5",
+      "min-h-0",
     );
   });
 

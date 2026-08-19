@@ -12,7 +12,7 @@ export function Runtime() {
   return (
     <div
       data-testid="runtime-workspace"
-      className="tw-page flex h-full w-full flex-col gap-3 p-3 lg:gap-3 lg:p-5"
+      className="tw-page max-w-none flex h-full min-h-0 w-full min-w-0 flex-col gap-3"
     >
       <PageHeader kicker="Runtime" title={t("layout.runtime")} />
       <RuntimeStatus />

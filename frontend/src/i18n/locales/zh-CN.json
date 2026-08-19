@@ -551,6 +551,11 @@
   },
   "correlation": {
     "title": "相关性矩阵",
+    "subtitle": "多资产收益率相关性热力图，支持皮尔逊与斯皮尔曼方法。",
+    "controls": "计算参数",
+    "results": "相关性结果",
+    "emptyTitle": "尚无结果",
+    "emptyBody": "输入资产代码并点击「计算」，生成相关性热力图。",
     "assetCodes": "资产代码",
     "assetCodesHint": "逗号分隔的标的代码，如 BTC-USDT,ETH-USDT,AAPL,SPY",
     "windowDays": "窗口（天）",

@@ -94,7 +94,7 @@ function IndexStrip({ indexes }: { indexes: DashboardIndex[] }) {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]">
+    <div className="dashboard-index-strip" aria-label={t("dashboard.marketSnapshot")}>
       {indexes.map((idx) => {
         const color = changeColor(idx.changePct);
         return (
@@ -865,7 +865,7 @@ function MarketSnapshotSection({
 
   return (
     <section aria-label={t("dashboard.marketSnapshot")} className="space-y-3">
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 min-[1440px]:grid-cols-4">
+      <div className="dashboard-snapshot-grid">
         <MarketBreadthCard
           snapshot={snapshot}
           loading={loading}
@@ -879,7 +879,7 @@ function MarketSnapshotSection({
         <MarketTrendCard snapshot={snapshot} loading={loading} error={error} />
         <MarketLimitCard snapshot={snapshot} loading={loading} error={error} />
       </div>
-      <div className="grid gap-2 lg:grid-cols-2">
+      <div className="dashboard-detail-grid">
         <BoardHeatCard
           testId="market-concepts-card"
           title={t("dashboard.conceptHeat")}
@@ -927,7 +927,7 @@ function MarketRankingsSection({
 
   return (
     <section aria-label={t("dashboard.rankings")}>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="dashboard-rankings-grid">
         <StockRankCard
           testId="top-gainers-card"
           title={t("dashboard.topGainers")}
@@ -1001,7 +1001,7 @@ export default function Dashboard() {
   }, [initialize, startPolling, stopPolling]);
 
   return (
-    <div className="tw-page max-w-none w-full space-y-3">
+    <div className="tw-page dashboard-page max-w-none w-full space-y-3">
       {/* Market Overview */}
       <section aria-labelledby="market-overview" className="space-y-3">
         <div id="market-overview">

@@ -158,7 +158,36 @@ describe("Dashboard page", () => {
       const { container } = renderDashboard();
 
       expect(container.firstElementChild).toHaveClass("w-full");
+      expect(container.firstElementChild).toHaveClass("dashboard-page");
       expect(container.firstElementChild).not.toHaveClass("max-w-[1440px]");
+    });
+
+    it("uses shell-aware layout hooks to avoid wrapping market tiles into orphan rows", () => {
+      stateWithMarketData({
+        indexes: Array.from({ length: 8 }, (_, index) => ({
+          code: `index-${index}`,
+          name: `指数 ${index + 1}`,
+          price: 3000 + index,
+          changePct: index % 2 === 0 ? 0.5 : -0.3,
+          changeAmt: index,
+          source: "test",
+          stale: false,
+        })),
+      });
+      const { container } = renderDashboard();
+
+      expect(container.querySelector(".dashboard-index-strip")).toHaveClass(
+        "dashboard-index-strip",
+      );
+      expect(container.querySelector(".dashboard-snapshot-grid")).toHaveClass(
+        "dashboard-snapshot-grid",
+      );
+      expect(container.querySelector(".dashboard-detail-grid")).toHaveClass(
+        "dashboard-detail-grid",
+      );
+      expect(container.querySelector(".dashboard-rankings-grid")).toHaveClass(
+        "dashboard-rankings-grid",
+      );
     });
 
     it("renders market-first sections before watchlist detail", () => {

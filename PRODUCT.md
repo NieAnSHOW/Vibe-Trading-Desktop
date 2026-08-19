@@ -1,10 +1,12 @@
 # Product
 
-## Register
+<!-- impeccable:product-schema 1 -->
 
-product
+## Platform
 
-> 品牌+产品兼顾：Vibe Trading Desktop 首先是一个金融研究工具，但它面向个人投资者，品牌传达温暖、可信赖的陪伴感，而非冷冰冰的交易终端。
+web
+
+The primary research experience is a React web UI embedded by the Tauri desktop shell. The UI must work in the narrower content area left after the persistent desktop rail and in-app navigation are rendered.
 
 ## Users
 
@@ -19,7 +21,24 @@ product
 - 自然语言界面，降低金融研究的技术门槛
 - 70+ 金融技能覆盖技术分析、基本面、策略回测、加密货币等
 
-## Brand Personality
+## Positioning
+
+Vibe Trading Desktop combines a local-first desktop runtime with natural-language finance research, backtesting, and market data. It makes professional research workflows usable without asking individual investors to become quant developers or to hand over their data to a hosted terminal.
+
+## Operating Context
+
+- Users work alone on a desktop computer, often in a focused research session rather than while actively placing an order.
+- The WebUI is deeply integrated with the Tauri shell. A persistent desktop rail and the expandable research sidebar reduce the usable content width.
+- The dashboard is an orientation surface: it should help a user understand the current market regime, then lead them to deeper research rather than present every available metric at equal priority.
+
+## Capabilities and Constraints
+
+- The product provides natural-language research, market data, technical and fundamental analysis, backtesting, paper/live runtime monitoring, and related finance skills.
+- Market terminology and color semantics must remain appropriate for China A-share users: red denotes rising and green denotes falling.
+- Preserve data freshness, source, stale, loading, empty, and error states. Routine validation must never trigger broker writes or live trading.
+- React 19, TypeScript, Tailwind CSS, and Tauri v2 are established implementation constraints.
+
+## Brand Commitments
 
 **温暖 · 活泼 · 友好**
 
@@ -27,12 +46,16 @@ product
 
 关键情绪目标：**自信**（投资者感到被赋能，而不是被数据淹没）、**安心**（本地运行，数据在自己手里）、**启发**（发现新的投资视角）。
 
-## Anti-references
+The existing visual authority is the **Trading Worker** design system from the OpenDesign MCP. Preserve its quiet panel language, gold typography accent, data-oriented numerals, and warm-but-professional character; do not introduce a competing visual world while refining existing surfaces.
 
-- **避免拥挤的券商 App**（如 Webull / 富途）：不要把所有数据堆在一个屏幕上。Vibe Trading Desktop 是对话式的，信息应该有层次、有节奏地呈现，而不是像仪表盘一样撒满屏幕。
-- 避免冷冰冰的专业终端感（Bloomberg Terminal 风格）：那不是我们的用户。
+## Evidence on Hand
 
-## Design Principles
+- Product and architecture documentation: `AGENTS.md`.
+- Existing WebUI design tokens and shared primitives: `frontend/src/index.css`, `frontend/src/components/common/PageHeader.tsx`, and `frontend/src/components/layout/DesktopShellRail.tsx`.
+- Current dashboard implementation and its data states: `frontend/src/pages/Dashboard.tsx`.
+- Captured embedded-shell dashboard evidence supplied by the user on 2026-08-19.
+
+## Product Principles
 
 1. **自然语言优先** —— 对话是主要的交互方式，UI 辅助对话，而非反过来
 2. **信息分层，不要信息轰炸** —— 一次呈现最重要的数字/图表，细节可以展开

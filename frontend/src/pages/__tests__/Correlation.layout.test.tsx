@@ -29,18 +29,21 @@ describe("Correlation responsive layout contract", () => {
   it("uses a two-column desktop workspace that stacks controls before results on mobile", () => {
     render(<Correlation />);
 
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Correlation Matrix" }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("correlation-workspace")).toHaveClass(
+      "grid",
+      "min-h-0",
       "min-w-0",
-      "lg:grid",
+      "flex-1",
       "lg:grid-cols-[minmax(15rem,0.36fr)_minmax(0,1fr)]",
     );
     expect(screen.getByTestId("correlation-controls")).toHaveClass(
-      "rounded-lg",
       "tw-panel",
       "lg:overflow-auto",
     );
     expect(screen.getByTestId("correlation-results")).toHaveClass(
-      "rounded-lg",
       "tw-panel",
       "lg:overflow-auto",
     );

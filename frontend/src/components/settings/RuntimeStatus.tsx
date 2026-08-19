@@ -88,7 +88,7 @@ export function RuntimeStatus() {
   const summary = useMemo(() => summarizeRuntime(status), [status]);
 
   return (
-    <section className="tw-panel">
+    <section className="tw-panel min-h-0 flex-1 lg:overflow-auto">
       <div className="flex flex-col gap-6 tw-panel-body">
         <div className="flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-3">
