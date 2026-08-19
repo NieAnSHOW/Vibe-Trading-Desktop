@@ -12,17 +12,9 @@ vi.mock("@/lib/api", () => ({
   api: apiMock,
 }));
 
-// 真实遥测在 jsdom(fake-indexeddb)下会拖垮 worker,与其它页面测试一致地 mock 掉。
-const telemetryMock = vi.hoisted(() => ({
+// 避免向 fake-indexeddb 写入测试事件,与其它页面测试一致地 mock 掉遥测。
+vi.mock("@/lib/telemetry", () => ({
   track: vi.fn(),
-  getConsent: vi.fn(() => false),
-  setConsent: vi.fn(async () => {}),
-}));
-vi.mock("@/lib/telemetry", () => telemetryMock);
-
-vi.mock("@/lib/apiAuth", () => ({
-  getApiAuthKey: vi.fn(() => ""),
-  setApiAuthKey: vi.fn(),
 }));
 
 describe("Runtime workspace layout", () => {
@@ -54,7 +46,7 @@ describe("Runtime workspace layout", () => {
     );
   });
 
-  it("leads with the runtime monitor and keeps browser-side access panels", async () => {
+  it("shows only the runtime monitor", async () => {
     render(
       <MemoryRouter>
         <Runtime />
@@ -70,13 +62,11 @@ describe("Runtime workspace layout", () => {
       screen.getByRole("heading", { name: "Runtime" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Local API access" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Usage Data" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("heading", { name: "Settings" }),
+      screen.queryByRole("heading", { name: "Local API access" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Usage Data" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
   });
 });
