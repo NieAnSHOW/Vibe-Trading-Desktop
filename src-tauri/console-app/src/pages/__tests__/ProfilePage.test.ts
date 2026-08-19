@@ -120,14 +120,57 @@ describe("ProfilePage", () => {
     await flushPromises();
 
     const usageSection = wrapper.get('[data-test="member-usage-section"]');
-    expect(usageSection.text()).toContain("98,025,508积分");
-    expect(usageSection.get('[role="progressbar"]').attributes("aria-label")).toBe("剩余额度");
-    expect(wrapper.text()).toContain("总量 113,514,188");
-    expect(wrapper.text()).toContain("已用 15,488,680");
+    expect(usageSection.text()).toContain("98,025,508积分可用");
+    expect(usageSection.get('[role="progressbar"]').attributes("aria-label")).toBe("剩余研究额度");
+    expect(wrapper.text()).toContain("总额度 113,514,188");
+    expect(wrapper.text()).toContain("已使用 15,488,680");
 
     await wrapper.get('[data-test="member-usage-refresh"]').trigger("click");
     await flushPromises();
     expect(mocks.consoleMemberUsage).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the research quota panel stable with a loading skeleton", async () => {
+    mocks.consoleAuthStatus.mockResolvedValue({
+      authenticated: true,
+      userInfo: { id: 1, nickName: "Tester", gender: 0, status: 1, loginType: 2 },
+      expireAt: 9999999999,
+    });
+    mocks.consoleMemberUsage.mockReturnValue(new Promise(() => {}));
+    const wrapper = mount(ProfilePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+
+    const usageSection = wrapper.get('[data-test="member-usage-section"]');
+    expect(usageSection.get('[data-test="member-usage-skeleton"]').attributes("aria-busy")).toBe("true");
+    expect(usageSection.find(".pf-state").exists()).toBe(false);
+  });
+
+  it("groups account context, research quota, and membership capabilities", async () => {
+    mocks.consoleAuthStatus.mockResolvedValue({
+      authenticated: true,
+      userInfo: {
+        id: 1,
+        nickName: "Tester",
+        gender: 0,
+        status: 1,
+        loginType: 2,
+        memberLevel: { id: 3, name: "Pro", code: "pro", levelValue: 20 },
+      },
+      expireAt: 9999999999,
+    });
+    mocks.consoleMemberBenefits.mockResolvedValue({
+      benefits: [{ id: "models", title: "高级模型访问", description: "可使用会员模型进行研究" }],
+    });
+    const wrapper = mount(ProfilePage, { global: { plugins: [router] } });
+
+    await flushPromises();
+
+    expect(wrapper.get('[data-test="profile-workspace"]').classes()).toContain("pf-workspace");
+    expect(wrapper.get(".tw-kicker").text()).toBe("Membership");
+    expect(wrapper.get('[data-test="member-usage-section"]').text()).toContain("研究额度");
+    expect(wrapper.get('[data-test="member-capabilities"]').text()).toContain("会员能力");
+    expect(wrapper.text()).toContain("用于会员支持的研究与模型能力");
   });
 
   it("restarts a running service when membership changes are acknowledged", async () => {

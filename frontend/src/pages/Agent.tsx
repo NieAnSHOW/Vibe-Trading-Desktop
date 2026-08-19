@@ -1985,7 +1985,10 @@ export function Agent() {
       </div>
 
       <form onSubmit={handleSubmit} className="px-4 pb-4 backdrop-blur-sm">
-        <div className="max-w-5xl mx-auto space-y-2">
+        <div
+          className="max-w-5xl mx-auto rounded-2xl"
+          style={{ boxShadow: "8px -8px 38px rgba(205, 198, 198, 0.31)" }}
+        >
           {goalSnapshot && !goalComposerActive && (
             <div className="grid gap-2">
               <button
@@ -2025,7 +2028,7 @@ export function Agent() {
                 />
               </button>
               {goalDetailsOpen && (
-                <div className="grid gap-3 rounded-xl border border-primary/20 bg-background/95 p-3 text-xs">
+                <div className="grid gap-3 rounded-2xl border border-primary/20 bg-background/95 p-3 text-xs">
                   {goalEditActive ? (
                     <div className="grid gap-2">
                       <textarea
@@ -2212,7 +2215,7 @@ export function Agent() {
           )}
           <div
             data-testid="agent-composer"
-            className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-2 transition-[border-color,box-shadow] focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20"
+            className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-2 transition-[border-color,box-shadow] focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20"
           >
             {(swarmPreset || goalComposerActive || attachment) && (
               <div className="order-first flex w-full flex-wrap items-center gap-1.5 px-1 pt-1">
@@ -2513,7 +2516,7 @@ export function Agent() {
                       ? !input.trim()
                       : !input.trim() && !attachment)
                   }
-                  className="tw-btn-primary h-9 w-9 !px-0 shrink-0"
+                  className="tw-btn-primary h-9 w-9 !px-0 shrink-0 rounded-lg"
                 >
                   <Send className="h-4 w-4" />
                 </button>
