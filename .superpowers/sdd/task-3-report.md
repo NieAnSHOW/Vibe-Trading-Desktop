@@ -15,7 +15,7 @@ Added `CustomLLMReadiness`, the `Credential` auth error variant, exact Rust-comm
 
 ## Commit
 
-Recorded after implementation commit.
+`30014ead` (`feat: expose custom logout and quiet service start`, signed with DCO).
 
 ## Files
 
