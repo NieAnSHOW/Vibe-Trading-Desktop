@@ -533,6 +533,29 @@ def test_desktop_exit_vip_route_is_redacted(tmp_path: Path, monkeypatch: pytest.
     assert "api_key" not in response.text.lower()
 
 
+def test_custom_readiness_route_is_read_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "DESKTOP_LLM_MODE=vip\nLANGCHAIN_PROVIDER=ollama\n"
+        "LANGCHAIN_MODEL_NAME=llama3\nOLLAMA_BASE_URL=http://localhost:11434\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api_server, "ENV_PATH", env_path)
+    monkeypatch.setattr(api_server, "ENV_EXAMPLE_PATH", tmp_path / ".env.example")
+    monkeypatch.setattr(api_server, "USER_ENV_PATH", tmp_path / "home" / ".vibe-trading" / ".env")
+
+    async def read_readiness() -> httpx.Response:
+        transport = httpx.ASGITransport(app=api_server.app, client=("127.0.0.1", 50000))
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            return await client.get("/settings/llm/custom-readiness")
+
+    response = asyncio.run(read_readiness())
+
+    assert response.status_code == 200
+    assert response.json() == {"custom_configured": True}
+    assert "DESKTOP_LLM_MODE=vip" in env_path.read_text(encoding="utf-8")
+
+
 def test_vip_mode_without_transient_credential_is_not_reported_as_active(
     client: TestClient, tmp_path: Path,
 ) -> None:
