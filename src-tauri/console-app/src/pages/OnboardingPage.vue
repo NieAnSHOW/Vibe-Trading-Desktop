@@ -8,7 +8,7 @@ import { useServiceStore } from "../stores/service";
 import { useBootstrapStore } from "../stores/bootstrap";
 import { useAuthStore } from "../stores/auth";
 import { config, loadPublicConfig } from "../config/prod";
-import { consoleBootstrap, consoleQuit } from "../ipc/commands";
+import { consoleBootstrap, consoleOpenWebui, consoleQuit } from "../ipc/commands";
 import {
   onBootstrapEvent,
   onBootstrapExit,
@@ -96,7 +96,7 @@ async function startResearchService() {
 }
 
 async function continueStartup() {
-  if (envState.value !== "ready" || serviceRunning.value) return;
+  if (envState.value !== "ready") return;
 
   await loadPublicConfig();
 
@@ -106,6 +106,21 @@ async function continueStartup() {
       await router.replace("/login");
       return;
     }
+  }
+
+  // A return from the login surface can leave the sidecar running. Reopen its
+  // retained WebUI frame instead of waiting for a new service-start event.
+  if (serviceRunning.value) {
+    if (env.port != null) {
+      try {
+        await consoleOpenWebui(env.port);
+      } catch (error) {
+        setErr(error);
+      }
+    } else {
+      setErr("本地服务端口不可用，请重启服务");
+    }
+    return;
   }
 
   await startResearchService();

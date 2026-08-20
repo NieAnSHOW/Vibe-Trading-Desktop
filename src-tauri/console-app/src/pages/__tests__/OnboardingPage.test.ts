@@ -185,6 +185,22 @@ describe("OnboardingPage", () => {
     expect(consoleOpenWebui).toHaveBeenCalledWith(8899);
   });
 
+  it("reopens an already-running service after re-login instead of hanging on onboarding", async () => {
+    const { consoleStartService, consoleOpenWebui } = await import("../../ipc/commands");
+    mocks.consoleStatus.mockResolvedValueOnce({
+      env: "ready",
+      service_running: true,
+      port: 8899,
+    });
+
+    mount(OnboardingPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(mocks.consoleAuthStatus).toHaveBeenCalledTimes(1);
+    expect(consoleStartService).not.toHaveBeenCalled();
+    expect(consoleOpenWebui).toHaveBeenCalledWith(8899);
+  });
+
   it("resumes service startup after a user returns from login", async () => {
     const { consoleStartService } = await import("../../ipc/commands");
     const flowRouter = createRouter({

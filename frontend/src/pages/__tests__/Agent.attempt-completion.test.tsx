@@ -114,6 +114,33 @@ describe("Agent attempt completion", () => {
     expect(composer.querySelector("button[type='submit']")).toBeInTheDocument();
   });
 
+  it("removes the VIP model selector when the desktop shell logs out", async () => {
+    apiMock.getLLMSettings.mockResolvedValue({
+      sse_timeout_seconds: 90,
+      desktop_login_provisioned: true,
+      desktop_llm_mode: "vip",
+      desktop_vip_available: true,
+      model_name: "gpt-5.6-terra",
+      vip_models: ["gpt-5.6-terra", "gpt-5.6-sol"],
+    });
+
+    renderAgent();
+
+    const trigger = await screen.findByRole("button", { name: /agent\.vipModel/ });
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+
+    window.dispatchEvent(new MessageEvent("message", {
+      data: { type: "vibe-shell:auth-logout" },
+      source: window,
+    }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /agent\.vipModel/ })).not.toBeInTheDocument();
+    });
+  });
+
   it("starts the composer at a single input row", async () => {
     renderAgent();
 

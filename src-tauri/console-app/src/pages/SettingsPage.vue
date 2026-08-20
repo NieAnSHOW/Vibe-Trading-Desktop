@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
+import { useRouter } from "vue-router";
 import AppButton from "../components/AppButton.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import { useAuthStore } from "../stores/auth";
 import { useEnvStore } from "../stores/env";
 import { useServiceStore } from "../stores/service";
 import { useBusy } from "../composables/useBusy";
@@ -51,6 +53,8 @@ import tauriConf from "../../../tauri.conf.json";
 
 const env = useEnvStore();
 const service = useServiceStore();
+const auth = useAuthStore();
+const router = useRouter();
 const { serviceRunning } = storeToRefs(env);
 
 const notice = ref("");
@@ -198,6 +202,10 @@ function onToggleClearTushare(event: Event) {
 }
 
 async function switchToVip() {
+  if (!auth.authenticated) {
+    await router.replace("/login");
+    return;
+  }
   const port = settingsPort.value;
   if (port == null) return;
   await llmBusy.run("切换中", async () => {

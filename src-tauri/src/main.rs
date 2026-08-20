@@ -87,6 +87,7 @@ fn main() {
             console::console_logout,
             console::console_custom_llm_readiness,
             console::console_logout_to_custom,
+            console::console_login_activate_vip,
             console::console_fetch_ads,
             console::console_get_public_config,
             console::console_check_update,
@@ -330,5 +331,26 @@ mod tests {
             serde_json::Value::String("VERSION".into()),
             "bundle.resources 必须打包 VERSION,否则 release 下 runtime prepare 读不到版本标记"
         );
+    }
+
+    #[test]
+    fn default_capability_allows_custom_llm_commands() {
+        let cfg: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json"))
+                .expect("parse capabilities/default.json");
+        let permissions = cfg["permissions"]
+            .as_array()
+            .expect("default capability permissions must be an array");
+
+        for permission in [
+            "allow-console-custom-llm-readiness",
+            "allow-console-logout-to-custom",
+            "allow-console-login-activate-vip",
+        ] {
+            assert!(
+                permissions.iter().any(|value| value == permission),
+                "default capability must include {permission}"
+            );
+        }
     }
 }

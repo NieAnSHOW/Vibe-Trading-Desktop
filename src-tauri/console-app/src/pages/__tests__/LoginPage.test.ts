@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   })),
   consoleStartService: vi.fn(async () => 8899),
   consoleOpenWebui: vi.fn(async () => true),
+  consoleCustomLlmReadiness: vi.fn(async () => ({ customConfigured: false })),
+  consoleLoginActivateVip: vi.fn(async () => null as number | null),
   consoleAuthStatus: vi.fn(async () => ({
     authenticated: false,
     userInfo: null,
@@ -48,6 +50,8 @@ vi.mock("../../ipc/commands", () => ({
   consoleStatus: mocks.consoleStatus,
   consoleStartService: mocks.consoleStartService,
   consoleOpenWebui: mocks.consoleOpenWebui,
+  consoleCustomLlmReadiness: mocks.consoleCustomLlmReadiness,
+  consoleLoginActivateVip: mocks.consoleLoginActivateVip,
   consoleAuthStatus: mocks.consoleAuthStatus,
   consoleLoginCaptcha: mocks.consoleLoginCaptcha,
   consoleLoginSendSms: mocks.consoleLoginSendSms,
@@ -79,6 +83,8 @@ beforeEach(async () => {
   });
   mocks.consoleStartService.mockResolvedValue(8899);
   mocks.consoleOpenWebui.mockResolvedValue(true);
+  mocks.consoleCustomLlmReadiness.mockResolvedValue({ customConfigured: false });
+  mocks.consoleLoginActivateVip.mockResolvedValue(null);
   setActivePinia(createPinia());
   await router.push("/login");
   await router.isReady();
@@ -100,6 +106,22 @@ describe("LoginPage", () => {
     expect(mocks.consoleOpenWebui).not.toHaveBeenCalled();
   });
 
+  it("continues directly to research when custom LLM is already configured", async () => {
+    mocks.consoleStatus.mockResolvedValueOnce({
+      env: "ready",
+      service_running: true,
+      port: 8899,
+    });
+    mocks.consoleCustomLlmReadiness.mockResolvedValueOnce({ customConfigured: true });
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    await w.get('[data-test="continue-custom"]').trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleCustomLlmReadiness).toHaveBeenCalledTimes(1);
+    expect(mocks.consoleOpenWebui).toHaveBeenCalledWith(8899);
+    expect(router.currentRoute.value.path).toBe("/");
+  });
+
   it("starts a stopped local service without opening WebUI before continuing to settings", async () => {
     const w = mount(LoginPage, { global: { plugins: [router] } });
     await w.get('[data-test="continue-custom"]').trigger("click");
@@ -111,6 +133,17 @@ describe("LoginPage", () => {
     expect(router.currentRoute.value.path).toBe("/settings");
   });
 
+  it("starts a stopped local service and goes to research when custom LLM is configured", async () => {
+    mocks.consoleCustomLlmReadiness.mockResolvedValueOnce({ customConfigured: true });
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    await w.get('[data-test="continue-custom"]').trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleCustomLlmReadiness).toHaveBeenCalledTimes(1);
+    expect(mocks.consoleOpenWebui).toHaveBeenCalledWith(8899);
+    expect(router.currentRoute.value.path).toBe("/");
+  });
+
   it("keeps the login route and shows the startup error when custom continuation fails", async () => {
     mocks.consoleStartService.mockRejectedValueOnce(new Error("服务启动失败"));
     const w = mount(LoginPage, { global: { plugins: [router] } });
@@ -119,6 +152,21 @@ describe("LoginPage", () => {
 
     expect(router.currentRoute.value.path).toBe("/login");
     expect(w.get('[role="alert"]').text()).toContain("服务启动失败");
+  });
+
+  it("keeps the login route and shows the readiness error when custom LLM status fails", async () => {
+    mocks.consoleStatus.mockResolvedValueOnce({
+      env: "ready",
+      service_running: true,
+      port: 8899,
+    });
+    mocks.consoleCustomLlmReadiness.mockRejectedValueOnce(new Error("配置状态读取失败"));
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    await w.get('[data-test="continue-custom"]').trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/login");
+    expect(w.get('[role="alert"]').text()).toContain("配置状态读取失败");
   });
 
   it("redirects a remembered token-only session after restoring auth status", async () => {
@@ -153,6 +201,21 @@ describe("LoginPage", () => {
     expect(w.text()).toContain("密码登录");
     // 默认 tab=sms：应有"获取"验证码按钮
     expect(w.text()).toContain("获取");
+  });
+
+  it("登录后等待运行中的自定义服务切换到 VIP runtime", async () => {
+    mocks.consoleLoginActivateVip.mockResolvedValueOnce(8899);
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    const inputs = w.findAll("input");
+    await inputs[0]!.setValue("13800000000");
+    await inputs[2]!.setValue("1234");
+    await inputs[3]!.setValue("1234");
+    await w.findAll("button").find((button) => button.text() === "登录")!.trigger("click");
+    await flushPromises();
+
+    expect(mocks.consoleLoginActivateVip).toHaveBeenCalledOnce();
+    expect(useEnvStore().port).toBe(8899);
+    expect(router.currentRoute.value.path).toBe("/");
   });
 
   it("进入注册页后隐藏登录方式切换", async () => {

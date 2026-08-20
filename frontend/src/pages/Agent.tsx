@@ -443,6 +443,8 @@ export function Agent() {
   const [llmSettings, setLLMSettings] = useState<LLMSettings | null>(null);
   const [vipModelSwitching, setVipModelSwitching] = useState(false);
   const focusInputAfterVipSwitchRef = useRef(false);
+  const llmSettingsRequestRef = useRef(0);
+  const vipModelsDisabledRef = useRef(false);
 
   const messages = useAgentStore((s) => s.messages);
   const streamingText = useAgentStore((s) => s.streamingText);
@@ -1325,18 +1327,48 @@ export function Agent() {
 
   useEffect(() => () => doDisconnect(), [doDisconnect]);
 
-  useEffect(() => {
-    api
+  const loadLLMSettings = useCallback(() => {
+    const requestId = ++llmSettingsRequestRef.current;
+    return api
       .getLLMSettings()
       .then((s) => {
+        if (
+          requestId !== llmSettingsRequestRef.current ||
+          vipModelsDisabledRef.current
+        )
+          return;
         sseTimeoutMsRef.current = s.sse_timeout_seconds * 1000;
         setLLMSettings(s);
       })
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    void loadLLMSettings();
+  }, [loadLLMSettings]);
+
+  useEffect(() => {
+    const onShellAuthMessage = (event: MessageEvent) => {
+      const type = (event.data as { type?: unknown } | null)?.type;
+      if (type === "vibe-shell:auth-logout") {
+        vipModelsDisabledRef.current = true;
+        llmSettingsRequestRef.current += 1;
+        setShowVipModelMenu(false);
+        setVipModelSwitching(false);
+        focusInputAfterVipSwitchRef.current = false;
+        setLLMSettings(null);
+      } else if (type === "vibe-shell:auth-login") {
+        vipModelsDisabledRef.current = false;
+        void loadLLMSettings();
+      }
+    };
+    window.addEventListener("message", onShellAuthMessage);
+    return () => window.removeEventListener("message", onShellAuthMessage);
+  }, [loadLLMSettings]);
+
   const vipModels = llmSettings?.vip_models ?? [];
   const showVipModelSelector =
+    !vipModelsDisabledRef.current &&
     llmSettings?.desktop_llm_mode === "vip" &&
     llmSettings.desktop_vip_available &&
     vipModels.length > 0;
@@ -1361,18 +1393,34 @@ export function Agent() {
       return;
     }
 
+    const requestId = llmSettingsRequestRef.current;
     setVipModelSwitching(true);
     try {
       const updated = await api.updateVIPModel(modelName);
+      if (
+        requestId !== llmSettingsRequestRef.current ||
+        vipModelsDisabledRef.current
+      )
+        return;
       setLLMSettings(updated);
     } catch (error) {
+      if (
+        requestId !== llmSettingsRequestRef.current ||
+        vipModelsDisabledRef.current
+      )
+        return;
       toast.error(
         error instanceof Error
           ? error.message
           : t("agent.vipModelSwitchFailed"),
       );
     } finally {
-      focusInputAfterVipSwitchRef.current = true;
+      if (
+        requestId === llmSettingsRequestRef.current &&
+        !vipModelsDisabledRef.current
+      ) {
+        focusInputAfterVipSwitchRef.current = true;
+      }
       setVipModelSwitching(false);
     }
   };

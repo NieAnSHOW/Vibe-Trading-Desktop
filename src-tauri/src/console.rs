@@ -446,6 +446,56 @@ pub async fn console_logout_to_custom(
     .await
 }
 
+/// Complete a login transition from custom models back to the member runtime.
+/// A running custom sidecar must be replaced so its process environment receives
+/// the freshly fetched VIP credential; a stopped service only needs the mode
+/// persisted and will be started by the onboarding flow.
+#[tauri::command]
+pub async fn console_login_activate_vip(
+    app: AppHandle,
+    state: State<'_, SharedChild>,
+    service_port: State<'_, SharedPort>,
+    auth_state: State<'_, AuthState>,
+    runtime_operation: State<'_, RuntimeOperationLock>,
+) -> Result<Option<u16>, String> {
+    let layout = Layout::from_home()?;
+    let was_custom = auth::read_llm_mode(&layout) == auth::DesktopLlmMode::Custom;
+    let was_running = state.lock().unwrap().is_some();
+    let operation = if was_custom && was_running {
+        Some(
+            runtime_operation
+                .try_acquire()
+                .ok_or_else(|| "运行环境正在维护，请等待当前操作完成".to_string())?,
+        )
+    } else {
+        None
+    };
+    auth::persist_vip_mode(&layout).map_err(|error| error.to_string())?;
+    if operation.is_none() {
+        return Ok(None);
+    }
+
+    let shared = state.inner().clone();
+    let port = service_port.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _operation = operation.expect("running custom login transition holds the lock");
+        stop_service_blocking(&shared, &port);
+    })
+    .await
+    .map_err(|error| format!("停止旧服务失败: {error}"))?;
+
+    start_service_inner(
+        &app,
+        state.inner(),
+        service_port.inner(),
+        auth_state.inner(),
+        runtime_operation.inner(),
+    )
+    .await
+    .map(Some)
+    .map_err(|error| error.to_string())
+}
+
 fn membership_level_changed(
     previous: Option<&auth::MemberLevel>,
     current: Option<&auth::MemberLevel>,

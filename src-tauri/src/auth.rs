@@ -419,6 +419,30 @@ pub fn persist_custom_mode(layout: &Layout) -> Result<(), AuthError> {
     write_env_atomic(&layout.user_env, &new_content)
 }
 
+/// Persist the member/VIP runtime mode while preserving provider settings.
+/// Credentials are still fetched only when the sidecar is started.
+pub fn persist_vip_mode(layout: &Layout) -> Result<(), AuthError> {
+    let content = match fs::read_to_string(&layout.user_env) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => {
+            return Err(AuthError::EnvWrite {
+                message: format!("read .env: {error}"),
+            })
+        }
+    };
+    write_env_atomic(
+        &layout.user_env,
+        &rewrite_env_keys(
+            &content,
+            &[(
+                ENV_KEY_LLM_MODE.to_string(),
+                DesktopLlmMode::Vip.as_env_value().to_string(),
+            )],
+        ),
+    )
+}
+
 pub fn persist_custom_mode_and_clear_token_section(layout: &Layout) -> Result<(), AuthError> {
     let content = match fs::read_to_string(&layout.user_env) {
         Ok(content) => content,
@@ -2182,6 +2206,27 @@ mod tests {
         assert!(text.contains("OPENAI_API_KEY=custom-key"));
         assert!(text.contains("OPENAI_BASE_URL=https://custom.example/v1"));
         assert!(text.contains("LANGCHAIN_MODEL_NAME=custom-model"));
+    }
+
+    #[test]
+    fn persist_vip_mode_switches_only_the_desktop_mode() {
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
+        fs::create_dir_all(&layout.root).unwrap();
+        fs::write(
+            &layout.user_env,
+            "DESKTOP_LLM_MODE=custom\nLANGCHAIN_PROVIDER=openai\nLANGCHAIN_MODEL_NAME=custom-model\nOPENAI_API_KEY=custom-key\nCUSTOM_KEEP=1\n",
+        )
+        .unwrap();
+
+        persist_vip_mode(&layout).unwrap();
+
+        let text = fs::read_to_string(&layout.user_env).unwrap();
+        assert!(text.contains("DESKTOP_LLM_MODE=vip"));
+        assert!(text.contains("LANGCHAIN_PROVIDER=openai"));
+        assert!(text.contains("LANGCHAIN_MODEL_NAME=custom-model"));
+        assert!(text.contains("OPENAI_API_KEY=custom-key"));
+        assert!(text.contains("CUSTOM_KEEP=1"));
     }
 
     #[test]

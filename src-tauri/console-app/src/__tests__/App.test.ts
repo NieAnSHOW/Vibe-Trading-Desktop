@@ -317,6 +317,23 @@ describe("App", () => {
     );
   });
 
+  it("forwards console auth transitions to the retained WebUI frame", async () => {
+    await router.push("/next");
+    const wrapper = mountAppAtDocumentRoot();
+    await flushPromises();
+    openListener?.("http://127.0.0.1:8899/?desktop=1&shell=frame");
+    await flushPromises();
+
+    const frame = wrapper.get('iframe[data-test="desktop-webui-frame"]');
+    const postMessage = vi.spyOn((frame.element as HTMLIFrameElement).contentWindow!, "postMessage");
+    window.dispatchEvent(new CustomEvent("vibe-shell:auth", { detail: "vibe-shell:auth-logout" }));
+
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: "vibe-shell:auth-logout" },
+      "http://127.0.0.1:8899",
+    );
+  });
+
   it("opens external URLs requested by the retained WebUI frame", async () => {
     const { consoleOpenExternalUrl } = await import("../ipc/commands");
     vi.mocked(consoleOpenExternalUrl).mockClear();

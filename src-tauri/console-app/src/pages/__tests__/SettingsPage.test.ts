@@ -122,10 +122,14 @@ vi.mock("../../ipc/commands", () => ({
 }));
 
 import SettingsPage from "../SettingsPage.vue";
+import { useAuthStore } from "../../stores/auth";
 
 const router = createRouter({
   history: createMemoryHistory(),
-  routes: [{ path: "/", component: { template: "<div />" } }],
+  routes: [
+    { path: "/", component: { template: "<div />" } },
+    { path: "/login", component: { template: "<div>login</div>" } },
+  ],
 });
 
 beforeAll(() => {
@@ -244,6 +248,10 @@ describe("SettingsPage", () => {
   });
 
   it("switches to VIP mode through the backend proxy", async () => {
+    useAuthStore().setFromLogin({
+      userInfo: { id: 1, nickName: "Tester", gender: 0, status: 1, loginType: 2 },
+      expireAt: 9999999999,
+    });
     mocks.consoleStatus.mockResolvedValueOnce({
       env: "ready",
       service_running: true,
@@ -263,6 +271,24 @@ describe("SettingsPage", () => {
 
     expect(mocks.consoleSetLlmSettings).toHaveBeenCalledWith(8899, { mode: "vip" });
     expect(wrapper.get('[data-test="vip-status"]').text()).toContain("VIP 服务可用");
+  });
+
+  it("redirects unauthenticated users to login before switching to VIP", async () => {
+    mocks.consoleStatus.mockResolvedValueOnce({
+      env: "ready",
+      service_running: true,
+      port: 8899,
+    });
+    mocks.consoleGetLlmSettings.mockResolvedValueOnce(fakeLlm);
+    mocks.consoleGetDataSourceSettings.mockResolvedValueOnce(fakeDataSource);
+    const wrapper = mount(SettingsPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper.get('[data-test="llm-mode"] button[data-mode="vip"]').trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/login");
+    expect(mocks.consoleSetLlmSettings).not.toHaveBeenCalled();
   });
 
   it("saves data source settings through the backend proxy", async () => {

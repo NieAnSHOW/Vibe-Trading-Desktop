@@ -6,6 +6,7 @@ import { loadPublicConfig } from "./config/prod";
 import Rail, { THEME_COLOR_EVENT, THEME_MODE_EVENT } from "./components/Rail.vue";
 import { consoleCloseWebui, consoleOpenExternalUrl, consoleTakePendingWebui } from "./ipc/commands";
 import { onWebuiClose, onWebuiOpen } from "./ipc/events";
+import { WEBUI_AUTH_EVENT, type WebuiAuthMessage } from "./webuiAuth";
 
 const errMsg = ref("");
 const route = useRoute();
@@ -42,6 +43,18 @@ function syncWebuiTheme() {
     );
   } catch {
     // The frame may be navigating; its load handler will retry the sync.
+  }
+}
+
+function notifyWebuiAuth(event: Event) {
+  const message = (event as CustomEvent<WebuiAuthMessage>).detail;
+  const frame = webuiFrame.value;
+  const frameUrl = webuiFrameUrl.value;
+  if (!frame?.contentWindow || !frameUrl) return;
+  try {
+    frame.contentWindow.postMessage({ type: message }, new URL(frameUrl, window.location.href).origin);
+  } catch {
+    // The frame may be navigating; a later login/open will refresh its settings.
   }
 }
 
@@ -145,6 +158,7 @@ onMounted(async () => {
   unlistens = await Promise.all([onWebuiOpen(openWebui), onWebuiClose(() => void animateCloseWebui())]);
   window.addEventListener(THEME_MODE_EVENT, syncWebuiTheme);
   window.addEventListener(THEME_COLOR_EVENT, syncWebuiTheme);
+  window.addEventListener(WEBUI_AUTH_EVENT, notifyWebuiAuth);
   window.addEventListener("message", onWebuiMessage);
   const pendingUrl = await consoleTakePendingWebui();
   if (pendingUrl) openWebui(pendingUrl);
@@ -156,6 +170,7 @@ onUnmounted(() => {
   window.clearTimeout(surfaceScrollHideTimer);
   window.removeEventListener(THEME_MODE_EVENT, syncWebuiTheme);
   window.removeEventListener(THEME_COLOR_EVENT, syncWebuiTheme);
+  window.removeEventListener(WEBUI_AUTH_EVENT, notifyWebuiAuth);
   window.removeEventListener("message", onWebuiMessage);
 });
 </script>

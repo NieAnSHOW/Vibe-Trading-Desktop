@@ -38,6 +38,7 @@ fn main() {
             "console_login_by_phone",
             "console_login_by_password",
             "console_login_register",
+            "console_login_activate_vip",
             "console_login_set_password",
             "console_auth_status",
             "console_member_usage",

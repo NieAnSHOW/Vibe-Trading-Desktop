@@ -180,6 +180,9 @@ export const consoleCustomLlmReadiness = (): Promise<CustomLLMReadiness> =>
 export const consoleLogoutToCustom = (): Promise<CustomLLMReadiness> =>
   invoke<CustomLLMReadiness>("console_logout_to_custom");
 
+export const consoleLoginActivateVip = (): Promise<number | null> =>
+  invoke<number | null>("console_login_activate_vip");
+
 export const consoleFetchAds = (position: string): Promise<AdItem[]> =>
   invoke<AdItem[]>("console_fetch_ads", { position });
 

@@ -8,6 +8,9 @@ import {
   consoleLoginByPhone,
   consoleLoginByPassword,
   consoleLoginRegister,
+  consoleCustomLlmReadiness,
+  consoleOpenWebui,
+  consoleLoginActivateVip,
 } from "../ipc/commands";
 import type { Captcha, LoginResultView } from "../ipc/types";
 import { useAuthStore } from "../stores/auth";
@@ -17,6 +20,7 @@ import { useBusy } from "../composables/useBusy";
 import SetPasswordModal from "../components/SetPasswordModal.vue";
 import logoPng from "../assets/128x128@2x.png";
 import { Layers, MessageCircle, ShieldCheck } from "@lucide/vue";
+import { notifyWebuiAuth } from "../webuiAuth";
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -182,7 +186,9 @@ async function continueWithCustom() {
         env.serviceRunning = true;
       }
       if (env.port == null) throw new Error("无法获取本地服务端口");
-      await router.replace("/settings");
+      const readiness = await consoleCustomLlmReadiness();
+      if (readiness.customConfigured) await consoleOpenWebui(env.port);
+      await router.replace(readiness.customConfigured ? "/" : "/settings");
     } catch (error) {
       err.value = responseMessage(error, "本地服务启动失败");
     }
@@ -194,6 +200,12 @@ async function finishLogin(
 ) {
   auth.setFromLogin(view);
   setNotice(view.message, "登录成功");
+  const restartedPort = await consoleLoginActivateVip();
+  if (restartedPort != null) {
+    env.setPort(restartedPort);
+    env.serviceRunning = true;
+  }
+  notifyWebuiAuth("vibe-shell:auth-login");
   if (!view.hasPassword) {
     showSetPwd.value = true;
     return;
@@ -252,7 +264,10 @@ async function submitRegister() {
 
 function onPwdModalClose() {
   showSetPwd.value = false;
-  router.replace("/");
+  if (env.serviceRunning && env.port != null) {
+    void consoleOpenWebui(env.port);
+  }
+  void router.replace("/");
 }
 
 function showRegister() {
