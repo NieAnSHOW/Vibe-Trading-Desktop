@@ -103,6 +103,23 @@ fn main() {
                 api.prevent_close();
                 let _ = window.hide();
             }
+            // 仅「跟随系统」模式:系统深浅切换时原生窗口配色同步;显式
+            // light/dark 由 console_set_theme_mode 负责重着色,这里直接忽略。
+            #[cfg(target_os = "windows")]
+            if let WindowEvent::ThemeChanged(theme) = event {
+                let follows_system = runtime_dir::Layout::from_home().map(|layout| {
+                    settings::load(&layout.root).theme_mode == "system"
+                });
+                if follows_system != Ok(true) {
+                    return;
+                }
+                if let Some(win) = window.app_handle().get_webview_window("main") {
+                    let dark = matches!(theme, tauri::Theme::Dark);
+                    if let Err(error) = window_style::apply_window_theme(&win, dark) {
+                        eprintln!("failed to apply Windows window theme: {error}");
+                    }
+                }
+            }
         })
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -113,13 +130,18 @@ fn main() {
             let win = app
                 .get_webview_window("main")
                 .expect("main window (defined in tauri.conf.json)");
+            // 启动即按用户主题设置着色窗口背景 + 标题栏(亮 #f3f4f7 / 暗 #08090d);
+            // tauri.conf.json 的 backgroundColor 只是浅色兜底,深色用户在此纠正。
             #[cfg(target_os = "windows")]
-            if let Err(error) = win
-                .hwnd()
-                .map_err(|error| error.to_string())
-                .and_then(|hwnd| window_style::apply_windows_titlebar_color(hwnd.0 as isize))
             {
-                eprintln!("failed to set Windows title bar color: {error}");
+                let theme_mode = runtime_dir::Layout::from_home()
+                    .map(|layout| settings::load(&layout.root).theme_mode)
+                    .unwrap_or_else(|_| settings::Settings::default().theme_mode);
+                let system_dark = matches!(win.theme(), Ok(tauri::Theme::Dark));
+                let dark = window_style::effective_dark(&theme_mode, system_dark);
+                if let Err(error) = window_style::apply_window_theme(&win, dark) {
+                    eprintln!("failed to apply Windows window theme: {error}");
+                }
             }
 
             let shared = shared_setup.clone();
@@ -320,6 +342,18 @@ mod tests {
         assert_eq!(window["minHeight"], 780);
         assert_eq!(window["resizable"], true);
         assert_eq!(window["maximizable"], true);
+    }
+
+    // 配置里的 backgroundColor 只是首帧兜底(settings 默认 light);深色主题
+    // 由 setup / console_set_theme_mode / ThemeChanged 运行时改写,见 window_style.rs。
+    #[test]
+    fn tauri_conf_window_background_defaults_to_light_theme() {
+        let cfg: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("parse tauri.conf.json");
+        assert_eq!(
+            cfg["app"]["windows"][0]["backgroundColor"],
+            serde_json::Value::String("#f3f4f7".into())
+        );
     }
 
     #[test]
