@@ -38,6 +38,7 @@ vi.mock("../../ipc/commands", () => ({
     kefuQrCode: "",
     rewardQrCode: "",
     enableAd: true,
+    imgBase: "",
   })),
   consoleStartService: vi.fn(async () => 8899),
   consoleStopService: vi.fn(),

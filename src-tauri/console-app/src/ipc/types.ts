@@ -274,4 +274,6 @@ export interface PublicConfig {
   /** 支持作者二维码（登录用户「支持作者领中级会员」弹窗展示） */
   rewardQrCode: string;
   enableAd: boolean;
+  /** 静态资源 baseURL：由 Rust 侧 auth::user_api_url() 填充（本地默认 127.0.0.1:8001） */
+  imgBase: string;
 }

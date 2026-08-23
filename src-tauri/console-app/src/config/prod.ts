@@ -8,8 +8,8 @@ import { consoleGetPublicConfig } from "../ipc/commands";
  * 默认值镜像服务端 comm.ts publicConfig 的 defaults，服务端缺字段时兜底。
  */
 export const config = reactive({
-    // 静态资源 baseURL
-    imgBase: "https://trading-server.nieanshow.cn",
+    // 静态资源 baseURL（Rust 侧 user_api_url() 填充；本地无服务时为 ""，图片加载失败属预期）
+    imgBase: "",
     // 是否启用 login
     enableLogin: true,
     // 是否启用广告 【服务端 comm.ts 统一管理，见 loadPublicConfig】
@@ -44,6 +44,7 @@ export function loadPublicConfig(): Promise<void> {
                     kefuQrCode: remote.kefuQrCode,
                     rewardQrCode: remote.rewardQrCode,
                     enableAd: remote.enableAd,
+                    imgBase: remote.imgBase || config.imgBase,
                 });
             } catch {
                 // 静默失败：保留默认值

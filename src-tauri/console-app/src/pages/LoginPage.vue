@@ -11,21 +11,26 @@ import {
   consoleCustomLlmReadiness,
   consoleOpenWebui,
   consoleLoginActivateVip,
+  consoleFetchAds,
 } from "../ipc/commands";
-import type { Captcha, LoginResultView } from "../ipc/types";
+import type { AdItem, Captcha, LoginResultView } from "../ipc/types";
+import { config, loadPublicConfig } from "../config/prod";
 import { useAuthStore } from "../stores/auth";
 import { useEnvStore } from "../stores/env";
 import { useServiceStore } from "../stores/service";
 import { useBusy } from "../composables/useBusy";
+import { useToast } from "../composables/useToast";
 import SetPasswordModal from "../components/SetPasswordModal.vue";
+import AdSlot from "../components/AdSlot.vue";
 import logoPng from "../assets/128x128@2x.png";
-import { Layers, MessageCircle, ShieldCheck } from "@lucide/vue";
+import { Eye, EyeOff, Layers, MessageCircle, ShieldCheck } from "@lucide/vue";
 import { notifyWebuiAuth } from "../webuiAuth";
 
 const router = useRouter();
 const auth = useAuthStore();
 const env = useEnvStore();
 const service = useServiceStore();
+const toast = useToast();
 
 const tab = ref<"sms" | "password" | "register">("sms");
 const captcha = ref<Captcha | null>(null);
@@ -37,6 +42,7 @@ const smsCode = ref("");
 const smsTouched = ref(false);
 const password = ref("");
 const passwordTouched = ref(false);
+const showPwd = ref(false);
 const registerPhone = ref("");
 const registerPhoneTouched = ref(false);
 const registerPassword = ref("");
@@ -47,9 +53,8 @@ const registerSmsCode = ref("");
 const registerSmsTouched = ref(false);
 const rememberLogin = ref(true);
 const countdown = ref(0);
-const err = ref("");
-const notice = ref("");
 const showSetPwd = ref(false);
+const loginAds = ref<AdItem[]>([]);
 let timer: ReturnType<typeof setInterval> | null = null;
 
 const PHONE_RE = /^1\d{10}$/;
@@ -96,15 +101,11 @@ function responseMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-async function loadCaptcha(clearFeedback = true) {
-  if (clearFeedback) {
-    err.value = "";
-    notice.value = "";
-  }
+async function loadCaptcha(reportFailure = true) {
   try {
     captcha.value = await consoleLoginCaptcha();
   } catch (e) {
-    if (clearFeedback) err.value = responseMessage(e, "验证码加载失败");
+    if (reportFailure) toast.error(responseMessage(e, "验证码加载失败"));
   }
 }
 
@@ -112,17 +113,28 @@ function refreshCaptcha() {
   void loadCaptcha();
 }
 
+// 登录页公告:先等公共配置(记忆化,安全可重复 await),开关开启才拉取纯文本公告;
+// 任何失败都静默吞掉——公告缺失绝不能影响登录
+async function loadLoginAds() {
+  try {
+    await loadPublicConfig();
+    if (!config.enableAd) return;
+    loginAds.value = await consoleFetchAds("loginNotice");
+  } catch {
+    // 静默失败:保持空公告,不展示任何提示
+  }
+}
+
 function setErr(e: unknown, fallback: string) {
-  notice.value = "";
-  err.value = responseMessage(e, fallback);
-  // 刷新图形验证码不能清掉刚捕获的接口错误，也不能用刷新失败覆盖它。
+  toast.error(responseMessage(e, fallback));
+  // 刷新图形验证码;刷新失败保持静默,避免叠加打扰刚弹出的错误。
   void loadCaptcha(false);
 }
 
 function setNotice(message: string, fallback: string) {
-  err.value = "";
-  notice.value = message || fallback;
+  toast.success(message || fallback);
 }
+
 
 async function sendCode() {
   if (!phoneValid.value || !captchaValid.value || countdown.value > 0) return;
@@ -175,7 +187,6 @@ const submitBusy = useBusy();
 const continueCustomBusy = useBusy();
 
 async function continueWithCustom() {
-  err.value = "";
   await continueCustomBusy.run("启动中", async () => {
     try {
       await env.refresh();
@@ -190,7 +201,7 @@ async function continueWithCustom() {
       if (readiness.customConfigured) await consoleOpenWebui(env.port);
       await router.replace(readiness.customConfigured ? "/" : "/settings");
     } catch (error) {
-      err.value = responseMessage(error, "本地服务启动失败");
+      toast.error(responseMessage(error, "本地服务启动失败"));
     }
   });
 }
@@ -219,8 +230,6 @@ async function finishLogin(
 async function submitSms() {
   if (!phoneValid.value || !smsValid.value) return;
   await submitBusy.run("登录中", async () => {
-    err.value = "";
-    notice.value = "";
     try {
       const view = await consoleLoginByPhone(phone.value, smsCode.value, rememberLogin.value);
       await finishLogin(view);
@@ -233,8 +242,6 @@ async function submitSms() {
 async function submitPassword() {
   if (!phoneValid.value || !passwordValid.value) return;
   await submitBusy.run("登录中", async () => {
-    err.value = "";
-    notice.value = "";
     try {
       const view = await consoleLoginByPassword(phone.value, password.value, rememberLogin.value);
       await finishLogin(view);
@@ -247,8 +254,6 @@ async function submitPassword() {
 async function submitRegister() {
   if (!registerValid.value) return;
   await submitBusy.run("注册中", async () => {
-    err.value = "";
-    notice.value = "";
     try {
       const view = await consoleLoginRegister(
         registerPhone.value,
@@ -298,6 +303,8 @@ function resetTouched() {
 
 onMounted(async () => {
   void loadCaptcha();
+  // 登录页公告:异步拉取,不阻塞验证码与会话恢复
+  void loadLoginAds();
   // 从磁盘恢复的会话没有 userInfo，但仍是有效的记住登录。
   if (!auth.authenticated) await auth.refresh();
   if (auth.authenticated) await router.replace("/");
@@ -314,7 +321,13 @@ onUnmounted(() => {
       <h1 class="login-title">用自然语言，做专业级研究</h1>
     </header>
 
+
+
     <section class="card">
+      <!-- 登录页公告:有公告时展示于登录卡上方,与卡同宽;无公告时整块不占位 -->
+      <div v-if="loginAds.length" class="login-notice">
+        <AdSlot :ads="loginAds" variant="banner" />
+      </div>
       <header class="login-brand">
         <img class="login-brand__mark" :src="logoPng" alt="Trading Worker 图标" />
         <div class="login-brand__copy">
@@ -324,187 +337,199 @@ onUnmounted(() => {
       </header>
 
       <nav v-if="tab !== 'register'" class="tabs" role="tablist" aria-label="登录方式">
-          <button :class="['tab', tab === 'sms' && 'active']" role="tab" :aria-selected="tab === 'sms'"
-            @click="switchTab('sms')">
-            短信登录
-          </button>
-          <button :class="['tab', tab === 'password' && 'active']" role="tab" :aria-selected="tab === 'password'"
-            @click="switchTab('password')">
-            密码登录
-          </button>
-        </nav>
+        <button :class="['tab', tab === 'sms' && 'active']" role="tab" :aria-selected="tab === 'sms'"
+          @click="switchTab('sms')">
+          短信登录
+        </button>
+        <button :class="['tab', tab === 'password' && 'active']" role="tab" :aria-selected="tab === 'password'"
+          @click="switchTab('password')">
+          密码登录
+        </button>
+      </nav>
 
-        <form v-if="tab === 'sms'" class="form" @submit.prevent="submitSms">
-          <label class="row">
-            <span class="lbl">手机号</span>
-            <input class="field" :class="{ invalid: phoneError }" v-model="phone" inputmode="numeric"
-              placeholder="请输入 11 位手机号" autocomplete="tel"
-              @input="phone = phone.replace(/\D/g, '').slice(0, 11); phoneTouched = false"
-              @blur="phoneTouched = true" />
-            <span v-if="phoneError" class="field-error" role="alert">请输入正确的手机号,如 13800000000</span>
-          </label>
+      <form v-if="tab === 'sms'" class="form" @submit.prevent="submitSms">
+        <label class="row">
+          <span class="lbl">手机号</span>
+          <input class="field" :class="{ invalid: phoneError }" v-model="phone" inputmode="numeric"
+            placeholder="请输入 11 位手机号" autocomplete="tel"
+            @input="phone = phone.replace(/\D/g, '').slice(0, 11); phoneTouched = false" @blur="phoneTouched = true" />
+          <span v-if="phoneError" class="field-error" role="alert">请输入正确的手机号,如 13800000000</span>
+        </label>
 
-          <label class="remember-row">
-            <input data-test="remember-login" v-model="rememberLogin" type="checkbox" />
-            <span>记住登录（有效期 14 天）</span>
-          </label>
+        <label class="remember-row">
+          <input data-test="remember-login" v-model="rememberLogin" type="checkbox" />
+          <span>记住登录（有效期 14 天）</span>
+        </label>
 
-          <label class="row">
-            <span class="lbl">图形验证码</span>
-            <div class="inline">
-              <input class="field" :class="{ invalid: captchaError }" v-model="captchaCode" placeholder="请输入 4 位验证码"
-                autocomplete="off" @input="captchaCode = captchaCode.trim().slice(0, 4); captchaTouched = false"
-                @blur="captchaTouched = true" />
-              <button type="button" class="captcha-btn" title="刷新验证码" aria-label="刷新验证码" @click="refreshCaptcha">
-                <img v-if="captcha" :src="captcha.data.startsWith('data:')
-                  ? captcha.data
-                  : `data:image/svg+xml;base64,${captcha.data}`
-                  " alt="图形验证码" />
-                <span v-else class="captcha-loading">…</span>
-              </button>
-            </div>
-            <span v-if="captchaError" class="field-error" role="alert">请输入 4 位图形验证码,如 abcd</span>
-          </label>
+        <label class="row">
+          <span class="lbl">图形验证码</span>
+          <div class="inline">
+            <input class="field" :class="{ invalid: captchaError }" v-model="captchaCode" placeholder="请输入 4 位验证码"
+              autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off"
+              @input="captchaCode = captchaCode.trim().slice(0, 4); captchaTouched = false"
+              @blur="captchaTouched = true" />
+            <button type="button" class="captcha-btn" title="刷新验证码" aria-label="刷新验证码" @click="refreshCaptcha">
+              <img v-if="captcha" :src="captcha.data.startsWith('data:')
+                ? captcha.data
+                : `data:image/svg+xml;base64,${captcha.data}`
+                " alt="图形验证码" />
+              <span v-else class="captcha-loading">…</span>
+            </button>
+          </div>
+          <span v-if="captchaError" class="field-error" role="alert">请输入 4 位图形验证码,如 abcd</span>
+        </label>
 
-          <label class="row">
-            <span class="lbl">短信验证码</span>
-            <div class="inline">
-              <input class="field" :class="{ invalid: smsError }" v-model="smsCode" inputmode="numeric"
-                placeholder="请输入 4 位短信验证码" autocomplete="one-time-code"
-                @input="smsCode = smsCode.trim().slice(0, 4); smsTouched = false" @blur="smsTouched = true" />
-              <button type="button" class="code-btn" :disabled="!phoneValid || !captchaValid || countdown > 0"
-                @click="sendCode">
-                {{ countdown > 0 ? `${countdown}s` : "获取" }}
-              </button>
-            </div>
-            <span v-if="smsError" class="field-error" role="alert">请输入 4 位短信验证码,如 1234</span>
-          </label>
+        <label class="row">
+          <span class="lbl">短信验证码</span>
+          <div class="inline">
+            <input class="field" :class="{ invalid: smsError }" v-model="smsCode" inputmode="numeric"
+              placeholder="请输入 4 位短信验证码" autocomplete="one-time-code" spellcheck="false" autocorrect="off"
+              autocapitalize="off" @input="smsCode = smsCode.trim().slice(0, 4); smsTouched = false"
+              @blur="smsTouched = true" />
+            <button type="button" class="code-btn" :disabled="!phoneValid || !captchaValid || countdown > 0"
+              @click="sendCode">
+              {{ countdown > 0 ? `${countdown}s` : "获取" }}
+            </button>
+          </div>
+          <span v-if="smsError" class="field-error" role="alert">请输入 4 位短信验证码,如 1234</span>
+        </label>
 
-          <button type="button" class="submit" :disabled="!phoneValid || !smsValid || submitBusy.busy.value"
-            @click="submitSms">
-            {{ submitBusy.busy.value ? "登录中…" : "登录" }}
-          </button>
-        </form>
+        <button type="button" class="submit" :disabled="!phoneValid || !smsValid || submitBusy.busy.value"
+          @click="submitSms">
+          {{ submitBusy.busy.value ? "登录中…" : "登录" }}
+        </button>
+      </form>
 
-        <form v-else-if="tab === 'password'" class="form" @submit.prevent="submitPassword">
-          <label class="row">
-            <span class="lbl">手机号</span>
-            <input class="field" :class="{ invalid: phoneError }" v-model="phone" inputmode="numeric"
-              placeholder="请输入 11 位手机号" autocomplete="tel"
-              @input="phone = phone.replace(/\D/g, '').slice(0, 11); phoneTouched = false"
-              @blur="phoneTouched = true" />
-            <span v-if="phoneError" class="field-error" role="alert">请输入正确的手机号,如 13800000000</span>
-          </label>
-          <label class="remember-row">
-            <input data-test="remember-login" v-model="rememberLogin" type="checkbox" />
-            <span>记住登录（有效期 14 天）</span>
-          </label>
-          <label class="row">
-            <span class="lbl">密码</span>
-            <input class="field" :class="{ invalid: passwordError }" type="password" v-model="password"
-              placeholder="请输入登录密码" autocomplete="current-password"
-              @input="passwordTouched = false" @blur="passwordTouched = true" />
-            <span v-if="passwordError" class="field-error" role="alert">密码长度至少 6 位</span>
-          </label>
-          <button type="button" class="submit" :disabled="!phoneValid || !passwordValid || submitBusy.busy.value"
-            @click="submitPassword">
-            {{ submitBusy.busy.value ? "登录中…" : "登录" }}
-          </button>
-        </form>
+      <form v-else-if="tab === 'password'" class="form" @submit.prevent="submitPassword">
+        <label class="row">
+          <span class="lbl">手机号</span>
+          <input class="field" :class="{ invalid: phoneError }" v-model="phone" inputmode="numeric"
+            placeholder="请输入 11 位手机号" autocomplete="tel"
+            @input="phone = phone.replace(/\D/g, '').slice(0, 11); phoneTouched = false" @blur="phoneTouched = true" />
+          <span v-if="phoneError" class="field-error" role="alert">请输入正确的手机号,如 13800000000</span>
+        </label>
+        <label class="remember-row">
+          <input data-test="remember-login" v-model="rememberLogin" type="checkbox" />
+          <span>记住登录（有效期 14 天）</span>
+        </label>
+        <label class="row">
+          <span class="lbl">密码</span>
+          <div class="pwd-wrap">
+            <input class="field" :class="{ invalid: passwordError }" :type="showPwd ? 'text' : 'password'"
+              v-model="password" placeholder="请输入登录密码" autocomplete="current-password" @input="passwordTouched = false"
+              @blur="passwordTouched = true" />
+            <button type="button" class="pwd-toggle" :title="showPwd ? '隐藏密码' : '显示密码'"
+              :aria-label="showPwd ? '隐藏密码' : '显示密码'" :aria-pressed="showPwd" @click="showPwd = !showPwd">
+              <EyeOff v-if="showPwd" :size="16" aria-hidden="true" />
+              <Eye v-else :size="16" aria-hidden="true" />
+            </button>
+          </div>
+        </label>
+        <button type="button" class="submit" :disabled="!phoneValid || !passwordValid || submitBusy.busy.value"
+          @click="submitPassword">
+          {{ submitBusy.busy.value ? "登录中…" : "登录" }}
+        </button>
+      </form>
 
-        <form v-else class="form" @submit.prevent="submitRegister">
-          <label class="row">
-            <span class="lbl">手机号</span>
-            <input data-test="register-phone" class="field" :class="{ invalid: registerPhoneError }" v-model="registerPhone"
-              inputmode="numeric" placeholder="请输入 11 位手机号" autocomplete="tel"
-              @input="registerPhone = registerPhone.replace(/\D/g, '').slice(0, 11); registerPhoneTouched = false"
-              @blur="registerPhoneTouched = true" />
-            <span v-if="registerPhoneError" class="field-error" role="alert">请输入正确的手机号,如 13800000000</span>
-          </label>
-          <label class="row">
-            <span class="lbl">密码</span>
-            <input data-test="register-password" class="field" :class="{ invalid: registerPwdError }" type="password"
-              v-model="registerPassword" placeholder="6-10 位，含大写字母和数字" autocomplete="new-password"
-              @input="registerPwdTouched = false" @blur="registerPwdTouched = true" />
-            <span v-if="registerPwdError" class="field-error" role="alert">
-              密码格式不正确，需 6-10 位且同时包含大写字母和数字，示例：Exa123
-            </span>
-          </label>
-          <label class="row">
-            <span class="lbl">图形验证码</span>
-            <div class="inline">
-              <input data-test="register-captcha" class="field" :class="{ invalid: registerCaptchaError }"
-                v-model="registerCaptchaCode" placeholder="请输入 4 位验证码" autocomplete="off"
-                @input="registerCaptchaCode = registerCaptchaCode.trim().slice(0, 4); registerCaptchaTouched = false"
-                @blur="registerCaptchaTouched = true" />
-              <button type="button" class="captcha-btn" title="刷新验证码" aria-label="刷新验证码" @click="refreshCaptcha">
-                <img v-if="captcha" :src="captcha.data.startsWith('data:')
-                  ? captcha.data
-                  : `data:image/svg+xml;base64,${captcha.data}`" alt="图形验证码" />
-                <span v-else class="captcha-loading">…</span>
-              </button>
-            </div>
-            <span v-if="registerCaptchaError" class="field-error" role="alert">请输入 4 位图形验证码,如 abcd</span>
-          </label>
-          <label class="row">
-            <span class="lbl">短信验证码</span>
-            <div class="inline">
-              <input data-test="register-sms" class="field" :class="{ invalid: registerSmsError }"
-                v-model="registerSmsCode" inputmode="numeric" placeholder="请输入 4 位短信验证码"
-                autocomplete="one-time-code"
-                @input="registerSmsCode = registerSmsCode.trim().slice(0, 4); registerSmsTouched = false"
-                @blur="registerSmsTouched = true" />
-              <button data-test="register-send-code" type="button" class="code-btn"
-                :disabled="!registerPhoneValid || !registerPasswordValid || !registerCaptchaValid || countdown > 0"
-                @click="sendRegisterCode">
-                {{ countdown > 0 ? `${countdown}s` : "获取" }}
-              </button>
-            </div>
-            <span v-if="registerSmsError" class="field-error" role="alert">请输入 4 位短信验证码,如 1234</span>
-          </label>
-          <button data-test="register-submit" type="button" class="submit"
-            :disabled="!registerValid || submitBusy.busy.value" @click="submitRegister">
-            {{ submitBusy.busy.value ? "注册中…" : "注册" }}
-          </button>
-        </form>
+      <form v-else class="form" @submit.prevent="submitRegister">
+        <label class="row">
+          <span class="lbl">手机号</span>
+          <input data-test="register-phone" class="field" :class="{ invalid: registerPhoneError }"
+            v-model="registerPhone" inputmode="numeric" placeholder="请输入 11 位手机号" autocomplete="tel"
+            @input="registerPhone = registerPhone.replace(/\D/g, '').slice(0, 11); registerPhoneTouched = false"
+            @blur="registerPhoneTouched = true" />
+          <span v-if="registerPhoneError" class="field-error" role="alert">请输入正确的手机号,如 13800000000</span>
+        </label>
+        <label class="row">
+          <span class="lbl">密码</span>
+          <div class="pwd-wrap">
+            <input data-test="register-password" class="field" :class="{ invalid: registerPwdError }"
+              :type="showPwd ? 'text' : 'password'" v-model="registerPassword" placeholder="6-10 位，含大写字母和数字"
+              autocomplete="new-password" @input="registerPwdTouched = false" @blur="registerPwdTouched = true" />
+            <button type="button" class="pwd-toggle" :title="showPwd ? '隐藏密码' : '显示密码'"
+              :aria-label="showPwd ? '隐藏密码' : '显示密码'" :aria-pressed="showPwd" @click="showPwd = !showPwd">
+              <EyeOff v-if="showPwd" :size="16" aria-hidden="true" />
+              <Eye v-else :size="16" aria-hidden="true" />
+            </button>
+          </div>
+          <span v-if="registerPwdError" class="field-error" role="alert">
+            密码格式不正确，需 6-10 位且同时包含大写字母和数字，示例：Exa123
+          </span>
+        </label>
+        <label class="row">
+          <span class="lbl">图形验证码</span>
+          <div class="inline">
+            <input data-test="register-captcha" class="field" :class="{ invalid: registerCaptchaError }"
+              v-model="registerCaptchaCode" placeholder="请输入 4 位验证码" autocomplete="off" spellcheck="false"
+              autocorrect="off" autocapitalize="off"
+              @input="registerCaptchaCode = registerCaptchaCode.trim().slice(0, 4); registerCaptchaTouched = false"
+              @blur="registerCaptchaTouched = true" />
+            <button type="button" class="captcha-btn" title="刷新验证码" aria-label="刷新验证码" @click="refreshCaptcha">
+              <img v-if="captcha" :src="captcha.data.startsWith('data:')
+                ? captcha.data
+                : `data:image/svg+xml;base64,${captcha.data}`" alt="图形验证码" />
+              <span v-else class="captcha-loading">…</span>
+            </button>
+          </div>
+          <span v-if="registerCaptchaError" class="field-error" role="alert">请输入 4 位图形验证码,如 abcd</span>
+        </label>
+        <label class="row">
+          <span class="lbl">短信验证码</span>
+          <div class="inline">
+            <input data-test="register-sms" class="field" :class="{ invalid: registerSmsError }"
+              v-model="registerSmsCode" inputmode="numeric" placeholder="请输入 4 位短信验证码" autocomplete="one-time-code"
+              spellcheck="false" autocorrect="off" autocapitalize="off"
+              @input="registerSmsCode = registerSmsCode.trim().slice(0, 4); registerSmsTouched = false"
+              @blur="registerSmsTouched = true" />
+            <button data-test="register-send-code" type="button" class="code-btn"
+              :disabled="!registerPhoneValid || !registerPasswordValid || !registerCaptchaValid || countdown > 0"
+              @click="sendRegisterCode">
+              {{ countdown > 0 ? `${countdown}s` : "获取" }}
+            </button>
+          </div>
+          <span v-if="registerSmsError" class="field-error" role="alert">请输入 4 位短信验证码,如 1234</span>
+        </label>
+        <button data-test="register-submit" type="button" class="submit"
+          :disabled="!registerValid || submitBusy.busy.value" @click="submitRegister">
+          {{ submitBusy.busy.value ? "注册中…" : "注册" }}
+        </button>
+      </form>
 
-        <p v-if="notice" class="notice" role="status">{{ notice }}</p>
-        <p v-if="err" class="err" role="alert">{{ err }}</p>
 
-        <footer class="login-links">
-          <button data-test="continue-custom" type="button" class="skip-btn"
-            :disabled="continueCustomBusy.busy.value" @click="continueWithCustom">
-            {{ continueCustomBusy.busy.value ? "启动中…" : "使用自定义模型继续" }}
-          </button>
-          <button v-if="tab !== 'register'" data-test="register-entry" type="button" class="register-entry"
-            @click="showRegister">
-            没有账号？注册
-          </button>
-          <button v-else data-test="back-to-login" type="button" class="register-entry" @click="showLogin">
-            已有账号？去登录
-          </button>
-        </footer>
-      </section>
+      <footer class="login-links">
+        <button data-test="continue-custom" type="button" class="skip-btn" :disabled="continueCustomBusy.busy.value"
+          @click="continueWithCustom">
+          {{ continueCustomBusy.busy.value ? "启动中…" : "使用自定义模型继续" }}
+        </button>
+        <button v-if="tab !== 'register'" data-test="register-entry" type="button" class="register-entry"
+          @click="showRegister">
+          没有账号？注册
+        </button>
+        <button v-else data-test="back-to-login" type="button" class="register-entry" @click="showLogin">
+          已有账号？去登录
+        </button>
+      </footer>
+    </section>
 
-      <SetPasswordModal :open="showSetPwd" @close="onPwdModalClose" />
+    <SetPasswordModal :open="showSetPwd" @close="onPwdModalClose" />
 
-      <ul class="login-points" aria-label="产品要点">
-        <li>
-          <MessageCircle :size="18" aria-hidden="true" />
-          <strong>对话式研究</strong>
-          <span>直接问“帮我回测一个均线交叉策略”，不用写代码</span>
-        </li>
-        <li>
-          <Layers :size="18" aria-hidden="true" />
-          <strong>70+ 金融技能</strong>
-          <span>覆盖技术分析、基本面、策略回测、加密货币等</span>
-        </li>
-        <li>
-          <ShieldCheck :size="18" aria-hidden="true" />
-          <strong>本地运行</strong>
-          <span>数据与 API Key 只存放在你自己的电脑上</span>
-        </li>
-      </ul>
+    <ul class="login-points" aria-label="产品要点">
+      <li>
+        <MessageCircle :size="18" aria-hidden="true" />
+        <strong>对话式研究</strong>
+        <span>直接问“帮我回测一个均线交叉策略”，不用写代码</span>
+      </li>
+      <li>
+        <Layers :size="18" aria-hidden="true" />
+        <strong>70+ 金融技能</strong>
+        <span>覆盖技术分析、基本面、策略回测、加密货币等</span>
+      </li>
+      <li>
+        <ShieldCheck :size="18" aria-hidden="true" />
+        <strong>本地运行</strong>
+        <span>数据与 API Key 只存放在你自己的电脑上</span>
+      </li>
+    </ul>
   </main>
 </template>
 
@@ -518,16 +543,12 @@ onUnmounted(() => {
    浅色为设计系统"米白纸面",深色为"近黑蓝研究底";品牌色仍全局生效 ── */
 .login-page {
   --login-canvas:
-    radial-gradient(
-      64% 42% at 50% -6%,
+    radial-gradient(64% 42% at 50% -6%,
       hsl(var(--brand) / 0.07),
-      transparent 62%
-    ),
-    radial-gradient(
-      44% 30% at 6% 104%,
+      transparent 62%),
+    radial-gradient(44% 30% at 6% 104%,
       oklch(0.66 0.04 85 / 0.05),
-      transparent 60%
-    ),
+      transparent 60%),
     linear-gradient(164deg, oklch(0.975 0.008 95) 0%, oklch(0.955 0.01 100) 100%);
   --login-noise-opacity: 0.03;
   --login-card-shadow:
@@ -547,16 +568,12 @@ onUnmounted(() => {
 
 html[data-theme="dark"] .login-page {
   --login-canvas:
-    radial-gradient(
-      64% 42% at 50% -6%,
+    radial-gradient(64% 42% at 50% -6%,
       hsl(var(--brand) / 0.14),
-      transparent 62%
-    ),
-    radial-gradient(
-      44% 30% at 6% 104%,
+      transparent 62%),
+    radial-gradient(44% 30% at 6% 104%,
       oklch(0.66 0.04 85 / 0.05),
-      transparent 60%
-    ),
+      transparent 60%),
     linear-gradient(164deg, oklch(0.058 0.007 222) 0%, oklch(0.042 0.006 214) 100%);
   --login-noise-opacity: 0.05;
   --login-card-shadow:
@@ -696,6 +713,18 @@ html[data-theme="dark"] .login-page {
   box-shadow: var(--login-card-shadow);
 }
 
+/* 登录页公告:与登录卡同宽,保持页内统一间距节奏;公告本身退为次要视觉 */
+.login-notice {
+  width: 100%;
+  max-width: 440px;
+  margin-bottom: 14px;
+}
+
+/* 抵消全局 .ad-banner 自带的上间距,让公告与卡上下间距一致 */
+.login-notice :deep(.ad-banner) {
+  margin-top: 0;
+}
+
 .tabs {
   display: flex;
   gap: 4px;
@@ -798,6 +827,44 @@ html[data-theme="dark"] .login-page {
   font-size: 12px;
   line-height: 1.5;
   color: hsl(var(--bad-fg));
+}
+
+/* 密码可见性切换:输入框内右侧悬浮眼睛按钮 */
+.pwd-wrap {
+  position: relative;
+}
+
+.pwd-wrap .field {
+  padding-right: 42px;
+}
+
+.pwd-toggle {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: hsl(var(--ink-dim));
+  cursor: pointer;
+  transition: color 0.16s var(--ease), background 0.16s var(--ease);
+}
+
+.pwd-toggle:hover {
+  color: hsl(var(--brand));
+  background: hsl(var(--brand) / 0.1);
+}
+
+.pwd-toggle:focus-visible {
+  outline: 2px solid hsl(var(--brand));
+  outline-offset: 2px;
 }
 
 .inline {
@@ -971,6 +1038,7 @@ html[data-theme="dark"] .login-page {
   outline-offset: 2px;
   border-radius: 4px;
 }
+
 .remember-row {
   display: flex;
   align-items: center;
@@ -1007,29 +1075,6 @@ html[data-theme="dark"] .login-page {
   border-radius: 4px;
 }
 
-.err {
-  margin-top: 14px;
-  padding: 10px 12px;
-  background: hsl(var(--bad) / 0.1);
-  border: 1px solid hsl(var(--bad) / 0.3);
-  border-radius: 8px;
-  color: hsl(var(--bad-fg));
-  font-size: 12.5px;
-  line-height: 1.5;
-  word-break: break-word;
-}
-
-.notice {
-  margin-top: 14px;
-  padding: 10px 12px;
-  background: hsl(var(--ok) / 0.1);
-  border: 1px solid hsl(var(--ok) / 0.3);
-  border-radius: 8px;
-  color: hsl(var(--ok-fg));
-  font-size: 12.5px;
-  line-height: 1.5;
-  word-break: break-word;
-}
 
 /* ── 响应式:单列流天然自适应;窄屏收紧节奏,极窄卖点转单列 ── */
 @media (max-width: 640px) {

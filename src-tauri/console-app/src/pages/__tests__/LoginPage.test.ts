@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { useToast } from "../../composables/useToast";
+
 import { mount, flushPromises } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { createPinia, setActivePinia } from "pinia";
-import type { StatusReport } from "../../ipc/types";
+import type { AdItem, PublicConfig, StatusReport } from "../../ipc/types";
 
 // vi.mock 工厂在提升阶段执行，变量必须通过 vi.hoisted() 声明
 const mocks = vi.hoisted(() => ({
@@ -44,6 +45,19 @@ const mocks = vi.hoisted(() => ({
     message: "注册成功",
   })),
   consoleLoginSetPassword: vi.fn(async (_password: string) => {}),
+  consoleFetchAds: vi.fn(async (): Promise<AdItem[]> => []),
+  consoleOpenExternalUrl: vi.fn(async () => {}),
+  consoleGetPublicConfig: vi.fn(async (): Promise<PublicConfig> => ({
+    officialUrl: "",
+    enableLogin: true,
+    checkUpdate: false,
+    enableService: false,
+    serviceQrCode: "",
+    kefuQrCode: "",
+    rewardQrCode: "",
+    enableAd: true,
+    imgBase: "",
+  })),
 }));
 
 vi.mock("../../ipc/commands", () => ({
@@ -59,6 +73,9 @@ vi.mock("../../ipc/commands", () => ({
   consoleLoginByPassword: mocks.consoleLoginByPassword,
   consoleLoginRegister: mocks.consoleLoginRegister,
   consoleLoginSetPassword: mocks.consoleLoginSetPassword,
+  consoleFetchAds: mocks.consoleFetchAds,
+  consoleOpenExternalUrl: mocks.consoleOpenExternalUrl,
+  consoleGetPublicConfig: mocks.consoleGetPublicConfig,
 }));
 
 import LoginPage from "../LoginPage.vue";
@@ -151,7 +168,7 @@ describe("LoginPage", () => {
     await flushPromises();
 
     expect(router.currentRoute.value.path).toBe("/login");
-    expect(w.get('[role="alert"]').text()).toContain("服务启动失败");
+    expect(useToast().toasts.value.some((t) => t.kind === "error" && t.message.includes("服务启动失败"))).toBe(true);
   });
 
   it("keeps the login route and shows the readiness error when custom LLM status fails", async () => {
@@ -166,7 +183,7 @@ describe("LoginPage", () => {
     await flushPromises();
 
     expect(router.currentRoute.value.path).toBe("/login");
-    expect(w.get('[role="alert"]').text()).toContain("配置状态读取失败");
+    expect(useToast().toasts.value.some((t) => t.kind === "error" && t.message.includes("配置状态读取失败"))).toBe(true);
   });
 
   it("redirects a remembered token-only session after restoring auth status", async () => {
@@ -329,7 +346,7 @@ describe("LoginPage", () => {
     await w.find(".code-btn").trigger("click");
     await flushPromises();
 
-    expect(w.get('[role="status"]').text()).toBe("验证码已发送");
+    expect(useToast().toasts.value.some((t) => t.kind === "success" && t.message === "验证码已发送")).toBe(true);
   });
 
   it("获取验证码失败后保留 API 返回的错误消息", async () => {
@@ -342,7 +359,7 @@ describe("LoginPage", () => {
     await w.find(".code-btn").trigger("click");
     await flushPromises();
 
-    expect(w.get('[role="alert"]').text()).toBe("图形验证码错误");
+    expect(useToast().toasts.value.some((t) => t.kind === "error" && t.message === "图形验证码错误")).toBe(true);
   });
 
   it("注册页在密码和图形验证码都合法前禁用获取验证码", async () => {
@@ -380,5 +397,52 @@ describe("LoginPage", () => {
       "1234",
       "Passw0rd!",
     );
+  });
+
+  it("密码输入框支持显示/隐藏切换", async () => {
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    const pwdTab = w.findAll(".tab").find((b) => b.text().includes("密码登录"))!;
+    await pwdTab.trigger("click");
+
+    const input = w.get('input[autocomplete="current-password"]');
+    expect(input.attributes("type")).toBe("password");
+
+    await w.get(".pwd-toggle").trigger("click");
+    expect(input.attributes("type")).toBe("text");
+
+    await w.get(".pwd-toggle").trigger("click");
+    expect(input.attributes("type")).toBe("password");
+  });
+
+  it("发送短信成功后以 toast 提醒而非内联文案", async () => {
+    useToast().clear();
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    await w.get('input[autocomplete="tel"]').setValue("13800000000");
+    await w.get('input[autocomplete="off"]').setValue("abcd");
+    await w.findAll(".code-btn")[0].trigger("click");
+    await flushPromises();
+
+    const { toasts } = useToast();
+    expect(toasts.value.some((t) => t.kind === "success" && t.message.includes("验证码已发送"))).toBe(true);
+    expect(w.find("p.notice").exists()).toBe(false);
+  });
+
+  it("登录页公告:接口返回纯文本公告时,在登录卡上方渲染公告文字", async () => {
+    mocks.consoleFetchAds.mockResolvedValueOnce([
+      {
+        id: 1,
+        title: "维护公告",
+        type: 2,
+        position: "loginNotice",
+        content: "平台将于今晚 23:00 停机维护",
+        link: null,
+        sort: 1,
+      },
+    ]);
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(w.find(".login-notice").exists()).toBe(true);
+    expect(w.text()).toContain("平台将于今晚 23:00 停机维护");
   });
 });

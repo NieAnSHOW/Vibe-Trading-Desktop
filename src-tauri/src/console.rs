@@ -2145,6 +2145,9 @@ pub struct PublicConfig {
     pub official_url: String,
     #[serde(default = "default_true")]
     pub enable_login: bool,
+    /// 是否启用广告（服务端 comm 统一管理；服务端缺字段时默认开启）
+    #[serde(default = "default_true")]
+    pub enable_ad: bool,
     #[serde(default)]
     pub check_update: bool,
     #[serde(default)]
@@ -2157,8 +2160,10 @@ pub struct PublicConfig {
     /// 支持作者二维码（登录用户「支持作者领中级会员」弹窗展示）
     #[serde(default)]
     pub reward_qr_code: String,
-    #[serde(default = "default_true")]
-    pub enable_ad: bool,
+    /// 静态资源 baseURL（imgBase）：取自 auth::user_api_url() 当前生效地址；
+    /// 本地开发默认 127.0.0.1:8001，生产构建由编译期 VIBE_USER_API_URL 注入。
+    #[serde(default)]
+    pub img_base: String,
 }
 
 fn default_true() -> bool {
@@ -2181,7 +2186,9 @@ pub async fn console_get_public_config() -> Result<PublicConfig, String> {
             .map_err(|e| format!("public config request: {e}"))?
             .text()
             .map_err(|e| format!("public config body: {e}"))?;
-        auth::parse_cool_response(&text).map_err(|e| e.to_string())
+        let mut cfg: PublicConfig = auth::parse_cool_response(&text).map_err(|e| e.to_string())?;
+        cfg.img_base = auth::user_api_url();
+        Ok(cfg)
     })
     .await
     .map_err(|e| format!("spawn_blocking join: {e}"))?
@@ -2317,6 +2324,24 @@ mod tests {
         assert_eq!(remember_until(false, 100), None);
     }
 
+    #[test]
+    fn public_config_roundtrips_enable_ad() {
+        // 服务端返回 enableAd 时,应保留并序列化回 camelCase 字段
+        let cfg: PublicConfig = serde_json::from_str(
+            r#"{"officialUrl":"https://example.com","enableLogin":true,"enableAd":true}"#,
+        )
+        .unwrap();
+        let value = serde_json::to_value(&cfg).unwrap();
+        assert_eq!(value["enableAd"], true);
+    }
+
+    #[test]
+    fn public_config_defaults_enable_ad_true_when_server_omits_it() {
+        // 服务端缺 enableAd 字段时,默认开启(需 serde default)
+        let cfg: PublicConfig = serde_json::from_str(r#"{"enableLogin":true}"#).unwrap();
+        let value = serde_json::to_value(&cfg).unwrap();
+        assert_eq!(value["enableAd"], true);
+    }
     #[test]
     fn remembered_login_has_a_fourteen_day_deadline() {
         assert_eq!(

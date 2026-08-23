@@ -4,6 +4,7 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import { useRoute } from "vue-router";
 import { loadPublicConfig } from "./config/prod";
 import Rail, { THEME_COLOR_EVENT, THEME_MODE_EVENT } from "./components/Rail.vue";
+import ToastHost from "./components/ToastHost.vue";
 import { consoleCloseWebui, consoleOpenExternalUrl, consoleTakePendingWebui } from "./ipc/commands";
 import { onWebuiClose, onWebuiOpen } from "./ipc/events";
 import { WEBUI_AUTH_EVENT, type WebuiAuthMessage } from "./webuiAuth";
@@ -214,6 +215,7 @@ onUnmounted(() => {
       title="研究"
       @load="syncWebuiTheme"
     />
+    <ToastHost />
   </template>
 </template>
 

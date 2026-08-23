@@ -20,6 +20,9 @@ type SharedChild = console::SharedChild;
 type SharedPort = console::SharedPort;
 
 fn main() {
+    // 本地开发覆盖：加载 src-tauri/.env（如 VIBE_USER_API_URL）。文件不存在时静默跳过，
+    // 打包后的正式环境不受影响；已手动 export 的环境变量优先，不覆盖。
+    dotenvy::dotenv().ok();
     let shared: SharedChild = Arc::new(Mutex::new(None));
     let shared_setup = shared.clone();
     let service_port: SharedPort = Arc::new(Mutex::new(None));

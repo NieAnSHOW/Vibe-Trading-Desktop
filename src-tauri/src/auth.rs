@@ -21,10 +21,16 @@ use crate::runtime_dir::Layout;
 
 // ── 可覆盖配置 ──
 // 业务接口（captcha/sms/login/person...），独立于大模型 MaaS 接口。
-// 默认值与 frontend/src/pages/auth/Login.tsx 对齐。 https://trading-server.nieanshow.cn
+// 默认值与 frontend/src/pages/auth/Login.tsx 对齐。
+// 解析优先级：
+//   1) 运行时环境变量 VIBE_USER_API_URL（本地开发/测试，dotenvy 加载 src-tauri/.env）；
+//   2) 编译期 VIBE_USER_API_URL（CI 打包时由 GitHub secret 注入，固化进产物，线上生效）；
+//   3) 回退 http://127.0.0.1:8001（本地后端默认）。
 pub fn user_api_url() -> String {
     std::env::var("VIBE_USER_API_URL")
-        .unwrap_or_else(|_| "https://trading-server.nieanshow.cn".into())
+        .ok()
+        .or_else(|| option_env!("VIBE_USER_API_URL").map(str::to_string))
+        .unwrap_or_else(|| "http://127.0.0.1:8001".into())
 }
 // ── .env 中由本模块管辖的 key（其余 key 不动）──
 pub const ENV_KEY_ACCESS: &str = "USER_ACCESS_TOKEN";
@@ -399,8 +405,9 @@ pub fn clear_env_token_section(layout: &Layout) -> Result<(), AuthError> {
     write_env_atomic(path, &new_content)
 }
 
-/// Atomically select custom LLM mode and remove the persisted desktop-login
-/// token section. Provider and data-source settings remain untouched.
+/// Atomically select custom LLM mode. Provider and data-source settings,
+/// including the persisted token section, remain untouched; token cleanup is
+/// handled separately via `clear_env_token_section`.
 pub fn persist_custom_mode(layout: &Layout) -> Result<(), AuthError> {
     let content = match fs::read_to_string(&layout.user_env) {
         Ok(content) => content,
@@ -441,34 +448,6 @@ pub fn persist_vip_mode(layout: &Layout) -> Result<(), AuthError> {
             )],
         ),
     )
-}
-
-pub fn persist_custom_mode_and_clear_token_section(layout: &Layout) -> Result<(), AuthError> {
-    let content = match fs::read_to_string(&layout.user_env) {
-        Ok(content) => content,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(error) => {
-            return Err(AuthError::EnvWrite {
-                message: format!("read .env: {error}"),
-            })
-        }
-    };
-    let mut updates = vec![(
-        ENV_KEY_LLM_MODE.to_string(),
-        DesktopLlmMode::Custom.as_env_value().to_string(),
-    )];
-    updates.extend(
-        [
-            ENV_KEY_ACCESS,
-            ENV_KEY_REFRESH,
-            ENV_KEY_EXPIRE,
-            ENV_KEY_REFRESH_EXPIRE,
-            ENV_KEY_REMEMBER_UNTIL,
-        ]
-        .into_iter()
-        .map(|key| (key.to_string(), String::new())),
-    );
-    write_env_atomic(&layout.user_env, &rewrite_env_keys(&content, &updates))
 }
 
 /// 从 layout.user_env 读回 session（重启恢复用）。机密 VIP 凭据绝不从磁盘读取。
@@ -2230,50 +2209,6 @@ mod tests {
     }
 
     #[test]
-    fn persist_custom_mode_and_clear_token_section_preserves_custom_and_data_source_keys() {
-        let tmp = tempfile::tempdir().unwrap();
-        let layout = Layout::new(&tmp.path().join(".vibe-trading"));
-        fs::create_dir_all(&layout.root).unwrap();
-        fs::write(
-            &layout.user_env,
-            "DESKTOP_LLM_MODE=vip\nLANGCHAIN_PROVIDER=openai\nLANGCHAIN_MODEL_NAME=custom-model\nOPENAI_API_KEY=custom-key\nTUSHARE_TOKEN=data-source-token\nUSER_ACCESS_TOKEN=access\nUSER_REFRESH_TOKEN=refresh\nUSER_TOKEN_EXPIRE=1\nUSER_REFRESH_EXPIRE=2\nUSER_REMEMBER_UNTIL=3\n",
-        )
-        .unwrap();
-
-        persist_custom_mode_and_clear_token_section(&layout).unwrap();
-
-        let values = parse_env_to_map(&fs::read_to_string(&layout.user_env).unwrap());
-        assert_eq!(
-            values.get(ENV_KEY_LLM_MODE).map(String::as_str),
-            Some("custom")
-        );
-        for key in [
-            ENV_KEY_ACCESS,
-            ENV_KEY_REFRESH,
-            ENV_KEY_EXPIRE,
-            ENV_KEY_REFRESH_EXPIRE,
-            ENV_KEY_REMEMBER_UNTIL,
-        ] {
-            assert!(
-                values.get(key).map(String::is_empty).unwrap_or(true),
-                "{key}"
-            );
-        }
-        assert_eq!(
-            values.get("OPENAI_API_KEY").map(String::as_str),
-            Some("custom-key")
-        );
-        assert_eq!(
-            values.get("LANGCHAIN_MODEL_NAME").map(String::as_str),
-            Some("custom-model")
-        );
-        assert_eq!(
-            values.get("TUSHARE_TOKEN").map(String::as_str),
-            Some("data-source-token")
-        );
-    }
-
-    #[test]
     fn token_write_normalizes_invalid_llm_mode_to_vip() {
         let tmp = tempfile::tempdir().unwrap();
         let layout = Layout::new(&tmp.path().join(".vibe-trading"));
@@ -2412,13 +2347,25 @@ mod tests {
     }
 
     #[test]
-    fn user_api_url_defaults_to_production_server() {
+    fn user_api_url_defaults_to_localhost() {
         let _api_url_lock = USER_API_URL_TEST_LOCK.lock().unwrap();
         let previous_api_url = std::env::var("VIBE_USER_API_URL").ok();
         std::env::remove_var("VIBE_USER_API_URL");
-        // 默认与线上配置对齐(见 user_api_url 注释);本地开发用
-        // VIBE_USER_API_URL 覆盖(对齐 frontend/.env 的 127.0.0.1:8001)。
-        assert_eq!(user_api_url(), "https://trading-server.nieanshow.cn");
+        // 无运行时/编译期配置时回退本地默认 127.0.0.1:8001（见 user_api_url 注释）；
+        // 本地开发用 VIBE_USER_API_URL 覆盖。
+        assert_eq!(user_api_url(), "http://127.0.0.1:8001");
+        match previous_api_url {
+            Some(value) => std::env::set_var("VIBE_USER_API_URL", value),
+            None => std::env::remove_var("VIBE_USER_API_URL"),
+        }
+    }
+
+    #[test]
+    fn user_api_url_prefers_env_override() {
+        let _api_url_lock = USER_API_URL_TEST_LOCK.lock().unwrap();
+        let previous_api_url = std::env::var("VIBE_USER_API_URL").ok();
+        std::env::set_var("VIBE_USER_API_URL", "https://user-api.example.com");
+        assert_eq!(user_api_url(), "https://user-api.example.com");
         match previous_api_url {
             Some(value) => std::env::set_var("VIBE_USER_API_URL", value),
             None => std::env::remove_var("VIBE_USER_API_URL"),

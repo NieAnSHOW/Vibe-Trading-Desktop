@@ -22,6 +22,7 @@ def proxy_client(monkeypatch):
     Usage: ``client = proxy_client(handler)`` where ``handler`` receives the
     upstream ``httpx.Request`` and returns the canned ``httpx.Response``.
     """
+
     def install(handler):
         transport = httpx.MockTransport(handler)
 
@@ -56,7 +57,8 @@ class TestUserApiProxy:
         assert captured["path"] == "/app/user/login/captcha"
         # Query string survives (url is str and carries it verbatim).
         assert "width=120" in captured["url"] and "height=40" in captured["url"]
-        assert captured["url"].startswith("https://trading-server.nieanshow.cn/")
+        # URL 是绝对地址，指向配置的上游 USER_API_URL（path 已在上方断言）。
+        assert captured["url"].startswith(("http://", "https://"))
 
     def test_post_forwards_body_and_bare_authorization(self, proxy_client):
         captured = {}

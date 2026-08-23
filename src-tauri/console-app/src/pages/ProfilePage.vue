@@ -220,8 +220,9 @@ onUnmounted(() => clearMemberUsage());
       </AppButton>
     </div>
 
-    <!-- DOM 顺序 = 窄屏优先级流:用量 → 身份 → 权益 → 支持 → 退出;桌面位由网格指定 -->
+    <!-- 窄屏优先级流:用量 → 身份 → 权益 → 支持 → 退出;桌面端分为独立双列 -->
     <div class="tw-grid pf-workspace" data-test="profile-workspace">
+      <div class="pf-workspace__main">
       <section class="tw-panel pf-usage" data-test="member-usage-section" aria-label="研究额度">
         <header class="tw-panel__head pf-panel-head">
           <div>
@@ -266,25 +267,10 @@ onUnmounted(() => clearMemberUsage());
             </div>
             <span class="pf-skeleton pf-skeleton--note"></span>
           </div>
-          <p v-else class="pf-state">用量暂未加载，请点击右上角刷新。</p>
+          <p v-else class="pf-state pf-usage-empty">用量暂未加载，请点击右上角刷新。</p>
         </div>
       </section>
 
-      <section class="tw-panel pf-identity" aria-label="账户身份">
-        <div class="tw-panel__body pf-identity__body">
-          <span class="pf-section-overline">当前会员</span>
-          <span class="pf-avatar" aria-hidden="true">
-            <CircleUserRound :size="28" stroke-width="1.3" />
-          </span>
-          <h2 class="pf-name">{{ accountName }}</h2>
-          <p v-if="auth.userInfo?.phone" class="pf-phone">{{ auth.userInfo.phone }}</p>
-          <span v-if="level" class="member-tier" :class="`member-tier--${memberTier?.tone ?? 'member'}`">
-            <span class="member-tier-mark">V</span><span class="member-tier-name">{{ memberTier?.label }}</span>
-          </span>
-          <p v-if="level?.expireTime" class="pf-expire">有效期至 {{ level.expireTime }}</p>
-          <p class="pf-local-note"><ShieldCheck :size="14" aria-hidden="true" />账户与配置保存在本机</p>
-        </div>
-      </section>
 
       <section class="tw-panel pf-benefits" data-test="member-capabilities" aria-label="当前会员能力">
         <header class="tw-panel__head">
@@ -310,7 +296,25 @@ onUnmounted(() => clearMemberUsage());
           </ul>
         </div>
       </section>
+      </div>
 
+      <div class="pf-workspace__context">
+
+      <section class="tw-panel pf-identity" aria-label="账户身份">
+        <div class="tw-panel__body pf-identity__body">
+          <span class="pf-section-overline">当前会员</span>
+          <span class="pf-avatar" aria-hidden="true">
+            <CircleUserRound :size="28" stroke-width="1.3" />
+          </span>
+          <h2 class="pf-name">{{ accountName }}</h2>
+          <p v-if="auth.userInfo?.phone" class="pf-phone">{{ auth.userInfo.phone }}</p>
+          <span v-if="level" class="member-tier" :class="`member-tier--${memberTier?.tone ?? 'member'}`">
+            <span class="member-tier-mark">V</span><span class="member-tier-name">{{ memberTier?.label }}</span>
+          </span>
+          <p v-if="level?.expireTime" class="pf-expire">有效期至 {{ level.expireTime }}</p>
+          <p class="pf-local-note"><ShieldCheck :size="14" aria-hidden="true" />账户与配置保存在本机</p>
+        </div>
+      </section>
       <section v-if="kefuQrCode || rewardQrCode" class="tw-panel pf-support" aria-label="支持与联系">
         <header class="tw-panel__head">
           <div>
@@ -337,6 +341,7 @@ onUnmounted(() => clearMemberUsage());
           </AppButton>
         </div>
       </section>
+      </div>
     </div>
 
     <p v-if="actionError" class="pf-error" role="alert">{{ actionError }}</p>
@@ -361,8 +366,7 @@ onUnmounted(() => clearMemberUsage());
 </template>
 
 <style>
-/* 页面特有布局;共享词汇(tw-*)见 console.css。
-   桌面位:用量/权益为主列,身份/支持/退出为右侧上下文列 */
+/* 页面特有布局;共享词汇(tw-*)见 console.css。桌面端两列独立堆叠 */
 @media (min-width: 900px) {
   .profile .pf-workspace {
     display: grid;
@@ -370,14 +374,30 @@ onUnmounted(() => clearMemberUsage());
     align-items: start;
     gap: 14px;
   }
+
   .profile .pf-workspace > * { min-width: 0; }
-  .pf-usage { grid-area: 1 / 1; }
-  .pf-benefits { grid-area: 2 / 1; }
-  .pf-identity { grid-area: 1 / 2; }
-  .pf-support { grid-area: 2 / 2; }
-  .pf-danger { grid-area: 3 / 2; }
+
+  .profile .pf-workspace__main,
+  .profile .pf-workspace__context {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+  }
 }
 
+@media (max-width: 899px) {
+  .profile .pf-workspace__main,
+  .profile .pf-workspace__context {
+    display: contents;
+  }
+
+  .profile .pf-usage { order: 1; }
+  .profile .pf-identity { order: 2; }
+  .profile .pf-benefits { order: 3; }
+  .profile .pf-support { order: 4; }
+  .profile .pf-danger { order: 5; }
+}
 .pf-header__meta {
   display: flex;
   align-items: center;
@@ -651,6 +671,14 @@ onUnmounted(() => clearMemberUsage());
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+/* 空/错态保留稳定高度并与加载骨架对齐,避免卡片塌陷成一行留白 */
+.pf-usage-empty,
+.pf-benefits__body > .pf-state {
+  display: flex;
+  align-items: center;
+  min-height: 160px;
 }
 
 /* 支持:整行入口按钮 */
