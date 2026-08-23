@@ -1040,15 +1040,27 @@ pub fn console_set_autostart(
 }
 
 /// 保存桌面端主题模式。主题设置只影响本地桌面壳,不触碰后端运行配置。
+/// Windows 下同时把原生窗口(背景 + 标题栏)重着色为新主题,切换即时生效。
 #[tauri::command]
-pub fn console_set_theme_mode(mode: String) -> Result<(), String> {
+pub fn console_set_theme_mode(app: AppHandle, mode: String) -> Result<(), String> {
     if !matches!(mode.as_str(), "system" | "light" | "dark") {
         return Err("主题模式无效".to_string());
     }
     let layout = Layout::from_home()?;
     let mut settings = crate::settings::load(&layout.root);
-    settings.theme_mode = mode;
-    crate::settings::save(&layout.root, &settings)
+    settings.theme_mode = mode.clone();
+    crate::settings::save(&layout.root, &settings)?;
+    #[cfg(target_os = "windows")]
+    if let Some(win) = app.get_webview_window("main") {
+        let system_dark = matches!(win.theme(), Ok(tauri::Theme::Dark));
+        let dark = crate::window_style::effective_dark(&mode, system_dark);
+        if let Err(error) = crate::window_style::apply_window_theme(&win, dark) {
+            eprintln!("failed to apply Windows window theme: {error}");
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    let _ = app;
+    Ok(())
 }
 
 /// 保存桌面端主题色。
