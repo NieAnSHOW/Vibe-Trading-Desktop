@@ -5,6 +5,13 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `scripts/desktop/upload-release.sh` — upload locally built installers
+  (`.dmg` / `.exe` / `.msi`) to the GitHub release for the current
+  `tauri.conf.json` version; repo pinned to the `origin` remote, idempotent
+  re-upload (`--clobber`), and release notes auto-extracted from the
+  matching CHANGELOG section on first create.
+
 ## [0.1.15] — 2026-08-24
 
 ### Added

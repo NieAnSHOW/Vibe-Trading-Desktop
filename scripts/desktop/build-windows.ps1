@@ -166,6 +166,7 @@ function Invoke-Step4Archive {
   Write-Host "  Git HEAD   : $commit"
   Write-Host "  Tauri      : $tauriVer"
   Write-Host "  Elapsed    : $elapsed"
+  Write-Host "  Upload     : bash scripts/desktop/upload-release.sh   (Git Bash)"
 }
 
 # 主流程
