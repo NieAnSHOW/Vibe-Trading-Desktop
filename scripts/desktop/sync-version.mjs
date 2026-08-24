@@ -101,27 +101,6 @@ function plannedUpdates(root, version, displayVersion) {
         "src-tauri/Cargo.lock"
       ),
     },
-    {
-      path: "frontend/src/components/layout/Layout.tsx",
-      next: replaceRequired(
-        readText(root, "frontend/src/components/layout/Layout.tsx"),
-        /const APP_VERSION = "v[^"]+";/,
-        `const APP_VERSION = "${displayVersion}";`,
-        "frontend/src/components/layout/Layout.tsx"
-      ),
-    },
-    {
-      path: "frontend/src/i18n/locales/en.json",
-      next: updateJson(root, "frontend/src/i18n/locales/en.json", (data) => {
-        data.app.version = displayVersion;
-      }),
-    },
-    {
-      path: "frontend/src/i18n/locales/zh-CN.json",
-      next: updateJson(root, "frontend/src/i18n/locales/zh-CN.json", (data) => {
-        data.app.version = displayVersion;
-      }),
-    },
   ];
 }
 

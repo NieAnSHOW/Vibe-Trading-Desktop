@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.15] — 2026-08-24
+
 ### Added
 - **Embedded WebUI in the desktop main window.** When the backend service is
   ready, the desktop console's "open WebUI" action now navigates the main
