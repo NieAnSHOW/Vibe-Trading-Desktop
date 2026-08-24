@@ -34,9 +34,8 @@ err()  { printf '✗ %s\n' "$*" >&2; }
 # ── 版本 ─────────────────────────────────────────────────────
 VER="${1:-}"
 if [ -z "$VER" ]; then
-    command -v node >/dev/null 2>&1 \
-        || { err "未指定版本且无 node，无法从 tauri.conf.json 读取；用法: $0 vX.Y.Z"; exit 1; }
-    VER="$(node -p "require('$ROOT/src-tauri/tauri.conf.json').version")"
+    VER="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ROOT/src-tauri/tauri.conf.json" | head -1)"
+    [ -n "$VER" ] || { err "无法从 tauri.conf.json 读取 version；用法: $0 vX.Y.Z"; exit 1; }
 fi
 VER="${VER#v}"
 TAG="v$VER"
