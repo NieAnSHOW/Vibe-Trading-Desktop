@@ -66,6 +66,10 @@ export function initDesktopShell(): void {
   } catch {
     // sessionStorage 不可用(隐私模式极端情况)时静默降级:入口按 URL 探测。
   }
+  // 桌面内嵌时给根节点打标:index.css 借此关闭展示文本选中(仅桌面端生效)
+  if (isDesktopEmbedded()) {
+    document.documentElement.classList.add("desktop-embed");
+  }
 }
 
 /** 读取桌面壳传入的主题模式;普通浏览器始终返回系统模式。 */

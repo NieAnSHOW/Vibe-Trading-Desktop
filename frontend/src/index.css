@@ -396,3 +396,15 @@ html.desktop-shell-leaving .desktop-shell-content {
     @apply font-mono tabular-nums;
   }
 }
+
+/* 桌面壳内嵌时(initDesktopShell 打标)关闭展示文本选中,对齐原生应用;浏览器端不受影响 */
+html.desktop-embed body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html.desktop-embed input,
+html.desktop-embed textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}

@@ -25,6 +25,7 @@ describe("desktopShell", () => {
     window.sessionStorage.clear();
     window.localStorage.clear();
     setSearch("/");
+    document.documentElement.classList.remove("desktop-embed");
   });
 
   it("does not ship an environment item in the HTML-first desktop rail", () => {
@@ -38,8 +39,9 @@ describe("desktopShell", () => {
 
     expect(isDesktopEmbedded()).toBe(true);
     expect(getShellConsoleUrl()).toBe("tauri://localhost/index.html");
+    // 内嵌时根节点打标,index.css 借此关闭展示文本选中
+    expect(document.documentElement.classList.contains("desktop-embed")).toBe(true);
   });
-
   it("keeps working after SPA navigation drops the query string", () => {
     setSearch("/?desktop=1&console=" + encodeURIComponent("http://tauri.localhost/"));
     initDesktopShell();
@@ -92,6 +94,8 @@ describe("desktopShell", () => {
 
     expect(isDesktopEmbedded()).toBe(false);
     expect(getShellConsoleUrl()).toBeNull();
+    // 浏览器访问不打标,文本选中保持 Web 习惯
+    expect(document.documentElement.classList.contains("desktop-embed")).toBe(false);
   });
 
   it("recognizes a WebUI iframe while retaining desktop privileges", () => {
