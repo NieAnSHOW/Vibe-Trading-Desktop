@@ -132,7 +132,7 @@ fn main() {
                 .get_webview_window("main")
                 .expect("main window (defined in tauri.conf.json)");
             // 启动即按用户主题设置着色窗口背景 + 标题栏(亮 #f3f4f7 / 暗 #08090d);
-            // tauri.conf.json 的 backgroundColor 只是浅色兜底,深色用户在此纠正。
+            // 配置不再写死 backgroundColor,首帧颜色也由这里给出。
             #[cfg(target_os = "windows")]
             {
                 let theme_mode = runtime_dir::Layout::from_home()
@@ -419,17 +419,8 @@ mod tests {
         assert_eq!(window["maximizable"], true);
     }
 
-    // 配置里的 backgroundColor 只是首帧兜底(settings 默认 light);深色主题
-    // 由 setup / console_set_theme_mode / ThemeChanged 运行时改写,见 window_style.rs。
-    #[test]
-    fn tauri_conf_window_background_defaults_to_light_theme() {
-        let cfg: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
-            .expect("parse tauri.conf.json");
-        assert_eq!(
-            cfg["app"]["windows"][0]["backgroundColor"],
-            serde_json::Value::String("#f3f4f7".into())
-        );
-    }
+    // 窗口背景色由 setup / console_set_theme_mode / ThemeChanged 运行时按主题
+    // 着色(见 window_style.rs),tauri.conf.json 不再携带 backgroundColor。
 
     #[test]
     fn tauri_conf_bundles_runtime_version_marker() {
