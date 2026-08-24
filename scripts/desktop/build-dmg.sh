@@ -207,6 +207,22 @@ ok "VERSION → $VERSION_NEW"
 # ── Tauri 编译 + 打包 ────────────────────────────────────────
 section "Tauri build (cargo tauri build)"
 log "开始编译 Rust release 并打包 .app / .dmg（首次约 1-3 分钟）"
+# ── 编译期注入线上用户接口地址 ─────────────────────────────────
+# option_env! 在编译期从构建进程环境取值。手动 export 优先；
+# 否则从 gitignored 的 src-tauri/.env 读取（与 CI secret 注入、
+# 运行时 dotenvy 优先级一致）。两者都没有时产物回退 127.0.0.1:8001。
+if [ -z "${VIBE_USER_API_URL:-}" ] && [ -f "$SRC_TAURI/.env" ]; then
+    _url="$(sed -n 's/^VIBE_USER_API_URL=//p' "$SRC_TAURI/.env" | head -1 | tr -d '\r' | tr -d '"' || true)"
+    if [ -n "$_url" ]; then
+        export VIBE_USER_API_URL="$_url"
+    fi
+fi
+if [ -n "${VIBE_USER_API_URL:-}" ]; then
+    ok "VIBE_USER_API_URL: 编译期注入 ${VIBE_USER_API_URL}"
+else
+    warn "VIBE_USER_API_URL 未设置，产物将回退 http://127.0.0.1:8001"
+fi
+
 BUILD_START=$(date +%s)
 
 ( cd "$SRC_TAURI" && cargo tauri build ) || { err "cargo tauri build 失败"; exit 3; }

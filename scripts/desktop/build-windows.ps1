@@ -110,6 +110,23 @@ function Invoke-Step2Assemble {
 
 function Invoke-Step3Tauri {
   Write-Step 3 "Tauri build"
+  # 编译期注入线上用户接口地址:手动 $env: 优先,否则读 gitignored 的 src-tauri\.env
+  # (与 CI secret 注入、运行时 dotenvy 优先级一致);两者都没有时产物回退 127.0.0.1:8001
+  if (-not $env:VIBE_USER_API_URL) {
+    $envFile = "$Root\src-tauri\.env"
+    if (Test-Path $envFile) {
+      $m = Select-String -Path $envFile -Pattern '^\s*VIBE_USER_API_URL\s*=\s*(.+)$' | Select-Object -First 1
+      if ($m) {
+        $v = $m.Matches[0].Groups[1].Value.Trim().Trim('"').Trim("'").Trim("`r")
+        if ($v) { $env:VIBE_USER_API_URL = $v }
+      }
+    }
+  }
+  if ($env:VIBE_USER_API_URL) {
+    Write-Host "VIBE_USER_API_URL baked at compile time: $env:VIBE_USER_API_URL" -ForegroundColor Green
+  } else {
+    Write-Host "VIBE_USER_API_URL not set; build falls back to http://127.0.0.1:8001" -ForegroundColor Yellow
+  }
   Push-Location "$Root\src-tauri"
   try {
     cargo tauri build --bundles nsis
