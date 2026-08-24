@@ -5,6 +5,7 @@ import { createPinia } from "pinia";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import App from "../App.vue";
+import ConfirmDialog from "../components/ConfirmDialog.vue";
 import consoleDocument from "../../index.html?raw";
 
 const consoleStyles = readFileSync(
@@ -19,6 +20,24 @@ const settingsPageSource = readFileSync(
 
 let openListener: ((url: string) => void) | undefined;
 let closeListener: (() => void) | undefined;
+let quitListener: ((payload: unknown) => void) | undefined;
+// jsdom 25 的 <dialog> 缺 showModal/close,页面测试同款 stub
+Object.defineProperties(HTMLDialogElement.prototype, {
+  showModal: {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.open = true;
+    },
+  },
+  close: {
+    configurable: true,
+    value(this: HTMLDialogElement, returnValue = "") {
+      this.open = false;
+      if (returnValue) this.returnValue = returnValue;
+    },
+  },
+});
+
 vi.mock("../ipc/events", () => ({
   onWebuiOpen: vi.fn(async (callback: (url: string) => void) => {
     openListener = callback;
@@ -28,10 +47,15 @@ vi.mock("../ipc/events", () => ({
     closeListener = callback;
     return vi.fn();
   }),
+  onQuitRequested: vi.fn(async (callback: (payload: unknown) => void) => {
+    quitListener = callback;
+    return vi.fn();
+  }),
 }));
 vi.mock("../ipc/commands", () => ({
   consoleTakePendingWebui: vi.fn(async () => null),
   consoleOpenExternalUrl: vi.fn(async () => undefined),
+  consoleQuit: vi.fn(async () => undefined),
 }));
 
 const router = createRouter({
@@ -51,6 +75,7 @@ beforeEach(async () => {
 afterEach(() => {
   openListener = undefined;
   closeListener = undefined;
+  quitListener = undefined;
   delete document.documentElement.dataset.theme;
   delete document.documentElement.dataset.brand;
   document.getElementById("app")?.remove();
@@ -394,5 +419,47 @@ describe("App", () => {
     await flushPromises();
 
     expect(consoleOpenExternalUrl).not.toHaveBeenCalled();
+  });
+
+  it("在任意路由上响应托盘退出请求并弹出确认框", async () => {
+    await router.push("/next");
+    const wrapper = mountAppAtDocumentRoot();
+    await flushPromises();
+
+    quitListener?.({ installing: false, service_running: true });
+    await flushPromises();
+
+    const dialog = wrapper.findComponent(ConfirmDialog);
+    expect(dialog.props("open")).toBe(true);
+    expect(dialog.text()).toContain("退出将终止服务");
+  });
+
+  it("确认托盘退出时调用 console_quit 真正退出", async () => {
+    const { consoleQuit } = await import("../ipc/commands");
+    vi.mocked(consoleQuit).mockClear();
+    const wrapper = mountAppAtDocumentRoot();
+    await flushPromises();
+
+    quitListener?.({ installing: true });
+    await flushPromises();
+    expect(wrapper.findComponent(ConfirmDialog).text()).toContain("退出将中断安装");
+
+    wrapper.findComponent(ConfirmDialog).vm.$emit("close", "ok");
+    await flushPromises();
+    expect(consoleQuit).toHaveBeenCalledTimes(1);
+  });
+
+  it("取消托盘退出确认时不退出", async () => {
+    const { consoleQuit } = await import("../ipc/commands");
+    vi.mocked(consoleQuit).mockClear();
+    const wrapper = mountAppAtDocumentRoot();
+    await flushPromises();
+
+    quitListener?.({ installing: false, service_running: true });
+    await flushPromises();
+    wrapper.findComponent(ConfirmDialog).vm.$emit("close", "cancel");
+    await flushPromises();
+
+    expect(consoleQuit).not.toHaveBeenCalled();
   });
 });

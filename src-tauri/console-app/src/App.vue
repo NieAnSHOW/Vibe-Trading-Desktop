@@ -5,8 +5,15 @@ import { useRoute } from "vue-router";
 import { loadPublicConfig } from "./config/prod";
 import Rail, { THEME_COLOR_EVENT, THEME_MODE_EVENT } from "./components/Rail.vue";
 import ToastHost from "./components/ToastHost.vue";
-import { consoleCloseWebui, consoleOpenExternalUrl, consoleTakePendingWebui } from "./ipc/commands";
-import { onWebuiClose, onWebuiOpen } from "./ipc/events";
+import ConfirmDialog from "./components/ConfirmDialog.vue";
+import { useToast } from "./composables/useToast";
+import {
+  consoleCloseWebui,
+  consoleOpenExternalUrl,
+  consoleQuit,
+  consoleTakePendingWebui,
+} from "./ipc/commands";
+import { onQuitRequested, onWebuiClose, onWebuiOpen } from "./ipc/events";
 import { WEBUI_AUTH_EVENT, type WebuiAuthMessage } from "./webuiAuth";
 
 const errMsg = ref("");
@@ -22,6 +29,26 @@ const SHELL_TRANSITION_MS = 220;
 let unlistens: UnlistenFn[] = [];
 let closeTransition: Promise<void> | null = null;
 let transitionGeneration = 0;
+// 托盘「退出」的二次确认(服务运行中/依赖安装中)。必须挂在常驻壳层:
+// 控制台多页路由化后,页面级监听在其他路由/内嵌 WebUI 态收不到
+// app://quit-requested,曾导致托盘「退出」无响应。
+const quitDialogOpen = ref(false);
+const quitInstalling = ref(false);
+const quitText = computed(() =>
+  quitInstalling.value
+    ? "依赖仍在安装中,<b>退出将中断安装</b>,下次需要重新安装。确认要退出吗?"
+    : "后端服务仍在运行,<b>退出将终止服务并中断正在执行的任务</b>(回测、研究、实盘等)。确认要退出吗?",
+);
+
+async function onQuitDialogClose(value: "ok" | "cancel") {
+  quitDialogOpen.value = false;
+  if (value !== "ok") return;
+  try {
+    await consoleQuit();
+  } catch (error) {
+    useToast().error(`退出失败：${error}`);
+  }
+}
 
 function prefersReducedMotion(): boolean {
   return typeof window.matchMedia === "function"
@@ -156,7 +183,14 @@ onMounted(async () => {
   if (document.documentElement.classList.contains("desktop-shell-entering")) {
     requestAnimationFrame(() => document.documentElement.classList.remove("desktop-shell-entering"));
   }
-  unlistens = await Promise.all([onWebuiOpen(openWebui), onWebuiClose(() => void animateCloseWebui())]);
+  unlistens = await Promise.all([
+    onWebuiOpen(openWebui),
+    onWebuiClose(() => void animateCloseWebui()),
+    onQuitRequested((payload: any) => {
+      quitInstalling.value = !!payload?.installing;
+      quitDialogOpen.value = true;
+    }),
+  ]);
   window.addEventListener(THEME_MODE_EVENT, syncWebuiTheme);
   window.addEventListener(THEME_COLOR_EVENT, syncWebuiTheme);
   window.addEventListener(WEBUI_AUTH_EVENT, notifyWebuiAuth);
@@ -215,6 +249,15 @@ onUnmounted(() => {
       title="研究"
       @load="syncWebuiTheme"
     />
+    <ConfirmDialog
+      data-test="quit-dialog"
+      :open="quitDialogOpen"
+      title="确认退出客户端？"
+      @close="onQuitDialogClose"
+    >
+      <span v-html="quitText"></span>
+      <template #confirm-text>确认退出</template>
+    </ConfirmDialog>
     <ToastHost />
   </template>
 </template>

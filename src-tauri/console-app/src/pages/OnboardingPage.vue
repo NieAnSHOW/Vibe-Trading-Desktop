@@ -8,13 +8,8 @@ import { useServiceStore } from "../stores/service";
 import { useBootstrapStore } from "../stores/bootstrap";
 import { useAuthStore } from "../stores/auth";
 import { config, loadPublicConfig } from "../config/prod";
-import { consoleBootstrap, consoleOpenWebui, consoleQuit } from "../ipc/commands";
-import {
-  onBootstrapEvent,
-  onBootstrapExit,
-  onServiceStarted,
-  onQuitRequested,
-} from "../ipc/events";
+import { consoleBootstrap, consoleOpenWebui } from "../ipc/commands";
+import { onBootstrapEvent, onBootstrapExit, onServiceStarted } from "../ipc/events";
 import type { BootstrapEvent } from "../ipc/types";
 import AppButton from "../components/AppButton.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
@@ -126,23 +121,8 @@ async function continueStartup() {
   await startResearchService();
 }
 
-const quitDialogOpen = ref(false);
-const quitInstalling = ref(false);
-const quitText = computed(() =>
-  quitInstalling.value
-    ? "依赖仍在安装中,<b>退出将中断安装</b>,下次需要重新安装。确认要退出吗?"
-    : "后端服务仍在运行,<b>退出将终止服务并中断正在执行的任务</b>(回测、研究、实盘等)。确认要退出吗?",
-);
+// 托盘「退出」的二次确认已上移到常驻的 App.vue(多页路由下页面级监听会丢事件)。
 
-async function onQuitDialogClose(value: "ok" | "cancel") {
-  quitDialogOpen.value = false;
-  if (value !== "ok") return;
-  try {
-    await consoleQuit();
-  } catch (error) {
-    setErr(error);
-  }
-}
 
 let unlistens: UnlistenFn[] = [];
 
@@ -176,10 +156,6 @@ onMounted(async () => {
     onServiceStarted((port: number) => {
       env.setPort(port);
       env.serviceRunning = true;
-    }),
-    onQuitRequested((payload: any) => {
-      quitInstalling.value = !!payload?.installing;
-      quitDialogOpen.value = true;
     }),
   ]);
 
@@ -228,10 +204,7 @@ function onStartupAnimationEnd() {
       <template #confirm-text>停止并修复</template>
     </ConfirmDialog>
 
-    <ConfirmDialog :open="quitDialogOpen" title="确认退出客户端？" @close="onQuitDialogClose">
-      <span v-html="quitText"></span>
-      <template #confirm-text>确认退出</template>
-    </ConfirmDialog>
+
   </main>
 </template>
 
