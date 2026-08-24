@@ -840,9 +840,11 @@ html[data-theme="dark"] .login-page {
 
 .pwd-toggle {
   position: absolute;
-  top: 50%;
+  /* 不用 top+transform 居中:全局 button:active 的 translateY(1px) 会覆盖 transform 导致按下跳位 */
+  top: 0;
+  bottom: 0;
+  margin-block: auto;
   right: 4px;
-  transform: translateY(-50%);
   display: flex;
   align-items: center;
   justify-content: center;

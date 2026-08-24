@@ -96,6 +96,15 @@ body {
   padding: 0;
   -webkit-font-smoothing: antialiased;
   line-height: 1.5;
+  /* 桌面端展示文本不可选中(原生应用手感);输入控件见下方例外 */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 #app {
