@@ -20,9 +20,7 @@ type SharedChild = console::SharedChild;
 type SharedPort = console::SharedPort;
 
 fn main() {
-    // 本地开发覆盖：加载 src-tauri/.env（如 VIBE_USER_API_URL）。文件不存在时静默跳过，
-    // 打包后的正式环境不受影响；已手动 export 的环境变量优先，不覆盖。
-    dotenvy::dotenv().ok();
+    init_dotenv();
     let shared: SharedChild = Arc::new(Mutex::new(None));
     let shared_setup = shared.clone();
     let service_port: SharedPort = Arc::new(Mutex::new(None));
@@ -182,6 +180,80 @@ fn main() {
                 }
             }
         });
+}
+
+/// 本地开发覆盖：加载 src-tauri/.env（如 VIBE_USER_API_URL）。
+/// debug 构建（cargo tauri dev）按编译期 manifest 路径定位文件——不依赖进程 CWD，
+/// 并把「文件缺失/解析失败」打印到终端而非静默吞掉：Windows 上 PowerShell `>` /
+/// Out-File 生成的 .env 是 UTF-16，dotenvy 直接解析会报 "stream did not contain
+/// valid UTF-8"，过去被 .ok() 吞掉，接口因此始终回退 http://127.0.0.1:8001。
+/// 解析前统一把 UTF-8 BOM / UTF-16 LE/BE 转成 UTF-8。release 构建保持原 CWD
+/// 向上查找（打包产物无 .env，等于 no-op）。已手动 export 的变量优先，不被覆盖。
+fn init_dotenv() {
+    #[cfg(debug_assertions)]
+    {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".env");
+        match load_env_file(&path) {
+            EnvFileOutcome::Loaded => eprintln!("[env] loaded {}", path.display()),
+            EnvFileOutcome::NotFound => eprintln!(
+                "[env] {} 不存在，VIBE_USER_API_URL 未设置（将回退内置地址）",
+                path.display()
+            ),
+            EnvFileOutcome::Failed(e) => {
+                eprintln!("[env] 解析 {} 失败: {e}（请检查该文件格式）", path.display())
+            }
+        }
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        dotenvy::dotenv().ok();
+    }
+}
+
+#[cfg(debug_assertions)]
+#[derive(Debug)]
+enum EnvFileOutcome {
+    Loaded,
+    NotFound,
+    Failed(String),
+}
+
+#[cfg(debug_assertions)]
+fn load_env_file(path: &std::path::Path) -> EnvFileOutcome {
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(_) => return EnvFileOutcome::NotFound,
+    };
+    let text = decode_env_bytes(&bytes);
+    match dotenvy::from_read(text.as_bytes()) {
+        Ok(()) => EnvFileOutcome::Loaded,
+        Err(e) => EnvFileOutcome::Failed(e.to_string()),
+    }
+}
+
+/// .env 字节流转 UTF-8：容忍 UTF-8 BOM 与 UTF-16 LE/BE BOM（Windows 编辑器 /
+/// PowerShell 重定向的常见产物）；其余按 UTF-8 容错解码。
+#[cfg(debug_assertions)]
+fn decode_env_bytes(bytes: &[u8]) -> String {
+    let utf16 = |rest: &[u8], big_endian: bool| -> String {
+        let units: Vec<u16> = rest
+            .chunks_exact(2)
+            .map(|chunk| {
+                if big_endian {
+                    u16::from_be_bytes([chunk[0], chunk[1]])
+                } else {
+                    u16::from_le_bytes([chunk[0], chunk[1]])
+                }
+            })
+            .collect();
+        String::from_utf16_lossy(&units)
+    };
+    match bytes {
+        [0xEF, 0xBB, 0xBF, rest @ ..] => String::from_utf8_lossy(rest).into_owned(),
+        [0xFF, 0xFE, rest @ ..] => utf16(rest, false),
+        [0xFE, 0xFF, rest @ ..] => utf16(rest, true),
+        _ => String::from_utf8_lossy(bytes).into_owned(),
+    }
 }
 
 #[tauri::command]
@@ -389,5 +461,57 @@ mod tests {
                 "default capability must include {permission}"
             );
         }
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn load_env_file_reads_utf16le_env_created_by_powershell_redirect() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join(".env");
+        let text = "DOTENV_TEST_UTF16_URL=http://utf16-example\r\n";
+        let mut bytes = vec![0xFF, 0xFE];
+        for unit in text.encode_utf16() {
+            bytes.extend_from_slice(&unit.to_le_bytes());
+        }
+        std::fs::write(&path, bytes).unwrap();
+
+        assert!(matches!(load_env_file(&path), EnvFileOutcome::Loaded));
+        assert_eq!(
+            std::env::var("DOTENV_TEST_UTF16_URL").ok().as_deref(),
+            Some("http://utf16-example")
+        );
+        std::env::remove_var("DOTENV_TEST_UTF16_URL");
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn load_env_file_reads_utf8_with_bom_and_plain() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join(".env");
+        std::fs::write(&path, b"\xEF\xBB\xBFDOTENV_TEST_BOM_URL=http://bom\n").unwrap();
+        assert!(matches!(load_env_file(&path), EnvFileOutcome::Loaded));
+        assert_eq!(
+            std::env::var("DOTENV_TEST_BOM_URL").ok().as_deref(),
+            Some("http://bom")
+        );
+        std::env::remove_var("DOTENV_TEST_BOM_URL");
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn load_env_file_reports_missing_and_malformed_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let missing = tmp.path().join("missing.env");
+        assert!(matches!(
+            load_env_file(&missing),
+            EnvFileOutcome::NotFound
+        ));
+
+        let malformed = tmp.path().join("malformed.env");
+        std::fs::write(&malformed, b"JUST_A_LINE\n").unwrap();
+        assert!(matches!(
+            load_env_file(&malformed),
+            EnvFileOutcome::Failed(_)
+        ));
     }
 }
