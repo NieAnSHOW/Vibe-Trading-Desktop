@@ -79,97 +79,139 @@ transparent LLM usage center. Everything runs locally on `127.0.0.1`.
 
 Trading Worker 由一个原生桌面壳和一个嵌入式研究工作区组成：
 
-| 层级 | 技术 | 作用 |
-| --- | --- | --- |
-| 桌面壳 | Tauri 2.x + Rust + Vue 控制台 | 账户登录、内嵌 Python 运行时、依赖引导安装、服务生命周期与本地日志 |
-| 研究工作区 | React 19 + TypeScript + ECharts | Agent 对话、市场数据、资讯、自选股、回测与可视化（嵌入主窗口） |
-| 研究引擎 | Python 3.12 + FastAPI + LangGraph | 金融研究、回测、数据源、技能与本地 API 服务（仅监听 127.0.0.1） |
+| 层级       | 技术                              | 作用                                                               |
+| ---------- | --------------------------------- | ------------------------------------------------------------------ |
+| 桌面壳     | Tauri 2.x + Rust + Vue 控制台     | 账户登录、内嵌 Python 运行时、依赖引导安装、服务生命周期与本地日志 |
+| 研究工作区 | React 19 + TypeScript + ECharts   | Agent 对话、市场数据、资讯、自选股、回测与可视化（嵌入主窗口）     |
+| 研究引擎   | Python 3.12 + FastAPI + LangGraph | 金融研究、回测、数据源、技能与本地 API 服务（仅监听 127.0.0.1）    |
 
 桌面主窗口左侧是常驻导航栏（账户 / 环境 / 研究 / 设置）：**账户** 进登录与个人中心（会员状态、托管模型、用量），**环境** 是运行时控制台（安装依赖、启停服务、看日志），**研究** 直接在主窗口内嵌完整 WebUI。首次运行时控制台会引导安装依赖，就绪后一键启动并进入工作区。
 
 ## 功能一览
 
-以下截图按产品工作流顺序展示 Trading Worker 的完整体验。
+以下截图按产品工作流顺序展示 Trading Worker 的完整体验；研究工作区支持深色 / 浅色主题切换。
 
-### 0. 桌面控制台
+### 登录与注册
 
 <p align="center">
-  <img src="assets/0.png" alt="Trading Worker 桌面控制台" width="420" />
+  <img src="assets/light_login.png" alt="登录页（浅色主题）" width="460" />
+  &nbsp;
+  <img src="assets/light_reg.png" alt="注册页（浅色主题）" width="460" />
 </p>
 
-安装、修复依赖、启动本地研究服务，全在图形界面完成 —— 不用打开终端。
+手机号 + 验证码即可登录或注册，也可以「使用自定义模型继续」跳过账号 —— 不需要配置任何 API key。
 
-### 1. 市场看板
+### 账户与会员
 
 <p align="center">
-  <img src="assets/1.png" alt="A 股市场看板" width="960" />
+  <img src="assets/light_profile.png" alt="账户与会员页（浅色主题）" width="960" />
 </p>
 
-集中查看主要指数、市场宽度、板块和行情概览，先看清今天的市场情绪。
+查看研究额度余额、会员有效期，以及当前套餐可用的托管模型。
 
-### 2. 市场异动
+### 市场看板
 
 <p align="center">
-  <img src="assets/2.png" alt="市场异动" width="960" />
+  <img src="assets/light_dashboard.png" alt="A 股市场看板（浅色主题）" width="960" />
 </p>
 
-聚合值得跟进的价格、成交量与市场信号，即时发现、即时跟踪。
+主要指数、涨幅榜 / 跌幅榜、涨跌分布与情绪雷达集中在一屏，先看清今天的市场情绪。
 
-### 3. 指数详情与盘中图表
+### 4. 市场异动
 
 <p align="center">
-  <img src="assets/3.png" alt="指数详情与盘中图表" width="960" />
+  <img src="assets/light_marketpulse.png" alt="市场异动（浅色主题）" width="960" />
 </p>
 
-在指数详情中查看 K 线、盘中走势、成交量与相关市场数据。
+按涨停、跌停 / 炸板等分类跟踪盘中异动，点开单条事件查看信号含义与盘面解读。
 
-### 4. 自选股
+### 指数
 
 <p align="center">
-  <img src="assets/4.png" alt="自选股管理" width="960" />
+  <img src="assets/light_indices.png" alt="指数详情（浅色主题）" width="960" />
 </p>
 
-维护关注标的，并通过快捷按钮把行情上下文直接交给 Agent 继续研究。
+主要宽基指数一屏总览，选中即看日线 K 线、均线、成交量与分时走势。
 
-### 5. 投资资讯
+### 自选股
 
 <p align="center">
-  <img src="assets/5.png" alt="投资资讯中心" width="960" />
+  <img src="assets/light_watchlist.png" alt="A股自选（浅色主题）" width="960" />
 </p>
 
-以研究主题与市场线索组织资讯，帮你快速筛出值得跟进的事件。
+输入 6 位代码添加自选，点选个股查看 K 线，并可把行情上下文一键交给 Agent 继续研究。
 
-### 6. AI 研究 Agent
+### 投资资讯
 
 <p align="center">
-  <img src="assets/6.png" alt="Trading Worker AI Agent" width="960" />
+  <img src="assets/light_news.png" alt="投资资讯（浅色主题）" width="960" />
+</p>
+
+按行业分类浏览 A 股资讯，右侧直接阅读原文与 AI 要点。
+
+### AI 研究 Agent
+
+<p align="center">
+  <img src="assets/light_agent.png" alt="Trading Worker AI Agent（浅色主题）" width="960" />
 </p>
 
 从研究模板或自然语言问题开始，像聊天一样完成全方位的个股与策略分析。
 
-### 7. LLM 用量中心
+### 回测报告
 
 <p align="center">
-  <img src="assets/7.png" alt="LLM 用量中心" width="960" />
+  <img src="assets/light_report.png" alt="回测报告库（浅色主题）" width="960" />
 </p>
 
-按模型与时间维度查看用量，研究成本一目了然。
+报告库集中呈现回测数量、收益率、夏普比率等统计，支持搜索与筛选，让每个想法经过验证。
 
-### 8. 回测报告
+### 相关性矩阵
 
 <p align="center">
-  <img src="assets/8.png" alt="回测报告工作台" width="960" />
+  <img src="assets/light_correlation.png" alt="相关性矩阵（浅色主题）" width="960" />
 </p>
 
-在工作台中查找、筛选和打开已完成的研究与回测结果，让每个想法经过验证。
+多资产收益率相关性分析：自选标的、窗口长度与计算方法，热力图呈现结果。
 
-### 9. Alpha Zoo
+### Alpha 因子库
 
 <p align="center">
-  <img src="assets/9.png" alt="Alpha Zoo 因子库" width="960" />
+  <img src="assets/light_alpha.png" alt="Alpha 因子库（浅色主题）" width="960" />
 </p>
 
-高阶玩家的因子实验室：浏览 450+ 内置因子，做检验与对比，探索下一条研究线索。
+4 个因子库、460 个内置 Alpha 因子，按主题与标的池筛选，支持对比与基准测试。
+
+### LLM 用量中心
+
+<p align="center">
+  <img src="assets/light_usage.png" alt="LLM 用量中心（浅色主题）" width="960" />
+</p>
+
+按会话与时间维度查看 Token 消耗趋势和模型分布，研究成本一目了然。
+
+### 运行时与设置
+
+<p align="center">
+  <img src="assets/light_runtime.png" alt="运行时监控（浅色主题）" width="960" />
+</p>
+
+只读监控实盘 / 模拟连接器的授权、Runner 与全局熔断状态，风险状况随时可见。
+
+<p align="center">
+  <img src="assets/light_settings.png" alt="设置页（浅色主题）" width="960" />
+</p>
+
+设置页可切换深浅主题、选择托管模型（VIP 服务）或自定义 LLM 配置，并管理 Tushare 等数据源凭证。
+
+### 深浅双主题
+
+<p align="center">
+  <img src="assets/dark_dashboard.png" alt="深色主题 · 市场看板" width="460" />
+  &nbsp;
+  <img src="assets/dark_profile.png" alt="深色主题 · 账户与会员" width="460" />
+</p>
+
+研究工作区支持深色 / 浅色主题，在设置中一键切换。
 
 ## 快速开始
 
@@ -219,23 +261,23 @@ bash scripts/desktop/build-dmg.sh
 
 ## 与上游 Vibe-Trading 的关系
 
-| 维度 | 上游 HKUDS/Vibe-Trading | 本仓库 Trading Worker |
-| --- | --- | --- |
-| 定位 | 面向开发者/研究者的开源智能体框架 | 面向个人投资者的桌面产品 |
-| 分发方式 | pip / Docker / CLI / MCP | macOS DMG / Windows MSI 安装包 |
-| 使用门槛 | 自备环境、终端与 API key | 双击安装、登录账号、托管模型 |
-| 市场数据 | 通用多市场研究 | A 股优先的工作台（看板/异动/自选/资讯） |
-| 账户体系 | 无 | 登录、会员、用量中心 |
-| 演进策略 | 社区驱动，快速迭代 | 保留上游核心，业务独立演进，选择性同步 |
+| 维度     | 上游 HKUDS/Vibe-Trading           | 本仓库 Trading Worker                   |
+| -------- | --------------------------------- | --------------------------------------- |
+| 定位     | 面向开发者/研究者的开源智能体框架 | 面向个人投资者的桌面产品                |
+| 分发方式 | pip / Docker / CLI / MCP          | macOS DMG / Windows MSI 安装包          |
+| 使用门槛 | 自备环境、终端与 API key          | 双击安装、登录账号、托管模型            |
+| 市场数据 | 通用多市场研究                    | A 股优先的工作台（看板/异动/自选/资讯） |
+| 账户体系 | 无                                | 登录、会员、用量中心                    |
+| 演进策略 | 社区驱动，快速迭代                | 保留上游核心，业务独立演进，选择性同步  |
 
 上游的完整功能说明、多语言 README、Roadmap 与社区信息见 [上游文档](https://github.com/HKUDS/Vibe-Trading#readme) 与 [上游 Wiki](https://vibetrading.wiki/)。
 
-| 本仓库文档 | 内容 |
-| --- | --- |
-| [桌面应用文档](docs/desktop/README.md) | 安装、系统要求、运行时与构建说明 |
-| [贡献者指南](AGENT_CONTRIBUTOR_GUIDE.md) | 开发与高风险交易路径的安全规则 |
-| [CHANGELOG](CHANGELOG.md) | 本仓库变更记录 |
-| [SECURITY](SECURITY.md) | 安全问题上报方式 |
+| 本仓库文档                               | 内容                             |
+| ---------------------------------------- | -------------------------------- |
+| [桌面应用文档](docs/desktop/README.md)   | 安装、系统要求、运行时与构建说明 |
+| [贡献者指南](AGENT_CONTRIBUTOR_GUIDE.md) | 开发与高风险交易路径的安全规则   |
+| [CHANGELOG](CHANGELOG.md)                | 本仓库变更记录                   |
+| [SECURITY](SECURITY.md)                  | 安全问题上报方式                 |
 
 ## 安全说明
 
