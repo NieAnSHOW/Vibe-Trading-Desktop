@@ -119,22 +119,15 @@
     background: hsl(var(--muted) / 0.3);
   }
 
-  /* Smooth scrollbar for webkit */
+  /* 全局隐藏滚动条 */
+  * {
+    scrollbar-width: none;
+  }
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: hsl(var(--border));
-    border-radius: 3px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground));
+    display: none;
   }
 }
+
 
 .desktop-shell-content {
   transition:
@@ -268,14 +261,8 @@ html.desktop-shell-leaving .desktop-shell-content {
     min-width: 0;
     overflow-x: auto;
     overscroll-behavior-inline: contain;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
     scroll-behavior: smooth;
     scroll-snap-type: x proximity;
-  }
-
-  .dashboard-index-strip::-webkit-scrollbar {
-    display: none;
   }
 
   .dashboard-index-strip > * {
@@ -395,16 +382,4 @@ html.desktop-shell-leaving .desktop-shell-content {
   .tw-num {
     @apply font-mono tabular-nums;
   }
-}
-
-/* 桌面壳内嵌时(initDesktopShell 打标)关闭展示文本选中,对齐原生应用;浏览器端不受影响 */
-html.desktop-embed body {
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-html.desktop-embed input,
-html.desktop-embed textarea {
-  -webkit-user-select: text;
-  user-select: text;
 }

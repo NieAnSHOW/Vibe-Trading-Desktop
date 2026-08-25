@@ -39,8 +39,36 @@ describe("desktopShell", () => {
 
     expect(isDesktopEmbedded()).toBe(true);
     expect(getShellConsoleUrl()).toBe("tauri://localhost/index.html");
-    // 内嵌时根节点打标,index.css 借此关闭展示文本选中
+    // 内嵌时根节点打标(桌面专属样式/行为的门控)
     expect(document.documentElement.classList.contains("desktop-embed")).toBe(true);
+  });
+
+  it("suppresses the context menu only while desktop-embedded", () => {
+    const fire = () => {
+      const event = new MouseEvent("contextmenu", { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+
+    // 普通浏览器:右键菜单保留
+    expect(fire()).toBe(false);
+
+    setSearch("/?desktop=1&console=" + encodeURIComponent("tauri://localhost/index.html"));
+    initDesktopShell();
+    expect(fire()).toBe(true);
+
+    // 内嵌态下文本录入框豁免:保留复制/粘贴等原生菜单
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    const inputEvent = new MouseEvent("contextmenu", { cancelable: true });
+    input.dispatchEvent(inputEvent);
+    expect(inputEvent.defaultPrevented).toBe(false);
+    input.remove();
+
+    // 恢复浏览器态(查询串与存储都清掉)后不再拦截
+    window.sessionStorage.clear();
+    setSearch("/");
+    expect(fire()).toBe(false);
   });
   it("keeps working after SPA navigation drops the query string", () => {
     setSearch("/?desktop=1&console=" + encodeURIComponent("http://tauri.localhost/"));
@@ -94,7 +122,7 @@ describe("desktopShell", () => {
 
     expect(isDesktopEmbedded()).toBe(false);
     expect(getShellConsoleUrl()).toBeNull();
-    // 浏览器访问不打标,文本选中保持 Web 习惯
+    // 浏览器访问不打标
     expect(document.documentElement.classList.contains("desktop-embed")).toBe(false);
   });
 

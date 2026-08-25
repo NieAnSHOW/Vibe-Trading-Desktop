@@ -15,6 +15,7 @@ import "./index.css";
 // 捕获桌面壳内嵌标记(?desktop=1&console=…)——须在 SPA 路由丢弃查询串之前
 initDesktopShell();
 
+
 // 触发隔天遥测数据 flush（非阻塞）
 initTelemetry();
 

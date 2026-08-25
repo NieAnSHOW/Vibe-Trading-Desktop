@@ -14,6 +14,15 @@ const CONSOLE_URL_KEY = "vibe.desktop.consoleUrl";
 const THEME_MODE_KEY = "vibe.desktop.themeMode";
 const THEME_COLOR_KEY = "vibe.desktop.themeColor";
 const FRAME_KEY = "vibe.desktop.frame";
+/** 文本录入目标(input/textarea/contenteditable)保留原生右键菜单(复制/粘贴等)。 */
+function isTextEntryTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.closest("input, textarea") !== null || target.isContentEditable)
+  );
+}
+/** 右键菜单抑制只安装一次;是否拦截按实时内嵌状态判断。 */
+let contextMenuSuppressionInstalled = false;
 export const SHELL_PAGE_TRANSITION_MS = 220;
 
 /** Remove the HTML-first rail once the React rail has committed. */
@@ -66,9 +75,25 @@ export function initDesktopShell(): void {
   } catch {
     // sessionStorage 不可用(隐私模式极端情况)时静默降级:入口按 URL 探测。
   }
-  // 桌面内嵌时给根节点打标:index.css 借此关闭展示文本选中(仅桌面端生效)
+  // 桌面内嵌时给根节点打标(桌面专属样式/行为的门控)
   if (isDesktopEmbedded()) {
     document.documentElement.classList.add("desktop-embed");
+  }
+  // 桌面壳禁用右键菜单。Rail 内嵌的 WebUI 是 iframe 独立文档,控制台文档里的
+  // 抑制覆盖不到这里,须自行安装;普通浏览器访问不受影响。
+  if (!contextMenuSuppressionInstalled) {
+    contextMenuSuppressionInstalled = true;
+    // capture 阶段监听:先于图表库(zrender 在 canvas 上挂 contextmenu 且会
+    // stopPropagation)等任何元素级处理器运行,bubble 阶段的 window 监听收不到。
+    window.addEventListener(
+      "contextmenu",
+      (event) => {
+        if (isDesktopEmbedded() && !isTextEntryTarget(event.target)) {
+          event.preventDefault();
+        }
+      },
+      { capture: true },
+    );
   }
 }
 

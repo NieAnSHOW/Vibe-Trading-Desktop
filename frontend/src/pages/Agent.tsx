@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { track } from "@/lib/telemetry";
 import { useAgentStore } from "@/stores/agent";
 import { useSSE } from "@/hooks/useSSE";
+import { useDarkMode } from "@/hooks/useDarkMode";
 import {
   ApiError,
   AUTH_REQUIRED_MESSAGE,
@@ -373,6 +374,7 @@ function removeInlineThinkBlocks(content: string): string {
 /* ---------- Component ---------- */
 export function Agent() {
   const { t } = useTranslation();
+  const { dark } = useDarkMode();
   const [input, setInput] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   const listRef = useRef<HTMLDivElement>(null);
@@ -2035,7 +2037,11 @@ export function Agent() {
       <form onSubmit={handleSubmit} className="px-4 pb-4 backdrop-blur-sm">
         <div
           className="max-w-5xl mx-auto rounded-2xl"
-          style={{ boxShadow: "8px -8px 38px rgba(205, 198, 198, 0.31)" }}
+          style={{
+            boxShadow: dark
+              ? "8px -8px 38px rgba(7, 32, 32, 1)"
+              : "8px -8px 38px rgba(205, 198, 198, 0.31)",
+          }}
         >
           {goalSnapshot && !goalComposerActive && (
             <div className="grid gap-2">
