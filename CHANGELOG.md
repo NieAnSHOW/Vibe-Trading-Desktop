@@ -5,12 +5,24 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.16] — 2026-08-26
+
 ### Added
 - `scripts/desktop/upload-release.sh` — upload locally built installers
   (`.dmg` / `.exe` / `.msi`) to the GitHub release for the current
   `tauri.conf.json` version; repo pinned to the `origin` remote, idempotent
   re-upload (`--clobber`), and release notes auto-extracted from the
   matching CHANGELOG section on first create.
+
+### Fixed
+- **Copy-QA pass for the desktop WebUI.** Scrollbars are now hidden
+  globally (the custom thin-scrollbar styling is gone — it forced macOS into
+  classic overlay bars); the desktop shell suppresses the native context
+  menu in both the console document and the embedded WebUI (capture-phase
+  listeners so chart canvases cannot leak it), while text-entry fields
+  (input / textarea / contenteditable) keep copy/paste menus; text in the
+  embedded WebUI is selectable again (the desktop-embed `user-select` lock
+  is removed); and the Agent input card's shadow follows dark mode.
 
 ## [0.1.15] — 2026-08-24
 

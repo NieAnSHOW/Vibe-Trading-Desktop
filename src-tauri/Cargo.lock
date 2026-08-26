@@ -4324,7 +4324,7 @@ dependencies = [
 
 [[package]]
 name = "trading-worker"
-version = "0.1.15"
+version = "0.1.16"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
