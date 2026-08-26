@@ -151,12 +151,14 @@ Create one case for each approved category. Each case must name a fixture, expec
 
 - [ ] **Step 5: Run schema and runner smoke checks**
 
-Run:
+Run from the repository root:
 
 ```bash
-pytest agent/tests/test_eval_schema.py -q
-python -m evals.runner --executor legacy --case market-001 --fixture-only
+PYTHONPATH=agent pytest agent/tests/test_eval_schema.py -q
+PYTHONPATH=agent python -m evals.runner --executor legacy --case market-001 --fixture-only
 ```
+
+`PYTHONPATH=agent` is required before editable installation because `agent/` is not a top-level Python package. After changing `pyproject.toml`, a developer may run `pip install -e ".[dev]"` and use the installed entry point, but the plan's root-directory command remains explicitly self-contained.
 
 Expected: schema tests pass; the runner prints one JSON result with `executor: "legacy"`, numeric timing fields, and no secret-bearing fields.
 
@@ -655,12 +657,12 @@ The report must show medians and per-case failures without including prompts, ra
 
 - [ ] **Step 4: Run both executors against fixture-only cases**
 
-Run:
+Run from the repository root:
 
 ```bash
-python -m evals.runner --executor legacy --all --fixture-only --output /tmp/legacy-results.json
-VIBE_AGENT_EXECUTOR=pi python -m evals.runner --executor pi --all --fixture-only --output /tmp/pi-results.json
-python -m evals.runner --compare /tmp/legacy-results.json /tmp/pi-results.json --output docs/superpowers/reports/2026-08-26-agent-baseline-comparison.md
+PYTHONPATH=agent python -m evals.runner --executor legacy --all --fixture-only --output /tmp/legacy-results.json
+PYTHONPATH=agent VIBE_AGENT_EXECUTOR=pi python -m evals.runner --executor pi --all --fixture-only --output /tmp/pi-results.json
+PYTHONPATH=agent python -m evals.runner --compare /tmp/legacy-results.json /tmp/pi-results.json --output docs/superpowers/reports/2026-08-26-agent-baseline-comparison.md
 ```
 
 Expected: report contains per-case results, aggregate metrics, blockers, and an explicit `rollout_allowed` decision. If the Pi bridge is unavailable, the report must say `blocked` rather than claiming improvement.
