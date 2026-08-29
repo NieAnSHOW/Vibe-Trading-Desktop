@@ -186,7 +186,7 @@ next_cursor + limit 游标分页作为唯一回溯手段。
 - **THEN** 页面只提供窗口内统一流浏览、原文跳转、手动强制补拉、源健康提示与窗口内分页，不提供范围外入口
 
 ### Requirement: 隔离键为本机自选内容版本键
-系统 SHALL 以本机 watchlist 内容计算隔离键：watchlist_version = sha256(sorted((code, name, market) triples)，名称参与匹配，回填/改名必须使缓存失效。
+系统 SHALL 以本机 watchlist 内容计算隔离键：watchlist_version = sha256(sorted((code, name, market) triples))，名称参与匹配，回填/改名必须使缓存失效。
 系统 MUST NOT 引入用户身份体系，MUST NOT 设计为"按认证用户隔离"；匹配器 SHALL 直读本机
 ~/.vibe-trading/watchlist.db SQLite，MUST NOT 经未鉴权 HTTP 端点获取自选数据。
 

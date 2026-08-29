@@ -3,161 +3,169 @@
 ## Purpose
 TBD - created by archiving change investment-news-hub. Update Purpose after archive.
 ## Requirements
-### Requirement: 免费的投资资讯入口
-系统 SHALL 在侧栏提供“投资资讯”入口，并在 `/news` 路由提供无需产品登录、会员身份或付费权益即可使用的资讯页面。该页面 SHALL 支持在固定的 12 个投资赛道之间切换。
+### Requirement: 免费的自选股资讯入口
+系统 SHALL 在侧栏保留"投资资讯"入口并在 `/news` 路由提供无需产品登录、会员身份或付费权益的资讯页面；
+页面 SHALL 以本机自选股为中心组织统一资讯流，MUST NOT 保留 12 赛道视图。
 
 #### Scenario: 访问投资资讯页面
-- **WHEN** 用户从侧栏选择“投资资讯”
-- **THEN** 系统导航至 `/news`，显示 12 个赛道及当前赛道的最新可用资讯，且不触发任何登录或付费门控
+- **WHEN** 用户从侧栏选择"投资资讯"
+- **THEN** 系统导航至 `/news`，显示与自选股相关的统一资讯流，且不触发任何登录或付费门控
 
-#### Scenario: 切换赛道
-- **WHEN** 用户在投资资讯页面选择另一个赛道
-- **THEN** 系统在同一页面显示该赛道的资讯，并保持其他赛道可继续选择
+#### Scenario: 空自选引导
+- **WHEN** 本机自选列表为空
+- **THEN** 页面显示引导添加自选股的空状态并提供前往自选管理的入口
 
-### Requirement: 固定且可追溯的来源目录
-系统 SHALL 原生纳入 `https://github.com/simonlin1212/investment-news` 上游提交 `d98aa603228f4839fb48859812c63a58ca10cead` 的 108 个 RSS/Atom 赛道来源映射（对应 106 个唯一 feed 网络端点）、12 个赛道及过滤规则，并 SHALL 通过可重复校验的清单证明移植内容与该固定版本一致。系统 SHALL 保留对应的 MIT 版权与许可声明，且 MUST NOT 通过嵌入或启动上游应用来提供此能力。
+### Requirement: 受限的多源快讯与公告采集
+系统 SHALL 从东方财富 7x24 与新浪滚动并行采集快讯（东财优先，新浪交叉验证与降级兜底），并从上交所
+公告接口（主，jsonp）与深交所公告 HTML 频道（备）采集公告。系统 SHALL 仅持久化来源端点返回的标题与
+短摘要（≤500 字符），MUST NOT 抓取条目原文正文或由后端代理原文链接；原文跳转由用户浏览器直接打开。
+条目 URL SHALL 仅接受 http/https 协议并在展示前校验。同源条目 SHALL 以 (source, item_id) 去重；
+跨源标题近似（simhash 相似度 ≥0.7）SHALL 合并，保留多源链接并取最早发布时间。URL 规范化 SHALL
+剥离 utm_* / source=* 跟踪参数。
 
-#### Scenario: 使用固定来源版本刷新
-- **WHEN** 系统启动一次资讯刷新
-- **THEN** 系统使用仓库内源自提交 `d98aa603228f4839fb48859812c63a58ca10cead` 的固定来源目录和赛道映射执行采集，而不在运行时跟随上游分支变化
+#### Scenario: 快讯并行采集
+- **WHEN** 后台轮询执行快讯增量拉取
+- **THEN** 东财与新浪并行工作，任一可用即继续入库；全源失败时回放本地缓存并诚实标注
 
-#### Scenario: 检查第三方归属
-- **WHEN** 发布物包含移植的来源配置或相关实现
-- **THEN** 源码分发物、Python 分发物及桌面应用资源中同时包含适用于这些材料的 MIT 版权与许可声明
+#### Scenario: 公告降级链
+- **WHEN** 上交所公告接口失败
+- **THEN** 系统切换到深交所公告 HTML 频道采集，并把该状态反映到源健康
 
-### Requirement: 受限的 RSS 与 Atom 内容采集
-系统 SHALL 仅从配置的 RSS/Atom feed 获取并标准化标题、短摘要、来源、发布时间和原文 URL，应用移植的过滤规则，并对重复资讯去重。标题和合法的 HTTP(S) 原文 URL SHALL 是条目进入结果的必需字段；短摘要或发布时间缺失时 SHALL 使用显式空值，不得伪造内容或时间。系统 SHALL 使用禁用 DTD、外部实体及实体扩展的安全 XML 解析方式，并 MUST NOT 为生成列表或摘要而抓取原文链接指向的媒体全文。
+#### Scenario: 不抓取原文正文
+- **WHEN** 条目携带原文链接
+- **THEN** 系统仅保存该链接，不请求或存储页面正文
 
-#### Scenario: 标准化有效条目
-- **WHEN** 来源返回包含必要字段的有效 RSS/Atom 条目
-- **THEN** 系统将条目标准化到所属赛道，从 feed 持久化的原始字段仅限标题、短摘要、来源、发布时间和原文 URL，并只额外保存经过校验的中文标题、赛道 AI 要点及必要的非内容元数据
+#### Scenario: 跨源近似合并
+- **WHEN** 不同来源的条目标题 simhash 相似度 ≥0.7
+- **THEN** 系统合并为一条，保留多源链接并取最早发布时间
 
-#### Scenario: 不抓取媒体全文
-- **WHEN** feed 条目包含一个指向媒体页面的原文 URL
-- **THEN** 系统保留该 URL 供用户跳转，但不请求或持久化该媒体页面的正文
+### Requirement: 后台分层轮询与手动强制补拉
+系统 SHALL 在现有 FastAPI 进程内以后台分层任务轮询快讯源（15-30s，以 since_id 为游标增量拉取）与公告源
+（5-10min 增量）。系统 SHALL 保留手动刷新 POST /news-api/watchlist-feed/refresh 作为强制补拉：触发快讯源
+立即增量拉取、公告源仅当上次拉取超过 2 分钟时触发；补拉任务运行中重复触发 SHALL 返回 202 与当前任务状态
+且不启动第二个任务（reuse 语义）；距上次触发不足 5 秒 SHALL 返回 429；响应为
+{ "accepted": boolean, "task_id": "uuid|null", "reused": boolean }，异步受理不同步等待完成。
 
-#### Scenario: 拒绝非 Web 原文链接
-- **WHEN** feed 条目提供 `javascript:`、`data:`、`file:` 或其他非 HTTP(S) 原文 URL
-- **THEN** 系统拒绝该条目，不持久化也不向页面提供该链接
+#### Scenario: 后台自动轮询
+- **WHEN** FastAPI sidecar 运行中
+- **THEN** 快讯源按 15-30s、公告源按 5-10min 自动增量采集入库，无需用户触发
 
-#### Scenario: 安全解析不可信 XML
-- **WHEN** feed 包含 DTD、外部实体或实体扩展声明
-- **THEN** 系统不解析或展开这些声明，并将该来源作为隔离失败处理
+#### Scenario: 手动强制补拉
+- **WHEN** 用户触发手动刷新
+- **THEN** 系统立即执行一次快讯增量拉取并快速返回受理结果
 
-#### Scenario: 可选字段缺失
-- **WHEN** 有效条目包含标题和合法原文 URL，但缺少短摘要或发布时间
-- **THEN** 系统保留该条目并将缺失字段表示为显式空值，页面使用稳定的“暂无摘要”或“时间未知”状态
+#### Scenario: 运行中重复触发
+- **WHEN** 补拉任务运行中再次收到刷新请求
+- **THEN** 返回 202 与运行中任务状态（reused=true），不启动第二个任务
 
-#### Scenario: 过滤和去重
-- **WHEN** 同一刷新中出现不符合过滤规则的条目或重复条目
-- **THEN** 系统排除不合格条目，并只在结果中保留一份等价资讯
+#### Scenario: 触发过于频繁
+- **WHEN** 距上次手动触发不足 5 秒
+- **THEN** 返回 429
 
-### Requirement: 可浏览的资讯条目与中文标题
-页面 SHALL 为每条资讯显示标题、可选短摘要、来源、可选发布时间和可访问的 HTTP(S) 原文链接。原始标题包含中文字符时 SHALL 原样展示且不调用标题本地化；非中文标题的本地化结果仅在条目 ID 匹配、非空、长度未超限且包含中文字符时视为有效。有效中文标题 SHALL 优先显示；本地化不可用时 SHALL 回退显示原始标题而不得隐藏该条目。
+### Requirement: SQLite 条目库有界窗口与派生缓存
+系统 SHALL 将快讯与公告统一持久化到本机 SQLite ~/.vibe-trading/news.db，仅保留活跃窗口：快讯 24 小时、
+公告 7 天；清理任务 SHALL 持续删除超窗条目；系统 MUST NOT 提供跨窗口历史。读取时系统 SHALL 按本机自选股
+内容执行匹配并按 (watchlist_version, 条目库写入代数 generation, after_cursor, before_cursor, limit) 缓存派生结果；
+派生缓存值 SHALL 存条目键有序表并在读取时与条目库 join（清理后的条目不得 replay）；自选增删 SHALL 经内容版本键
+变化自然失效缓存。条目字段 SHALL 包含 (source, item_id, published_at, title, summary, url, matched_codes, confidence)，
+其中 matched_codes/confidence 为预留字段，入库时保持空值。
 
-#### Scenario: 展示完整条目字段
-- **WHEN** 用户浏览包含有效条目的赛道
-- **THEN** 每条资讯显示标题、短摘要、来源和发布时间，并提供打开原始来源 URL 的操作
+#### Scenario: 窗口清理
+- **WHEN** 条目超过其类型留存窗口（快讯 24h / 公告 7d）
+- **THEN** 清理任务物理删除该条目，任何接口不再返回
 
-#### Scenario: 优先展示中文标题
-- **WHEN** 条目具有经过验证的中文标题
-- **THEN** 页面将中文标题作为主标题展示，并保留原文链接指向原始来源
+#### Scenario: 窗口内游标分页
+- **WHEN** 客户端携带 next_cursor 再次读取
+- **THEN** 返回窗口内更早的下一页；窗口外数据物理不存在
 
-#### Scenario: 标题本地化不可用
-- **WHEN** 非中文条目未能生成有效中文标题
-- **THEN** 页面显示原始标题并继续提供该条目的其余字段和原文链接
+#### Scenario: 后加自选可追溯窗口内条目
+- **WHEN** 用户把新股票加入自选
+- **THEN** 下次读取时该股票 24h 快讯窗口内的历史条目即被匹配呈现（匹配在读取时执行，非入库时）
 
-### Requirement: 每赛道 AI 要点使用项目 LLM 配置
-系统 SHALL 基于每个有新数据的赛道在本次刷新中选出的最新候选资讯，分别生成 3–5 条中文 AI 要点；“每日”仅是当前最新刷新快照的产品标签，不表示自然日归档或历史窗口。系统 MUST 在每次刷新中通过现有 `build_llm()` 只构建一个模型实例，使用项目当前 Provider、模型、Base URL 和凭据配置，并为每个有新数据的赛道执行一次结构化调用，同时返回该赛道的有效中文标题映射和 AI 要点。每赛道最多向模型提交 16 条候选资讯，所有赛道的模型调用并发 MUST 不超过 3。系统 MUST NOT 读取、复制、生成或维护独立的 `llm.config.json`。单条内容长度 SHALL 有明确上限，模型输出 SHALL 经过结构和字段校验后才能进入快照。
+### Requirement: 源健康降级状态机与诚实标注
+系统 SHALL 将请求健康与内容新鲜度分离：单源连续 3 次失败或游标停滞 ≥3 轮判定 degraded；429/403 按
+30→60→120 秒加抖动指数退避、上限 3 次后切备源；degraded 源每 60 秒探活、连续 3 次成功回切并补拉。
+内容新鲜度 SHALL 由 TradingCalendar 抽象控制（is_trading_day / current_session /
+expected_flash_interval），默认实现 ConservativeCalendar 将所有工作日视为交易时段、零外部依赖。响应
+SHALL 返回每个源的状态（source_id ∈ {eastmoney,sina,sse,szse}，state ∈ {ok,degraded,failed}，
+last_success_at ISO8601|null，last_error 非敏感摘要|null）；全源失败时页面 SHALL 显示
+"数据可能延迟，最后更新:{timestamp}" 横幅。巨潮（WAF 446）与财联社（需 sign）MUST NOT 进入首版降级链。
 
-#### Scenario: 使用当前 Provider 生成要点
-- **WHEN** 用户已配置可用的项目 LLM Provider 且刷新进入摘要阶段
-- **THEN** 系统为本次刷新调用一次 `build_llm()`，并使用该实例为各个有新数据的赛道分别执行一次结构化调用，生成 3–5 条中文要点和需要的中文标题，不要求新闻模块另行配置凭据
+#### Scenario: 单源降级
+- **WHEN** 某源连续 3 次失败或游标停滞 ≥3 轮
+- **THEN** 该源标记 degraded 并以小字提示，其余源不受影响
 
-#### Scenario: 切换赛道展示对应要点
-- **WHEN** 用户从一个赛道切换到另一个赛道
-- **THEN** 页面展示新赛道独立的 AI 要点与资讯列表，不复用其他赛道的要点
+#### Scenario: 限流退避
+- **WHEN** 某源返回 429 或 403
+- **THEN** 按 30→60→120 秒加抖动退避，连续 3 次后停止轮询该源并依赖备源
 
-#### Scenario: 限制模型输入
-- **WHEN** 待摘要资讯超过配置的候选数量或单条文本长度上限
-- **THEN** 系统先按确定性规则将每赛道候选截取至最多 16 条并截断字段，再以总并发不超过 3 的方式调用 LLM，且不把媒体全文加入提示词
+#### Scenario: 探活回切
+- **WHEN** degraded 源探活连续 3 次成功
+- **THEN** 该源回切为 ok 并补拉
 
-#### Scenario: 拒绝无效模型输出
-- **WHEN** LLM 返回无法通过预期结构、类型或长度校验的内容
-- **THEN** 系统不将该内容作为对应赛道的有效要点写入快照，并将该赛道 AI 摘要状态标记为不可用
+#### Scenario: 全源失败诚实标注
+- **WHEN** 全部源失败
+- **THEN** source_health 全部为 failed，页面顶部显示横幅与最后更新时间
 
-#### Scenario: LLM 不可用
-- **WHEN** `build_llm()` 无法取得可用模型或摘要调用失败
-- **THEN** 资讯刷新仍可凭有效 feed 数据成功，页面继续展示原始资讯并按赛道明确显示 AI 摘要不可用
+### Requirement: 自选相关统一资讯流接口
+系统 SHALL 提供 GET /news-api/watchlist-feed?after_cursor=<水位游标>&before_cursor=<翻页游标>&limit=50（挂 require_auth）。
+两个游标参数正交且互斥（同传 SHALL 返回 400）：after_cursor 为轮询水位，只返回比它更新的条目，响应 new_cursor
+为推进后的水位（无新条目时原样回传）；before_cursor 为翻页游标，只返回比它更早的条目，响应 next_cursor 指向
+更早一页（null 表示窗口内已无更多）。首屏（两游标皆空）从窗口头部取最新一页并同时返回 new_cursor 与
+next_cursor。游标均为不透明字符串，客户端 MUST NOT 解析内部结构；游标不可解析时 SHALL 返回 400 而非静默重置。
+after_cursor 模式按 published_at 升序交付最旧未交付页（前端 reverse 展示），一轮涌入超过 limit 条也不丢不重。
+items 上限 50 条、按 published_at 新→旧
+排序；last_updated_at 为最近一次成功入库时间或 null；watchlist_version 为 64 位十六进制 sha256（空自选也有
+确定哈希）。请求中任一游标（after_cursor 或 before_cursor）绑定的 watchlist_version 与当前不一致时 SHALL
+返回 reset_required=true，且该游标被视为空（items 从窗口头部重新匹配），前端应丢弃旧游标。FeedItem SHALL 含
+id/source/type(flash|announcement)/published_at/title/summary(≤500)/url(可选)/matched_stocks[{
+code,name,match_rule ∈ {structured_field,code_pattern,name_exact}}]/confidence(high|medium)。边界响应：空自选
+列表返回 items=[]、new_cursor=null、next_cursor=null、reset_required=false 且其余字段正常；全源失败且无缓存
+返回 items=[] 且 source_health 全部 failed；全源失败但有窗口内缓存返回缓存条目 + source_health 全部 failed。
+三级置信度：高=来源结构化代码字段直接映射（东财 stockList，1. 前缀=沪市 600/601/603/605/688，0. 前缀=深市
+000/001/002/003/300/301，北交所前缀未确认首版跳过）叠加正文 6 位代码上下文护栏；中=自选名称精确匹配；
+低=板块/概念间接关联首版不做、仅预留字段，低置信度条目 MUST NOT 返回或展示。
 
-### Requirement: 手动后台刷新与单任务协调
-系统 SHALL 提供手动启动刷新的 API，并在现有 FastAPI 进程内异步执行覆盖全部 12 个赛道的采集和摘要。启动请求 SHALL 快速返回任务状态；同一进程在任意时刻 MUST 最多运行一个刷新任务，并 SHALL 提供可查询的阶段、进度、开始时间、完成时间和错误摘要。刷新任务状态 SHALL 仅驻留当前进程内存，不得写入最新快照或独立任务文件。
+#### Scenario: 读取统一流
+- **WHEN** 已登录客户端请求 watchlist-feed（不带游标）
+- **THEN** 返回窗口头部最新一页与自选匹配的统一流（新→旧），含源健康、内容版本键、new_cursor 与 next_cursor
 
-#### Scenario: 启动后台刷新
-- **WHEN** 当前没有刷新任务且用户触发手动刷新
-- **THEN** API 接受请求并立即返回新的任务标识和运行状态，而不等待所有来源与 LLM 处理完成
+#### Scenario: 短轮询增量拉取
+- **WHEN** 客户端携带 after_cursor=new_cursor 轮询
+- **THEN** 只返回比该水位更新的条目，new_cursor 推进到本页最旧返回行；无新条目时 items=[] 且水位原样回传
 
-#### Scenario: 一次刷新覆盖全部赛道
-- **WHEN** 系统接受一次手动刷新请求
-- **THEN** 同一个后台任务采集并处理固定的全部 12 个赛道，而不是只刷新当前页面选中的赛道
+#### Scenario: 上滑加载更早
+- **WHEN** 客户端携带 before_cursor=next_cursor 翻页
+- **THEN** 只返回更早的条目，next_cursor 指向更早一页；窗口耗尽时 next_cursor=null
 
-#### Scenario: 查询刷新进度
-- **WHEN** 用户在刷新运行期间查询任务状态
-- **THEN** 系统返回当前阶段、可计算的进度、开始时间以及截至当前的来源成功与失败统计
+#### Scenario: 自选变化游标重置
+- **WHEN** 请求中任一游标绑定的 watchlist_version 与当前不一致
+- **THEN** 返回 reset_required=true，该游标视为空且 items 从窗口头部重新匹配
 
-#### Scenario: 并发触发刷新
-- **WHEN** 已有刷新任务运行时再次收到刷新请求
-- **THEN** 系统不启动第二个任务，并返回现有运行任务的状态
+### Requirement: 隔离键为本机自选内容版本键
+系统 SHALL 以本机 watchlist 内容计算隔离键：watchlist_version = sha256(sorted((code, name, market) triples))，名称参与匹配，回填/改名必须使缓存失效。
+系统 MUST NOT 引入用户身份体系，MUST NOT 设计为"按认证用户隔离"；匹配器 SHALL 直读本机
+~/.vibe-trading/watchlist.db SQLite，MUST NOT 经未鉴权 HTTP 端点获取自选数据。
 
-#### Scenario: 进程重启后的任务状态
-- **WHEN** FastAPI 进程在刷新任务运行期间重启
-- **THEN** 先前的进程内任务不被恢复为运行中，系统返回空闲状态并继续提供最后一次成功快照
+#### Scenario: 自选增删失效派生
+- **WHEN** 用户添加或删除自选股
+- **THEN** watchlist_version 变化，旧派生缓存自然失效
 
-### Requirement: 来源失败隔离与赛道级刷新判定
-系统 SHALL 将每个来源的超时、解析或网络失败与其他来源隔离，并在一次刷新中独立计算 12 个赛道的结果。某赛道获得本次可用新条目时 SHALL 更新该赛道；某赛道未获得本次可用新条目时 SHALL 复用其旧数据并标记为 stale，若首次运行没有该赛道旧数据则 SHALL 将其标记为 unavailable。只有至少一个赛道获得更新时，系统才 SHALL 原子提交包含全部 12 个赛道状态的组合快照；当 12 个赛道均未更新或快照写入失败时，系统 SHALL 将刷新标记为失败且不得重写原快照。
+#### Scenario: 无身份体系
+- **WHEN** 多人共用同一台设备
+- **THEN** 资讯隔离仅由自选列表内容决定，与任何账户无关
 
-#### Scenario: 部分来源失败
-- **WHEN** 刷新期间部分来源失败，但至少一个赛道仍获得本次可用新条目
-- **THEN** 系统继续处理成功来源并允许提交组合快照，在任务与快照元数据中记录失败来源数量和非敏感错误摘要
+### Requirement: 自选名称解析为匹配前置
+系统 SHALL 在添加自选股时通过既有行情提供者解析证券简称写入本机自选库，并 SHALL 对存量 name 为空的行
+执行回填；解析失败时 SHALL 保留空名称且不阻断添加。中置信度名称匹配依赖该名称。
 
-#### Scenario: 赛道回退到旧数据
-- **WHEN** 某赛道本次未获得可用新条目且上一次快照中存在该赛道数据，同时至少一个其他赛道获得更新
-- **THEN** 新组合快照复用该赛道的旧条目和原 `generated_at`，将该赛道的 `stale` 标记为 `true`，且不影响已更新赛道提交
+#### Scenario: 添加自选解析名称
+- **WHEN** 用户添加自选股 600519
+- **THEN** 系统解析证券简称并写入自选库
 
-#### Scenario: 首次运行赛道不可用
-- **WHEN** 某赛道本次未获得可用新条目且没有可复用的旧赛道数据，同时至少一个其他赛道获得更新
-- **THEN** 新组合快照保留该赛道位置，将其标记为 unavailable，设置 `generated_at` 为空，并且不伪造条目
-
-#### Scenario: 所有赛道均未更新
-- **WHEN** 一次刷新完成采集后 12 个赛道均没有获得本次可用新条目
-- **THEN** pipeline 保留可检查的 12 个 stale/unavailable 赛道状态；协调器将任务标记为失败并返回 `no_track_updated` 稳定错误码，且在调用 LLM 或写入前不重写最后一次成功快照
-
-#### Scenario: 记录赛道新鲜度
-- **WHEN** 至少一个赛道获得更新并提交新的组合快照
-- **THEN** 每个赛道分别包含其 `generated_at`、`stale` 和可用状态，使读取方能够区分本次更新、旧数据回退和首次不可用
-
-#### Scenario: 快照提交失败
-- **WHEN** 新快照在原子提交前发生序列化或文件系统错误
-- **THEN** 系统将任务标记为失败，并保持原有快照文件完整可读
-
-### Requirement: 最新快照的原子持久化与陈旧回退
-系统 SHALL 只在用户运行时数据目录持久化一个最新成功 JSON 组合快照，并 SHALL 通过临时文件、完整校验和原子替换提交新快照。读取接口 SHALL 在刷新期间及后续刷新失败后继续返回最后一次成功快照，同时通过顶层生成信息和每赛道 `generated_at`、`stale`、可用状态及错误摘要区分其新鲜度。系统 MUST NOT 为该功能保存可查询的历史快照或持久化刷新任务状态。
-
-#### Scenario: 刷新期间读取旧快照
-- **WHEN** 已有成功快照且新刷新任务仍在运行
-- **THEN** 读取接口返回已有快照并标记刷新正在进行，而不是返回空列表或未提交的部分数据
-
-#### Scenario: 原子替换成功快照
-- **WHEN** 新刷新结果通过结构校验并成功写入临时文件
-- **THEN** 系统以原子操作替换最新快照，使读取方只能看到完整旧版本或完整新版本
-
-#### Scenario: 失败后使用陈旧快照
-- **WHEN** 最近一次刷新失败且存在上一次成功快照
-- **THEN** 读取接口继续返回未被重写的上一次成功快照，并在 API 包络中标记整体数据陈旧及当前进程内的最近刷新失败
-
-#### Scenario: 首次使用且无快照
-- **WHEN** 用户首次访问页面且从未生成成功快照
-- **THEN** 系统显示无可用资讯的明确空状态和手动刷新操作，而不伪造内容
+#### Scenario: 存量回填
+- **WHEN** 自选库存在 name 为空的行
+- **THEN** 系统批量解析并回填，失败行保持空名称
 
 ### Requirement: 单一服务与现有 API 安全边界
 资讯 API SHALL 使用 `/news-api/...` 命名空间并运行在现有 FastAPI sidecar 中，以避免与 SPA `/news` 路由冲突。所有读取、刷新和状态接口 SHALL 复用项目现有的本地回环信任与远程 `API_AUTH_KEY` 鉴权规则。API 响应、持久化快照、任务错误摘要和日志 MUST NOT 包含 LLM 或 API 凭据。
@@ -179,8 +187,10 @@ TBD - created by archiving change investment-news-hub. Update Purpose after arch
 - **THEN** 这些输出不包含 LLM 密钥、`API_AUTH_KEY` 或其他 Provider 凭据
 
 ### Requirement: 明确限定首版功能范围
-首版系统 MUST NOT 提供资讯历史、搜索、分页、收藏、已读状态、定时刷新或消息推送，也 MUST NOT 为新闻模块启动第二个后端服务或引入独立账户体系。
+首版系统 MUST NOT 提供跨留存窗口的资讯历史、搜索、日期筛选、收藏、已读状态或消息推送，也 MUST NOT 为
+新闻模块启动第二个后端服务或引入独立账户体系。首版 SHALL 允许后台定时轮询，并 SHALL 允许留存窗口内以
+next_cursor + limit 游标分页作为唯一回溯手段。
 
 #### Scenario: 使用首版页面
 - **WHEN** 用户访问投资资讯模块
-- **THEN** 页面只提供最新快照浏览、赛道切换、当前赛道要点、原文跳转、手动刷新及状态反馈，不展示范围外功能入口
+- **THEN** 页面只提供窗口内统一流浏览、原文跳转、手动强制补拉、源健康提示与窗口内分页，不提供范围外入口
