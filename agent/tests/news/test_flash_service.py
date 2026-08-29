@@ -73,7 +73,7 @@ def _eastmoney_payload() -> bytes:
                         "code": "202608291200",
                         "title": "央行开展逆回购",
                         "summary": "500亿元",
-                        "showTime": 1787985600,
+                        "showTime": "2026-08-29 12:00:00",
                         "realSort": 1787985600,
                         "stockList": ["1.600519", "0.000001"],
                     },
@@ -81,7 +81,7 @@ def _eastmoney_payload() -> bytes:
                         "code": "202608291199",
                         "title": "某公司发布公告",
                         "summary": "",
-                        "showTime": 1787985500,
+                        "showTime": "2026-08-29 11:58:20",
                         "realSort": 1787985500,
                         "stockList": [],
                     },
@@ -97,6 +97,31 @@ def test_parse_eastmoney_builds_entries_and_cursor():
     assert [entry.item_id for entry in entries] == ["202608291200", "202608291199"]
     assert entries[0].structured_codes == ("1.600519", "0.000001")  # 原样保存，标准化在匹配层
     assert entries[0].type == "flash"
+
+
+def test_parse_eastmoney_parses_cst_showtime_string():
+    """真实线格式（规格 §10 端点证据）：showTime 为 CST 日期时间串、realSort 为微秒字符串。"""
+    payload = json.dumps(
+        {
+            "data": {
+                "fastNewsList": [
+                    {
+                        "code": "202608293859286768",
+                        "title": "东财快讯",
+                        "summary": "内容",
+                        "showTime": "2026-08-29 18:02:04",
+                        "realSort": "1787997724086768",
+                        "stockList": ["1.600519"],
+                    }
+                ]
+            }
+        }
+    ).encode()
+    entries, cursor = parse_eastmoney(payload)
+    assert len(entries) == 1
+    assert entries[0].published_at == "2026-08-29T10:02:04+00:00"  # 18:02 CST → 10:02 UTC
+    assert cursor == "1787997724086768"
+    assert entries[0].structured_codes == ("1.600519",)
 
 
 def test_parse_sina_builds_entries():
@@ -221,19 +246,34 @@ class StubAnnouncements:
 async def test_refresh_single_flight_and_rate_limit(tmp_path):
     store = EntryStore(tmp_path / "news.db")
     aggregator = FlashAggregator(
-        transport=TransportClient(resolver=FakeResolver(), transport=RoutingTransport({
-            "/comm/web/getFastNewsList": [
-                httpx.Response(200, headers={"content-type": "application/json"}, content=json.dumps({"data": {"fastNewsList": []}}).encode()),
-            ],
-            "/api/roll/get": [
-                httpx.Response(200, headers={"content-type": "application/json"}, content=json.dumps({"result": {"data": []}}).encode()),
-            ],
-        })),
-        store=store, health=_tracker(), sleep=_no_sleep, now=Clock().now,
+        transport=TransportClient(
+            resolver=FakeResolver(),
+            transport=RoutingTransport(
+                {
+                    "/comm/web/getFastNewsList": [
+                        httpx.Response(
+                            200,
+                            headers={"content-type": "application/json"},
+                            content=json.dumps({"data": {"fastNewsList": []}}).encode(),
+                        ),
+                    ],
+                    "/api/roll/get": [
+                        httpx.Response(
+                            200,
+                            headers={"content-type": "application/json"},
+                            content=json.dumps({"result": {"data": []}}).encode(),
+                        ),
+                    ],
+                }
+            ),
+        ),
+        store=store,
+        health=_tracker(),
+        sleep=_no_sleep,
+        now=Clock().now,
     )
     announcements = StubAnnouncements()
-    coordinator = FeedRefreshCoordinator(flash=aggregator, announcements=announcements,
-                                         now=lambda: 1000.0)
+    coordinator = FeedRefreshCoordinator(flash=aggregator, announcements=announcements, now=lambda: 1000.0)
     first = await coordinator.trigger()
     assert (first.accepted, first.reused, first.rate_limited) == (True, False, False)
     assert first.task_id

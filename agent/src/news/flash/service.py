@@ -9,7 +9,7 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from src.news.health import HealthTracker
 from src.news.store import EntryStore, StoredEntry, normalize_url
@@ -20,6 +20,9 @@ SINA_URL = "https://feed.mix.sina.com.cn/api/roll/get"
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 )
+
+
+_TZ_SHANGHAI = timezone(timedelta(hours=8))  # 东财 showTime 为 CST 墙钟字符串（规格 §10 端点证据）
 
 
 @dataclass(frozen=True)
@@ -38,7 +41,12 @@ def parse_eastmoney(payload: bytes) -> tuple[list[StoredEntry], str | None]:
     cursor: int | None = None
     for item in items:
         try:
-            published_at = datetime.fromtimestamp(int(item["showTime"]), tz=timezone.utc).isoformat()
+            published_at = (
+                datetime.strptime(str(item["showTime"]).strip(), "%Y-%m-%d %H:%M:%S")
+                .replace(tzinfo=_TZ_SHANGHAI)
+                .astimezone(timezone.utc)
+                .isoformat()
+            )
         except (KeyError, TypeError, ValueError, OSError, OverflowError):
             continue
         title = str(item.get("title") or "").strip()
