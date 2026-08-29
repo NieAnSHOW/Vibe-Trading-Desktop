@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { RefreshCw, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AnnouncementBar } from "@/components/common/AnnouncementBar";
 import { PageHeader } from "@/components/common/PageHeader";
 import { useMarketDashboardStore } from "@/stores/marketDashboard";
 import type {
@@ -1084,6 +1085,7 @@ export default function Dashboard() {
             }
           />
         </div>
+        <AnnouncementBar />
         <IndexStrip indexes={indexes} />
         {indexesError && indexes.length > 0 && (
           <p className="text-[10px] text-muted-foreground/60">

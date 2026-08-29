@@ -52,10 +52,14 @@ vi.mock("../ipc/events", () => ({
     return vi.fn();
   }),
 }));
+import type { AdItem } from "../ipc/types";
+
 vi.mock("../ipc/commands", () => ({
   consoleTakePendingWebui: vi.fn(async () => null),
   consoleOpenExternalUrl: vi.fn(async () => undefined),
   consoleQuit: vi.fn(async () => undefined),
+  consoleFetchAds: vi.fn(async () => [] as AdItem[]),
+  consoleCloseWebui: vi.fn(async () => undefined),
 }));
 
 const router = createRouter({
@@ -378,6 +382,47 @@ describe("App", () => {
     await flushPromises();
 
     expect(consoleOpenExternalUrl).toHaveBeenCalledWith("https://www.10jqka.com.cn/");
+  });
+
+  it("fetches ads for the retained WebUI frame and replies over the bridge", async () => {
+    const { consoleFetchAds } = await import("../ipc/commands");
+    vi.mocked(consoleFetchAds).mockClear();
+    const sampleAds: AdItem[] = [
+      {
+        id: 5,
+        title: "热门活动",
+        type: 2,
+        position: "dashboard",
+        images: null,
+        content: "热门活动",
+        link: "https://new.ailjf.cc/",
+        sort: 0,
+      },
+    ];
+    vi.mocked(consoleFetchAds).mockResolvedValueOnce(sampleAds);
+    await router.push("/next");
+    const wrapper = mountAppAtDocumentRoot();
+    await flushPromises();
+    openListener?.("http://127.0.0.1:8899/?desktop=1&shell=frame");
+    await flushPromises();
+
+    const frame = wrapper.get('iframe[data-test="desktop-webui-frame"]');
+    const frameWindow = (frame.element as HTMLIFrameElement).contentWindow!;
+    const reply = vi.spyOn(frameWindow, "postMessage");
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: frameWindow,
+        origin: "http://127.0.0.1:8899",
+        data: { type: "vibe-shell:ads-request", position: "dashboard" },
+      }),
+    );
+    await flushPromises();
+
+    expect(consoleFetchAds).toHaveBeenCalledWith("dashboard");
+    expect(reply).toHaveBeenCalledWith(
+      { type: "vibe-shell:ads", position: "dashboard", ads: sampleAds },
+      "http://127.0.0.1:8899",
+    );
   });
 
   it("ignores external-open requests from sources other than the WebUI frame", async () => {

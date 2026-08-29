@@ -651,11 +651,11 @@ select.channel-select:focus-visible {
 
 /* Confirm dialog (native <dialog>) */
 dialog.confirm {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  margin: 0;
+  /* 原生模态居中(UA 对 dialog:modal 是 position:fixed; inset:0;
+     fit-content + margin:auto):整像素对齐且无 transform。transform 居中
+     会把文本光栅化到半像素上,叠加动画的合成层后持续发糊,故弃用
+     translate(-50%,-50%) 方案(动画里也不携带 translate)。 */
+  margin: auto;
   background: hsl(var(--surface-1));
   color: hsl(var(--ink));
   border: 1px solid hsl(var(--line));
@@ -664,9 +664,70 @@ dialog.confirm {
   max-width: 380px;
   box-shadow: 0 22px 55px hsl(0 0% 0% / 0.55);
 }
+/* 遮罩用纯半透明黑,不用 backdrop-filter:WKWebView 对 dialog::backdrop 的
+   backdrop-filter 合成有缺陷,模糊会连弹窗自身内容一起糊掉 */
 dialog.confirm::backdrop {
-  background: hsl(0 0% 0% / 0.55);
-  backdrop-filter: blur(2px);
+  background: hsl(0 0% 0% / 0.6);
+}
+/* 渐入:轻微缩放 + 遮罩淡入,200ms;渐出由 JS 挂 confirm--closing。
+   关键帧不携带 translate(居中交给 margin:auto),终态 transform:none,
+   动画结束后无合成层,文本保持锐利 */
+dialog.confirm[open] {
+  animation: confirm-in 200ms var(--ease) both;
+}
+dialog.confirm[open]::backdrop {
+  animation: confirm-fade-in 200ms ease both;
+}
+dialog.confirm[open].confirm--closing {
+  animation: confirm-out 170ms var(--ease) both;
+  pointer-events: none;
+}
+dialog.confirm[open].confirm--closing::backdrop {
+  animation: confirm-fade-out 170ms ease both;
+}
+@keyframes confirm-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes confirm-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+@keyframes confirm-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes confirm-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  dialog.confirm[open],
+  dialog.confirm[open]::backdrop,
+  dialog.confirm[open].confirm--closing,
+  dialog.confirm[open].confirm--closing::backdrop {
+    animation: none;
+  }
 }
 dialog.confirm h3 {
   font-size: 15.5px;
@@ -714,92 +775,6 @@ dialog.confirm--info .confirm-actions {
   border: 1px solid hsl(var(--bad) / 0.3);
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-/* ── Ad slots ── */
-/* 公告条:逐条轮播,单条时静态;带链接则整条可点击,常驻品牌色 + 末尾跳转箭头 */
-.ad-banner {
-  margin-top: 16px;
-  padding: 0px 2px;
-  background: hsl(var(--surface-1));
-  font-size: 13px;
-  text-align: center;
-  transition:
-    background 0.18s var(--ease),
-    border-color 0.18s var(--ease);
-}
-.ad-bottom {
-  margin-top: 12px;
-  padding: 8px 14px;
-  background: hsl(var(--surface-1));
-  border: 1px solid hsl(var(--line));
-  border-radius: var(--radius);
-  font-size: 12px;
-  text-align: center;
-  color: hsl(var(--ink-dim));
-  transition:
-    background 0.18s var(--ease),
-    border-color 0.18s var(--ease);
-}
-.ad-viewport {
-  position: relative;
-  height: 1.6em;
-  overflow: hidden;
-}
-.ad-row {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: start;
-  gap: 6px;
-  margin: 0;
-  height: 1.6em;
-  line-height: 1.6;
-  overflow: hidden;
-  white-space: nowrap;
-}
-.ad-mark {
-  flex: none;
-}
-.ad-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* 带链接:文字常驻品牌色,末尾跳转箭头;hover 整条变"可按下"卡片 */
-.ad--link {
-  cursor: pointer;
-}
-.ad--link:focus-visible {
-  outline: 2px solid hsl(var(--brand));
-  outline-offset: 2px;
-}
-.ad--link:hover {
-  border-color: hsl(var(--brand) / 0.55);
-}
-.ad-row--link {
-  color: hsl(var(--brand));
-  font-weight: 550;
-}
-.ad-link-icon {
-  flex: none;
-  transition: transform 0.18s var(--ease);
-}
-.ad--link:hover .ad-link-icon {
-  transform: translate(1px, -1px);
-}
-/* 上下轮播:新条目从下滑入,旧条目向上滑出 */
-.ad-slide-enter-active,
-.ad-slide-leave-active {
-  transition: transform 0.45s var(--ease);
-}
-.ad-slide-enter-from {
-  transform: translateY(100%);
-}
-.ad-slide-leave-to {
-  transform: translateY(-100%);
 }
 
 /* ── Wide desktop console ───────────────────────────────────── */
@@ -981,11 +956,6 @@ body::before {
 .icon-button:hover {
   color: hsl(var(--ink));
   background: hsl(var(--surface-3));
-}
-
-.console-shell > .ad-banner,
-.console-shell > .ad-bottom {
-  margin-inline: 14px;
 }
 
 .console-workspace {

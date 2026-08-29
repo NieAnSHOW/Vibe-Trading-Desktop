@@ -947,6 +947,7 @@
   },
   "dashboard": {
     "title": "Market Overview",
+    "announcements": "Announcements",
     "marketPulse": "Market Pulse",
     "watchlistQuotes": "Watchlist",
     "stockDetail": "Stock Detail",

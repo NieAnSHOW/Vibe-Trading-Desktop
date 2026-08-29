@@ -12,6 +12,7 @@ import {
   consoleOpenWebui,
   consoleLoginActivateVip,
   consoleFetchAds,
+  consoleOpenExternalUrl,
 } from "../ipc/commands";
 import type { AdItem, Captcha, LoginResultView } from "../ipc/types";
 import { config, loadPublicConfig } from "../config/prod";
@@ -21,9 +22,8 @@ import { useServiceStore } from "../stores/service";
 import { useBusy } from "../composables/useBusy";
 import { useToast } from "../composables/useToast";
 import SetPasswordModal from "../components/SetPasswordModal.vue";
-import AdSlot from "../components/AdSlot.vue";
 import logoPng from "../assets/128x128@2x.png";
-import { Eye, EyeOff, Layers, MessageCircle, ShieldCheck } from "@lucide/vue";
+import { ArrowUpRight, Eye, EyeOff, Layers, MessageCircle, ShieldCheck } from "@lucide/vue";
 import { notifyWebuiAuth } from "../webuiAuth";
 
 const router = useRouter();
@@ -55,6 +55,7 @@ const rememberLogin = ref(true);
 const countdown = ref(0);
 const showSetPwd = ref(false);
 const loginAds = ref<AdItem[]>([]);
+const loginNoticeOpen = ref(false);
 let timer: ReturnType<typeof setInterval> | null = null;
 
 const PHONE_RE = /^1\d{10}$/;
@@ -114,15 +115,32 @@ function refreshCaptcha() {
 }
 
 // 登录页公告:先等公共配置(记忆化,安全可重复 await),开关开启才拉取纯文本公告;
-// 任何失败都静默吞掉——公告缺失绝不能影响登录
+// 任何失败都静默吞掉——公告缺失绝不能影响登录。有公告则以受控弹层展示。
+// 生命周期跟随应用:sessionStorage 标记本次运行已展示过则不再弹——sessionStorage
+// 在 Webview 存活期内持续(登录/登出、页面往返均保留),完全退出应用销毁 Webview
+// 后自动清空,重启应用才会重新展示。
+const NOTICE_SHOWN_KEY = "login-notice-shown";
+
 async function loadLoginAds() {
   try {
     await loadPublicConfig();
     if (!config.enableAd) return;
     loginAds.value = await consoleFetchAds("loginNotice");
+    if (sessionStorage.getItem(NOTICE_SHOWN_KEY)) return;
+    if (loginAds.value.length > 0) {
+      sessionStorage.setItem(NOTICE_SHOWN_KEY, "1");
+      loginNoticeOpen.value = true;
+    }
   } catch {
     // 静默失败:保持空公告,不展示任何提示
   }
+}
+
+const noticeText = (ad: AdItem) => ad.content || ad.title || "";
+
+function openNotice(ad: AdItem) {
+  const link = ad.link ?? ad.images?.[0]?.link;
+  if (link) void consoleOpenExternalUrl(link);
 }
 
 function setErr(e: unknown, fallback: string) {
@@ -324,10 +342,6 @@ onUnmounted(() => {
 
 
     <section class="card">
-      <!-- 登录页公告:有公告时展示于登录卡上方,与卡同宽;无公告时整块不占位 -->
-      <div v-if="loginAds.length" class="login-notice">
-        <AdSlot :ads="loginAds" variant="banner" />
-      </div>
       <header class="login-brand">
         <img class="login-brand__mark" :src="logoPng" alt="Trading Worker 图标" />
         <div class="login-brand__copy">
@@ -530,6 +544,34 @@ onUnmounted(() => {
         <span>数据与 API Key 只存放在你自己的电脑上</span>
       </li>
     </ul>
+    <!-- 登录页公告:有公告时以可关闭弹层展示,一条一行、自动换行;
+         带链接的行整行可点,拉起系统浏览器。
+         刻意不用 <dialog>/ConfirmDialog:open 态 modal dialog 在导航卸载序列中
+         曾触发 WebKit top-layer 不清理 → 整页永久 inert 的引擎缺陷
+         (ConfirmDialog 内已有两层防御补丁仍拦不住);此处是纯受控 div 弹层,
+         无 top-layer/inert 机制,从根上免疫该问题。视觉与 ConfirmDialog 一致。 -->
+    <Transition name="notice-fade">
+      <div v-if="loginNoticeOpen" data-test="login-notice-modal" class="login-notice">
+        <div class="login-notice__card confirm--info" role="dialog" aria-modal="true" aria-label="公告">
+          <h3>公告</h3>
+          <div class="notice-rows">
+            <span v-for="ad in loginAds" :key="ad.id" class="notice-row"
+              :class="{ 'notice-row--link': ad.link ?? ad.images?.[0]?.link }"
+              :role="ad.link ?? ad.images?.[0]?.link ? 'button' : undefined"
+              :tabindex="ad.link ?? ad.images?.[0]?.link ? 0 : undefined" :title="noticeText(ad)"
+              @click="openNotice(ad)" @keydown.enter.prevent="openNotice(ad)">
+              <span class="notice-row__text">{{ noticeText(ad) }}</span>
+              <ArrowUpRight v-if="ad.link ?? ad.images?.[0]?.link" class="notice-row__arrow" :size="13"
+                aria-hidden="true" />
+            </span>
+          </div>
+          <div class="confirm-actions">
+            <button type="button" data-test="login-notice-ok" class="btn-primary"
+              @click="loginNoticeOpen = false">我知道了</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </main>
 </template>
 
@@ -713,16 +755,50 @@ html[data-theme="dark"] .login-page {
   box-shadow: var(--login-card-shadow);
 }
 
-/* 登录页公告:与登录卡同宽,保持页内统一间距节奏;公告本身退为次要视觉 */
-.login-notice {
+/* 登录公告模态窗内容:一条一行,长文自动换行;带链接的行常驻品牌色 + 跳转箭头 */
+.notice-rows {
+  display: block;
   width: 100%;
-  max-width: 440px;
-  margin-bottom: 14px;
+  margin-top: 4px;
+  text-align: left;
 }
 
-/* 抵消全局 .ad-banner 自带的上间距,让公告与卡上下间距一致 */
-.login-notice :deep(.ad-banner) {
-  margin-top: 0;
+.notice-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 0;
+  line-height: 1.55;
+  word-break: break-word;
+  border-bottom: 1px dashed hsl(var(--line));
+}
+
+.notice-row:last-child {
+  border-bottom: none;
+}
+
+.notice-row__text {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+}
+
+.notice-row--link {
+  cursor: pointer;
+  color: hsl(var(--brand));
+  font-weight: 550;
+}
+
+.notice-row--link:focus-visible {
+  outline: 2px solid hsl(var(--brand));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.notice-row__arrow {
+  flex: none;
+  margin-top: 3px;
 }
 
 .tabs {
@@ -1077,6 +1153,51 @@ html[data-theme="dark"] .login-page {
   border-radius: 4px;
 }
 
+/* ── 登录公告弹层:纯 div 受控弹层(非 <dialog>),视觉对齐全局 ConfirmDialog
+   (margin:auto 原生居中观感 / 纯半透明黑遮罩,不用 backdrop-filter)。
+   固定定位 + 级联在 LoginPage 之上;无 top-layer/inert 语义。 ── */
+.login-notice {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+}
+
+.login-notice::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: hsl(0 0% 0% / 0.6);
+}
+
+.login-notice__card {
+  position: relative;
+  margin: auto;
+  width: fit-content;
+  max-width: min(380px, calc(100vw - 48px));
+  background: hsl(var(--surface-1));
+  color: hsl(var(--ink));
+  border: 1px solid hsl(var(--line));
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  box-shadow: 0 22px 55px hsl(0 0% 0% / 0.55);
+  text-align: center;
+}
+
+.login-notice__card h3 {
+  font-size: 15.5px;
+  font-weight: 650;
+  margin-bottom: 9px;
+}
+
+/* 只入不出的淡入动画:关闭即刻卸载(无离场动画 = 无 WebKit top-layer 风险面) */
+.notice-fade-enter-active {
+  transition: opacity 200ms ease;
+}
+
+.notice-fade-enter-from {
+  opacity: 0;
+}
 
 /* ── 响应式:单列流天然自适应;窄屏收紧节奏,极窄卖点转单列 ── */
 @media (max-width: 640px) {

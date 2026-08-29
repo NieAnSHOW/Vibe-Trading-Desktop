@@ -5,6 +5,23 @@ import { createMemoryHistory, createRouter } from "vue-router";
 import { createPinia, setActivePinia } from "pinia";
 import type { AdItem, PublicConfig, StatusReport } from "../../ipc/types";
 
+// jsdom 25 的 <dialog> 缺 showModal/close,与 App.test 同款 stub
+Object.defineProperties(HTMLDialogElement.prototype, {
+  showModal: {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.open = true;
+    },
+  },
+  close: {
+    configurable: true,
+    value(this: HTMLDialogElement, returnValue = "") {
+      this.open = false;
+      if (returnValue) this.returnValue = returnValue;
+    },
+  },
+});
+
 // vi.mock 工厂在提升阶段执行，变量必须通过 vi.hoisted() 声明
 const mocks = vi.hoisted(() => ({
   consoleStatus: vi.fn(async (): Promise<StatusReport> => ({
@@ -92,6 +109,7 @@ const router = createRouter({
 });
 
 beforeEach(async () => {
+  sessionStorage.clear();
   vi.clearAllMocks();
   mocks.consoleStatus.mockResolvedValue({
     env: "ready",
@@ -427,7 +445,7 @@ describe("LoginPage", () => {
     expect(w.find("p.notice").exists()).toBe(false);
   });
 
-  it("登录页公告:接口返回纯文本公告时,在登录卡上方渲染公告文字", async () => {
+  it("登录页公告:接口返回多条公告时,弹出可关闭模态窗,一条一行", async () => {
     mocks.consoleFetchAds.mockResolvedValueOnce([
       {
         id: 1,
@@ -438,11 +456,87 @@ describe("LoginPage", () => {
         link: null,
         sort: 1,
       },
+      {
+        id: 2,
+        title: "热门活动",
+        type: 2,
+        position: "loginNotice",
+        content: "注册即送专业会员",
+        link: null,
+        sort: 2,
+      },
     ]);
     const w = mount(LoginPage, { global: { plugins: [router] } });
     await flushPromises();
 
-    expect(w.find(".login-notice").exists()).toBe(true);
+    expect(w.find('[data-test="login-notice-modal"]').exists()).toBe(true);
+    expect(w.findAll(".notice-row")).toHaveLength(2);
     expect(w.text()).toContain("平台将于今晚 23:00 停机维护");
+    expect(w.text()).toContain("注册即送专业会员");
+
+    await w.get('[data-test="login-notice-ok"]').trigger("click");
+    await flushPromises();
+    expect(w.find('[data-test="login-notice-modal"]').exists()).toBe(false);
+  });
+
+  it("登录页公告:带链接的行点击拉起系统浏览器", async () => {
+    mocks.consoleFetchAds.mockResolvedValueOnce([
+      {
+        id: 2,
+        title: "热门活动",
+        type: 2,
+        position: "loginNotice",
+        content: "热门活动",
+        link: "https://new.ailjf.cc/",
+        sort: 0,
+      },
+    ]);
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await w.get(".notice-row--link").trigger("click");
+    expect(mocks.consoleOpenExternalUrl).toHaveBeenCalledWith("https://new.ailjf.cc/");
+  });
+
+  it("登录页公告:接口无公告时不弹窗", async () => {
+    const w = mount(LoginPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(w.find('[data-test="login-notice-modal"]').exists()).toBe(false);
+  });
+
+  it("登录页公告:每次应用运行只展示一次,再次进入页面不重复弹窗", async () => {
+    mocks.consoleFetchAds.mockResolvedValue([
+      {
+        id: 1,
+        title: "维护公告",
+        type: 2,
+        position: "loginNotice",
+        content: "平台将于今晚 23:00 停机维护",
+        link: null,
+        sort: 1,
+      },
+    ]);
+
+    const first = mount(LoginPage, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(first.find('[data-test="login-notice-modal"]').exists()).toBe(true);
+    await first.get('[data-test="login-notice-ok"]').trigger("click");
+    await flushPromises();
+    first.unmount();
+
+    // 同一次应用运行内重新进入登录页:不再弹
+    await router.push("/settings");
+    await router.push("/login");
+    const second = mount(LoginPage, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(second.find('[data-test="login-notice-modal"]').exists()).toBe(false);
+    second.unmount();
+
+    // 完全退出应用再启动 = 清空 sessionStorage:重新弹
+    sessionStorage.clear();
+    const third = mount(LoginPage, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(third.find('[data-test="login-notice-modal"]').exists()).toBe(true);
   });
 });

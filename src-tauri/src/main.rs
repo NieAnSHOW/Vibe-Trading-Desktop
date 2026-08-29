@@ -131,6 +131,10 @@ fn main() {
             let win = app
                 .get_webview_window("main")
                 .expect("main window (defined in tauri.conf.json)");
+            // cargo tauri dev(debug 构建)启动即打开 WebView 调试面板;
+            // release 构建不打开。
+            #[cfg(debug_assertions)]
+            win.open_devtools();
             // 启动即按用户主题设置着色窗口背景 + 标题栏(亮 #f3f4f7 / 暗 #08090d);
             // 配置不再写死 backgroundColor,首帧颜色也由这里给出。
             #[cfg(target_os = "windows")]

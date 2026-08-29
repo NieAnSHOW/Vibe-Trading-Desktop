@@ -947,6 +947,7 @@
   },
   "dashboard": {
     "title": "市场概览",
+    "announcements": "公告",
     "marketPulse": "市场异动",
     "watchlistQuotes": "自选股",
     "stockDetail": "个股详情",
