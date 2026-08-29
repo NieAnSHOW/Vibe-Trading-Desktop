@@ -5,29 +5,28 @@ import ja from "../locales/ja.json";
 import ko from "../locales/ko.json";
 import zhCN from "../locales/zh-CN.json";
 
-const trackIds = ["ai", "semi", "robot", "auto", "energy", "bio", "space", "security", "tech", "consumer", "macro", "science"];
 const requiredPaths = [
   "layout.news",
   "news.title",
-  "news.fresh",
-  "news.stale",
-  "news.unavailable",
-  "news.partial",
-  "news.ai",
-  "news.aiUnavailable",
-  "news.error",
   "news.refresh",
-  "news.trackList",
-  "news.selectTrack",
-  "news.refreshProgress",
+  "news.refreshing",
   "news.loading",
-  "news.emptySnapshot",
+  "news.error",
+  "news.emptyNoWatchlist",
+  "news.emptyNoWatchlistHint",
+  "news.goWatchlist",
+  "news.announcement",
   "news.noSummary",
   "news.unknownTime",
   "news.viewOriginal",
-  "news.articleList",
-  "news.emptyTrack",
-  ...trackIds.map((trackId) => `news.tracks.${trackId}`),
+  "news.delayedBanner",
+  "news.lastUpdated",
+  "news.sourceDegraded",
+  "news.loadMore",
+  "news.sources.eastmoney",
+  "news.sources.sina",
+  "news.sources.sse",
+  "news.sources.szse",
 ];
 
 function readPath(source: unknown, path: string): unknown {

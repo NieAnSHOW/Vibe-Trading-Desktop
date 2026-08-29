@@ -1,545 +1,98 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import i18n from "@/i18n";
-import type { NewsPageState } from "@/hooks/useNews";
-import type {
-  NewsArticle,
-  NewsPublicError,
-  NewsRefreshStatus,
-  NewsSnapshot,
-  NewsTrack,
-  NewsTrackId,
-} from "@/lib/api";
+import type { WatchlistFeed } from "@/lib/api";
 
 const mocks = vi.hoisted(() => ({
-  refreshNews: vi.fn().mockResolvedValue(undefined),
-  startNewsRefresh: vi.fn(),
-  state: {} as NewsPageState,
+  refresh: vi.fn().mockResolvedValue(undefined),
+  loadMore: vi.fn().mockResolvedValue(undefined),
+  state: { feed: null as WatchlistFeed | null, isLoading: false, isRefreshing: false, error: null as string | null },
 }));
 
-vi.mock("@/lib/api", () => ({
-  api: { startNewsRefresh: mocks.startNewsRefresh },
+vi.mock("@/hooks/useWatchlistFeed", () => ({
+  useWatchlistFeed: () => ({
+    ...mocks.state,
+    refresh: mocks.refresh,
+    loadMore: mocks.loadMore,
+  }),
 }));
-
-vi.mock("@/hooks/useNews", async () => {
-  const React = await import("react");
-  return {
-    useNews: () => {
-      const [selectedTrackId, selectTrack] = React.useState<NewsTrackId | null>(
-        mocks.state.selectedTrackId,
-      );
-      return {
-        ...mocks.state,
-        selectedTrackId,
-        selectTrack,
-        refreshNews: mocks.refreshNews,
-      };
-    },
-  };
-});
 
 import { News } from "../News";
 
-const TRACK_IDS: NewsTrackId[] = [
-  "ai",
-  "semi",
-  "robot",
-  "auto",
-  "energy",
-  "bio",
-  "space",
-  "security",
-  "tech",
-  "consumer",
-  "macro",
-  "science",
-];
-
-const publicError: NewsPublicError = {
-  code: "upstream_failed",
-  message: "news refresh failed",
-};
-
-const idleRefresh: NewsRefreshStatus = {
-  state: "idle",
-  scope: "a_share",
-  task_id: null,
-  started_at: null,
-  completed_at: null,
-  processed_endpoints: 0,
-  successful_endpoints: 0,
-  failed_endpoints: 0,
-  processed_tracks: 0,
-  total_endpoints: 106,
-  total_tracks: 12,
-  error: null,
-};
-
-function article(overrides: Partial<NewsArticle> = {}): NewsArticle {
-  return {
-    id: "article-1",
-    track_id: "ai",
-    title: "Original AI headline",
-    title_zh: "人工智能新闻",
-    summary: "这是一条用于投资研究的摘要。",
-  source: {
-    id: "source-1",
-    name: "Example Wire",
-  },
-  published_at: "2026-07-20T08:00:00Z",
-  url: "https://example.com/article",
-  article_access: "direct",
-  first_seen_at: "2026-07-20T08:00:00Z",
-    ...overrides,
-  };
-}
-
-function track(
-  trackId: NewsTrackId,
-  overrides: Partial<NewsTrack> = {},
-): NewsTrack {
-  return {
-    track_id: trackId,
-    state: "fresh",
-    generated_at: "2026-07-20T09:00:00Z",
-    stale: false,
-    partial: false,
-    items: [
-      article({
-        id: `${trackId}-article`,
-        track_id: trackId,
-        title_zh: trackId === "semi" ? "芯片新闻" : "人工智能新闻",
-      }),
-    ],
-    ai: {
-      available: true,
-      generated_at: "2026-07-20T09:01:00Z",
-      highlights: ["要点一", "要点二", "要点三"],
-      error: null,
-    },
-    source_stats: {
-      endpoint_total: 2,
-      endpoint_success_count: 2,
-      endpoint_failure_count: 0,
-      assignment_total: 2,
-      assignment_success_count: 2,
-      assignment_failure_count: 0,
-    },
-    source_outcomes: [],
-    ...overrides,
-  };
-}
-
-function snapshot(overrides: Partial<NewsSnapshot> = {}): NewsSnapshot {
-  return {
-    schema_version: 2,
-    scope: "a_share",
-    generated_at: "2026-07-20T09:00:00Z",
-    upstream_commit: "fixture-commit",
-    source_stats: {
-      endpoint_total: 24,
-      endpoint_success_count: 24,
-      endpoint_failure_count: 0,
-      assignment_total: 24,
-      assignment_success_count: 24,
-      assignment_failure_count: 0,
-    },
-    errors: [],
-    tracks: TRACK_IDS.map((trackId) => track(trackId)),
-    ...overrides,
-  };
-}
-
-function pageState(overrides: Partial<NewsPageState> = {}): NewsPageState {
-  return {
-    scope: "a_share",
-    snapshot: snapshot(),
-    available: true,
-    stale: false,
-    snapshotError: null,
-    refreshStatus: idleRefresh,
-    selectedTrackId: "ai",
-    isLoading: false,
-    isRefreshing: false,
-    error: null,
-    ...overrides,
-  };
-}
-
-describe("News workspace", () => {
-  beforeEach(async () => {
-    await i18n.changeLanguage("zh-CN");
-    mocks.state = pageState();
-    mocks.refreshNews.mockClear();
-    mocks.startNewsRefresh.mockClear();
-  });
-
-  it("renders all 12 desktop tracks and a mobile track selector", () => {
-    render(<News />);
-
-    expect(screen.getAllByRole("tab")).toHaveLength(12);
-    const selector = screen.getByRole("combobox", { name: "选择资讯赛道" });
-    expect(within(selector).getAllByRole("option")).toHaveLength(12);
-  });
-
-  it("shows a structural reading skeleton while the first snapshot loads", () => {
-    mocks.state = pageState({ snapshot: null, isLoading: true });
-
-    render(<News />);
-
-    expect(screen.getByTestId("news-loading-skeleton")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveClass("sr-only");
-  });
-
-  it("exposes a roving tab set linked to the selected track panel", async () => {
-    const user = userEvent.setup();
-    render(<News />);
-
-    const aiTab = screen.getByRole("tab", { name: "人工智能" });
-    const semiTab = screen.getByRole("tab", { name: "半导体" });
-    expect(aiTab).toHaveAttribute("tabindex", "0");
-    expect(semiTab).toHaveAttribute("tabindex", "-1");
-    expect(aiTab).toHaveAttribute("aria-controls", "news-panel-ai");
-    for (const tab of screen.getAllByRole("tab")) {
-      const panelId = tab.getAttribute("aria-controls");
-      expect(panelId).toBeTruthy();
-      expect(document.getElementById(panelId!)).toHaveAttribute(
-        "aria-labelledby",
-        tab.id,
-      );
-    }
-    expect(screen.getByRole("tabpanel")).toHaveAttribute(
-      "aria-labelledby",
-      "news-tab-ai",
-    );
-
-    aiTab.focus();
-    await user.keyboard("{ArrowRight}");
-
-    expect(semiTab).toHaveFocus();
-    expect(semiTab).toHaveAttribute("tabindex", "0");
-    expect(aiTab).toHaveAttribute("tabindex", "-1");
-    expect(screen.getByRole("tabpanel")).toHaveAttribute(
-      "aria-labelledby",
-      "news-tab-semi",
-    );
-    expect(screen.getByRole("heading", { name: "芯片新闻" })).toBeInTheDocument();
-  });
-
-  it("supports Home and End keyboard navigation across desktop tracks", async () => {
-    const user = userEvent.setup();
-    render(<News />);
-
-    const firstTab = screen.getByRole("tab", { name: "人工智能" });
-    const lastTab = screen.getByRole("tab", { name: "科学" });
-    firstTab.focus();
-
-    await user.keyboard("{ArrowLeft}");
-    expect(lastTab).toHaveFocus();
-    expect(lastTab).toHaveAttribute("aria-selected", "true");
-
-    await user.keyboard("{ArrowRight}");
-    expect(firstTab).toHaveFocus();
-    expect(firstTab).toHaveAttribute("aria-selected", "true");
-
-    await user.keyboard("{End}");
-    expect(lastTab).toHaveFocus();
-    expect(lastTab).toHaveAttribute("aria-selected", "true");
-
-    await user.keyboard("{Home}");
-    expect(firstTab).toHaveFocus();
-    expect(firstTab).toHaveAttribute("aria-selected", "true");
-  });
-
-  it("switches tracks without changing refresh scope", async () => {
-    const user = userEvent.setup();
-    render(<News />);
-
-    await user.click(screen.getByRole("tab", { name: "半导体" }));
-
-    expect(screen.getByRole("heading", { name: "芯片新闻" })).toBeInTheDocument();
-    expect(mocks.refreshNews).not.toHaveBeenCalled();
-    expect(mocks.startNewsRefresh).not.toHaveBeenCalled();
-  });
-
-  it("switches tracks through the mobile selector", async () => {
-    const user = userEvent.setup();
-    render(<News />);
-
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: "选择资讯赛道" }),
-      "semi",
-    );
-
-    expect(screen.getByRole("heading", { name: "芯片新闻" })).toBeInTheDocument();
-  });
-
-  it("uses the Chinese title first and falls back for missing fields", () => {
-    const current = track("ai", {
-      items: [
-        article({ title: "English fallback", title_zh: "中文标题" }),
-        article({
-          id: "missing-fields",
-          title: "Fallback headline",
-          title_zh: null,
-          summary: null,
-          published_at: null,
-        }),
-      ],
-    });
-    mocks.state = pageState({
-      snapshot: snapshot({
-        tracks: TRACK_IDS.map((id) => (id === "ai" ? current : track(id))),
-      }),
-    });
-
-    render(<News />);
-
-    expect(screen.getByRole("heading", { name: "中文标题" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Fallback headline" })).toBeInTheDocument();
-    expect(screen.queryByText("English fallback")).not.toBeInTheDocument();
-    expect(screen.getByTestId("missing-fields")).toHaveTextContent("暂无摘要");
-    expect(screen.getByTestId("missing-fields")).toHaveTextContent("时间未知");
-  });
-
-  it("renders between three and five AI highlights", () => {
-    const highlighted = track("ai", {
-      ai: {
-        available: true,
-        generated_at: "2026-07-20T09:01:00Z",
-        highlights: ["要点一", "要点二", "要点三", "要点四", "要点五"],
-        error: null,
-      },
-    });
-    mocks.state = pageState({
-      snapshot: snapshot({
-        tracks: TRACK_IDS.map((id) => (id === "ai" ? highlighted : track(id))),
-      }),
-    });
-
-    render(<News />);
-
-    expect(within(screen.getByRole("list", { name: "AI 要点" })).getAllByRole("listitem")).toHaveLength(5);
-  });
-
-  it.each([
+const feed = (overrides: Partial<WatchlistFeed> = {}): WatchlistFeed => ({
+  items: [
     {
-      label: "fresh",
-      state: pageState(),
-      expected: "最新",
+      id: "sse:abc", source: "sse", type: "announcement",
+      published_at: "2026-08-28T10:30:00+00:00",
+      title: "关于召开临时股东大会的通知", summary: "摘要内容",
+      url: "https://static.sse.com.cn/x.pdf",
+      matched_stocks: [{ code: "600519", name: "贵州茅台", match_rule: "structured_field" }],
+      confidence: "high",
     },
     {
-      label: "stale",
-      state: pageState({ stale: true }),
-      expected: "数据可能已过期",
+      id: "eastmoney:1", source: "eastmoney", type: "flash",
+      published_at: "2026-08-29T12:00:00+00:00", title: "央行开展逆回购", summary: "",
+      url: null, matched_stocks: [], confidence: "high",
     },
-    {
-      label: "unavailable",
-      state: pageState({
-        snapshot: snapshot({
-          tracks: TRACK_IDS.map((id) =>
-            id === "ai"
-              ? track(id, {
-                  state: "unavailable",
-                  generated_at: null,
-                  items: [],
-                  ai: { available: false, generated_at: null, highlights: [], error: publicError },
-                })
-              : track(id),
-          ),
-        }),
-      }),
-      expected: "资讯暂不可用",
-    },
-    {
-      label: "partial",
-      state: pageState({
-        snapshot: snapshot({
-          tracks: TRACK_IDS.map((id) =>
-            id === "ai" ? track(id, { partial: true }) : track(id),
-          ),
-        }),
-      }),
-      expected: "部分来源暂不可用",
-    },
-  ])("shows the $label data state", ({ state, expected }) => {
-    mocks.state = state;
-    render(<News />);
-    expect(screen.getByText(expected)).toBeInTheDocument();
-  });
+  ],
+  next_cursor: null,
+  source_health: [
+    { source_id: "eastmoney", state: "ok", last_success_at: null, last_error: null },
+    { source_id: "sina", state: "ok", last_success_at: null, last_error: null },
+    { source_id: "sse", state: "degraded", last_success_at: null, last_error: "timeout" },
+    { source_id: "szse", state: "ok", last_success_at: null, last_error: null },
+  ],
+  last_updated_at: "2026-08-29T12:00:01+00:00",
+  watchlist_version: "a".repeat(64),
+  reset_required: false,
+  ...overrides,
+});
 
-  it("shows when AI highlights are unavailable", () => {
-    mocks.state = pageState({
-      snapshot: snapshot({
-        tracks: TRACK_IDS.map((id) =>
-          id === "ai"
-            ? track(id, {
-                ai: { available: false, generated_at: null, highlights: [], error: publicError },
-              })
-            : track(id),
-        ),
-      }),
-    });
+beforeAll(async () => {
+  await i18n.changeLanguage("zh-CN");
+});
 
-    render(<News />);
-    expect(screen.getByText("AI 要点暂不可用")).toBeInTheDocument();
-  });
+test("renders unified stream with announcement badge and stock badge link", () => {
+  mocks.state = { feed: feed(), isLoading: false, isRefreshing: false, error: null };
+  render(<MemoryRouter><News /></MemoryRouter>);
+  expect(screen.getByText("关于召开临时股东大会的通知")).toBeInTheDocument();
+  expect(screen.getByText("公告")).toBeInTheDocument(); // 公告置顶标识（§6.3）
+  const badge = screen.getByText("600519 贵州茅台");
+  expect(badge).toHaveAttribute("href", "/watchlist"); // 股票徽标跳自选管理（§6.3）
+});
 
-  it("shows loading, empty snapshot, refresh progress, and overall failure", () => {
-    const { rerender } = render(<News />);
+test("shows degraded hint but not banner when any source is ok", () => {
+  mocks.state = { feed: feed(), isLoading: false, isRefreshing: false, error: null };
+  render(<MemoryRouter><News /></MemoryRouter>);
+  expect(screen.getByText("上交所源暂时不可用，数据可能不完整")).toBeInTheDocument(); // 单源降级小字提示（§6.3）
+  expect(screen.queryByText("数据可能延迟")).not.toBeInTheDocument();
+});
 
-    mocks.state = pageState({ snapshot: null, available: false, selectedTrackId: null, isLoading: true });
-    rerender(<News />);
-    expect(screen.getByText("正在加载资讯…")).toBeInTheDocument();
+test("shows delayed banner when all sources failed", () => {
+  const all = feed().source_health.map((health) => ({ ...health, state: "failed" as const }));
+  mocks.state = { feed: feed({ source_health: all }), isLoading: false, isRefreshing: false, error: null };
+  render(<MemoryRouter><News /></MemoryRouter>);
+  expect(screen.getByText("数据可能延迟")).toBeInTheDocument(); // 全源失败横幅（§5.7）
+});
 
-    mocks.state = pageState({ snapshot: null, available: false, selectedTrackId: null });
-    rerender(<News />);
-    expect(screen.getByText("暂无资讯快照")).toBeInTheDocument();
+test("shows empty-watchlist guidance when no items and no failures", () => {
+  mocks.state = { feed: feed({ items: [] }), isLoading: false, isRefreshing: false, error: null };
+  render(<MemoryRouter><News /></MemoryRouter>);
+  expect(screen.getByText("还没有自选股")).toBeInTheDocument();
+  expect(screen.getByText("去添加自选").closest("a")).toHaveAttribute("href", "/watchlist");
+});
 
-    mocks.state = pageState({
-      isRefreshing: true,
-      refreshStatus: {
-        ...idleRefresh,
-        state: "fetching",
-        processed_endpoints: 26,
-        total_endpoints: 106,
-        processed_tracks: 3,
-      },
-    });
-    rerender(<News />);
-    expect(screen.getByText("正在刷新：26 / 106 个来源，3 / 12 个赛道")).toBeInTheDocument();
+test("manual refresh calls hook refresh", async () => {
+  mocks.state = { feed: feed(), isLoading: false, isRefreshing: false, error: null };
+  render(<MemoryRouter><News /></MemoryRouter>);
+  await userEvent.click(screen.getByRole("button", { name: "刷新" }));
+  expect(mocks.refresh).toHaveBeenCalledTimes(1);
+});
 
-    mocks.state = pageState({ error: new Error("backend offline") });
-    rerender(<News />);
-    expect(screen.getByText("加载资讯时出现问题")).toBeInTheDocument();
-    expect(screen.getByText("backend offline")).toBeInTheDocument();
-  });
-
-  it("refreshes all news from an accessible icon button", async () => {
-    const user = userEvent.setup();
-    render(<News />);
-
-    const refresh = screen.getByRole("button", { name: "刷新全部资讯" });
-    expect(refresh).toHaveAttribute("title", "刷新全部资讯");
-    await user.click(refresh);
-
-    expect(mocks.refreshNews).toHaveBeenCalledOnce();
-  });
-
-  it("renders only valid http article URLs as external links", () => {
-    const current = track("ai", {
-      items: [
-        article({ id: "safe", title_zh: "安全链接", url: "https://example.com/story" }),
-        article({ id: "unsafe", title_zh: "危险链接", url: "javascript:alert(1)" }),
-        article({ id: "malformed", title_zh: "损坏链接", url: "not a url" }),
-      ],
-    });
-    mocks.state = pageState({
-      snapshot: snapshot({
-        tracks: TRACK_IDS.map((id) => (id === "ai" ? current : track(id))),
-      }),
-    });
-
-    render(<News />);
-
-    const safe = within(screen.getByTestId("safe")).getByRole("link", { name: "查看原文" });
-    expect(safe).toHaveAttribute("href", "https://example.com/story");
-    expect(safe).toHaveAttribute("target", "_blank");
-    expect(safe).toHaveAttribute("rel", "noopener noreferrer");
-    expect(within(screen.getByTestId("unsafe")).queryByRole("link")).not.toBeInTheDocument();
-    expect(within(screen.getByTestId("malformed")).queryByRole("link")).not.toBeInTheDocument();
-  });
-
-  it("keeps global-industry articles as summaries without original links", () => {
-    const current = track("ai", {
-      items: [article({
-        id: "global-summary",
-        title_zh: "海外摘要",
-        article_access: "summary_only",
-      })],
-    });
-    mocks.state = pageState({
-      scope: "global_industry",
-      snapshot: snapshot({
-        scope: "global_industry",
-        tracks: TRACK_IDS.map((id) => (id === "ai" ? current : track(id))),
-      }),
-    });
-
-    render(<News />);
-
-    expect(screen.getByTestId("global-summary")).toHaveTextContent("仅摘要");
-    expect(within(screen.getByTestId("global-summary")).queryByRole("link")).not.toBeInTheDocument();
-  });
-
-  it("localizes the complete workspace and formats dates with the resolved language", async () => {
-    const dateSpy = vi
-      .spyOn(Date.prototype, "toLocaleString")
-      .mockImplementation(function formatDate(locales) {
-        return `formatted:${String(locales)}`;
-      });
-    await i18n.changeLanguage("en");
-    const current = track("ai", {
-      items: [
-        article({
-          id: "missing-fields",
-          title_zh: null,
-          summary: null,
-          published_at: null,
-        }),
-        article({
-          id: "dated-article",
-          title_zh: null,
-          published_at: "2026-07-20T08:00:00Z",
-        }),
-      ],
-    });
-    mocks.state = pageState({
-      isRefreshing: true,
-      refreshStatus: {
-        ...idleRefresh,
-        state: "fetching",
-        processed_endpoints: 26,
-        processed_tracks: 3,
-      },
-      snapshot: snapshot({
-        tracks: TRACK_IDS.map((id) => (id === "ai" ? current : track(id))),
-      }),
-    });
-
-    const { rerender } = render(<News />);
-
-    expect(screen.getByRole("heading", { name: "Investment News" })).toBeInTheDocument();
-    expect(screen.getByRole("tablist", { name: "News tracks" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Select news track" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Refresh all news" })).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Refreshing: 26 / 106 sources, 3 / 12 tracks",
-    );
-    expect(screen.getByTestId("missing-fields")).toHaveTextContent("No summary available");
-    expect(screen.getByTestId("missing-fields")).toHaveTextContent("Time unavailable");
-    expect(screen.getAllByRole("link", { name: "View original" })).toHaveLength(2);
-    expect(screen.getByRole("region", { name: "News articles" })).toBeInTheDocument();
-    expect(screen.getAllByText("formatted:en")).toHaveLength(2);
-    expect(dateSpy).toHaveBeenCalledTimes(2);
-    expect(dateSpy).toHaveBeenNthCalledWith(1, "en");
-    expect(dateSpy).toHaveBeenNthCalledWith(2, "en");
-
-    mocks.state = pageState({
-      snapshot: null,
-      available: false,
-      selectedTrackId: null,
-      isLoading: true,
-    });
-    rerender(<News />);
-    expect(screen.getByText("Loading news…")).toBeInTheDocument();
-
-    mocks.state = pageState({
-      snapshot: null,
-      available: false,
-      selectedTrackId: null,
-    });
-    rerender(<News />);
-    expect(screen.getByText("No news snapshot is available")).toBeInTheDocument();
-  });
+test("load more button appears when next_cursor exists", async () => {
+  mocks.state = { feed: feed({ next_cursor: "cursor" }), isLoading: false, isRefreshing: false, error: null };
+  render(<MemoryRouter><News /></MemoryRouter>);
+  await userEvent.click(screen.getByRole("button", { name: "加载更早" }));
+  expect(mocks.loadMore).toHaveBeenCalledTimes(1);
 });
