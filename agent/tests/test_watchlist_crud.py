@@ -1,4 +1,5 @@
 """TDD：测试 watchlist CRUD 端点（GET/POST/DELETE /watchlist/stocks）。"""
+
 from __future__ import annotations
 
 import pytest
@@ -10,8 +11,10 @@ from fastapi.testclient import TestClient
 def client(tmp_path, monkeypatch):
     """创建隔离 TestClient，使用临时 DB 文件。"""
     import src.api.watchlist_routes as wm
+
     db_file = tmp_path / "watchlist.db"
     monkeypatch.setattr(wm, "DB_PATH", db_file)
+    monkeypatch.setattr(wm, "name_provider", None)  # 离线：全量套件中 api_server 先行导入会注入默认 provider
     wm._init_db()
 
     app = FastAPI()

@@ -65,6 +65,7 @@ def test_startup_activates_injected_vip_runtime_before_preflight_and_removes_leg
     monkeypatch.setattr(preflight, "run_preflight", capture_preflight)
     monkeypatch.setattr(api_server, "_start_scheduled_research_executor", lambda: None)
     monkeypatch.setattr(api_server, "_watchlist_init_db", noop_watchlist_init)
+    monkeypatch.setattr(api_server, "_watchlist_backfill_names", lambda: 0)  # 回填不触网、不写真实 DB
 
     with caplog.at_level("INFO"):
         asyncio.run(api_server._run_startup_preflight())
@@ -83,9 +84,7 @@ def test_startup_activates_injected_vip_runtime_before_preflight_and_removes_leg
     assert "https://vip.example" not in caplog.text
 
 
-def test_startup_keeps_custom_dotenv_untouched_without_injected_vip_runtime(
-    tmp_path, monkeypatch
-) -> None:
+def test_startup_keeps_custom_dotenv_untouched_without_injected_vip_runtime(tmp_path, monkeypatch) -> None:
     """Custom and unauthenticated starts keep their existing dotenv behavior."""
     env_path = tmp_path / ".env"
     original = (

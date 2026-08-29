@@ -119,6 +119,7 @@ async def init_db() -> None:
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _init_db)
 
+
 # ---------------------------------------------------------------------------
 # Pydantic 模型
 # ---------------------------------------------------------------------------
@@ -162,15 +163,11 @@ def _build_auth_dep():
 @router.get("/stocks", response_model=StockListResponse)
 async def list_stocks() -> StockListResponse:
     """返回自选股列表，按 added_at 倒序。"""
+
     def _query():
         with _get_connection() as conn:
-            rows = conn.execute(
-                "SELECT code, name, market, added_at FROM watchlist ORDER BY added_at DESC"
-            ).fetchall()
-            return [
-                StockItem(code=r["code"], name=r["name"], market=r["market"], added_at=r["added_at"])
-                for r in rows
-            ]
+            rows = conn.execute("SELECT code, name, market, added_at FROM watchlist ORDER BY added_at DESC").fetchall()
+            return [StockItem(code=r["code"], name=r["name"], market=r["market"], added_at=r["added_at"]) for r in rows]
 
     loop = asyncio.get_event_loop()
     stocks = await loop.run_in_executor(None, _query)
@@ -184,11 +181,12 @@ async def add_stock(req: AddStockRequest) -> dict:
         raise HTTPException(status_code=400, detail="股票代码不能为空")
 
     def _insert():
+        name = _resolve_names([req.code]).get(req.code, "")
         try:
             with _get_connection() as conn:
                 conn.execute(
-                    "INSERT INTO watchlist(code, name, market) VALUES (?, '', ?)",
-                    (req.code, req.market),
+                    "INSERT INTO watchlist(code, name, market) VALUES (?, ?, ?)",
+                    (req.code, name, req.market),
                 )
                 conn.commit()
             return {"added": True, "exists": False}
@@ -202,11 +200,10 @@ async def add_stock(req: AddStockRequest) -> dict:
 @router.delete("/stocks/{code}")
 async def delete_stock(code: str, market: str = "a_stock") -> dict:
     """删除自选股；不存在时返回 404。"""
+
     def _delete():
         with _get_connection() as conn:
-            cursor = conn.execute(
-                "DELETE FROM watchlist WHERE code=? AND market=?", (code, market)
-            )
+            cursor = conn.execute("DELETE FROM watchlist WHERE code=? AND market=?", (code, market))
             conn.commit()
             return cursor.rowcount
 
@@ -219,6 +216,42 @@ async def delete_stock(code: str, market: str = "a_stock") -> dict:
 
 _SUPPORTED_MARKETS = {"a_stock"}
 _DEFAULT_PROVIDER = TencentQuoteProvider()
+
+
+# 名称解析注入点：None = 不解析（直连 router 的测试保持离线）；
+# 生产路径由 register_watchlist_routes 注入 _DEFAULT_PROVIDER。
+name_provider: QuoteProvider | None = None
+
+
+def _resolve_names(codes: list[str]) -> dict[str, str]:
+    """批量解析证券简称；行情源失败返回空映射，不阻断添加/回填。"""
+    if name_provider is None:
+        return {}
+    try:
+        quotes = name_provider.fetch(codes)
+    except Exception:
+        return {}
+    return {code: str(quotes.get(code, {}).get("name") or "") for code in codes}
+
+
+def backfill_missing_names(batch_size: int = 50) -> int:
+    """回填存量 name='' 行（规格 §4.2）；返回成功回填数量，失败行保持空名称。"""
+    with _get_connection() as conn:
+        rows = conn.execute("SELECT code FROM watchlist WHERE IFNULL(name, '') = '' LIMIT ?", (batch_size,)).fetchall()
+    names = _resolve_names([str(row[0]) for row in rows])
+    updated = 0
+    with _get_connection() as conn:
+        for code, stock_name in names.items():
+            if not stock_name:
+                continue
+            cursor = conn.execute(
+                "UPDATE watchlist SET name = ? WHERE code = ? AND IFNULL(name, '') = ''",
+                (stock_name, code),
+            )
+            updated += cursor.rowcount
+        conn.commit()
+    return updated
+
 
 # TTL 缓存：{code: (timestamp, quote_dict)}，5 秒过期（plan 约束）
 _QUOTE_CACHE: dict[str, tuple[float, dict]] = {}
@@ -282,5 +315,8 @@ async def get_quotes(codes: str = "", market: str = "a_stock") -> dict:
 
 
 def register_watchlist_routes(app, require_local_or_auth_dep=None) -> None:
-    """挂载 watchlist 路由到 FastAPI app。"""
+    """挂载 watchlist 路由到 FastAPI app；生产注入默认名称解析 provider。"""
+    global name_provider
+    if name_provider is None and tencent_quote is not None:
+        name_provider = _DEFAULT_PROVIDER
     app.include_router(router)
