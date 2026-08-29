@@ -203,3 +203,45 @@ async def test_rate_limit_backoff_suspends_source(tmp_path):
     transport.requests.clear()
     await aggregator.poll_once()  # eastmoney 处于退避窗口内 → 跳过；不再发请求
     assert not [r for r in transport.requests if "getFastNewsList" in str(r.url)]
+
+
+# --- FeedRefreshCoordinator（§6.1.1 single-flight + 5s 限流）---
+from src.news.refresh import FeedRefreshCoordinator  # noqa: E402
+
+
+class StubAnnouncements:
+    def __init__(self) -> None:
+        self.calls: list[bool] = []
+
+    async def maybe_refresh(self, *, force: bool = False) -> None:
+        self.calls.append(force)
+
+
+@_async_test
+async def test_refresh_single_flight_and_rate_limit(tmp_path):
+    store = EntryStore(tmp_path / "news.db")
+    aggregator = FlashAggregator(
+        transport=TransportClient(resolver=FakeResolver(), transport=RoutingTransport({
+            "/comm/web/getFastNewsList": [
+                httpx.Response(200, headers={"content-type": "application/json"}, content=json.dumps({"data": {"fastNewsList": []}}).encode()),
+            ],
+            "/api/roll/get": [
+                httpx.Response(200, headers={"content-type": "application/json"}, content=json.dumps({"result": {"data": []}}).encode()),
+            ],
+        })),
+        store=store, health=_tracker(), sleep=_no_sleep, now=Clock().now,
+    )
+    announcements = StubAnnouncements()
+    coordinator = FeedRefreshCoordinator(flash=aggregator, announcements=announcements,
+                                         now=lambda: 1000.0)
+    first = await coordinator.trigger()
+    assert (first.accepted, first.reused, first.rate_limited) == (True, False, False)
+    assert first.task_id
+    second = await coordinator.trigger()  # 任务运行中 → reuse
+    assert (second.accepted, second.reused, second.task_id == first.task_id) == (True, True, True)
+
+    await coordinator._task  # 等待任务结束后测试 5s 限流窗口
+    await asyncio.sleep(0)
+    limited = await coordinator.trigger()
+    assert limited.rate_limited is True  # now 固定 1000.0 < 5s 窗口
+    assert announcements.calls == [False]  # 公告走 2min 门控，不走 force

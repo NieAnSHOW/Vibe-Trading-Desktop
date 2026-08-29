@@ -415,6 +415,43 @@ from src.news.coordinator import get_news_coordinator_registry  # noqa: E402
 news_coordinator_registry = get_news_coordinator_registry()
 register_news_routes(app, require_auth=require_auth, registry=news_coordinator_registry)
 
+# --- Investment news (watchlist feed, spec 2026-08-29) ---
+# Register before ``serve_main`` can mount the root SPA catch-all.
+from src.api.watchlist_feed_routes import register_watchlist_feed_routes  # noqa: E402
+from src.news.announcements.collector import AnnouncementCollector  # noqa: E402
+from src.news.calendar import ConservativeCalendar  # noqa: E402
+from src.news.flash.service import FlashAggregator  # noqa: E402
+from src.news.health import HealthTracker  # noqa: E402
+from src.news.matcher import WatchlistFeedService  # noqa: E402
+from src.news.refresh import FeedRefreshCoordinator  # noqa: E402
+from src.news.store import EntryStore  # noqa: E402
+from src.news.transport import TransportClient  # noqa: E402
+
+_feed_store = EntryStore()
+_feed_health = HealthTracker(ConservativeCalendar())
+_feed_transport = TransportClient()
+_flash_aggregator = FlashAggregator(transport=_feed_transport, store=_feed_store, health=_feed_health)
+_announcement_collector = AnnouncementCollector(transport=_feed_transport, store=_feed_store, health=_feed_health)
+_feed_refresher = FeedRefreshCoordinator(flash=_flash_aggregator, announcements=_announcement_collector)
+_feed_service = WatchlistFeedService(store=_feed_store, health=_feed_health)
+register_watchlist_feed_routes(app, require_auth=require_auth, service=_feed_service, refresher=_feed_refresher)
+
+_feed_stop = asyncio.Event()
+
+
+@app.on_event("startup")
+async def _start_feed_loops() -> None:
+    """后台分层轮询（§7.4）：快讯 15-30s、公告 5-10min；cleanup 由 shutdown 触发。"""
+    global _feed_stop
+    _feed_stop = asyncio.Event()
+    asyncio.create_task(_flash_aggregator.run_forever(_feed_stop))
+    asyncio.create_task(_announcement_collector.run_forever(_feed_stop))
+
+
+@app.on_event("shutdown")
+async def _stop_feed_loops() -> None:
+    _feed_stop.set()
+
 
 # ============================================================================
 # Scheduled Research Routes - defined in src/api/scheduled_routes.py
