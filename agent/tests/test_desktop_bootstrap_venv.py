@@ -1,4 +1,6 @@
 """venv 环境解析 —— 路径按平台正确,创建走 stdlib venv(设计 D2)。"""
+
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -7,8 +9,10 @@ import pytest
 
 from src.desktop_bootstrap.venv_env import venv_dir, venv_python, ensure_venv
 
+
 def test_venv_dir_is_home_vibe_trading_venv():
     assert venv_dir(Path("/home/u/.vibe-trading")) == Path("/home/u/.vibe-trading/venv")
+
 
 def test_venv_python_path_is_platform_correct():
     base = Path("/home/u/.vibe-trading")
@@ -18,15 +22,17 @@ def test_venv_python_path_is_platform_correct():
     else:
         assert p == base / "venv" / "bin" / "python"
 
+
 def test_ensure_venv_creates_real_venv(tmp_path):
     base = tmp_path / ".vibe-trading"
     py = ensure_venv(base)
     assert py.exists()
     import subprocess
-    out = subprocess.run([str(py), "-c", "import sys; print(sys.prefix)"],
-                         capture_output=True, text=True, timeout=60)
+
+    out = subprocess.run([str(py), "-c", "import sys; print(sys.prefix)"], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0
     assert str(base / "venv") in out.stdout
+
 
 def test_ensure_venv_is_idempotent(tmp_path):
     base = tmp_path / ".vibe-trading"
@@ -41,9 +47,7 @@ def _interpreter_runs(py: Path) -> bool:
     损坏的 exe 在 Windows 上无法 spawn(OSError),同样视为不可用。
     """
     try:
-        return subprocess.run(
-            [str(py), "-c", "pass"], capture_output=True, timeout=60
-        ).returncode == 0
+        return subprocess.run([str(py), "-c", "pass"], capture_output=True, timeout=60).returncode == 0
     except OSError:
         return False
 
@@ -62,6 +66,7 @@ def test_ensure_venv_rebuilds_when_interpreter_unusable(tmp_path):
     base = tmp_path / ".vibe-trading"
     py = ensure_venv(base)
     assert _interpreter_runs(py)
+    os.unlink(py)  # 先断链:POSIX 上 venv 解释器是指向真身的 symlink,open 会写透毁掉基础解释器
     with open(py, "wb") as f:
         f.write(b"not an interpreter")
     assert not _interpreter_runs(py)
@@ -86,10 +91,7 @@ def test_ensure_venv_rebuilds_when_base_runtime_gone(tmp_path):
     gone = tmp_path / "gone-runtime"
     gone.mkdir()
     cfg = base / "venv" / "pyvenv.cfg"
-    lines = [
-        line if not line.startswith("home =") else f"home = {gone}"
-        for line in cfg.read_text().splitlines()
-    ]
+    lines = [line if not line.startswith("home =") else f"home = {gone}" for line in cfg.read_text().splitlines()]
     cfg.write_text("\n".join(lines) + "\n")
     assert not _interpreter_runs(py), "前置:home 指向无标准库目录时解释器应无法启动"
 
