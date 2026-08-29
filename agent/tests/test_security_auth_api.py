@@ -5,14 +5,13 @@ from __future__ import annotations
 import ipaddress
 import inspect
 from types import SimpleNamespace
-from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
 
 import api_server
 from src.api import security
-from src.news.models import RefreshAcceptedResponse, RefreshStatus
+from src.news.refresh import RefreshDecision
 
 
 _TEST_CLIENT_SUPPORTS_CLIENT = "client" in inspect.signature(TestClient).parameters
@@ -93,8 +92,7 @@ def test_desktop_frame_response_uses_tauri_only_csp_allowlist() -> None:
 
     assert "x-frame-options" not in response.headers
     assert response.headers["content-security-policy"] == (
-        "frame-ancestors tauri://localhost http://tauri.localhost "
-        "https://tauri.localhost http://localhost:5173"
+        "frame-ancestors tauri://localhost http://tauri.localhost https://tauri.localhost http://localhost:5173"
     )
     assert "frame-ancestors 'none'" in response.headers["content-security-policy-report-only"]
 
@@ -201,23 +199,23 @@ def test_remote_news_api_requires_existing_auth_dependency(
     monkeypatch.setenv("API_AUTH_KEY", "secret")
     monkeypatch.setattr(api_server, "_API_KEY", "secret")
 
-    response = _remote_client().get("/news-api/snapshot")
+    response = _remote_client().get("/news-api/watchlist-feed")
 
     assert response.status_code == 401
 
 
 def test_cross_site_news_refresh_is_rejected_before_coordinator_work(monkeypatch: pytest.MonkeyPatch) -> None:
     start_calls: list[bool] = []
-    real_start = api_server.news_coordinator.start
+    real_trigger = api_server._feed_refresher.trigger
 
-    async def start_spy():
+    async def trigger_spy():
         start_calls.append(True)
-        return await real_start()
+        return await real_trigger()
 
-    monkeypatch.setattr(api_server.news_coordinator, "start", start_spy)
+    monkeypatch.setattr(api_server._feed_refresher, "trigger", trigger_spy)
 
     response = _local_client().post(
-        "/news-api/refresh",
+        "/news-api/watchlist-feed/refresh",
         headers={"Origin": "https://attacker.example", "Content-Type": "application/json"},
         json={},
     )
@@ -227,26 +225,25 @@ def test_cross_site_news_refresh_is_rejected_before_coordinator_work(monkeypatch
     assert start_calls == []
 
 
-def _accepted_refresh_response() -> RefreshAcceptedResponse:
-    task_id = UUID("00000000-0000-4000-8000-000000000001")
-    return RefreshAcceptedResponse(
-        task_id=task_id,
+def _accepted_refresh_decision() -> RefreshDecision:
+    return RefreshDecision(
+        accepted=True,
+        task_id="00000000-0000-4000-8000-000000000001",
         reused=False,
-        status=RefreshStatus(state="fetching", task_id=task_id, total_endpoints=106),
     )
 
 
 def test_vite_origin_can_refresh_across_ports(monkeypatch: pytest.MonkeyPatch) -> None:
     start_calls: list[bool] = []
 
-    async def start_spy() -> RefreshAcceptedResponse:
+    async def trigger_spy() -> RefreshDecision:
         start_calls.append(True)
-        return _accepted_refresh_response()
+        return _accepted_refresh_decision()
 
-    monkeypatch.setattr(api_server.news_coordinator, "start", start_spy)
+    monkeypatch.setattr(api_server._feed_refresher, "trigger", trigger_spy)
 
     response = _local_client().post(
-        "/news-api/refresh",
+        "/news-api/watchlist-feed/refresh",
         headers={"Host": "127.0.0.1:8899", "Origin": "HTTP://LOCALHOST:5899"},
     )
 
@@ -257,14 +254,14 @@ def test_vite_origin_can_refresh_across_ports(monkeypatch: pytest.MonkeyPatch) -
 def test_unconfigured_loopback_origin_cannot_start_news_refresh(monkeypatch: pytest.MonkeyPatch) -> None:
     start_calls: list[bool] = []
 
-    async def start_spy() -> RefreshAcceptedResponse:
+    async def trigger_spy() -> RefreshDecision:
         start_calls.append(True)
-        return _accepted_refresh_response()
+        return _accepted_refresh_decision()
 
-    monkeypatch.setattr(api_server.news_coordinator, "start", start_spy)
+    monkeypatch.setattr(api_server._feed_refresher, "trigger", trigger_spy)
 
     response = _local_client().post(
-        "/news-api/refresh",
+        "/news-api/watchlist-feed/refresh",
         headers={"Host": "127.0.0.1:8899", "Origin": "http://127.0.0.1:45678"},
     )
 
@@ -350,15 +347,15 @@ def test_watchlist_write_allows_trusted_or_absent_origin(
 def test_custom_cors_origins_do_not_merge_loopback_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     start_calls: list[bool] = []
 
-    async def start_spy() -> RefreshAcceptedResponse:
+    async def trigger_spy() -> RefreshDecision:
         start_calls.append(True)
-        return _accepted_refresh_response()
+        return _accepted_refresh_decision()
 
     monkeypatch.setattr(security, "_CORS_ORIGINS", ["http://localhost:5899"])
-    monkeypatch.setattr(api_server.news_coordinator, "start", start_spy)
+    monkeypatch.setattr(api_server._feed_refresher, "trigger", trigger_spy)
 
     response = _local_client().post(
-        "/news-api/refresh",
+        "/news-api/watchlist-feed/refresh",
         headers={"Host": "127.0.0.1:8899", "Origin": "http://127.0.0.1:5899"},
     )
 
@@ -369,14 +366,14 @@ def test_custom_cors_origins_do_not_merge_loopback_defaults(monkeypatch: pytest.
 def test_same_origin_request_can_start_news_refresh(monkeypatch: pytest.MonkeyPatch) -> None:
     start_calls: list[bool] = []
 
-    async def start_spy() -> RefreshAcceptedResponse:
+    async def trigger_spy() -> RefreshDecision:
         start_calls.append(True)
-        return _accepted_refresh_response()
+        return _accepted_refresh_decision()
 
-    monkeypatch.setattr(api_server.news_coordinator, "start", start_spy)
+    monkeypatch.setattr(api_server._feed_refresher, "trigger", trigger_spy)
 
     response = _local_client().post(
-        "/news-api/refresh",
+        "/news-api/watchlist-feed/refresh",
         headers={"Host": "127.0.0.1:8899", "Origin": "http://127.0.0.1:8899"},
     )
 
@@ -387,13 +384,13 @@ def test_same_origin_request_can_start_news_refresh(monkeypatch: pytest.MonkeyPa
 def test_non_browser_request_without_origin_can_start_news_refresh(monkeypatch: pytest.MonkeyPatch) -> None:
     start_calls: list[bool] = []
 
-    async def start_spy() -> RefreshAcceptedResponse:
+    async def trigger_spy() -> RefreshDecision:
         start_calls.append(True)
-        return _accepted_refresh_response()
+        return _accepted_refresh_decision()
 
-    monkeypatch.setattr(api_server.news_coordinator, "start", start_spy)
+    monkeypatch.setattr(api_server._feed_refresher, "trigger", trigger_spy)
 
-    response = _local_client().post("/news-api/refresh", headers={"Host": "127.0.0.1:8899"})
+    response = _local_client().post("/news-api/watchlist-feed/refresh", headers={"Host": "127.0.0.1:8899"})
 
     assert response.status_code == 202
     assert start_calls == [True]
@@ -402,16 +399,16 @@ def test_non_browser_request_without_origin_can_start_news_refresh(monkeypatch: 
 def test_remote_trusted_origin_still_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     start_calls: list[bool] = []
 
-    async def start_spy() -> RefreshAcceptedResponse:
+    async def trigger_spy() -> RefreshDecision:
         start_calls.append(True)
-        return _accepted_refresh_response()
+        return _accepted_refresh_decision()
 
     monkeypatch.setenv("API_AUTH_KEY", "secret")
     monkeypatch.setattr(api_server, "_API_KEY", "secret")
-    monkeypatch.setattr(api_server.news_coordinator, "start", start_spy)
+    monkeypatch.setattr(api_server._feed_refresher, "trigger", trigger_spy)
 
     response = _remote_client().post(
-        "/news-api/refresh",
+        "/news-api/watchlist-feed/refresh",
         headers={"Host": "127.0.0.1:8899", "Origin": "http://localhost:5899"},
     )
 
@@ -747,10 +744,7 @@ def test_default_cors_origins_are_loopback_only() -> None:
 
     assert origins
     assert "*" not in origins
-    assert all(
-        origin.startswith("http://localhost:") or origin.startswith("http://127.0.0.1:")
-        for origin in origins
-    )
+    assert all(origin.startswith("http://localhost:") or origin.startswith("http://127.0.0.1:") for origin in origins)
 
 
 def test_default_cors_origins_include_vite_loopback_hosts() -> None:
@@ -835,9 +829,9 @@ def test_loopback_shutdown_accepts_valid_bearer(
     "value",
     [
         # Real formats produced by the codebase.
-        "20260105_120342_12_a1b2c3",            # state.create_run_dir
-        "swarm-20260105_120342-a1b2c3",         # swarm presets.run_id
-        "abcdef012345",                         # session_id (uuid.uuid4().hex[:12])
+        "20260105_120342_12_a1b2c3",  # state.create_run_dir
+        "swarm-20260105_120342-a1b2c3",  # swarm presets.run_id
+        "abcdef012345",  # session_id (uuid.uuid4().hex[:12])
         "run-1",
         "A" * 128,
     ],
@@ -855,7 +849,7 @@ def test_validate_path_param_accepts_known_good_values(value: str) -> None:
         "foo/bar",
         "foo\\bar",
         "foo bar",
-        "foo.bar",             # dot is not in the safe class
+        "foo.bar",  # dot is not in the safe class
         "foo\n",
         "foo\r",
         "foo\t",

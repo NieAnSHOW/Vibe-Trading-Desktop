@@ -128,7 +128,7 @@ def test_uvicorn_filter_removes_all_query_values_from_news_api_subroute_access_l
         __file__,
         0,
         '%s - "%s %s HTTP/%s" %s',
-        ("203.0.113.10:50000", "GET", "/news-api/snapshot?llm=sk-canary&foo=bar", "1.1", 422),
+        ("203.0.113.10:50000", "GET", "/news-api/watchlist-feed?llm=sk-canary&foo=bar", "1.1", 422),
         None,
     )
 
@@ -136,4 +136,4 @@ def test_uvicorn_filter_removes_all_query_values_from_news_api_subroute_access_l
     rendered = record.getMessage()
     assert "sk-canary" not in rendered
     assert "foo=bar" not in rendered
-    assert "/news-api/snapshot HTTP/1.1" in rendered
+    assert "/news-api/watchlist-feed HTTP/1.1" in rendered
