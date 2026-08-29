@@ -21,7 +21,7 @@ CONNECT_TIMEOUT_SECONDS = 5.0
 READ_TIMEOUT_SECONDS = 15.0
 TOTAL_FETCH_TIMEOUT_SECONDS = 15.0
 MAX_CONCURRENT_REQUESTS = 16
-MAX_CONCURRENT_REQUESTS_PER_HOST = 2  # 规格 §5.4：单 IP 并发 ≤2
+MAX_CONCURRENT_REQUESTS_PER_IP = 2  # 规格 §5.4：单 IP 并发 ≤2（限流键为已解析 IP，非 hostname）
 MAX_HOST_SEMAPHORE_CACHE_SIZE = 64
 READ_CHUNK_BYTES = 64 * 1024
 MAX_ATTEMPTS = 3
@@ -125,6 +125,7 @@ class _RequestTarget:
     request_url: str
     hostname: str
     host_header: str
+    address: str
 
 
 def _host_with_port(hostname: str, port: int | None) -> str:
@@ -262,7 +263,7 @@ class TransportClient:
                         )
                     except (UnicodeError, ValueError, httpx.InvalidURL):
                         raise TransportError("invalid_url") from None
-                    async with self._host_limit(target.hostname):
+                    async with self._host_limit(target.address):
                         async with self._semaphore():
                             started = time.perf_counter()
                             response = await client.send(http_request, stream=True)
@@ -318,24 +319,24 @@ class TransportClient:
         return semaphore
 
     @classmethod
-    def _host_limiter(cls, hostname: str) -> _HostLimiter:
+    def _host_limiter(cls, address: str) -> _HostLimiter:
         loop = asyncio.get_running_loop()
         semaphores = cls._host_semaphores.get(loop)
         if semaphores is None:
             semaphores = OrderedDict()
             cls._host_semaphores[loop] = semaphores
-        limiter = semaphores.get(hostname)
+        limiter = semaphores.get(address)
         if limiter is None:
-            limiter = _HostLimiter(asyncio.Semaphore(MAX_CONCURRENT_REQUESTS_PER_HOST))
-            semaphores[hostname] = limiter
+            limiter = _HostLimiter(asyncio.Semaphore(MAX_CONCURRENT_REQUESTS_PER_IP))
+            semaphores[address] = limiter
         else:
-            semaphores.move_to_end(hostname)
+            semaphores.move_to_end(address)
         return limiter
 
     @classmethod
     @asynccontextmanager
-    async def _host_limit(cls, hostname: str) -> AsyncIterator[None]:
-        limiter = cls._host_limiter(hostname)
+    async def _host_limit(cls, address: str) -> AsyncIterator[None]:
+        limiter = cls._host_limiter(address)
         limiter.reservations += 1
         try:
             async with limiter.semaphore:
@@ -399,4 +400,6 @@ class TransportClient:
         selected = parsed_addresses[0]
         host_header = _host_with_port(hostname, port)
         request_url = _request_url(parsed, selected, port)
-        return _RequestTarget(request_url=request_url, hostname=hostname, host_header=host_header), None
+        return _RequestTarget(
+            request_url=request_url, hostname=hostname, host_header=host_header, address=selected.compressed
+        ), None

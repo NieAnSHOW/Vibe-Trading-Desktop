@@ -44,6 +44,24 @@ class QueuedTransport(httpx.AsyncBaseTransport):
         return self.responses.pop(0)
 
 
+class ProbeTransport(httpx.AsyncBaseTransport):
+    """挂起所有请求直到释放事件，用于探测实际并发峰值。"""
+
+    def __init__(self) -> None:
+        self.requests: list[httpx.Request] = []
+        self.active = 0
+        self.peak = 0
+        self.release = asyncio.Event()
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        self.active += 1
+        self.peak = max(self.peak, self.active)
+        await self.release.wait()
+        self.active -= 1
+        return httpx.Response(200, headers={"content-type": "text/plain"}, content=b"ok")
+
+
 def _async_test(function: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(function)
     def run(*args: Any, **kwargs: Any) -> Any:
@@ -54,6 +72,12 @@ def _async_test(function: Callable[..., Any]) -> Callable[..., Any]:
 
 async def _no_sleep(_seconds: float) -> None:
     return None
+
+
+async def _settle(ticks: int = 25) -> None:
+    """让事件循环推进若干拍，使挂起的请求全部就位。"""
+    for _ in range(ticks):
+        await asyncio.sleep(0)
 
 
 def _client(
@@ -225,3 +249,48 @@ async def test_unsafe_direct_target_rejected():
     with pytest.raises(TransportError) as excinfo:
         await client.fetch(TransportRequest(url="http://loopback.example.test/x"))
     assert excinfo.value.code == "unsafe_target"
+
+
+@_async_test
+async def test_concurrency_budget_is_per_ip_not_per_hostname():
+    resolver = FakeResolver(
+        {
+            "a.example.test": ["93.184.216.34"],
+            "b.example.test": ["93.184.216.34"],
+            "c.example.test": ["93.184.216.34"],
+        }
+    )
+    probe = ProbeTransport()
+    client = TransportClient(resolver=resolver, transport=probe, sleep=_no_sleep)
+    tasks = [
+        asyncio.create_task(client.fetch(TransportRequest(url=f"https://{host}/x")))
+        for host in ("a.example.test", "b.example.test", "c.example.test")
+    ]
+    await _settle()
+    assert len(probe.requests) == 2  # 共享同一 IP：第三个请求在限流处挂起，尚未发出
+    assert probe.peak == 2
+    probe.release.set()
+    results = await asyncio.gather(*tasks)
+    assert [r.status_code for r in results] == [200, 200, 200]
+    assert len(probe.requests) == 3
+
+
+@_async_test
+async def test_distinct_ips_keep_independent_concurrency_budgets():
+    resolver = FakeResolver(
+        {
+            "a.example.test": ["93.184.216.34"],
+            "b.example.test": ["8.8.8.8"],
+        }
+    )
+    probe = ProbeTransport()
+    client = TransportClient(resolver=resolver, transport=probe, sleep=_no_sleep)
+    tasks = [
+        asyncio.create_task(client.fetch(TransportRequest(url=f"https://{host}/x")))
+        for host in ("a.example.test", "b.example.test")
+    ]
+    await _settle()
+    assert probe.peak == 2  # 不同 IP 各占各的预算，互不占用
+    probe.release.set()
+    results = await asyncio.gather(*tasks)
+    assert [r.status_code for r in results] == [200, 200]
