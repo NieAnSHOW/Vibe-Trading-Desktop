@@ -257,8 +257,8 @@ class WatchlistFeedService:
             "reset_required": reset_required,
         }
 
+    @staticmethod
     def _match_rows(
-        self,
         by_code: dict[str, WatchlistEntry],
         names_lc: dict[str, WatchlistEntry],
         rows: list[StoredEntry],
@@ -283,6 +283,77 @@ class WatchlistFeedService:
             )
         return items
 
+    SCAN_PAGE = 200  # ponytail: 全窗扫描每页行数；留存窗口（快讯24h/公告7d）本地 SQLite 千行量级，逐页循环足够
+
+    def _row_hits(
+        self, entry: StoredEntry, by_code: dict[str, WatchlistEntry], names_lc: dict[str, WatchlistEntry]
+    ) -> bool:
+        return bool(match_entry(entry, by_code, names_lc)[0])
+
+    def _scan_desc(
+        self,
+        by_code: dict[str, WatchlistEntry],
+        names_lc: dict[str, WatchlistEntry],
+        limit: int,
+        now: datetime,
+        before: tuple[str, str] | None = None,
+    ) -> tuple[list[StoredEntry], bool, StoredEntry | None]:
+        """新→旧逐页扫描，攒满 limit 条命中为止；返回 (命中列表[未截断], 窗口是否扫尽, 窗口首行)。
+
+        线上缺陷修正（2026-08-29）：命中稀疏时最新命中可能排在任意深度，
+        "最新 limit 行原始条目的命中子集"会导致首屏空页——必须扫全窗口。
+        """
+        matched: list[StoredEntry] = []
+        head: StoredEntry | None = None
+        exhausted = False
+        anchor = before
+        while True:
+            rows = self._store.window_merged(
+                limit=self.SCAN_PAGE,
+                now=now,
+                before_published_at=anchor[0] if anchor else None,
+                before_item_id=anchor[1] if anchor else None,
+            )
+            if not rows:
+                exhausted = True
+                break
+            if head is None:
+                head = rows[0]
+            matched.extend(row for row in rows if self._row_hits(row, by_code, names_lc))
+            if len(matched) >= limit:
+                break
+            if len(rows) < self.SCAN_PAGE:
+                exhausted = True
+                break
+            anchor = (rows[-1].published_at, rows[-1].item_id)
+        return matched, exhausted, head
+
+    @staticmethod
+    def _deliver_page(
+        by_code: dict[str, WatchlistEntry],
+        names_lc: dict[str, WatchlistEntry],
+        version: str,
+        matched: list[StoredEntry],
+        exhausted: bool,
+        limit: int,
+        *,
+        want_new_cursor: bool,
+        head: StoredEntry | None,
+    ) -> tuple[list[dict], str | None, str | None, list[StoredEntry]]:
+        delivered = matched[:limit]
+        items = WatchlistFeedService._match_rows(by_code, names_lc, delivered)
+        if want_new_cursor and head is not None:
+            new_cursor = encode_cursor(version, head.published_at, head.item_id)
+        else:
+            new_cursor = None
+        # 还有更深的命中（本页截断）或窗口未扫尽 → 提供翻页游标；扫尽且无截断 → null
+        next_cursor = (
+            encode_cursor(version, delivered[-1].published_at, delivered[-1].item_id)
+            if delivered and (len(matched) > limit or not exhausted)
+            else None
+        )
+        return items, new_cursor, next_cursor, delivered
+
     def _page_head(
         self,
         by_code: dict[str, WatchlistEntry],
@@ -290,14 +361,11 @@ class WatchlistFeedService:
         version: str,
         limit: int,
     ) -> tuple[list[dict], str | None, str | None, list[StoredEntry]]:
-        rows = self._store.window_merged(limit=limit + 1, now=self._now())
-        delivered = rows[:limit]
-        items = self._match_rows(by_code, names_lc, delivered)
-        new_cursor = encode_cursor(version, rows[0].published_at, rows[0].item_id) if rows else None
-        next_cursor = (
-            encode_cursor(version, rows[limit - 1].published_at, rows[limit - 1].item_id) if len(rows) > limit else None
+        matched, exhausted, head = self._scan_desc(by_code, names_lc, limit, self._now())
+        # new_cursor = 窗口头部水位（含未命中行）：轮询水位语义（§6.1）
+        return self._deliver_page(
+            by_code, names_lc, version, matched, exhausted, limit, want_new_cursor=True, head=head
         )
-        return items, new_cursor, next_cursor, delivered
 
     def _page_after(
         self,
@@ -307,23 +375,25 @@ class WatchlistFeedService:
         after_cursor: str,
         limit: int,
     ) -> tuple[list[dict], str | None, str | None, list[StoredEntry]]:
-        """升序交付"最旧的未交付 N 条"（缺陷 3）：一轮涌入超过 limit 条也不丢不重——
-        ORDER BY published_at ASC 取最旧未交付页，水位 = 本页最后一条（最新已交付）位置。"""
+        """升序交付"最旧的未交付命中"（缺陷 3 修正 + 深扫修正）：一轮涌入超过 limit 条也不丢不重。
+
+        单页扫描 SCAN_PAGE 行（比 limit+1 深两个数量级）：水位推进到本页最后扫过行，
+        静默期不再反复重扫尾巴；发布时间早于水位的回填条目按 §6.1 由首屏/翻页路径覆盖。
+        """
         data = decode_cursor(after_cursor)
         assert data is not None
         rows = self._store.window_merged(
-            limit=limit + 1,
+            limit=self.SCAN_PAGE,
             now=self._now(),
             after_published_at=data["t"],
             after_item_id=data["i"],
             order="asc",
         )
-        delivered = rows[:limit]
-        items = self._match_rows(by_code, names_lc, delivered)  # 升序返回，前端 reverse 展示
-        if delivered:
-            new_cursor = encode_cursor(version, delivered[-1].published_at, delivered[-1].item_id)
-        else:
-            new_cursor = after_cursor  # 无新条目 → 水位不变
+        matched = [row for row in rows if self._row_hits(row, by_code, names_lc)]
+        delivered = matched[:limit]
+        items = self._match_rows(by_code, names_lc, delivered)
+        anchor_row = delivered[-1] if delivered else (rows[-1] if rows else None)
+        new_cursor = encode_cursor(version, anchor_row.published_at, anchor_row.item_id) if anchor_row else after_cursor
         return items, new_cursor, None, delivered
 
     def _page_before(
@@ -336,18 +406,10 @@ class WatchlistFeedService:
     ) -> tuple[list[dict], str | None, str | None, list[StoredEntry]]:
         data = decode_cursor(before_cursor)
         assert data is not None
-        rows = self._store.window_merged(
-            limit=limit + 1,
-            now=self._now(),
-            before_published_at=data["t"],
-            before_item_id=data["i"],
+        matched, exhausted, _ = self._scan_desc(by_code, names_lc, limit, self._now(), before=(data["t"], data["i"]))
+        return self._deliver_page(
+            by_code, names_lc, version, matched, exhausted, limit, want_new_cursor=False, head=None
         )
-        delivered = rows[:limit]
-        items = self._match_rows(by_code, names_lc, delivered)
-        next_cursor = (
-            encode_cursor(version, rows[limit - 1].published_at, rows[limit - 1].item_id) if len(rows) > limit else None
-        )
-        return items, None, next_cursor, delivered
 
     def _health_payload(self) -> list[dict]:
         snapshot: list[SourceHealth] = self._health.snapshot()

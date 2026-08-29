@@ -243,6 +243,71 @@ async def test_feed_head_page_sets_both_cursors(tmp_path, watchlist_db):
 
 
 @_async_test
+async def test_feed_head_surfaces_deep_matches_across_window(tmp_path, watchlist_db):
+    """线上缺陷（2026-08-29 实测）：自选命中稀疏时，最新命中排在 limit+1 行原始条目之外——
+    首屏/翻页必须扫描整个留存窗口、返回最新 limit 条命中，而不是"最新 limit 行原始条目的命中子集"。
+    标题须互异（§5.5 近似合并会吞掉雷同合成标题，见 burst 测试注释）。"""
+    noise_titles = [
+        "央行公开市场净投放创单周新高",
+        "国际原油期货周五亚盘窄幅震荡",
+        "欧洲主要股指收盘涨跌互现",
+        "日元汇率创近三个月新低",
+        "国内商品期货夜盘多数收跌",
+        "某新势力车企公布全新整车平台",
+        "多地出台夏季电力保供新举措",
+        "国际金价小幅回落等待非农数据",
+        "半导体设备出货量同比环比双降",
+        "南美大豆产区迎来关键降雨",
+        "国产大飞机新增一条商业航线",
+        "海上风电装机容量再创新高",
+        "某互联网公司宣布回购计划",
+        "多地楼市政策微调引发关注",
+        "锂电材料价格周环比持平",
+    ]
+    hits = [
+        ("hit1", 40, "白酒龙头发布年度业绩预告", ("1.600519",)),
+        ("hit2", 50, "股份制银行获外资行上调评级", ("0.000001",)),
+        ("hit3", 55, "酱香型白酒批发价企稳回升", ("1.600519",)),
+    ]
+    service, store = _feed_service(tmp_path, watchlist_db)
+    rows = [
+        StoredEntry(
+            source="eastmoney",
+            item_id=f"noise{i}",
+            type="flash",
+            published_at=(NOW - timedelta(minutes=i)).isoformat(),
+            title=title,
+            summary="",
+            url="",
+            structured_codes=(),
+        )
+        for i, title in enumerate(noise_titles)
+    ]
+    rows.extend(
+        StoredEntry(
+            source="eastmoney",
+            item_id=item_id,
+            type="flash",
+            published_at=(NOW - timedelta(minutes=minutes)).isoformat(),
+            title=title,
+            summary="",
+            url="",
+            structured_codes=structured,
+        )
+        for item_id, minutes, title, structured in hits
+    )
+    store.upsert_entries(rows, now=NOW)
+
+    payload = await service.feed(None, None, 2)
+    assert [item["id"] for item in payload["items"]] == ["eastmoney:hit1", "eastmoney:hit2"]
+    assert payload["next_cursor"] is not None
+
+    older = await service.feed(None, payload["next_cursor"], 50)
+    assert [item["id"] for item in older["items"]] == ["eastmoney:hit3"]
+    assert older["next_cursor"] is None
+
+
+@_async_test
 async def test_feed_poll_returns_only_new_items_and_advances_watermark(tmp_path, watchlist_db):
     service, store = _feed_service(tmp_path, watchlist_db)
     store.upsert_entries(
