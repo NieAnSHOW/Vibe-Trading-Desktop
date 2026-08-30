@@ -3,7 +3,6 @@
     "version": "v0.1.10"
   },
   "layout": {
-    "news": "أخبار الاستثمار",
     "section": { "workspace": "Workspace" },
     "researchTools": "أدوات البحث",
     "agent": "الوكيل",
@@ -789,24 +788,5 @@
     "nextPage": "الصفحة التالية",
     "notProvided": "غير متوفر",
     "periodOverview": "نظرة عامة على استخدام الفترة"
-  },
-  "news": {
-    "title": "تدفقات قائمة المتابعة",
-    "refresh": "تحديث",
-    "refreshing": "جارٍ التحديث…",
-    "loading": "جارٍ التحميل…",
-    "error": "فشل التحميل، يرجى المحاولة مرة أخرى",
-    "emptyNoWatchlist": "لا توجد أسهم في قائمة المتابعة",
-    "emptyNoWatchlistHint": "أضف أسهمًا لعرض الأخبار والإعلانات ذات الصلة",
-    "goWatchlist": "إدارة قائمة المتابعة",
-    "announcement": "إعلان",
-    "noSummary": "لا يوجد ملخص",
-    "unknownTime": "وقت غير معروف",
-    "viewOriginal": "عرض الأصل",
-    "delayedBanner": "قد تكون البيانات متأخرة",
-    "lastUpdated": "آخر تحديث: {{time}}",
-    "sourceDegraded": "مصدر {{source}} غير مستقر، قد تكون البيانات غير مكتملة",
-    "loadMore": "تحميل الأقدم",
-    "sources": { "eastmoney": "إيستموني", "sina": "سينا", "sse": "بورصة شنغهاي", "szse": "بورصة شنتشن" }
   }
 }

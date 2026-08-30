@@ -3,7 +3,6 @@
     "version": "v0.1.10"
   },
   "layout": {
-    "news": "투자 뉴스",
     "section": { "workspace": "Workspace" },
     "researchTools": "투자 리서치 도구",
     "agent": "에이전트",
@@ -789,24 +788,5 @@
     "nextPage": "다음 페이지",
     "notProvided": "제공되지 않음",
     "periodOverview": "기간 사용량 개요"
-  },
-  "news": {
-    "title": "관심 종목 피드",
-    "refresh": "새로고침",
-    "refreshing": "새로고침 중…",
-    "loading": "불러오는 중…",
-    "error": "불러오기에 실패했습니다, 다시 시도하세요",
-    "emptyNoWatchlist": "관심 종목이 없습니다",
-    "emptyNoWatchlistHint": "종목을 추가하면 관련 뉴스와 공시가 표시됩니다",
-    "goWatchlist": "관심 종목 관리",
-    "announcement": "공시",
-    "noSummary": "요약 없음",
-    "unknownTime": "시간 미상",
-    "viewOriginal": "원문 보기",
-    "delayedBanner": "데이터가 지연될 수 있습니다",
-    "lastUpdated": "마지막 업데이트: {{time}}",
-    "sourceDegraded": "{{source}} 소스가 불안정합니다, 데이터가 불완전할 수 있습니다",
-    "loadMore": "이전 항목 불러오기",
-    "sources": { "eastmoney": "동방재부", "sina": "신화재경", "sse": "상해거래소", "szse": "심천거래소" }
   }
 }

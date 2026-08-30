@@ -23,7 +23,6 @@
     "noEquityData": "No equity data"
   },
   "layout": {
-    "news": "Investment News",
     "section": {
       "workspace": "Workspace"
     },
@@ -1128,24 +1127,5 @@
     "nextPage": "Next page",
     "notProvided": "Not provided",
     "periodOverview": "Period overview"
-  },
-  "news": {
-    "title": "Watchlist Feed",
-    "refresh": "Refresh",
-    "refreshing": "Refreshing…",
-    "loading": "Loading…",
-    "error": "Failed to load, please retry",
-    "emptyNoWatchlist": "No watchlist stocks yet",
-    "emptyNoWatchlistHint": "Add stocks to your watchlist to see related flashes and announcements",
-    "goWatchlist": "Manage watchlist",
-    "announcement": "Announcement",
-    "noSummary": "No summary",
-    "unknownTime": "Unknown time",
-    "viewOriginal": "View original",
-    "delayedBanner": "Data may be delayed",
-    "lastUpdated": "Last updated: {{time}}",
-    "sourceDegraded": "{{source}} source is degraded, data may be incomplete",
-    "loadMore": "Load earlier",
-    "sources": { "eastmoney": "Eastmoney", "sina": "Sina", "sse": "SSE", "szse": "SZSE" }
   }
 }

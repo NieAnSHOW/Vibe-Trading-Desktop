@@ -11,7 +11,7 @@ describe("Vite API proxy config", () => {
     expect(config).toContain('"/settings/data-sources"');
   });
 
-  it("proxies investment news API endpoints", () => {
-    expect(config).toContain('"/news-api"');
+  it("no longer proxies the removed news API", () => {
+    expect(config).not.toContain('"/news-api"');
   });
 });

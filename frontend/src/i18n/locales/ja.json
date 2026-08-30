@@ -3,7 +3,6 @@
     "version": "v0.1.10"
   },
   "layout": {
-    "news": "投資ニュース",
     "section": { "workspace": "Workspace" },
     "researchTools": "投研ツール",
     "agent": "エージェント",
@@ -789,24 +788,5 @@
     "nextPage": "次のページ",
     "notProvided": "未提供",
     "periodOverview": "期間の使用量"
-  },
-  "news": {
-    "title": "ウォッチリストフィード",
-    "refresh": "更新",
-    "refreshing": "更新中…",
-    "loading": "読み込み中…",
-    "error": "読み込みに失敗しました、再試行してください",
-    "emptyNoWatchlist": "ウォッチリストが空です",
-    "emptyNoWatchlistHint": "銘柄を追加すると、関連するニュースと公告が表示されます",
-    "goWatchlist": "ウォッチリストを管理",
-    "announcement": "公告",
-    "noSummary": "概要なし",
-    "unknownTime": "時刻不明",
-    "viewOriginal": "原文を見る",
-    "delayedBanner": "データが遅延している可能性があります",
-    "lastUpdated": "最終更新：{{time}}",
-    "sourceDegraded": "{{source}}ソースが不安定です、データが不完全な可能性があります",
-    "loadMore": "さらに読み込む",
-    "sources": { "eastmoney": "東方財富", "sina": "新浪財経", "sse": "上証所", "szse": "深証所" }
   }
 }
