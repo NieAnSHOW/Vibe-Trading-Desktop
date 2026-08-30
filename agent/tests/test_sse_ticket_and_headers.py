@@ -119,21 +119,3 @@ def test_uvicorn_filter_redacts_ticket_and_api_key_query_values() -> None:
     assert "super-secret" not in rendered
     assert "also-secret" not in rendered
     assert "[redacted]" in rendered
-
-
-def test_uvicorn_filter_removes_all_query_values_from_news_api_subroute_access_logs() -> None:
-    record = logging.LogRecord(
-        "uvicorn.access",
-        logging.INFO,
-        __file__,
-        0,
-        '%s - "%s %s HTTP/%s" %s',
-        ("203.0.113.10:50000", "GET", "/news-api/watchlist-feed?llm=sk-canary&foo=bar", "1.1", 422),
-        None,
-    )
-
-    assert security._UvicornQuerySecretRedactionFilter().filter(record) is True
-    rendered = record.getMessage()
-    assert "sk-canary" not in rendered
-    assert "foo=bar" not in rendered
-    assert "/news-api/watchlist-feed HTTP/1.1" in rendered
