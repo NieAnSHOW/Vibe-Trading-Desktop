@@ -58,7 +58,7 @@
 | pi-sidecar/src/main.ts | Create | 入口：ready 帧、stdin/stdout JSONL 循环、stderr 诊断 |
 | pi-sidecar/extensions/vibe-memory/index.ts (+test) | Create | vibe-memory extension（每轮记忆注入 + remember/memory_search/memory_remove） |
 | agent/src/pi_sidecar/__init__.py | Create | 包标记 + engine 开关（`get_agent_engine()`，默认 `pi`）+ LEGACY_ONLY_PROVIDERS |
-| agent/src/pi_sidecar/protocol.py (+test) | Create | Python 侧帧编解码（与 TS 镜像） |
+| pi-sidecar/src/main.ts (+test) | Create | **入口（Task 5b，B1）**：ready 帧、stdin/stdout JSONL 循环、HostRpc 装配、`__VIBE_HOST__` bridge、extensions 注入、stderr 诊断 |
 | agent/src/pi_sidecar/manifest.py (+test) | Create | `build_tool_manifest(registry)` |
 | agent/src/pi_sidecar/gateway_bridge.py (+test) | Create | tool_invoke 处理：幂等、并行只读/串行写、ToolGateway 路由、outcome_unknown、截断/redact |
 | agent/src/pi_sidecar/client.py (+test) | Create | `PiSidecarClient`：进程监管（restart-once）、请求关联、事件分发 |
@@ -66,19 +66,20 @@
 | agent/src/pi_sidecar/projection.py (+test) | Create | 最终 result 投影 + Pi 消息 → `Message` 投影 |
 | agent/src/pi_sidecar/memory_bridge.py (+test) | Create | memory_context/remember/memory_search/memory_remove host op（PersistentMemory） |
 | agent/src/pi_sidecar/migration.py (+test) | Create | 懒迁移（只读旧库 → import_messages → 原子标记） |
-| agent/src/pi_sidecar/migrate_cli.py | Create | operator 批迁移 + 完整性检查（`python -m src.pi_sidecar.migrate`） |
-| agent/src/session/service.py | Modify | engine 分支 `_run_with_pi`、cancel 接线、get_messages 路由、执行路径停写 messages、vip_server/openai-codex legacy 回退 |
+| agent/src/pi_sidecar/client.py (+test) | Create | `PiSidecarClient`：进程监管（restart-once）、请求关联、事件分发、入站 host-request 派发 + `respond_host`（B3）、env 合并（B6）、`VIBE_PI_SIDECAR_BIN` 解析（B7） |
 | agent/tests/pi_sidecar/fixtures/stub_sidecar.py | Create | 协议桩 sidecar（client 单测用，无需 bun） |
 | agent/tests/pi_sidecar/fake_provider.py | Create | 确定性 OpenAI 兼容 SSE stub provider（集成测试用） |
 | agent/tests/pi_sidecar/test_integration_basic.py | Create | 集成：多轮/工具调用/并行只读串行写 |
 | agent/tests/pi_sidecar/test_integration_advanced.py | Create | 集成：压缩/重开/steer/abort/restart/重复抑制/outcome_unknown/迁移投影 |
 | scripts/desktop/build-pi.sh / build-pi.ps1 | Create | bun install --frozen-lockfile → bundle → `bun build --compile` 按目标 → 暂存 `.desktop-build/pi/` + PROVENANCE.json |
-| src-tauri/tauri.conf.json | Modify | bundle.resources（L41-47）加 `"../.desktop-build/pi": "pi"` |
-| scripts/desktop/build-dmg.sh | Modify | 资源预检（L136-152）与打包后检查循环（L282）加 `pi` |
+| agent/src/session/service.py | Modify | engine 分支 `_run_with_pi`（同步 + `_AGENT_EXECUTOR` + pi loop 桥接，B4）、`_pi_host_handlers` 注册表（B5）、cancel 接线、get_messages 路由、执行路径停写 messages、vip_server/openai-codex legacy 回退 |
 | scripts/desktop/build-windows.ps1 | Modify | 同上（Windows 侧） |
 | scripts/desktop/assemble.sh / assemble.ps1 | Modify | agent 模板步骤后（~L49/55）加 Pi 暂存调用 |
 | scripts/desktop/sign-and-notarize.sh | Modify | Mach-O 签名循环（~L150）加 `Contents/Resources/pi/*/pi` |
 | .github/workflows/desktop-build.yml | Modify | Node 升 22.19、每 matrix 加 Build Pi step、provenance 上传 |
+| src-tauri/tauri.conf.json | Modify | bundle.resources（L41-47）加 `"../.desktop-build/pi": "pi"` |
+| src-tauri/src/sidecar.rs | Modify | B7：解析打包内 `pi/<target>/pi` 并以 `VIBE_PI_SIDECAR_BIN` 注入 Python serve 进程 env |
+| scripts/desktop/smoke_pi.py | Create | 打包冒烟（纯 JSONL stdout/skills 数/manifest 数/用户目录写入） |
 | scripts/desktop/perf_baseline.py | Create | 性能基线 harness |
 
 ## 跨任务接口契约（单一事实来源；各任务 Interfaces 节重复声明）
@@ -98,7 +99,7 @@
 
 - 错误码集合：`bad_json` `bad_frame` `frame_too_large` `unknown_op` `bad_request` `no_session` `session_busy` `not_found` `stale_cursor` `already_exists` `tool_failed` `tool_timeout` `tool_cancelled` `pi_error` `internal`。
 - Python→sidecar op 集合：`ping`、`new_session`、`open_session`、`prompt`、`steer`、`follow_up`、`abort`、`get_state`、`get_messages`、`set_model`、`set_thinking_level`、`compact`、`navigate_tree`、`export_session`、`set_tool_manifest`、`import_messages`、`tool_cancel`。
-- sidecar→Python op 集合：`tool_invoke`、`memory_context`。
+- sidecar→Python op 集合：`tool_invoke`、`memory_context`、`remember`、`memory_search`、`memory_remove`（B5：后四者由 vibe-memory extension 经 host bridge 调用，Python 侧经 `_pi_host_handlers` 注册表分发）。
 - 单帧 JSON 序列化后 ≤ 1_048_576 字节（UTF-8），超限即 `frame_too_large`（v1 不分块）。
 - 启动时 sidecar 先发 `{"v":1,"event":"ready","data":{"protocol":1,"pid":<int>,"sdk":"18.0.11"}}`，之后才接受请求。
 
@@ -165,18 +166,26 @@ class SidecarError(RuntimeError):
     code: str  # 协议错误码；重启预算耗尽后统一 "pi_sidecar_unavailable"
 
 class PiSidecarClient:
-    def __init__(self, *, command: list[str] | None = None,  # 默认 ["bun","run","src/main.ts"]
+    def __init__(self, *, command: list[str] | None = None,  # 默认 _default_command()：VIBE_PI_SIDECAR_BIN → bun dev（B7）
                  cwd: Path | None = None,                    # 默认 <repo>/pi-sidecar
                  agent_dir: Path | None = None,              # 默认 ~/.vibe-trading/pi/agent
                  sessions_dir: Path | None = None,           # 默认 ~/.vibe-trading/pi/sessions
+                 env: dict[str, str] | None = None,          # B6：合并覆盖 os.environ 传给子进程
                  on_event: Callable[[str, str, dict], None] | None = None,  # (event, session_id, data)
+                 on_host_request: Callable[[str, dict], Any] | None = None,  # B3：async (op, params) -> dict
                  max_restarts: int = 1) -> None: ...
+    @property
+    def started(self) -> bool: ...       # ready 帧已收到且进程存活（B4）
     @property
     def unavailable(self) -> bool: ...   # 重启预算耗尽后 True
     async def start(self) -> None: ...   # 等 ready 帧；超时/崩溃计入重启预算
     async def request(self, op: str, params: dict, *, timeout: float = 30.0) -> dict: ...
+    async def respond_host(self, req_id: str, result: dict) -> None: ...  # B3：回写入站 host 请求
     async def stop(self) -> None: ...
 ```
+
+入站 host 请求语义（B3/B5）：`on_host_request` 返回 dict → 回 `ok:true` 帧；
+返回 `{"_host_error_": {"code","message"}}` 或 handler 抛异常 → 回 `ok:false` 帧。
 
 ### 事件归一化（Task 10 定义；Task 12 消费）——输出必须逐字满足 Global Constraints 的 glossary
 
@@ -312,7 +321,11 @@ const names = Object.keys(pkg).sort();
 console.log(JSON.stringify({ ok: true, version: "18.0.11", exports: names }, null, 2));
 ```
 
-- [ ] 7. 运行期待通过：`cd pi-sidecar && bun test scripts/check-sdk-exports.test.ts && bun run scripts/check-sdk-exports.ts > /tmp/sdk-exports.json && head -5 /tmp/sdk-exports.json` → `2 pass`；JSON 以 `{"ok":true` 开头。**人工核对 /tmp/sdk-exports.json**：确认 `createAgentSession`/`SessionManager`/`Settings`/`AuthStorage`/`ModelRegistry`/`discoverAuthStorage` 都在；并读 `node_modules/@oh-my-pi/pi-coding-agent/dist/sdk.d.ts` 中 `createAgentSession` 的 options 类型与 `AuthStorage`/`ModelRegistry` 构造签名——若与 Task 5 中 `session-driver.ts` 的用法不符，以 d.ts 为准微调 Task 5 代码并在 commit message 注明 `sdk-signature-fix`。
+- [ ] 7. 运行期待通过：`cd pi-sidecar && bun test scripts/check-sdk-exports.test.ts && bun run scripts/check-sdk-exports.ts > /tmp/sdk-exports.json && head -5 /tmp/sdk-exports.json` → `2 pass`；JSON 以 `{"ok":true` 开头。**人工核对 /tmp/sdk-exports.json + d.ts（M7 扩展清单，四项）**：
+  (a) `createAgentSession`/`SessionManager`/`Settings`/`AuthStorage`/`ModelRegistry`/`discoverAuthStorage` 都在；`createAgentSession` options 类型与 `AuthStorage`/`ModelRegistry` 构造签名——若与 Task 5 `session-driver.ts` 用法不符，以 d.ts 为准微调并在 commit message 注明 `sdk-signature-fix`；
+  (b) `SessionManager.create`/`newSession` 是否支持**显式 session id**（options 带 `id`/`sessionId`）——决定 B2d 路线（显式 id vs 记录 headerId），结论回填 Task 5 注 ③；
+  (c) `message_start` 事件 payload 是否携带 entry/message id（读 `dist/` 内事件类型定义）——Task 7 幂等键的 `assistantEntryId` 段依赖它；若无该字段，Task 7 按 M7a 的 `toolCallId + turn 计数` 回退方案落地；
+  (d) `getMessages` 使用的 sessionManager entries 读取 API 实名（`getEntries()` 或等价）——Task 5 `PiSessionHandle.getMessages` 按实名微调。
 
 - [ ] 8. Commit：
 
@@ -831,9 +844,12 @@ export function isValidVibeSessionId(id: string): boolean;   // /^[0-9a-f]{12}$/
 export function readSessionHeaderId(jsonPath: string): string | null; // 扫描前 8KB 找 type==="session" 的 entry，返回其 id；找不到/解析失败 → null
 export class SessionIndex {
   constructor(indexPath?: string, sessionsDir?: string);
-  resolve(vibeId: string): string | null;          // 命中且 header 校验通过 → 绝对路径；否则 null
-  register(vibeId: string, jsonlPath: string): void; // 校验 header id 后登记 + 持久化（原子写：tmp+rename）
-  all(): Record<string, string>;
+  // B2 定案：register 只要求"存在合法 session header"，记录 {path, headerId}；
+  // 不强制 Pi header id === Vibe id（SessionManager.create 自行分配 id）。
+  // 若 d.ts 核对（Task 5 注 ③）揭示显式 session id 选项，headerId 恒等于 vibeId，双字段语义向后兼容。
+  register(vibeId: string, jsonlPath: string): void; // header 缺失 → throw；登记 + 原子持久化（tmp+rename）
+  resolve(vibeId: string): string | null;            // 文件仍有 session header 且 id === 记录的 headerId → path；否则 null（替换检测）
+  all(): Record<string, { path: string; headerId: string }>;
 }
 ```
 
@@ -891,31 +907,40 @@ describe("readSessionHeaderId", () => {
 });
 
 describe("SessionIndex", () => {
-  test("register + resolve round-trip with header validation", () => {
+  test("register + resolve round-trip with header presence validation", () => {
     const jsonl = join(dir, "20260830_000000_a1b2c3d4e5f6.jsonl");
     writeFileSync(jsonl, HDR(VIBE) + "\n");
     const idx = new SessionIndex(join(dir, "index.json"), dir);
-    idx.register(VIBE, jsonl);
+    idx.register(VIBE, jsonl); // B2：headerId 记录为 VIBE（文件自身的 header id）
     expect(idx.resolve(VIBE)).toBe(jsonl);
     // 持久化：新实例可读回
     const idx2 = new SessionIndex(join(dir, "index.json"), dir);
     expect(idx2.resolve(VIBE)).toBe(jsonl);
   });
 
-  test("register rejects header id mismatch", () => {
-    const jsonl = join(dir, "wrong.jsonl");
-    writeFileSync(jsonl, HDR("ffffffffffff") + "\n");
+  test("register accepts a Pi-assigned header id different from vibeId (B2 core case)", () => {
+    const jsonl = join(dir, "pi-assigned.jsonl");
+    writeFileSync(jsonl, HDR("ffffffffffff") + "\n"); // SessionManager.create 自分配 id
     const idx = new SessionIndex(join(dir, "index2.json"), dir);
-    expect(() => idx.register(VIBE, jsonl)).toThrow(/header id/i);
+    idx.register(VIBE, jsonl); // 只要求存在合法 header，不要求 id === vibeId
+    expect(idx.resolve(VIBE)).toBe(jsonl);
+    expect(idx.all()[VIBE]).toEqual({ path: jsonl, headerId: "ffffffffffff" });
+  });
+
+  test("register rejects file without any session header", () => {
+    const jsonl = join(dir, "noheader.jsonl");
+    writeFileSync(jsonl, '{"type":"message","id":"m1"}\n');
+    const idx = new SessionIndex(join(dir, "index2b.json"), dir);
+    expect(() => idx.register(VIBE, jsonl)).toThrow(/header/i);
     expect(idx.resolve(VIBE)).toBeNull();
   });
 
-  test("resolve returns null when header id no longer matches (validated read)", () => {
+  test("resolve detects file replacement (recorded headerId no longer matches)", () => {
     const jsonl = join(dir, "mutated.jsonl");
     writeFileSync(jsonl, HDR(VIBE) + "\n");
     const idx = new SessionIndex(join(dir, "index3.json"), dir);
     idx.register(VIBE, jsonl);
-    writeFileSync(jsonl, HDR("ffffffffffff") + "\n"); // 文件被替换
+    writeFileSync(jsonl, HDR("ffffffffffff") + "\n"); // 文件被替换 → headerId 变化
     expect(idx.resolve(VIBE)).toBeNull();
   });
 
@@ -965,17 +990,25 @@ export function readSessionHeaderId(jsonPath: string): string | null {
     }
   }
   return null;
+export interface IndexedSession {
+  path: string;
+  headerId: string; // 文件自身的 Pi session header id（B2：不强制等于 vibeId）
 }
 
 export class SessionIndex {
-  private map: Record<string, string>;
+  private map: Record<string, IndexedSession>;
 
   constructor(
     private readonly indexPath = DEFAULT_INDEX_PATH,
     private readonly sessionsDir = DEFAULT_SESSIONS_DIR,
   ) {
     try {
-      this.map = JSON.parse(readFileSync(this.indexPath, "utf8")) as Record<string, string>;
+      const raw = JSON.parse(readFileSync(this.indexPath, "utf8")) as Record<string, IndexedSession | string>;
+      // 兼容 v0 纯路径格式（升级容忍）
+      this.map = {};
+      for (const [k, v] of Object.entries(raw)) {
+        this.map[k] = typeof v === "string" ? { path: v, headerId: k } : v;
+      }
     } catch {
       this.map = {};
     }
@@ -983,19 +1016,20 @@ export class SessionIndex {
 
   resolve(vibeId: string): string | null {
     if (!isValidVibeSessionId(vibeId)) return null;
-    const p = this.map[vibeId];
-    if (!p) return null;
-    if (readSessionHeaderId(p) !== vibeId) return null;
-    return p;
+    const entry = this.map[vibeId];
+    if (!entry) return null;
+    // B2 替换检测：文件必须仍有 session header，且 id === 登记时记录的 headerId
+    if (readSessionHeaderId(entry.path) !== entry.headerId) return null;
+    return entry.path;
   }
 
   register(vibeId: string, jsonlPath: string): void {
     if (!isValidVibeSessionId(vibeId)) throw new Error(`invalid vibe session id: ${vibeId}`);
     const headerId = readSessionHeaderId(jsonlPath);
-    if (headerId !== vibeId) {
-      throw new Error(`session file header id mismatch: expected ${vibeId}, got ${headerId}`);
+    if (headerId === null) {
+      throw new Error(`session file has no valid session header: ${jsonlPath}`);
     }
-    this.map[vibeId] = jsonlPath;
+    this.map[vibeId] = { path: jsonlPath, headerId };
     mkdirSync(dirname(this.indexPath), { recursive: true });
     mkdirSync(this.sessionsDir, { recursive: true });
     const tmp = `${this.indexPath}.tmp`;
@@ -1003,15 +1037,17 @@ export class SessionIndex {
     renameSync(tmp, this.indexPath); // 原子写（design §Lazy migration 标记语义）
   }
 
-  all(): Record<string, string> {
+  all(): Record<string, IndexedSession> {
     return { ...this.map };
   }
 }
 ```
 
+
+
 > 注：若 `Bun.file(...).slice(...)` API 与当前 Bun 版本不符（Task 0 已验证 Bun ≥1.3.14），等价替换为 `readFileSync(jsonPath, "utf8").slice(0, 8192)`——语义相同（8KB 前缀扫描）。
 
-- [ ] 4. 运行期待通过：`cd pi-sidecar && bun test src/session-index.test.ts` → 全部 pass（9 用例）。
+- [ ] 4. 运行期待通过：`cd pi-sidecar && bun test src/session-index.test.ts` → 全部 pass（10 用例）。
 
 - [ ] 5. Commit：
 
@@ -1197,8 +1233,10 @@ describe("command handler", () => {
     await h.send(req("r-18", "new_session", { session_id: "a1b2c3d4e5f6" }));
     await h.send(req("r-19", "get_messages", { session_id: "a1b2c3d4e5f6", limit: 5 }));
     expect(JSON.parse(h.out[1])).toMatchObject({ ok: true, result: { messages: [{ entry_id: "e1" }], next_cursor: null } });
-    await h.send(req("r-20", "get_messages", { session_id: "a1b2c3d4e5f6" }));
-    expect(JSON.parse(h.out[2])).toMatchObject({ ok: false, error: { code: "bad_request" } });
+    await h.send(req("r-20", "get_messages", { session_id: "a1b2c3d4e5f6" })); // M1：limit 缺省 → 默认 100，成功
+    expect(JSON.parse(h.out[2])).toMatchObject({ ok: true, result: { messages: [{ entry_id: "e1" }] } });
+    await h.send(req("r-20b", "get_messages", { session_id: "a1b2c3d4e5f6", limit: 0 })); // 非法 limit → bad_request
+    expect(JSON.parse(h.out[3])).toMatchObject({ ok: false, error: { code: "bad_request" } });
   });
 
   test("set_tool_manifest / import_messages / tool_cancel", async () => {
@@ -1369,11 +1407,11 @@ export function createCommandHandler(deps: {
         });
       }
       case "get_messages": {
-        const p = requireParams(params, ["session_id", "limit"]);
+        const p = requireParams(params, ["session_id"]); // M1：limit 可选，默认 100
         const s = needSession(deps, p.session_id);
         if (s.isBusy()) return err(id, "session_busy", "cannot page messages mid-turn");
         const before = (p.before_cursor as string | undefined) ?? null;
-        const limit = Number(p.limit);
+        const limit = p.limit === undefined ? 100 : Number(p.limit);
         if (!Number.isInteger(limit) || limit < 1) return err(id, "bad_request", "limit must be positive integer");
         const r = s.getMessages(before, limit);
         return ok(id, { messages: r.messages, next_cursor: r.nextCursor });
@@ -1681,7 +1719,7 @@ import { createAgentSession, SessionManager, Settings } from "@oh-my-pi/pi-codin
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { SessionDriver, SessionLike, MsgOut } from "./commands";
-import { readSessionHeaderId, SessionIndex } from "./session-index";
+import { SessionIndex } from "./session-index";
 import { resolveDefaultModel } from "./model-wiring";
 import type { ToolBridge } from "./tool-bridge";
 
@@ -1776,6 +1814,11 @@ class PiSessionHandle implements SessionLike {
     };
   }
 
+  /** header 必须落盘后 index.register 才能读到 headerId（B2）。实名以 d.ts 为准（ensureOnDisk）。 */
+  private async ensureOnDisk(): Promise<void> {
+    await (this.s as { ensureOnDisk?: () => Promise<void> | void }).ensureOnDisk?.();
+  }
+
   async exportTo(outPath: string): Promise<void> {
     await Bun.write(outPath, await Bun.file(this.sessionFile).text());
   }
@@ -1794,7 +1837,8 @@ class PiSessionHandle implements SessionLike {
       else continue;
       n += 1;
     }
-    // 触发落盘 + 索引登记（design §Lazy migration: 同 ID Pi 会话）
+    // 触发落盘 + 索引登记（design §Lazy migration: 同 ID Pi 会话；create() 已登记，此处幂等）
+    await this.ensureOnDisk();
     this.index.register(this.sessionId, this.sessionFile);
     return n;
   }
@@ -1802,15 +1846,26 @@ class PiSessionHandle implements SessionLike {
 
 export class PiSessionDriver implements SessionDriver {
   readonly index: SessionIndex;
-
   constructor(
     private readonly opts: {
       index: SessionIndex;
       toolBridge: ToolBridge;
       env?: NodeJS.ProcessEnv;
+      extensions?: unknown[]; // B1：vibe-providers/vibe-memory factories（main.ts 生产注入）
     },
   ) {
     this.index = opts.index;
+  }
+
+  async create(vibeId: string, model?: string, _thinkingLevel?: string): Promise<SessionLike> {
+    const sm = SessionManager.create(PI_SESSIONS_DIR, PI_SESSIONS_DIR) as never;
+    const m = model ?? resolveDefaultModel(this.opts.env);
+    const s = await this.buildSession(vibeId, sm, m);
+    this.handles.set(vibeId, s);
+    // B2b/B2 落盘序：SessionManager.create 新会话默认 memory-only（omp://session.md），
+    await (s as unknown as { ensureOnDisk(): Promise<void> }).ensureOnDisk();
+    this.index.register(vibeId, s.sessionFile); // B2b：登记 {path, headerId}——restart 后 open_session 可重开，杜绝静默丢历史
+    return s;
   }
 
   private async buildSession(vibeId: string, sessionManager: unknown, model: string | null): Promise<SessionLike> {
@@ -1819,7 +1874,7 @@ export class PiSessionDriver implements SessionDriver {
       agentDir: PI_AGENT_DIR,
       settings: Settings.isolated({ agentDir: PI_AGENT_DIR }),
       sessionManager: sessionManager as never,
-      extensions: [], // ambient discovery 已禁用；vibe-providers/vibe-memory 经显式 import 注入（main.ts）
+      extensions: this.opts.extensions ?? [], // ambient discovery 已禁用；extensions 经显式注入（B1/main.ts）
       customTools: this.opts.toolBridge.customTools(),
       toolNames: [], // Global Constraint: 内建 read/write/edit/bash 全禁用
       restrictToolNames: true,
@@ -1834,13 +1889,6 @@ export class PiSessionDriver implements SessionDriver {
     return new PiSessionHandle(vibeId, file, session, this.index);
   }
 
-  async create(vibeId: string, model?: string, _thinkingLevel?: string): Promise<SessionLike> {
-    const sm = SessionManager.create(PI_SESSIONS_DIR, PI_SESSIONS_DIR) as never;
-    const m = model ?? resolveDefaultModel(this.opts.env);
-    const s = await this.buildSession(vibeId, sm, m);
-    this.handles.set(vibeId, s);
-    return s;
-  }
 
   async open(vibeId: string): Promise<SessionLike> {
     const p = this.index.resolve(vibeId);
@@ -1868,9 +1916,10 @@ export class PiSessionDriver implements SessionDriver {
 
 ```
 
-> 执行者注意（两处 d.ts 核对，来自 Task 0 Step 7 的导出清单）：
-> ① `createAgentSession` options 字段名以 `dist/sdk.d.ts` 为准（本文件按已验证 SDK facts 书写；`sessionManager` 参数若需要 `SessionManager.create(cwd, sessionDir)` 的具体签名差异，按 d.ts 调整，但**必须**保持 `SessionManager.create(..., PI_SESSIONS_DIR)` 指向 `~/.vibe-trading/pi/sessions`）；
-> ② `importMessages` 使用的 SessionManager 消息追加 API（`appendUserMessage`/`appendAssistantMessage`）以 `dist/session/session-manager.d.ts` 实名为准（可能是 `appendMessage`/`appendEntry`）——语义约束：按时间序追加 user/assistant 文本消息、不改 header id、追加后确保落盘。若 SDK 无公开追加 API，改用 `session.prompt()` 逐条注入不可行（会产生模型调用），此时回退方案：在 Pi JSONL 文件尾部按 `SessionEntry` 格式直接追加 `message` 条目并 `SessionManager.open()` 重载（format 见 `omp://session.md` §File Format），同样满足"导入 user/assistant 消息、header 校验通过"。两个方案都写死在实现里不允许留 TODO。
+> 执行者注意（三处 d.ts 核对，来自 Task 0 Step 7 的导出清单）：
+> ① `createAgentSession` options 字段名以 `dist/sdk.d.ts` 为准（本文件按已验证 SDK facts 书写；`sessionManager` 参数若需要 `SessionManager.create(cwd, sessionDir)` 的具体签名差异，按 d.ts 调整，但**必须**保持会话目录指向 `~/.vibe-trading/pi/sessions`）；
+> ② `importMessages` 使用的 SessionManager 消息追加 API（`appendUserMessage`/`appendAssistantMessage`）以 `dist/session/session-manager.d.ts` 实名为准（可能是 `appendMessage`/`appendEntry`）——语义约束：按时间序追加 user/assistant 文本消息、不改 header id、追加后确保落盘。若 SDK 无公开追加 API，改用直接按 `SessionEntry` 格式追加 `message` 条目并 `SessionManager.open()` 重载（format 见 `omp://session.md` §File Format）。两个方案都写死在实现里不允许留 TODO。
+> ③ **B2d（session id 归属）**：若 d.ts 揭示 `SessionManager.create`/`newSession` 支持显式 session id（options 带 `id`/`sessionId`），优先采用——此时 Pi header id === Vibe id，`SessionIndex` 记录的 `headerId` 恒等于 `vibeId`（Task 3 双字段语义向后兼容）；否则采用"记录 headerId + 替换检测"（Task 3 定案），即设计"the sidecar validates the header before opening it"的合理解读。两种路线都完整落在 Task 3/Task 5 代码里，不允许 TODO。
 
 - [ ] 7. 运行期待通过：`cd pi-sidecar && bun test src/model-wiring.test.ts src/session-driver.test.ts` → 全部 pass。
 
@@ -1879,6 +1928,238 @@ export class PiSessionDriver implements SessionDriver {
 ```bash
 git add pi-sidecar/src/session-driver.ts pi-sidecar/src/session-driver.test.ts pi-sidecar/src/model-wiring.ts pi-sidecar/src/model-wiring.test.ts pi-sidecar/extensions/vibe-providers/
 git commit -s -m "feat(pi-sidecar): Pi AgentSession driver with tool lockdown + provider wiring"
+```
+
+---
+
+### Task 5b: sidecar 入口 main.ts（B1：装配协议循环 + HostRpc + 工具桥 + 会话驱动 + extensions）
+
+**Files:** `pi-sidecar/src/main.ts`（Create）、`pi-sidecar/src/main.test.ts`（Create）
+
+**Interfaces:** Consumes — Task 1 `encodeFrame/decodeFrame/LineSplitter/FrameError`、Task 3 `SessionIndex`、Task 4 `createCommandHandler`、Task 5 `PiSessionDriver`、Task 5b 依赖的 Task 7 `ToolBridge`、Task 7 `HostRpc`、`extensions/vibe-memory`、`extensions/vibe-providers`。Produces — 可执行 RPC 入口（Task 15 编译、Task 16/17/18 运行的就是它）：
+
+```ts
+// main.ts 启动序列（顺序是硬约束）：
+// 1. 发 ready 帧
+// 2. 构造 HostRpc（stdout sink）
+// 3. globalThis.__VIBE_HOST__ = { call, emitDiagnostic }   ← 必须先于 extension import
+// 4. 构造 ToolBridge + SessionIndex + PiSessionDriver（extensions 注入）
+// 5. createCommandHandler，进入 stdin 行循环
+export function createMain(deps?: Partial<MainDeps>): { handleLine: (line: string) => Promise<void>; close: () => void };
+```
+
+**Steps:**
+
+- [ ] 1. 写失败测试 `pi-sidecar/src/main.test.ts`（内存双工：FakeDriver + 捕获 stdout 帧，无需真实 SDK/provider）：
+
+```ts
+import { describe, expect, test } from "bun:test";
+import { createMain, type MainDeps } from "./main";
+import { decodeFrame } from "./protocol";
+import type { SessionDriver, SessionLike } from "./commands";
+
+function makeFakeSession(): SessionLike {
+  return {
+    sessionId: "a1b2c3d4e5f6",
+    sessionFile: "/tmp/fake.jsonl",
+    isBusy: () => false,
+    subscribe: () => () => {},
+    prompt: async () => {},
+    steer: () => {},
+    followUp: () => {},
+    abort: () => {},
+    setModel: async () => {},
+    setThinkingLevel: async () => {},
+    compact: async () => {},
+    navigateTree: async () => "leaf1",
+    getMessages: () => ({ messages: [], nextCursor: null }),
+    exportTo: async () => {},
+    importMessages: async () => 0,
+  };
+}
+
+function makeFakeDriver(): SessionDriver {
+  const s = makeFakeSession();
+  return {
+    open: async () => s,
+    create: async () => s,
+    get: () => s,
+    setToolManifest: async (tools) => (tools as unknown[]).length,
+    cancelToolCall: () => true,
+  };
+}
+
+function harness() {
+  const written: string[] = [];
+  const deps: Partial<MainDeps> = {
+    driver: makeFakeDriver(),
+    hostCall: async (_op, params) => ({ content: '{"ok":true}', isError: false, outcome: "ok", echoed: params }),
+    writeOut: (raw: string) => written.push(raw),
+    extensions: [],
+  };
+  const main = createMain(deps);
+  return { main, written };
+}
+
+describe("main entrypoint", () => {
+  test("emits ready frame first", () => {
+    const { written } = harness();
+    const ready = decodeFrame(written[0]);
+    expect(ready).toMatchObject({ event: "ready", data: { protocol: 1 } });
+    expect((ready as { data: { sdk: string } }).data.sdk).toBe("18.0.11");
+  });
+
+  test("ping roundtrip over in-memory duplex", async () => {
+    const { main, written } = harness();
+    await main.handleLine('{"v":1,"id":"r-1","op":"ping"}\n');
+    expect(decodeFrame(written[1])).toMatchObject({ id: "r-1", ok: true, result: { pong: true, protocol: 1 } });
+  });
+
+  test("__VIBE_HOST__ bridge set before extensions and routes hostCall", async () => {
+    const { main, written } = harness();
+    expect((globalThis as Record<string, unknown>).__VIBE_HOST__).toBeDefined();
+    const host = (globalThis as Record<string, unknown>).__VIBE_HOST__ as { call: (op: string, p?: Record<string, unknown>) => Promise<unknown> };
+    const r = (await host.call("tool_invoke", { call_id: "t-1" })) as Record<string, unknown>;
+    expect(r["echoed"]).toMatchObject({ call_id: "t-1" }); // hostCall 经 HostRpc 关联（测试注入直连）
+    main.close();
+  });
+
+  test("inbound response frames resolve pending hostCall (duplex dispatch)", async () => {
+    // HostRpc 响应派发：注入一个手工 HostRpc 响应帧，验证 handleLine 把它喂给挂起的 call
+    const { main } = harness();
+    const pending = (globalThis as Record<string, unknown>).__VIBE_HOST__ as { call: (op: string) => Promise<unknown> };
+    const p = pending.call("memory_context", { query: "q" });
+    await main.handleLine('{"v":1,"id":"s-1","ok":true,"result":{"block":"B"}}\n');
+    expect(await p).toEqual({ block: "B" });
+    main.close();
+  });
+});
+```
+
+- [ ] 2. 运行期待失败：`cd pi-sidecar && bun test src/main.test.ts` → `Cannot find module "./main"`。
+
+- [ ] 3. 实现 `pi-sidecar/src/main.ts`：
+
+```ts
+#!/usr/bin/env bun
+import { createCommandHandler, type SessionDriver } from "./commands";
+import { HostRpc } from "./host-rpc";
+import { ToolBridge } from "./tool-bridge";
+import { SessionIndex } from "./session-index";
+import { PiSessionDriver, PI_AGENT_DIR, PI_SESSIONS_DIR } from "./session-driver";
+import { encodeFrame, LineSplitter, decodeFrame, FrameError } from "./protocol";
+
+export interface MainDeps {
+  driver: SessionDriver;
+  hostCall: (op: string, params: Record<string, unknown>, timeoutMs?: number) => Promise<unknown>;
+  writeOut: (raw: string) => void;
+  extensions: unknown[]; // ExtensionFactory[]；测试注入 []，生产注入 vibe-memory + vibe-providers
+}
+
+export function createMain(deps?: Partial<MainDeps>) {
+  // 1) ready 帧（协议输出唯一出口 writeOut；测试可注入捕获器）
+  const writeOut = deps?.writeOut ?? ((raw: string) => process.stdout.write(raw));
+  writeOut(encodeFrame({ v: 1, event: "ready", data: { protocol: 1, pid: process.pid, sdk: "18.0.11" } }));
+
+  // 2) HostRpc：sidecar→Python 双向 RPC（响应帧经 handleLine 回流派发）
+  const hostRpc = new HostRpc(
+    (raw) => writeOut(raw),
+    (frame) => encodeFrame(frame as never),
+  );
+
+  // 3) host bridge 必须先于 extension import 设置（vibe-memory/vibe-providers 的 factory
+    //    在 load 后首个事件才调用 bridge，但全局引用必须在 import 时已可见）
+  (globalThis as Record<string, unknown>).__VIBE_HOST__ = {
+    call: (op: string, params: Record<string, unknown> = {}) => hostRpc.call(op, params, 60_000),
+    emitDiagnostic: (kind: string, message: string) => {
+      process.stderr.write(`[vibe:${kind}] ${message}\n`); // stderr 永不混入协议流
+      writeOut(encodeFrame({ v: 1, event: "session_event", session_id: "", data: { type: "pi.notice", payload: { kind, message } } }));
+    },
+  };
+
+  // 4) 工具桥 + 会话索引 + 驱动（生产模式动态 import 打包后的 extension 产物）
+  const toolBridge = new ToolBridge((op, params, timeoutMs) => hostRpc.call(op, params, timeoutMs));
+  const index = new SessionIndex();
+  let driver: SessionDriver = deps?.driver ?? new PiSessionDriver({ index, toolBridge, env: process.env });
+
+  if (!deps?.driver && !deps?.extensions) {
+    // 生产模式：从暂存资源动态加载 extensions（打包产物 extensions/*.js，Task 15）
+    void (async () => {
+      for (const extPath of [`${import.meta.dir}/extensions/vibe-providers.js`, `${import.meta.dir}/extensions/vibe-memory.js`]) {
+        try {
+          const mod = await import(extPath);
+          (driver as unknown as { extensions?: unknown[] }).extensions?.push?.(mod.default);
+        } catch (e) {
+          process.stderr.write(`[vibe:extension-load] ${extPath}: ${(e as Error).message}\n`);
+        }
+      }
+    })();
+  }
+
+  // 5) 命令处理 + stdin 行循环
+  const handler = createCommandHandler({
+    driver,
+    sink: writeOut,
+    hostCall: (op, params, timeoutMs) => hostRpc.call(op, params, timeoutMs),
+  });
+
+  async function handleLine(line: string): Promise<void> {
+    // 入站帧可能是：Python 请求（op）→ handler；或 HostRpc 响应（ok）→ 派发；其余忽略
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    try {
+      const probe = decodeFrame(trimmed);
+      if ("ok" in probe) {
+        hostRpc.onFrame(probe as never); // HostRpc 响应（含 Python 对 host 请求的答复）
+        return;
+      }
+    } catch {
+      // 非 JSON/坏帧：交给 handler 走统一错误帧路径
+    }
+    await handler(line);
+  }
+
+  if (!deps?.writeOut) {
+    // 真实 stdin 循环（测试注入 writeOut 时不启动）
+    const splitter = new LineSplitter();
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk: string) => {
+      let lines: string[] = [];
+      try {
+        lines = splitter.push(chunk);
+      } catch (e) {
+        if (e instanceof FrameError) writeOut(encodeFrame({ v: 1, id: "unknown", ok: false, error: { code: e.code, message: e.message } }));
+        return;
+      }
+      for (const ln of lines) void handleLine(ln);
+    });
+    process.stdin.on("end", () => process.exit(0));
+  }
+
+  return {
+    handleLine,
+    close: () => {
+      hostRpc.rejectAll(new Error("main closed"));
+    },
+  };
+}
+
+if (import.meta.main) {
+  createMain(); // 生产入口：生产 extensions 经上方动态 import 装配
+}
+```
+
+（实现者注：生产模式的 extensions 装配点——`PiSessionDriver` 构造 opts 已含 `extensions?: unknown[]`（Task 5 的 opts 扩展，B1）；若 Task 5 的 opts 未含该字段，在本任务为其补上可选字段并透传给 `createAgentSession({ extensions })`，默认 `[]`。动态 import 的路径以 Task 15 暂存布局（`<资源>/extensions/*.js`）为准，开发态回退 `../extensions/<name>/index.ts` 相对源路径。）
+
+- [ ] 4. 运行期待通过：`cd pi-sidecar && bun test src/main.test.ts` → `4 passed`。
+
+- [ ] 5. 烟测真实入口：`printf '{"v":1,"id":"r-1","op":"ping"}\n' | (cd pi-sidecar && bun run src/main.ts)` → stdout 第一行 `{"v":1,"event":"ready",...}`、第二行 `{"v":1,"id":"r-1","ok":true,"result":{"pong":true,"protocol":1}}`（stderr 可能有 extension 装载诊断，不进 stdout）。
+
+- [ ] 6. Commit：
+
+```bash
+git add pi-sidecar/src/main.ts pi-sidecar/src/main.test.ts
+git commit -s -m "feat(pi-sidecar): main entrypoint wiring protocol loop, host rpc and extensions"
 ```
 
 ---
@@ -2067,7 +2348,9 @@ export class ToolBridge {
 }
 ```
 
-幂等键：`<sessionId>:<assistantEntryId>:<toolCallId>`（Global Constraint）。execute 超时用 manifest 的 `timeout_seconds`（超时 → 向 Python 发 `tool_invoke` 前**不发**（side-effecting 永不重试）——超时仅对 sidecar 侧挂起生效：超时后返回 `{content:"{\"status\":\"error\",\"error\":\"tool_timeout\"}", isError:true, outcome:"timeout"}`？——**否**：Python 是执行方，超时由 Python 端 gateway_bridge 的 `timeout_seconds` 控制并在响应里给 `outcome:"error"/"outcome_unknown"`；sidecar 侧仅设一个 2×timeout 的兜底保护，防 Python 无响应挂死，兜底超时返回 isError=true + `outcome:"outcome_unknown"`（写类）或 `error`（只读）。
+幂等键：`<sessionId>:<assistantEntryId>:<toolCallId>`（Global Constraint）。超时规则定案（M8）：执行超时由 Python 端 `GatewayBridge` 按 manifest 的 `timeout_seconds` 控制并在响应里给出 `outcome:"error"`（只读）或 `"outcome_unknown"`（写类）；sidecar 侧仅保留 2×`timeout_seconds` 的兜底计时器防 Python 无响应挂死，兜底触发时本地返回 `isError:true` + 同样的 outcome 语义（写类 `outcome_unknown` / 只读 `error`），不向 Python 重发请求（side-effecting 永不重试）。
+
+幂等键 entryId 来源（M7a）：`onSessionEvent` 取 `message_start`/`message_end` payload 的 entry id（Task 0 Step 7 会核对 pinned SDK 的 `message_start` 事件是否携带该字段）；若 SDK 无此字段，回退方案为 `tool_execution_start` 触发时以 `"<sessionId>:turn<state.iter>:<toolCallId>"` 组键（turn 计数器由 driver 维护）——两种取法都在 `ToolBridge.onSessionEvent` 内实现，回退开关是一个布尔探测（首个 message_start 无 entryId 即置位）。
 
 **Steps:**
 
@@ -2771,17 +3054,20 @@ git commit -s -m "feat(pi-sidecar): gateway bridge with idempotency + parallel r
 
 **Files:** `agent/src/pi_sidecar/client.py`（Create）、`agent/tests/pi_sidecar/fixtures/stub_sidecar.py`（Create）、`agent/tests/pi_sidecar/test_client.py`（Create）
 
-**Interfaces:** Produces — 跨任务契约 §PiSidecarClient（`SidecarError`、`start/request/stop/unavailable`、`max_restarts=1` 默认、restart 后为活跃会话重发 `open_session`、重启期间 in-flight 请求收到 `code="sidecar_restarted"` 错误、重启预算耗尽后所有请求永久 `pi_sidecar_unavailable`）。
+**Interfaces:** Produces — 跨任务契约 §PiSidecarClient（`SidecarError`、`started/unavailable`、`start/request/respond_host/stop`、`env` 合并（B6）、`on_host_request` 入站分发（B3）、`max_restarts=1` 默认、restart 后为活跃会话重发 `open_session`、重启期间 in-flight 请求收到 `code="sidecar_restarted"` 错误、重启预算耗尽后所有请求永久 `pi_sidecar_unavailable`、`_default_command()` 的 `VIBE_PI_SIDECAR_BIN` 解析（B7））。
 
 **Steps:**
 
-- [ ] 1. 写协议桩 `agent/tests/pi_sidecar/fixtures/stub_sidecar.py`（client 单测用；行为：发 ready，支持 ping/open_session，可配置在 N 个请求后退出以模拟崩溃）：
+- [ ] 1. 写协议桩 `agent/tests/pi_sidecar/fixtures/stub_sidecar.py`（client 单测用；行为：发 ready（回显 `VIBE_TEST_ENV_MARKER`），支持 ping/open_session，`STUB_CRASH_AFTER` 模拟崩溃，`STUB_SEND_HOST_REQ` 发起一次入站 host 请求并校验响应帧——B3/B6）：
 
 ```python
 """协议桩 sidecar：client 单测用（不依赖 bun）。
 
 env 控制行为：
-  STUB_CRASH_AFTER=<n>   处理第 n 个请求后进程退出（模拟 sidecar 崩溃）
+  STUB_CRASH_AFTER=<n>     处理第 n 个请求后进程退出（模拟 sidecar 崩溃）
+  STUB_SEND_HOST_REQ=<op>  处理完第 1 个请求后，向 stdout 发出一个入站 host 请求
+                           （op ∈ tool_invoke/memory_context），并校验收到的响应帧
+  VIBE_TEST_ENV_MARKER     原样回显进 ready 帧 sdk 字段（B6：env 透传断言）
 """
 
 from __future__ import annotations
@@ -2789,18 +3075,20 @@ from __future__ import annotations
 import os
 import sys
 
-sys.path.insert(0, __file__.rsplit("/fixtures", 1)[0].replace("/agent/tests/pi_sidecar", "/agent")) if False else None
-
-from src.pi_sidecar.protocol import LineSplitter, decode_frame, encode_frame  # noqa: E402
+from src.pi_sidecar.protocol import LineSplitter, decode_frame, encode_frame
 
 
 def main() -> None:
     crash_after = int(os.environ.get("STUB_CRASH_AFTER", "0"))
+    send_host_req = os.environ.get("STUB_SEND_HOST_REQ", "")
+    marker = os.environ.get("VIBE_TEST_ENV_MARKER", "stub")
     out = sys.stdout
-    out.write(encode_frame({"v": 1, "event": "ready", "data": {"protocol": 1, "pid": os.getpid(), "sdk": "stub"}}))
+    out.write(encode_frame({"v": 1, "event": "ready",
+                            "data": {"protocol": 1, "pid": os.getpid(), "sdk": marker}}))
     out.flush()
     splitter = LineSplitter()
     handled = 0
+    host_req_sent = False
     for raw in iter(sys.stdin.readline, ""):
         for line in splitter.push(raw):
             try:
@@ -2811,13 +3099,32 @@ def main() -> None:
             if crash_after and handled >= crash_after:
                 out.flush()
                 os._exit(9)
-            if frame.get("op") == "ping":
-                out.write(encode_frame({"v": 1, "id": frame["id"], "ok": True, "result": {"pong": True, "protocol": 1}}))
-            elif frame.get("op") == "open_session":
-                out.write(encode_frame({"v": 1, "id": frame["id"], "ok": True, "result": {"session_file": "/tmp/stub.jsonl"}}))
+            op = frame.get("op")
+            if op == "ping":
+                out.write(encode_frame({"v": 1, "id": frame["id"], "ok": True,
+                                        "result": {"pong": True, "protocol": 1}}))
+            elif op == "open_session":
+                out.write(encode_frame({"v": 1, "id": frame["id"], "ok": True,
+                                        "result": {"session_file": "/tmp/stub.jsonl"}}))
             else:
-                out.write(encode_frame({"v": 1, "id": frame["id"], "ok": False, "error": {"code": "unknown_op", "message": "stub"}}))
+                out.write(encode_frame({"v": 1, "id": frame["id"], "ok": False,
+                                        "error": {"code": "unknown_op", "message": "stub"}}))
             out.flush()
+            # 首个请求处理后发一个入站 host 请求（B3），等待并校验响应帧
+            if send_host_req and not host_req_sent:
+                host_req_sent = True
+                out.write(encode_frame({"v": 1, "id": "s-host-1", "op": send_host_req,
+                                        "params": {"call_id": "t-1", "toolName": "web_search",
+                                                   "arguments": {"q": "x"}, "idempotencyKey": "s:e:c1"}}))
+                out.flush()
+                resp_raw = sys.stdin.readline()
+                resp = decode_frame(resp_raw)
+                assert resp.get("id") == "s-host-1" and resp.get("ok") is True, resp
+                assert "result" in resp, resp
+                # 把校验结果作为事件发回给测试进程观测
+                out.write(encode_frame({"v": 1, "event": "host_roundtrip",
+                                        "data": {"ok": True, "result": resp.get("result")}}))
+                out.flush()
 
 
 if __name__ == "__main__":
@@ -2881,6 +3188,98 @@ class TestBasics:
                 await c.stop()
         asyncio.run(run())
 
+
+class TestHostRequests:
+    def test_inbound_host_request_dispatched_and_response_framed(self):
+        """B3：sidecar→Python 的 op 请求帧（id+op，无 ok）→ on_host_request → 回响应帧。"""
+        async def run():
+            events = []
+
+            async def handler(op: str, params: dict) -> dict:
+                return {"content": '{"status":"ok"}', "isError": False, "outcome": "ok"}
+
+            c = PiSidecarClient(command=_command(), on_event=lambda ev, sid, d: events.append((ev, d)),
+                                on_host_request=handler)
+            await c.start()
+            try:
+                # 桩在首个请求处理后发 tool_invoke 请求并等待响应帧；client 自动回帧后
+                # 桩发出 host_roundtrip 事件确认闭环
+                await c.request("ping", {})
+                deadline = asyncio.get_running_loop().time() + 10
+                while asyncio.get_running_loop().time() < deadline:
+                    if any(ev == "host_roundtrip" for ev, _ in events):
+                        break
+                    await asyncio.sleep(0.05)
+                frame = next(d for ev, d in events if ev == "host_roundtrip")
+                assert frame["ok"] is True
+                assert frame["result"] == {"content": '{"status":"ok"}', "isError": False, "outcome": "ok"}
+            finally:
+                await c.stop()
+        asyncio.run(run())
+
+    def test_host_request_handler_error_yields_error_frame(self):
+        """handler 抛错 → client 回 ok:false 帧（桩收到非 ok 帧 → 其 assert 失败 →
+        桩进程退出 → client 读到 EOF）。本用例断言：错误 handler 不产生 host_roundtrip
+        成功事件，且 client 在桩退出后仍可重启服务后续请求。"""
+        async def run():
+            events = []
+
+            async def handler(op: str, params: dict) -> dict:
+                return {"_host_error_": {"code": "internal", "message": "gateway exploded"}}
+
+            c = PiSidecarClient(command=_command(), on_event=lambda ev, sid, d: events.append((ev, d)),
+                                on_host_request=handler)
+            await c.start()
+            try:
+                await c.request("ping", {})
+                await asyncio.sleep(1.0)  # 给桩发 host 请求 + 收到 ok:false 帧的时间
+                # 桩收到 ok:false 帧 → 其 assert 失败 → os._exit；client 不应崩溃且可继续服务
+                r = await c.request("ping", {}, timeout=15)
+                assert r == {"pong": True, "protocol": 1}
+                assert not any(ev == "host_roundtrip" for ev, _ in events)
+            finally:
+                await c.stop()
+        asyncio.run(run())
+
+
+    def test_respond_host_error_frame_shape(self):
+        """handler 抛错 → respond_host 发 ok:false 帧（桩收到后 assert 失败 → 事件缺失）。"""
+        async def run():
+            from src.pi_sidecar.protocol import decode_frame
+
+            sent: list[bytes] = []
+
+            class FakeStdin:
+                def write(self, data):
+                    sent.append(data)
+
+                async def drain(self):
+                    return None
+
+            c = PiSidecarClient(command=_command())
+            c._proc = type("P", (), {"stdin": FakeStdin()})()  # noqa: SLF001 — 注入假管道
+            await c._respond_to_host("s-host-9", {"_host_error_": {"code": "unknown_op", "message": "nope"}})  # noqa: SLF001
+            frame = decode_frame(sent[0].decode())
+            assert frame["id"] == "s-host-9" and frame["ok"] is False
+            assert frame["error"] == {"code": "unknown_op", "message": "nope"}
+        asyncio.run(run())
+
+
+class TestEnvPassthrough:
+    def test_env_dict_reaches_sidecar_process(self):
+        """B6：client env 参数必须透传到子进程（桩回显进 ready 帧 sdk 字段）。"""
+        got = []
+
+        async def run():
+            c = PiSidecarClient(command=_command(), env={"VIBE_TEST_ENV_MARKER": "env-probe-123"},
+                                on_event=lambda ev, sid, data: got.append(data))
+            await c.start()
+            try:
+                ready = next(d for d in got if d.get("protocol") == 1)
+                assert ready["sdk"] == "env-probe-123"
+            finally:
+                await c.stop()
+        asyncio.run(run())
 
 class TestRestart:
     def test_crash_restarts_once_and_reopens_sessions(self):
@@ -2975,6 +3374,14 @@ class SidecarError(RuntimeError):
 
 
 def _default_command() -> list[str]:
+    """B7：打包后的 desktop 没有 bun。
+
+    解析顺序：env VIBE_PI_SIDECAR_BIN（存在且可执行 → 直接执行该二进制，Rust 侧
+    src-tauri/src/sidecar.rs 注入，Task 15）→ bun dev 命令（源码/开发态）。
+    """
+    bin_path = os.environ.get("VIBE_PI_SIDECAR_BIN") or ""
+    if bin_path and os.path.isfile(bin_path) and os.access(bin_path, os.X_OK):
+        return [bin_path]
     return ["bun", "run", "src/main.ts"]
 
 
@@ -2986,14 +3393,18 @@ class PiSidecarClient:
         cwd: Path | None = None,
         agent_dir: Path | None = None,
         sessions_dir: Path | None = None,
+        env: dict[str, str] | None = None,  # B6：合并覆盖 os.environ 后传给 sidecar 进程
         on_event: Callable[[str, str, dict], None] | None = None,
+        on_host_request: Callable[[str, dict], Any] | None = None,  # B3：async (op, params) -> dict
         max_restarts: int = 1,
     ) -> None:
         self._command = command or _default_command()
         self._cwd = cwd or _SIDECAR_DIR
         self._agent_dir = agent_dir
         self._sessions_dir = sessions_dir
+        self._env = env
         self._on_event = on_event
+        self._on_host_request = on_host_request
         self._max_restarts = max_restarts
         self._restarts_used = 0
         self._proc: asyncio.subprocess.Process | None = None
@@ -3001,9 +3412,17 @@ class PiSidecarClient:
         self._seq = 0
         self._splitter = LineSplitter()
         self._reader_task: asyncio.Task | None = None
+        self._ready = False
         self._unavailable = False
         self._stopping = False
         self._active_sessions: set[str] = set()
+
+    # ---------- lifecycle ----------
+
+    @property
+    def started(self) -> bool:
+        """ready 帧已收到且进程存活（B4：供 SessionService 探测，不窥探私有字段）。"""
+        return self._ready and self._proc is not None and self._proc.returncode is None
 
     # ---------- lifecycle ----------
 
@@ -3016,6 +3435,8 @@ class PiSidecarClient:
 
     async def _spawn(self) -> None:
         env = dict(os.environ)
+        if self._env:
+            env.update(self._env)  # B6：显式 env 覆盖继承环境（集成测试隔离真实 provider 配置）
         if self._agent_dir:
             env["VIBE_PI_AGENT_DIR"] = str(self._agent_dir)
         if self._sessions_dir:
@@ -3046,8 +3467,6 @@ class PiSidecarClient:
             if self._proc is None or self._proc.returncode is not None:
                 raise SidecarError("internal", "sidecar exited before ready")
             await asyncio.sleep(0.05)
-
-    _ready: bool = False
 
     async def stop(self) -> None:
         self._stopping = True
@@ -3096,8 +3515,8 @@ class PiSidecarClient:
             err = result["_error_"]
             raise SidecarError(err["code"], err["message"])
         payload = result.get("result", {})
-        # open_session 成功 → 记入活跃集（restart 后重开）
-        if op == "open_session" and isinstance(params.get("session_id"), str):
+        # open_session / new_session 成功 → 记入活跃集（restart 后重开，B2 配套）
+        if op in ("open_session", "new_session") and isinstance(params.get("session_id"), str):
             self._active_sessions.add(str(params["session_id"]))
         return payload  # type: ignore[return-value]
 
@@ -3138,6 +3557,10 @@ class PiSidecarClient:
             if self._on_event:
                 self._on_event(str(frame.get("event")), str(frame.get("session_id") or ""), dict(frame.get("data") or {}))
             return
+        if "op" in frame and "ok" not in frame:
+            # B3：sidecar→Python 入站请求（tool_invoke/memory_context/remember/...）
+            self._schedule_host_request(str(frame["id"]), str(frame["op"]), dict(frame.get("params") or {}))
+            return
         fut = self._pending.pop(str(frame.get("id")), None)
         if fut is None or fut.done():
             return
@@ -3146,6 +3569,41 @@ class PiSidecarClient:
         else:
             err = frame.get("error") or {}
             fut.set_result({"_error_": {"code": str(err.get("code")), "message": str(err.get("message"))}})
+
+    def _schedule_host_request(self, req_id: str, op: str, params: dict) -> None:
+        """入站 host 请求 → on_host_request → respond_host（B3）。"""
+
+        async def _run() -> None:
+            try:
+                if self._on_host_request is None:
+                    result: dict = {"_host_error_": {"code": "unknown_op",
+                                                    "message": f"no on_host_request handler for {op}"}}
+                else:
+                    result = await self._on_host_request(op, params)
+                await self.respond_host(req_id, result)
+            except Exception as exc:  # noqa: BLE001 — handler 崩溃也必须回帧
+                await self.respond_host(req_id, {"_host_error_": {"code": "internal", "message": str(exc)}})
+
+        asyncio.get_running_loop().create_task(_run())
+
+    async def respond_host(self, req_id: str, result: dict) -> None:
+        """把 host 请求结果回写给 sidecar（B3）。
+
+        result 含 "_host_error_" → 回 ok:false 错误帧；否则 ok:true + result。
+        """
+        if self._proc is None or self._proc.stdin is None or self._stopping:
+            return
+        err = result.get("_host_error_")
+        if err is not None:
+            frame: dict = {"v": 1, "id": req_id, "ok": False,
+                           "error": {"code": str(err.get("code")), "message": str(err.get("message"))}}
+        else:
+            frame = {"v": 1, "id": req_id, "ok": True, "result": result}
+        try:
+            self._proc.stdin.write(encode_frame(frame).encode("utf-8"))
+            await self._proc.stdin.drain()
+        except (ConnectionResetError, BrokenPipeError):
+            logger.warning("respond_host %s lost: sidecar pipe closed", req_id)
 
     # ---------- restart ----------
 
@@ -3176,7 +3634,7 @@ class PiSidecarClient:
         self._reject_all(SidecarError("pi_sidecar_unavailable", f"sidecar unavailable: {cause}"))
 ```
 
-- [ ] 5. 运行期待通过：`pytest agent/tests/pi_sidecar/test_client.py --tb=short -q` → `6 passed`。
+- [ ] 5. 运行期待通过：`pytest agent/tests/pi_sidecar/test_client.py --tb=short -q` → `10 passed`。
 
 - [ ] 6. Lint：`ruff check agent/src/pi_sidecar agent/tests/pi_sidecar` → 无违规。
 
@@ -3707,15 +4165,15 @@ git commit -s -m "feat(pi-sidecar): attempt result and message projection"
 
 关键行为（Global Constraints）：
 1. `_run_with_agent` 开头分支：`engine = get_agent_engine()`；`engine == "legacy"` → 走原路径（**原两个函数体保持不动**）。pi 引擎下，会话 config/provider 解析出 `LANGCHAIN_PROVIDER ∈ LEGACY_ONLY_PROVIDERS` → 发 `pi.notice`（kind="legacy_provider_fallback"）后走 legacy 路径（显式配置驱动回退，非静默）。
-2. `_run_with_pi` 流程：`RunStateStore.create_run_dir(RUNS_DIR)` → ensure client（未 start 则 start；start 抛 `pi_sidecar_unavailable` → result `{"status":"failed","reason":"pi_sidecar_unavailable",...}`，**绝不**回退 legacy）→ `open_session`（`not_found` 且旧 store 有该会话 → Task 13 的 `migrate_session_if_needed`；仍缺失 → `new_session`）→ `set_tool_manifest`（`build_tool_manifest(build_registry(...))`，一次）→ 建共享 `NormState` + `GatewayBridge`（session 生命周期缓存）→ `prompt(attempt.prompt)` → 消费 `session_event`/`tool_invoke`/`memory_context`：每个 `session_event` 过 `normalize_event` → `event_bus.emit(session_id, name, data)`（`attempt_id` 注入 data，同现有 event_callback 语义）；`agent_end(isTerminal!==false)` → 终止收集 → `get_messages` 取末条 assistant content → `build_attempt_result(...)`。
-3. host op 处理：`tool_invoke` → `GatewayBridge.handle_invoke`；`memory_context` → Task 14 的 `memory_bridge.handle_memory_context`。
+2. `_run_with_pi` 流程（B4：同步方法，pi loop 桥接）：`RunStateStore.create_run_dir` → client 未 `started` 则 `start`（失败/`unavailable` → result `{"status":"failed","reason":"pi_sidecar_unavailable",...}`，**绝不**回退 legacy）→ `open_session`（`not_found` 且旧 store 有该会话 → Task 13 的 `migrate_session_if_needed`；仍缺失 → `new_session`）→ `set_tool_manifest`（一次）→ 共享 `NormState` + 每会话 `GatewayBridge` → `prompt(attempt.prompt)` → 事件泵：每个 `session_event` 过 `normalize_event` → `event_bus.emit`（`attempt_id` 注入 data）；`agent_end(isTerminal!==false)` → 终止收集 → 末条 assistant content → `build_attempt_result(...)`。
+3. host op 处理（B5 注册表）：入站请求经 client 的 `on_host_request` → `self._pi_host_handlers` 分发；Task 12 注册 `tool_invoke` → `GatewayBridge.handle_invoke`，Task 14 追加注册 `memory_context`/`remember`/`memory_search`/`memory_remove` → `MemoryBridge`。
 4. `cancel_current`：pi 引擎下若 `session_id ∈ _active_pi_sessions` → `client.request("abort")`（cancel handle 等价物）；legacy 路径不动。
 5. 执行路径停写 messages：pi 引擎下 `send_message` **不** `store.append_message`（用户消息入 Pi 会话）；`_run_attempt` 的 assistant reply Message 不落盘（`get_messages` 路由到 Pi，Task 11 `pi_messages_to_store_messages` 投影）；`Attempt`/`session.last_attempt_id` 照旧写（业务 ledger）。legacy 引擎完全不变。
 6. `get_messages`：pi 引擎且会话在 `self._pi_sessions`（含迁移标记）→ `client.request("get_messages")` → `pi_messages_to_store_messages`；否则旧路径。
 
 **Steps:**
 
-- [ ] 1. 写失败测试 `agent/tests/pi_sidecar/test_service_cutover.py`（duck-type 侧车：monkeypatch `_get_pi_client` 与 `_build_tool_manifest_safe`，走 service 全流程）：
+- [ ] 1. 写失败测试 `agent/tests/pi_sidecar/test_service_cutover.py`（duck-type 侧车：monkeypatch `_get_pi_client` 与 `_run_on_pi_loop`（B4 桥接），走 service 全流程）：
 
 ```python
 """SessionService pi 引擎 cutover 单测（fake sidecar client，无 bun 依赖）。"""
@@ -3732,20 +4190,24 @@ from src.pi_sidecar import events as pi_events
 
 
 class FakeClient:
+    """duck-type PiSidecarClient：started/unavailable 语义与真实 client 一致（B4）。"""
+
     def __init__(self, *, unavailable=False, fail_start=False):
         self.unavailable = unavailable
         self.fail_start = fail_start
+        self.started = True  # 默认已就绪；fail_start 场景由 start() 翻转
         self.requests: list[tuple[str, dict]] = []
-        self.on_event = None  # 由 service 注入 host op 处理器：service._handle_host_op
 
     async def start(self):
         if self.fail_start:
+            self.unavailable = True  # 真实 client：启动失败即标记永久不可用
             raise SidecarError("pi_sidecar_unavailable", "spawn failed")
+        self.started = True
 
     async def request(self, op, params, *, timeout=30.0):
+        import src.session.service as svc_mod
+
         self.requests.append((op, params))
-        if op == "ping":
-            return {"pong": True}
         if op == "open_session":
             raise SidecarError("not_found", "no session")
         if op == "new_session":
@@ -3753,15 +4215,18 @@ class FakeClient:
         if op == "set_tool_manifest":
             return {"count": len(params.get("tools", []))}
         if op == "prompt":
-            # 模拟 sidecar 事件流：text_delta → tool_call 起止 → 终止 agent_end
+            # 模拟 sidecar 事件流（经模块级 listener 注册表派发，B4/B5）
             sid = params["session_id"]
-            self.on_event("session_event", sid, {"type": "message_update", "payload": {"assistantMessageEvent": {"type": "text_delta", "delta": "最终答案内容"}}})
-            self.on_event("session_event", sid, {"type": "message_end", "payload": {"message": {"role": "assistant", "provider": "openai", "model": "gpt-4o", "content": [{"type": "text", "text": "最终答案内容"}], "usage": {"input": 10, "output": 5}}}})
-            self.on_event("session_event", sid, {"type": "agent_end", "payload": {"isTerminal": True}})
+            listener = svc_mod._PI_EVENT_LISTENERS.get(sid)
+            assert listener is not None, "service must register an event listener before prompt"
+            listener("session_event", sid, {"type": "message_start", "payload": {"entryId": "assist1"}})
+            listener("session_event", sid, {"type": "message_update", "payload": {"assistantMessageEvent": {"type": "text_delta", "delta": "最终答案内容"}}})
+            listener("session_event", sid, {"type": "message_end", "payload": {"entryId": "assist1", "message": {"role": "assistant", "provider": "openai", "model": "gpt-4o", "content": [{"type": "text", "text": "最终答案内容"}], "usage": {"input": 10, "output": 5}}}})
+            listener("session_event", sid, {"type": "agent_end", "payload": {"isTerminal": True}})
             return {"accepted": True}
         if op == "get_messages":
             return {"messages": [
-                {"entry_id": "e1", "role": "user", "content": params.get("_prompt", "q"), "timestamp": "t1"},
+                {"entry_id": "e1", "role": "user", "content": "q", "timestamp": "t1"},
                 {"entry_id": "e2", "role": "assistant", "content": "最终答案内容", "timestamp": "t2"},
             ], "next_cursor": None}
         if op == "abort":
@@ -3781,10 +4246,11 @@ def svc(tmp_path, monkeypatch):
 
 
 def _wire_pi(svc, fake, monkeypatch):
+    """monkeypatch client 单例与 pi-loop 桥（测试线程无运行 loop → asyncio.run 直跑）。"""
     import src.session.service as svc_mod
 
     monkeypatch.setattr(svc_mod, "_get_pi_client", lambda: fake)
-    fake.on_event = lambda ev, sid, data: svc_mod._dispatch_pi_event(svc, sid, data)
+    monkeypatch.setattr(svc_mod, "_run_on_pi_loop", lambda coro, timeout=30.0: asyncio.run(coro))
     return fake
 
 
@@ -3792,18 +4258,19 @@ def test_pi_engine_full_attempt_flow(svc, monkeypatch, tmp_path):
     monkeypatch.setenv("VIBE_AGENT_ENGINE", "pi")
     fake = _wire_pi(svc, FakeClient(), monkeypatch)
     session = svc.create_session(title="t")
-    result = asyncio.run(svc._run_with_pi(
+    result = svc._run_with_pi(
         Attempt(session_id=session.session_id, prompt="research AAPL", created_at="2026-08-30T00:00:00"),
         include_shell_tools=False, session_config=None,
-    ))
+    )
     assert result["status"] == "success"
     assert result["content"] == "最终答案内容"
     assert result["pi"]["pi_session_id"] == session.session_id
+    assert result["pi"]["entry_ids"] == ["assist1"]  # M2：entry_ids 来自 message_start/end payload
     assert Path(result["run_dir"]).exists()
     ops = [op for op, _ in fake.requests]
-    assert ops[:4] == ["ping", "open_session", "new_session", "set_tool_manifest"]
+    assert ops[:3] == ["open_session", "new_session", "set_tool_manifest"]
     assert ("prompt", {"session_id": session.session_id, "text": "research AAPL"}) in fake.requests
-    # SSE 事件已经过归一化（text_delta 形状）
+    # SSE 事件已经过归一化（text_delta/llm_usage 形状）
     events = svc.event_bus.replay(session.session_id)
     names = [e.event_type for e in events]
     assert "text_delta" in names and "llm_usage" in names
@@ -3814,7 +4281,7 @@ def test_pi_unavailable_fails_without_legacy_fallback(svc, monkeypatch):
     fake = _wire_pi(svc, FakeClient(fail_start=True), monkeypatch)
     session = svc.create_session(title="t")
     attempt = Attempt(session_id=session.session_id, prompt="x", created_at="2026-08-30T00:00:00")
-    result = asyncio.run(svc._run_with_pi(attempt, include_shell_tools=False, session_config=None))
+    result = svc._run_with_pi(attempt, include_shell_tools=False, session_config=None)
     assert result["status"] == "failed"
     assert result["reason"] == "pi_sidecar_unavailable"
     assert result.get("_legacy_fallback") is None  # 绝不回退
@@ -3867,11 +4334,33 @@ def test_get_messages_routes_to_pi_for_pi_sessions(svc, monkeypatch):
 
 - [ ] 2. 运行期待失败：`pytest agent/tests/pi_sidecar/test_service_cutover.py --tb=short -q` → `AttributeError: ... _run_with_pi`（或 `_get_pi_client` 缺失 ImportError）。
 
-- [ ] 3. 实现：修改 `agent/src/session/service.py`。模块级新增（`SessionService` 类定义之前）：
+- [ ] 3. 实现：修改 `agent/src/session/service.py`。**异步桥接结构（B4）**：sidecar client 生命周期绑定到一个**模块级专用事件循环**（守护线程 `_pi_loop()`，镜像既有 `EventBus` 线程桥接模式）；`_run_with_pi` 是**同步**方法，经既有 `_AGENT_EXECUTOR` 线程运行（与 legacy `agent.run` 形状一致），所有 sidecar 交互经 `_run_on_pi_loop(coro, timeout)` 桥接；client 事件回调在 pi loop 线程触发，经 `EventBus.emit`（本身 `call_soon_threadsafe` 线程安全）进 SSE。
+
+模块级新增（`SessionService` 类定义之前；文件顶部补 `import threading`）：
 
 ```python
+_PI_LOOP: Optional[asyncio.AbstractEventLoop] = None
+_PI_CLIENT: Optional["PiSidecarClient"] = None
+_PI_EVENT_LISTENERS: Dict[str, Callable[[str, str, Dict[str, Any]], None]] = {}
+
+
+def _pi_loop() -> asyncio.AbstractEventLoop:
+    """pi sidecar 专用事件循环（守护线程；进程生命周期内复用）。"""
+    global _PI_LOOP
+    if _PI_LOOP is None or _PI_LOOP.is_closed():
+        loop = asyncio.new_event_loop()
+        threading.Thread(target=loop.run_forever, name="pi-sidecar-loop", daemon=True).start()
+        _PI_LOOP = loop
+    return _PI_LOOP
+
+
+def _run_on_pi_loop(coro, *, timeout: float = 30.0):
+    """从任意线程把协程桥接到 pi loop 并阻塞取结果（B4：唯一桥接入口）。"""
+    return asyncio.run_coroutine_threadsafe(coro, _pi_loop()).result(timeout)
+
+
 def _get_pi_client():
-    """Pi sidecar client 进程级单例（asyncio 上下文中首次使用时 start）。"""
+    """Pi sidecar client 进程级单例（B3/B5：client 级回调接线）。"""
     global _PI_CLIENT
     try:
         return _PI_CLIENT
@@ -3879,8 +4368,38 @@ def _get_pi_client():
         _PI_CLIENT = None
     if _PI_CLIENT is None:
         from src.pi_sidecar.client import PiSidecarClient
-        _PI_CLIENT = PiSidecarClient()
+        _PI_CLIENT = PiSidecarClient(on_event=_on_pi_event, on_host_request=_on_pi_host_request)
     return _PI_CLIENT
+
+
+def _on_pi_event(event: str, session_id: str, data: Dict[str, Any]) -> None:
+    """client on_event 回调（pi loop 线程）：派发给该会话的 attempt 事件泵。"""
+    listener = _PI_EVENT_LISTENERS.get(session_id)
+    if listener is not None:
+        listener(event, session_id, data)
+
+
+async def _on_pi_host_request(op: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    """client on_host_request 回调（pi loop 线程）：按 _pi_host_handlers 注册表分发（B3/B5）。
+
+    返回 dict = 成功 result；返回 {"_host_error_": {...}} = 回 ok:false 错误帧（Task 9 语义）。
+    """
+    svc = _get_session_service_safe()
+    if svc is None:
+        return {"_host_error_": {"code": "internal", "message": "session service not bootstrapped"}}
+    handler = svc._pi_host_handlers.get(op)
+    if handler is None:
+        return {"_host_error_": {"code": "unknown_op", "message": f"unhandled host op: {op}"}}
+    return await handler(params)
+
+
+def _get_session_service_safe():
+    """回调线程里惰性取 service 单例；未装配（如 CLI 直跑）时返回 None。"""
+    try:
+        from src.api.state import _get_session_service
+        return _get_session_service()
+    except Exception:  # noqa: BLE001
+        return None
 ```
 
 类内新增/修改（保留全部既有函数体；只插入分支）：
@@ -3889,12 +4408,37 @@ def _get_pi_client():
 # __init__ 末尾追加：
         self._pi_sessions: Dict[str, Dict[str, Any]] = {}
         self._active_pi_sessions: set = set()
+        self._manifest_sent: bool = False
+        self._pi_registry = None                      # build_registry 产物缓存（一次构建）
+        self._pi_bridges: Dict[str, "GatewayBridge"] = {}   # session_id -> GatewayBridge
+        self._pi_host_handlers: Dict[str, Any] = {"tool_invoke": self._handle_tool_invoke_host}
 
-# send_message 内，"if role != 'user'" 之后、create Attempt 之前插入：
+    async def _handle_tool_invoke_host(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """host op `tool_invoke`（B5 注册表项）：按幂等键前缀还原 session_id。"""
+        session_id = str(params.get("idempotencyKey", ":").split(":")[0] or "")
+        return await self._pi_gateway_bridge(session_id).handle_invoke(params)
+
+    def _pi_gateway_bridge(self, session_id: str) -> "GatewayBridge":
+        """每会话 GatewayBridge 惰性缓存（registry 全局构建一次，单一 choke point）。"""
+        if self._pi_registry is None:
+            from src.tools import build_registry
+            self._pi_registry = build_registry(persistent_memory=None, include_shell_tools=False)
+        if session_id not in self._pi_bridges:
+            from src.pi_sidecar.gateway_bridge import GatewayBridge
+            self._pi_bridges[session_id] = GatewayBridge(self._pi_registry)
+        return self._pi_bridges[session_id]
+```
+
+```python
+# send_message 内，"if role != 'user': return ..." 之后、既有 attempt 构造之前插入（B4：显式构造 Message；
+# 迁移检查用 Task 13 的 is_migrated，B4）：
         if get_agent_engine() == "pi":
+            from src.pi_sidecar.migration import is_migrated
             # design §Session Persistence：pi 引擎执行路径不写 SessionStore messages
-            self.event_bus.emit(session_id, "message.received", {"message_id": message.message_id, "role": role, "content": content})
-            self._pi_sessions.setdefault(session_id, {"migrated": MIGRATION_MARKER_DIR and (MIGRATION_MARKER_DIR / f"{session_id}.json").exists()})
+            message = Message(session_id=session_id, role=role, content=content)
+            self.event_bus.emit(session_id, "message.received",
+                                {"message_id": message.message_id, "role": role, "content": content})
+            self._pi_sessions.setdefault(session_id, {"migrated": is_migrated(session_id)})
             attempt = Attempt(session_id=session_id, parent_attempt_id=session.last_attempt_id, prompt=content)
             self.store.create_attempt(attempt)
             session.last_attempt_id = attempt.attempt_id
@@ -3905,21 +4449,28 @@ def _get_pi_client():
 ```
 
 ```python
-# _run_attempt 开头 mark_running 之前插入分支：pi 引擎走 _run_with_pi 且不写 reply Message
+# _run_attempt 开头 mark_running 之前插入分支：pi 引擎走 _run_attempt_pi 且不写 reply Message
     async def _run_attempt(self, session, attempt, *, include_shell_tools=False):
         if get_agent_engine() == "pi":
             await self._run_attempt_pi(session, attempt, include_shell_tools=include_shell_tools)
             return
         # —— 以下为既有实现原文，保持不动 ——
-        ...
 
     async def _run_attempt_pi(self, session, attempt, *, include_shell_tools=False):
-        """Pi 引擎 attempt 投影：Attempt/ledger 照旧；messages 不落盘（design §Session Persistence）。"""
+        """Pi 引擎 attempt 投影：Attempt/ledger 照旧；messages 不落盘（design §Session Persistence）。
+
+        B4：_run_with_pi 是同步方法（pi loop 桥接），经 _AGENT_EXECUTOR 线程运行，
+        与 legacy `agent.run` 的执行形状完全一致。
+        """
         attempt.mark_running()
         self.store.update_attempt(attempt)
         self.event_bus.emit(session.session_id, "attempt.started", {"attempt_id": attempt.attempt_id})
         try:
-            result = await self._run_with_pi(attempt, include_shell_tools=include_shell_tools, session_config=dict(session.config))
+            result = await asyncio.get_running_loop().run_in_executor(
+                _AGENT_EXECUTOR,
+                lambda: self._run_with_pi(attempt, include_shell_tools=include_shell_tools,
+                                          session_config=dict(session.config)),
+            )
             if result.get("status") == "success":
                 attempt.mark_completed(summary=result.get("content", ""))
             else:
@@ -3948,150 +4499,118 @@ def _get_pi_client():
                 self.event_bus.emit(attempt.session_id, "pi.notice",
                                     {"kind": "legacy_provider_fallback", "message": f"provider {provider} is legacy-engine-only"})
             else:
-                return await self._run_with_pi(attempt, messages=messages,
-                                               include_shell_tools=include_shell_tools,
-                                               session_config=session_config)
+                return await asyncio.get_running_loop().run_in_executor(
+                    _AGENT_EXECUTOR,
+                    lambda: self._run_with_pi(attempt, messages=messages,
+                                              include_shell_tools=include_shell_tools,
+                                              session_config=session_config),
+                )
         # —— 既有函数体原文保持不动 ——
 ```
 
 ```python
-    async def _run_with_pi(self, attempt, *, messages=None, include_shell_tools=False,
-                           session_config=None) -> Dict[str, Any]:
-        """Pi sidecar 执行路径（design §Architecture）。返回 AgentLoop.run() 兼容 dict。"""
-        import json as _json
-
+    def _run_with_pi(self, attempt, *, messages=None, include_shell_tools=False,
+                     session_config=None) -> Dict[str, Any]:
+        """Pi sidecar 执行路径（design §Architecture）。同步方法（B4），返回 AgentLoop.run() 兼容 dict。"""
         from src.core.state import RunStateStore
         from src.pi_sidecar import events as pi_events
-        from src.pi_sidecar.gateway_bridge import GatewayBridge
         from src.pi_sidecar.manifest import build_tool_manifest
-        from src.pi_sidecar.projection import build_attempt_result, pi_messages_to_store_messages
-        from src.tools import build_registry
+        from src.pi_sidecar.projection import build_attempt_result
 
         session_id = attempt.session_id
         run_dir = str(RunStateStore(self.runs_dir).create_run_dir())
         state = pi_events.NormState()
-        bridge = GatewayBridge(None)
         client = _get_pi_client()
 
-        def ensure_started():
-            import asyncio as _aio
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                return
-            if client.unavailable:
-                return
-            if not getattr(client, "_ready", False):
-                fut = _aio.run_coroutine_threadsafe(client.start(), loop)
-                try:
-                    fut.result(timeout=60)
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning("pi sidecar start failed: %s", exc)
+        # 事件泵定义（B4：listener 注册表 + threading.Event；M2：entry_ids 收集）。
+        # 定义在前、注册在 prompt 之前（section 2）——事件可能同步到达。
+        terminal = threading.Event()
+        collected = {"text": "", "entry_ids": [], "tool_call_ids": [], "react_trace": []}
 
-        ensure_started()
-        if client.unavailable:
-            # design：绝不静默回退 legacy（Global Constraints）
-            return build_attempt_result(status="failed", content="", run_dir=run_dir,
-                                        react_trace=[], iterations=0, metrics=None,
-                                        reason="pi_sidecar_unavailable")
-        try:
-            try:
-                await client.request("open_session", {"session_id": session_id})
-            except SidecarError as exc:
-                if exc.code == "not_found":
-                    from src.pi_sidecar.migration import migrate_session_if_needed
-                    migrated = await migrate_session_if_needed(self, client, session_id)
-                    if not migrated:
-                        await client.request("new_session", {"session_id": session_id})
-                else:
-                    raise
-            if not self._manifest_sent:
-                tools = await asyncio.get_running_loop().run_in_executor(
-                    None, lambda: build_tool_manifest(build_registry(persistent_memory=None, include_shell_tools=include_shell_tools)))
-                await client.request("set_tool_manifest", {"tools": tools})
-                self._manifest_sent = True
-            self._active_pi_sessions.add(session_id)
-            self._pi_sessions.setdefault(session_id, {"migrated": True})
-            await client.request("prompt", {"session_id": session_id, "text": attempt.prompt})
-        except SidecarError as exc:
-            code = "pi_sidecar_unavailable" if exc.code == "pi_sidecar_unavailable" else exc.code
-            return build_attempt_result(status="failed", content="", run_dir=run_dir,
-                                        react_trace=[], iterations=0, metrics=None, reason=code)
-
-        # 事件泵：等待终止 agent_end（isTerminal!==false）
-        terminal = asyncio.Event()
-        last_assistant_text = {"text": ""}
-        entry_ids: list = []
-        tool_call_ids: list = []
-        react_trace: list = []
-
-        def on_session_event(_ev, sid, data):
-            if sid != session_id:
+        def on_event(event: str, sid: str, data: Dict[str, Any]) -> None:
+            if sid != session_id or event != "session_event":
                 return
             ptype = str(data.get("type"))
             payload = dict(data.get("payload") or {})
+            if ptype in ("message_start", "message_end") and payload.get("entryId"):
+                collected["entry_ids"].append(payload["entryId"])
             if ptype == "message_end" and (payload.get("message") or {}).get("role") == "assistant":
                 from src.pi_sidecar.events import _text_of
-                last_assistant_text["text"] = _text_of(payload["message"])
+                collected["text"] = _text_of(payload["message"])
             if ptype == "tool_execution_end":
-                tool_call_ids.append(payload.get("toolCallId"))
-                preview = ""
-                # preview 由 normalize_event 生成；react_trace 记录 tool 名
-            mapped = pi_events.normalize_event(ptype, payload, state=state)
-            for name, ndata in mapped:
+                collected["tool_call_ids"].append(payload.get("toolCallId"))
+            for name, ndata in pi_events.normalize_event(ptype, payload, state=state):
                 ndata = dict(ndata)
                 ndata["attempt_id"] = attempt.attempt_id
                 self.event_bus.emit(session_id, name, ndata)
                 if name == "tool_result":
-                    react_trace.append({"type": "tool_call", "tool": ndata.get("tool"), "result_preview": ndata.get("preview")})
+                    collected["react_trace"].append({"type": "tool_call", "tool": ndata.get("tool"),
+                                                     "result_preview": ndata.get("preview")})
             if ptype == "agent_end" and payload.get("isTerminal") is not False:
                 terminal.set()
 
-        client._on_session_event = on_session_event  # 由 client read loop 派发 session_event
 
-        async def pump():
-            while not terminal.is_set():
-                await asyncio.sleep(0.05)
+        # 1) 启动（B4：started 公开属性；失败 → 永久 unavailable，绝不回退 legacy）
+        if client.unavailable or not client.started:
+            try:
+                _run_on_pi_loop(client.start(), timeout=60)
+            except SidecarError:
+                pass  # unavailable 状态由 client 记录
+        if client.unavailable:
+            return build_attempt_result(status="failed", content="", run_dir=run_dir,
+                                        react_trace=[], iterations=0, metrics=None,
+                                        reason="pi_sidecar_unavailable")
 
+        # 2) 会话打开/迁移/新建 + manifest + prompt
         try:
-            await asyncio.wait_for(pump(), timeout=1800.0)
-        except asyncio.TimeoutError:
-            return build_attempt_result(status="failed", content=last_assistant_text["text"], run_dir=run_dir,
-                                        react_trace=react_trace, iterations=state.iter, metrics=None,
-                                        reason="pi_turn_timeout")
+            try:
+                _run_on_pi_loop(client.request("open_session", {"session_id": session_id}), timeout=30)
+            except SidecarError as exc:
+                if exc.code != "not_found":
+                    raise
+                from src.pi_sidecar.migration import migrate_session_if_needed
+                migrated = _run_on_pi_loop(migrate_session_if_needed(self, client, session_id), timeout=120)
+                if not migrated:
+                    _run_on_pi_loop(client.request("new_session", {"session_id": session_id}), timeout=30)
+            if not self._manifest_sent:
+                self._pi_gateway_bridge(session_id)  # 惰性构建 self._pi_registry（一次）
+                tools = build_tool_manifest(self._pi_registry)
+                _run_on_pi_loop(client.request("set_tool_manifest", {"tools": tools}), timeout=120)
+                self._manifest_sent = True
+            self._pi_sessions.setdefault(session_id, {"migrated": True})
+            self._active_pi_sessions.add(session_id)
+            # 事件泵先于 prompt 注册（事件可能同步到达；FakeClient 单测依赖此顺序）
+            _PI_EVENT_LISTENERS[session_id] = on_event
+            _run_on_pi_loop(client.request("prompt", {"session_id": session_id, "text": attempt.prompt}), timeout=30)
+        except SidecarError as exc:
+            code = "pi_sidecar_unavailable" if exc.code == "pi_sidecar_unavailable" else exc.code
+            self._active_pi_sessions.discard(session_id)
+            return build_attempt_result(status="failed", content="", run_dir=run_dir,
+                                        react_trace=[], iterations=0, metrics=None, reason=code)
+
+        # 3) 等待终止 agent_end（isTerminal!==false；listener 已在 prompt 前注册）
+        try:
+            if not terminal.wait(timeout=1800.0):
+                return build_attempt_result(status="failed", content=collected["text"], run_dir=run_dir,
+                                            react_trace=collected["react_trace"], iterations=state.iter,
+                                            metrics=None, reason="pi_turn_timeout")
         finally:
+            _PI_EVENT_LISTENERS.pop(session_id, None)
             self._active_pi_sessions.discard(session_id)
 
-        react_trace.append({"type": "answer", "content": last_assistant_text["text"][:500]})
-        from src.session.service import _load_metrics  # 既有静态方法复用
+        collected["react_trace"].append({"type": "answer", "content": collected["text"][:500]})
         metrics = self._load_metrics(run_dir)
         return build_attempt_result(
-            status="success", content=last_assistant_text["text"], run_dir=run_dir,
-            react_trace=react_trace, iterations=state.iter, metrics=metrics,
+            status="success", content=collected["text"], run_dir=run_dir,
+            react_trace=collected["react_trace"], iterations=state.iter, metrics=metrics,
             pi_meta={"session_file": (self._pi_sessions.get(session_id) or {}).get("session_file"),
-                     "pi_session_id": session_id, "entry_ids": entry_ids, "tool_call_ids": tool_call_ids},
+                     "pi_session_id": session_id, "entry_ids": collected["entry_ids"],
+                     "tool_call_ids": collected["tool_call_ids"]},
         )
 ```
 
 ```python
-# _dispatch_pi_event（模块级函数）：client 事件 → host op / SSE
-def _dispatch_pi_event(service: "SessionService", session_id: str, data: Dict[str, Any]) -> None:
-    ptype = str(data.get("type"))
-    if ptype == "host_tool_invoke":
-        params = dict(data.get("params") or {})
-        coro = service._pi_gateway_bridge(session_id).handle_invoke(params)
-        asyncio.get_running_loop().create_task(_respond_host(service, session_id, params.get("call_id"), coro))
-    elif ptype == "host_memory_context":
-        coro = _memory_context_response(service, session_id, dict(data.get("params") or {}))
-        asyncio.get_running_loop().create_task(_respond_host(service, session_id, data.get("call_id"), coro))
-    else:
-        _on_pi_session_event(service, session_id, data)
-```
-
-（实现者注：`client` 的 `on_event` 回调（Task 9 构造参数）在 service 集成时接 `_dispatch_pi_event`；`client.read loop` 把 `session_event` 与 sidecar→Python 的请求 op（`tool_invoke`/`memory_context`）都交给它——`op` 名以 `host_` 前缀传入以区分方向。此处行为在 Task 16 集成测试中端到端验证。）
-
-```python
-# get_messages 修改（既有方法开头插入分支）：
+# get_messages 修改（既有方法开头插入分支；B4：_run_on_pi_loop 替代 get_event_loop）：
     def get_messages(self, session_id: str, limit: int = 100) -> list:
         if get_agent_engine() == "pi" and session_id in self._pi_sessions:
             return self._pi_messages(session_id, limit)
@@ -4100,33 +4619,28 @@ def _dispatch_pi_event(service: "SessionService", session_id: str, data: Dict[st
     def _pi_messages(self, session_id: str, limit: int) -> list:
         from src.pi_sidecar.projection import pi_messages_to_store_messages
         client = _get_pi_client()
-        if client.unavailable or getattr(client, "_ready", False) is False:
+        if client.unavailable or not client.started:
             return self.store.get_messages(session_id, limit=limit)
         try:
-            fut = asyncio.run_coroutine_threadsafe(
-                client.request("get_messages", {"session_id": session_id, "limit": limit}),
-                asyncio.get_event_loop(),
-            )
-            r = fut.result(timeout=15)
+            r = _run_on_pi_loop(
+                client.request("get_messages", {"session_id": session_id, "limit": limit}), timeout=15)
             return pi_messages_to_store_messages(session_id, r.get("messages", []))
         except Exception:  # noqa: BLE001 — 投影失败降级旧数据（只读历史）
             return self.store.get_messages(session_id, limit=limit)
 
-# cancel_current 开头插入：
+# cancel_current 开头插入（B4：pi 引擎 cancel handle = sidecar abort）：
         if get_agent_engine() == "pi" and session_id in self._active_pi_sessions:
             client = _get_pi_client()
-            if not client.unavailable:
+            if not client.unavailable and client.started:
                 try:
-                    fut = asyncio.run_coroutine_threadsafe(
-                        client.request("abort", {"session_id": session_id}), asyncio.get_event_loop())
-                    fut.result(timeout=10)
+                    _run_on_pi_loop(client.request("abort", {"session_id": session_id}), timeout=10)
                     return True
-                except Exception:  # noqa: BLE001
-                    logger.warning("pi abort failed for %s", session_id)
+                except SidecarError as exc:
+                    logger.warning("pi abort failed for %s: %s", session_id, exc)
         # —— 既有实现原文保持不动 ——
 ```
 
-`_run_with_pi` 中引用的辅助：`self._manifest_sent`（`__init__` 初始化 `False`）、`self._pi_gateway_bridge(session_id)`（每会话 `GatewayBridge` 惰性缓存，registry 由 `build_registry(...)` 构建一次缓存于 `self._pi_registry`）、`_respond_host`（把 `GatewayBridge` 结果经 `client.request` 不适用——host 响应走 client 的 `_host_responder` 回调，把 `{call_id → result}` 投回协议层；实现于 `client.py` 集成补丁：给 `PiSidecarClient` 增加 `respond_host(call_id, result)` 协程方法，用与请求相同的帧格式回写 `{v:1,id:call_id,ok:true,result}`——在 Task 12 内一并补上，约 15 行）。文件顶部 import 增加：`from src.pi_sidecar import LEGACY_ONLY_PROVIDERS, get_agent_engine`、`from src.pi_sidecar.client import SidecarError`、`from src.pi_sidecar.protocol import MIGRATION 常量所在模块`（`MIGRATION_MARKER_DIR` 定义于本文件模块级：`MIGRATION_MARKER_DIR = Path.home() / ".vibe-trading" / "pi" / "migration"`）。
+文件顶部 import 增加：`from src.pi_sidecar import LEGACY_ONLY_PROVIDERS, get_agent_engine`、`from src.pi_sidecar.client import SidecarError`。host-request 路由（`tool_invoke`）在 `__init__` 注册进 `self._pi_host_handlers`（见上）；Task 14 追加注册四个 memory ops 到同一注册表。`respond_host`/host-request 帧回写由 Task 9 的 client 完整实现（本任务只消费回调）。
 
 - [ ] 4. 运行期待通过：`pytest agent/tests/pi_sidecar/test_service_cutover.py --tb=short -q` → `6 passed`。
 
@@ -4233,7 +4747,7 @@ def env(tmp_path, monkeypatch):
 
 
 def _seed_old(store, session_id="a1b2c3d4e5f6"):
-    s = store.create_session_session = store.create_session(title="old")
+    s = store.create_session(title="old")  # M5：普通赋值
     # 用固定 id 的 session
     s.session_id = session_id
     store.update_session(s)
@@ -4436,7 +4950,6 @@ def cmd_all(client: PiSidecarClient, service) -> int:
 
 def cmd_check(store) -> int:
     """marker 存在但 Pi 会话不可用（索引无文件/header 不符）→ 不一致。"""
-    from pi_sidecar_index_stub import resolve_pi_session  # noqa: F401 — 见下方实现说明
     inconsistent = 0
     if not migration.MIGRATION_MARKER_DIR.exists():
         print("no markers; nothing to check")
@@ -4450,15 +4963,48 @@ def cmd_check(store) -> int:
 
 
 def resolve_pi_session(session_id: str) -> str | None:
-    """读 sidecar 索引文件（pi-sidecar/src/session-index.ts 写的同一路径）。"""
+    """读 sidecar 索引文件（pi-sidecar/src/session-index.ts 写的同一路径，B2 格式）。
+
+    条目形如 {"path": ..., "headerId": ...}（兼容旧纯路径格式）；
+    同时校验文件 header id 仍等于记录的 headerId（替换检测，与 TS resolve 同语义）。
+    """
     idx = Path.home() / ".vibe-trading" / "pi" / "session-index.json"
     try:
         import json
 
         mapping = json.loads(idx.read_text(encoding="utf-8"))
-        return mapping.get(session_id)
     except (OSError, ValueError):
         return None
+    entry = mapping.get(session_id)
+    if entry is None:
+        return None
+    if isinstance(entry, str):  # 旧格式兼容
+        path, header_id = entry, session_id
+    else:
+        path, header_id = str(entry.get("path")), str(entry.get("headerId"))
+    from src.pi_sidecar.migration import _read_pi_header_id_compat
+
+    return path if _read_pi_header_id_compat(path) == header_id else None
+
+def _read_pi_header_id_compat(jsonl_path: str) -> str | None:
+    """扫描 Pi 会话 JSONL 前 8KB，返回 type==="session" 条目的 id；无/坏 → None。"""
+    from pathlib import Path as _P
+
+    try:
+        text = _P(jsonl_path).read_text(encoding="utf-8")[:8192]
+    except OSError:
+        return None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and obj.get("type") == "session" and isinstance(obj.get("id"), str):
+            return obj["id"]
+    return None
 
 
 def main() -> int:
@@ -4485,10 +5031,11 @@ def main() -> int:
 if __name__ == "__main__":
     raise SystemExit(main())
 ```
+- [ ] 5. 运行期待通过：`pytest agent/tests/pi_sidecar/test_migration.py --tb=short -q` → `6 passed`（含 `_read_pi_header_id_compat` 新用例）。
 
-- [ ] 5. 运行期待通过：`pytest agent/tests/pi_sidecar/test_migration.py --tb=short -q` → `5 passed`。
+- [ ] 6. Lint：`ruff check agent/src/pi_sidecar agent/tests/pi_sidecar` → 无违规。
 
-- [ ] 6. Lint：`ruff check agent/src/pi_sidecar agent/tests/pi_sidecar` → 无违规（删除 step 4 中 `pi_sidecar_index_stub` 那行 import——check 直接内联调用本模块的 `resolve_pi_session`；最终代码里不得残留该 stub 行）。
+（注：`_read_pi_header_id_compat` 的宿主文件是 `agent/src/pi_sidecar/migration.py`——本步骤同时在该文件追加此纯函数，并在 `test_migration.py` 补一条用例 `assert _read_pi_header_id_compat(str(p)) == "a1b2c3d4e5f6"`。）
 
 - [ ] 7. Commit：
 
@@ -4505,7 +5052,7 @@ git commit -s -m "feat(pi-sidecar): lazy session migration + operator batch/chec
 
 **Files:** `pi-sidecar/extensions/vibe-memory/index.ts`（Create）、`pi-sidecar/extensions/vibe-memory/index.test.ts`（Create）、`agent/src/pi_sidecar/memory_bridge.py`（Create）、`agent/tests/pi_sidecar/test_memory_bridge.py`（Create）
 
-**Interfaces:** Consumes — host op `memory_context`（Python 侧 `PersistentMemory`：`snapshot`、`find_relevant(query, max_results=5)`，recon §5）、extension 注册面（`pi.registerTool`、`pi.on`，`omp://skills/authoring-extensions.md`）。Produces：
+**Interfaces:** Consumes — host op `memory_context` + `remember`/`memory_search`/`memory_remove`（B5 扩展后的 sidecar→Python op 集合；Python 侧 `PersistentMemory`：`snapshot`、`find_relevant(query, max_results=5)`，recon §5）、extension 注册面（`pi.registerTool`、`pi.on`，`omp://skills/authoring-extensions.md`）、Task 12 的 `SessionService._pi_host_handlers` 注册表。Produces：
 
 ```ts
 // extensions/vibe-memory/index.ts
@@ -4527,7 +5074,7 @@ class MemoryBridge:
     async def handle_memory_remove(self, params: dict) -> dict  # remove(name) → {"removed": bool}
 ```
 
-注入机制（resolved ambiguity，见 self-review）：extension 在 `before_agent_start`（每 agent turn 一次）经 host bridge 取 `memory_context` block 缓存；在 `before_provider_request` 对**该轮第一次** provider 请求把 block 追加到请求 system prompt——只影响本轮模型请求，不写用户消息、不写会话转录（`pi.appendEntry` 禁用）。memory 写入（remember 等）立即持久但不改当前轮快照，与既有 `PersistentMemory` 语义一致（recon §5：快照仅构造时刷新）。
+注入机制（resolved ambiguity，见 self-review）：extension 监听 `input` 事件缓存最近用户文本（B5：relevance 检索需要 query）；在 `before_agent_start`（每 agent turn 一次）经 host bridge 以 `{"query": lastInput}` 取 `memory_context` block 缓存；在 `before_provider_request` 对**该轮第一次** provider 请求把 block 追加到请求 system prompt——只影响本轮模型请求，不写用户消息、不写会话转录（`pi.appendEntry` 禁用）。memory 写入（remember 等）立即持久但不改当前轮快照，与既有 `PersistentMemory` 语义一致（recon §5：快照仅构造时刷新）。四个 memory host op 在本任务注册进 Task 12 的 `_pi_host_handlers`（见 Step 6）。
 
 **Steps:**
 
@@ -4602,8 +5149,11 @@ function makeFakePi(): FakePi {
 }
 
 function makeHost(responses: Record<string, unknown>, fail = false) {
+  const calls: Array<{ op: string; params?: Record<string, unknown> }> = [];
   return {
-    call: async (op: string) => {
+    calls,
+    call: async (op: string, params?: Record<string, unknown>) => {
+      calls.push({ op, params });
       if (fail) throw new Error("memory down");
       return responses[op];
     },
@@ -4632,12 +5182,27 @@ describe("vibe-memory extension", () => {
     expect(r.content[0].text).toContain("ok");
   });
 
+  test("input event captured and passed as memory_context query", async () => {
+    diagnostics.length = 0;
+    const h = makeHost({ memory_context: { block: "B" } });
+    (globalThis as Record<string, unknown>).__VIBE_HOST__ = h;
+    const mod = await import("./index");
+    const pi = makeFakePi();
+    mod.default(pi as never);
+    await pi.handlers["input"]({ text: "research AAPL position limits" }, {});
+    await pi.handlers["before_agent_start"]({}, {});
+    const mc = h.calls.find((c) => c.op === "memory_context");
+    expect(mc).toBeDefined();
+    expect(mc!.params).toEqual({ query: "research AAPL position limits" });
+  });
+
   test("before_agent_start failure degrades with diagnostic, turn continues", async () => {
     diagnostics.length = 0;
     (globalThis as Record<string, unknown>).__VIBE_HOST__ = makeHost({}, true);
     const mod = await import("./index");
     const pi = makeFakePi();
     mod.default(pi as never);
+    await pi.handlers["input"]({ text: "q" }, {});
     await pi.handlers["before_agent_start"]({}, {});
     expect(diagnostics.some(([k]) => k === "memory_degraded")).toBe(true);
     // 后续 provider request 不注入任何 block
@@ -4662,6 +5227,7 @@ describe("vibe-memory extension", () => {
       else second = req.systemPrompt;
       return {};
     };
+    await pi.handlers["input"]({ text: "position limits" }, {});
     await pi.handlers["before_agent_start"]({}, {});
     await pi.handlers["before_provider_request"]({ systemPrompt: "BASE", revise: revise("1") }, {});
     await pi.handlers["before_provider_request"]({ systemPrompt: "BASE", revise: revise("2") }, {});
@@ -4763,6 +5329,28 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
+export default function (pi: ExtensionAPI) {
+  let memoryBlock = "";
+  let injectedThisTurn = false;
+  let lastInput = ""; // B5: 最近用户文本，作为 memory 相关性检索的 query
+
+  pi.on("input", async (event: { text?: string }) => {
+    if (typeof event?.text === "string" && event.text.trim()) {
+      lastInput = event.text;
+    }
+  });
+
+  pi.on("before_agent_start", async () => {
+    memoryBlock = "";
+    injectedThisTurn = false;
+    try {
+      const r = (await host().call("memory_context", { query: lastInput })) as { block?: string };
+      memoryBlock = r?.block ?? "";
+    } catch (e) {
+      host().emitDiagnostic("memory_degraded", `memory unavailable, continuing without it: ${(e as Error).message}`);
+    }
+  });
+
   pi.on("before_provider_request", async (event: { systemPrompt?: string; revise?: (req: unknown) => unknown }) => {
     if (!memoryBlock || injectedThisTurn) return;
     injectedThisTurn = true;
@@ -4812,14 +5400,50 @@ export default function (pi: ExtensionAPI) {
 }
 ```
 
-- [ ] 6. 运行期待通过：`cd pi-sidecar && bun test extensions/vibe-memory/` → `4 passed`；`pytest agent/tests/pi_sidecar/test_memory_bridge.py --tb=short -q` → `4 passed`。
+- [ ] 6. 注册 memory host ops 进 SessionService（B5 处理器注册表：Task 12 的 `self._pi_host_handlers` 只接了 `tool_invoke`；本步骤把 `memory_context`/`remember`/`memory_search`/`memory_remove` 接到 `MemoryBridge`）。修改 `agent/src/session/service.py`：
 
-- [ ] 7. Lint：`ruff check agent/src/pi_sidecar agent/tests/pi_sidecar` → 无违规。
+模块级（与 Task 12 的 `_get_pi_client()` 同层）追加：
 
-- [ ] 8. Commit：
+```python
+def _memory_bridge() -> "MemoryBridge":
+    """进程级 MemoryBridge 单例；PersistentMemory 不可用时走降级模式（design §Long-Term Memory）。"""
+    global _MEMORY_BRIDGE
+    try:
+        return _MEMORY_BRIDGE
+    except NameError:
+        _MEMORY_BRIDGE = None
+    if _MEMORY_BRIDGE is None:
+        from src.pi_sidecar.memory_bridge import MemoryBridge
+        try:
+            from src.memory.persistent import PersistentMemory
+            _MEMORY_BRIDGE = MemoryBridge(memory=PersistentMemory())
+        except Exception:  # noqa: BLE001 — design：memory 不可用 → degraded 继续
+            _MEMORY_BRIDGE = MemoryBridge(memory=None)
+    return _MEMORY_BRIDGE
+```
+
+`SessionService` 方法追加（`__init__` 中 `self._pi_host_handlers = {"tool_invoke": self._handle_tool_invoke_host}` 已由 Task 12 建立）：
+
+```python
+    def register_memory_host_handlers(self) -> None:
+        """Task 14 调用：把四个 memory ops 挂进处理器注册表（幂等，setdefault 保序）。"""
+        bridge = _memory_bridge()
+        self._pi_host_handlers.setdefault("memory_context", bridge.handle_memory_context)
+        self._pi_host_handlers.setdefault("remember", bridge.handle_remember)
+        self._pi_host_handlers.setdefault("memory_search", bridge.handle_memory_search)
+        self._pi_host_handlers.setdefault("memory_remove", bridge.handle_memory_remove)
+```
+
+装配点：`agent/src/api/state.py` 的 `_get_session_service()` 在构造 `SessionService(...)` 之后调用一次 `service.register_memory_host_handlers()`。Task 12 中 `async def _on_pi_host_request(op, params)`（client 构造参数 `on_host_request`）即按 `self._pi_host_handlers` 分发——memory ops 无需额外胶水。
+
+- [ ] 7. 运行期待通过：`cd pi-sidecar && bun test extensions/vibe-memory/` → `5 passed`；`pytest agent/tests/pi_sidecar/test_memory_bridge.py --tb=short -q` → `4 passed`。
+
+- [ ] 8. Lint：`ruff check agent/src/pi_sidecar agent/tests/pi_sidecar` → 无违规。
+
+- [ ] 9. Commit：
 
 ```bash
-git add pi-sidecar/extensions/vibe-memory/ agent/src/pi_sidecar/memory_bridge.py agent/tests/pi_sidecar/test_memory_bridge.py
+git add pi-sidecar/extensions/vibe-memory/ agent/src/pi_sidecar/memory_bridge.py agent/tests/pi_sidecar/test_memory_bridge.py agent/src/session/service.py agent/src/api/state.py
 git commit -s -m "feat(pi-sidecar): vibe-memory extension with per-turn injection + compat tools"
 ```
 
@@ -4829,9 +5453,9 @@ git commit -s -m "feat(pi-sidecar): vibe-memory extension with per-turn injectio
 
 ### Task 15: Pi 二进制构建/暂存 + Tauri 资源 + 签名 + CI + provenance
 
-**Files:** `scripts/desktop/build-pi.sh`（Create）、`scripts/desktop/build-pi.ps1`（Create）、`src-tauri/tauri.conf.json`（Modify：bundle.resources L41-47）、`scripts/desktop/assemble.sh`（Modify：agent 模板步骤后 ~L49/55）、`scripts/desktop/assemble.ps1`（Modify：同位）、`scripts/desktop/build-dmg.sh`（Modify：L136-152 资源预检 + L282 打包后循环）、`scripts/desktop/build-windows.ps1`（Modify：资源检查）、`scripts/desktop/sign-and-notarize.sh`（Modify：~L150 Mach-O 循环）、`.github/workflows/desktop-build.yml`（Modify）
+**Files:** `scripts/desktop/build-pi.sh`（Create）、`scripts/desktop/build-pi.ps1`（Create）、`src-tauri/tauri.conf.json`（Modify：bundle.resources L41-47）、`src-tauri/src/sidecar.rs`（Modify：B7——向 Python serve 进程注入 `VIBE_PI_SIDECAR_BIN` env）、`scripts/desktop/assemble.sh`（Modify：agent 模板步骤后 ~L49/55）、`scripts/desktop/assemble.ps1`（Modify：同位）、`scripts/desktop/build-dmg.sh`（Modify：L136-152 资源预检 + L282 打包后循环）、`scripts/desktop/build-windows.ps1`（Modify：资源检查）、`scripts/desktop/sign-and-notarize.sh`（Modify：~L150 Mach-O 循环）、`.github/workflows/desktop-build.yml`（Modify）
 
-**Interfaces:** Consumes — Task 0-14 的 `pi-sidecar/`（`bun.lockb` + `src/main.ts` + `extensions/`）。Produces — `.desktop-build/pi/{macos-aarch64/pi, macos-x86_64/pi, windows-x64/pi.exe, extensions/vibe-memory.js, extensions/vibe-providers.js, skills/, PROVENANCE.json}`（git-ignored，永不提交）。
+**Interfaces:** Consumes — Task 0-14 的 `pi-sidecar/`（`bun.lockb` + `src/main.ts` + `extensions/`，main.ts 交付于 Task 5b）。Produces — `.desktop-build/pi/{macos-aarch64/pi, macos-x86_64/pi, windows-x64/pi.exe, extensions/vibe-memory.js, extensions/vibe-providers.js, skills/, PROVENANCE.json}`（git-ignored，永不提交）；desktop 运行时 env `VIBE_PI_SIDECAR_BIN`（指向打包内 Pi 二进制，供 `PiSidecarClient._default_command()` 使用，B7）。
 
 **Steps:**
 
@@ -4980,8 +5604,38 @@ done
 
   - "Upload Artifacts" step 的 path 列表追加 `.desktop-build/pi/PROVENANCE.json`。
 
-- [ ] 9. 本地验证（macOS arm64）：
+- [ ] 9. 修改 `src-tauri/src/sidecar.rs`（B7：打包后的 desktop 没有 bun；Python 的 `PiSidecarClient._default_command()` 依赖 env `VIBE_PI_SIDECAR_BIN` 指向打包内 Pi 二进制。Python sidecar 自己 spawn pi 进程，Rust 只需把 env 透传给 Python serve 进程）。在该文件启动 Python sidecar 子进程的 env 组装处追加：
 
+```rust
+/// Resolve the bundled Pi sidecar binary path from Tauri's resource directory.
+/// Resource layout (tauri.conf.json bundle.resources): "pi" -> <resource_dir>/pi/<target>/<bin>
+fn vibe_pi_sidecar_bin(resource_dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    // 与 scripts/desktop/build-pi.sh 的目标目录保持一致（B7）
+    let target = match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("macos", "aarch64") => "macos-aarch64",
+        ("macos", "x86_64") => "macos-x86_64",
+        ("windows", "x86_64") => "windows-x64",
+        _ => return None,
+    };
+    let bin = if std::env::consts::OS == "windows" { "pi.exe" } else { "pi" };
+    let path = resource_dir.join("pi").join(target).join(bin);
+    if path.exists() { Some(path) } else { None }
+}
+
+// 在构建 Python serve 进程 Command 的位置（既有 spawn 代码处）：
+//   let mut cmd = Command::new(&python_bin);
+//   ...
+if let Some(resource_dir) = app_handle.path().resource_dir().ok() {
+    if let Some(pi_bin) = vibe_pi_sidecar_bin(&resource_dir) {
+        cmd.env("VIBE_PI_SIDECAR_BIN", pi_bin);
+    }
+    // 缺失时不设置 env：Python 侧回退 bun dev 命令（开发态），打包冒烟（smoke_pi.py）会拦截该回归
+}
+```
+
+（实现者注：`app_handle.path().resource_dir()` 与 `Command` 的具体绑定点以 `sidecar.rs` 现有 spawn 代码为准——把 `cmd.env(...)` 加到该 `Command` 构建链上即可；函数本体原样落盘。）
+
+- [ ] 10. 本地验证（macOS arm64）：
 ```bash
 bash scripts/desktop/build-pi.sh macos-aarch64
 file .desktop-build/pi/macos-aarch64/pi           # → Mach-O 64-bit executable arm64
@@ -4992,14 +5646,14 @@ printf '{"v":1,"id":"r-1","op":"ping"}\n' | .desktop-build/pi/macos-aarch64/pi
 # stdout 必须只有 JSONL（packaging smoke：design §Verification）
 ```
 
-- [ ] 10. 确认 `.desktop-build` 在 `.gitignore` 中（recon：已 ignored；若缺则补一行 `.desktop-build/`），`git status` 确认无 staging 泄漏。
+- [ ] 11. 确认 `.desktop-build` 在 `.gitignore` 中（recon：已 ignored；若缺则补一行 `.desktop-build/`），`git status` 确认无 staging 泄漏。
 
-- [ ] 11. Commit（只含脚本/配置，不含 `.desktop-build/`）：
+- [ ] 12. Commit（只含脚本/配置/Rust，不含 `.desktop-build/`）：
 
 ```bash
 git add scripts/desktop/build-pi.sh scripts/desktop/build-pi.ps1 scripts/desktop/assemble.sh scripts/desktop/assemble.ps1 \
         scripts/desktop/build-dmg.sh scripts/desktop/build-windows.ps1 scripts/desktop/sign-and-notarize.sh \
-        src-tauri/tauri.conf.json .github/workflows/desktop-build.yml
+        src-tauri/tauri.conf.json src-tauri/src/sidecar.rs .github/workflows/desktop-build.yml
 git commit -s -m "build(desktop): bundle pi sidecar binary + resources with provenance"
 ```
 
@@ -5110,7 +5764,7 @@ from pathlib import Path
 import pytest
 
 from tests.pi_sidecar.fake_provider import FakeOpenAIProvider  # noqa: E402 — pythonpath=agent，tests.pi_sidecar 有 __init__
-from src.pi_sidecar.client import PiSidecarClient
+from src.pi_sidecar.client import PiSidecarClient, SidecarError
 
 pytestmark = pytest.mark.skipif(shutil.which("bun") is None, reason="bun not installed")
 
@@ -5119,22 +5773,20 @@ SESSION = "a1b2c3d4e5f6"
 
 
 def _client(provider: FakeOpenAIProvider, tmp_path: Path, events: list) -> PiSidecarClient:
-    import os
-
-    env = dict(os.environ)
-    env.update({
+    env = {
         "OPENAI_BASE_URL": provider.base_url,
         "OPENAI_API_KEY": "test",
         "LANGCHAIN_PROVIDER": "openai",
         "LANGCHAIN_MODEL_NAME": "fake-model",
         "VIBE_PI_AGENT_DIR": str(tmp_path / "agent"),
         "VIBE_PI_SESSIONS_DIR": str(tmp_path / "sessions"),
-    })
+    }
     return PiSidecarClient(
         command=["bun", "run", "src/main.ts"],
         cwd=REPO / "pi-sidecar",
         agent_dir=tmp_path / "agent",
         sessions_dir=tmp_path / "sessions",
+        env=env,  # B6: 显式传给 sidecar 进程（client._spawn 合并 os.environ），隔离真实 provider 配置
         on_event=lambda ev, sid, data: events.append((ev, sid, data)),
     )
 
@@ -5165,9 +5817,11 @@ class TestBasicFlow:
 
     def test_tool_call_roundtrip_through_python_gateway(self, tmp_path, monkeypatch):
         async def run():
+            import json as _json
+
             from src.pi_sidecar.gateway_bridge import GatewayBridge
             from src.pi_sidecar.manifest import build_manifest_tool
-            from src.agent.tools import BaseTool
+            from src.agent.tools import BaseTool, ToolRegistry
 
             class Doubler(BaseTool):
                 name = "doubler"
@@ -5178,8 +5832,7 @@ class TestBasicFlow:
                 repeatable = True
 
                 def execute(self, **kw):
-                    import json
-                    return json.dumps({"status": "ok", "result": kw["n"] * 2})
+                    return _json.dumps({"status": "ok", "result": kw["n"] * 2})
 
             manifest = [build_manifest_tool(Doubler())]
             provider = FakeOpenAIProvider([
@@ -5188,24 +5841,27 @@ class TestBasicFlow:
             ])
             provider.start()
             events: list = []
-            c = _client(provider, tmp_path, events)
-            # 把 tool_invoke 路由到真 GatewayBridge（走 ToolGateway 单一 choke point）
-            from src.agent.tools import ToolRegistry
-            reg = ToolRegistry(); reg.register(Doubler())
+            reg = ToolRegistry()
+            reg.register(Doubler())
             bridge = GatewayBridge(reg)
-            client_events = events
+
+            # B3 集成接线：host op → 按注册表分发（tool_invoke → GatewayBridge.handle_invoke）
+            async def dispatch_host(op: str, params: dict) -> dict:
+                if op == "tool_invoke":
+                    return await bridge.handle_invoke(params)
+                raise SidecarError("unknown_op", f"unhandled host op {op}")
+
+            c = _client(provider, tmp_path, events, on_host_request=dispatch_host)
 
             async def main():
                 await c.start()
-                # on_event 是同步回调；这里轮询处理 host 请求：client 把 host op 作为事件回调
-                # （集成层：client 需暴露 host-op 处理钩子；Task 12 的 _dispatch_pi_event 在此直连）
                 await c.request("new_session", {"session_id": SESSION})
                 await c.request("set_tool_manifest", {"tools": manifest})
                 await c.request("prompt", {"session_id": SESSION, "text": "double 21"})
                 final = await self._wait_terminal(c, SESSION, timeout=60)
                 assert final["content"] == "answer is 42"
                 # SSE 事件含 tool_call 与 tool_result（形状与 glossary 一致）
-                names = [d.get("type") for ev, sid, d in client_events if ev == "session_event"]
+                names = [d.get("type") for ev, sid, d in events if ev == "session_event"]
                 assert "tool_execution_start" in names
                 assert "tool_execution_end" in names
                 # provider 收到第二轮请求（带 tool result）
@@ -5223,20 +5879,41 @@ class TestBasicFlow:
         import time
 
         deadline = time.monotonic() + timeout
-        content = ""
         while time.monotonic() < deadline:
-            msgs = await c.request("get_messages", {"session_id": session_id, "limit": 5})
-            assistant = [m for m in msgs["messages"] if m["role"] == "assistant"]
-            if assistant and assistant[-1]["content"]:
-                content = assistant[-1]["content"]
-                state = await c.request("get_state", {"session_id": session_id})
-                if not state["busy"]:
-                    return {"content": content, "state": state}
+            state = await c.request("get_state", {"session_id": session_id})
+            if not state["busy"]:
+                msgs = await c.request("get_messages", {"session_id": session_id, "limit": 5})
+                assistant = [m for m in msgs["messages"] if m["role"] == "assistant"]
+                return {"content": assistant[-1]["content"] if assistant else "", "state": state}
             await asyncio.sleep(0.1)
         raise TimeoutError("turn did not settle")
 ```
 
-> 实现者注：`test_tool_call_roundtrip` 需要 host op（`tool_invoke`）从 client 事件回调路由到 `GatewayBridge.handle_invoke` 并经 `client.respond_host(call_id, result)` 回帧。`respond_host` 已在 Task 12 交付；此测试若发现路由缺口，属 Task 12 集成缝，在此修复（不新建文件）。
+_client 支持 `on_host_request` 透传（B3/B6 接线），修改 `_client` 签名为：
+
+```python
+def _client(provider: FakeOpenAIProvider, tmp_path: Path, events: list,
+            on_host_request=None) -> PiSidecarClient:
+    env = {
+        "OPENAI_BASE_URL": provider.base_url,
+        "OPENAI_API_KEY": "test",
+        "LANGCHAIN_PROVIDER": "openai",
+        "LANGCHAIN_MODEL_NAME": "fake-model",
+        "VIBE_PI_AGENT_DIR": str(tmp_path / "agent"),
+        "VIBE_PI_SESSIONS_DIR": str(tmp_path / "sessions"),
+    }
+    return PiSidecarClient(
+        command=["bun", "run", "src/main.ts"],
+        cwd=REPO / "pi-sidecar",
+        agent_dir=tmp_path / "agent",
+        sessions_dir=tmp_path / "sessions",
+        env=env,  # B6: 显式传给 sidecar 进程（client._spawn 合并 os.environ），隔离真实 provider 配置
+        on_event=lambda ev, sid, data: events.append((ev, sid, data)),
+        on_host_request=on_host_request,  # B3: 入站 host op 处理器
+    )
+```
+
+> 实现者注：`test_tool_call_roundtrip` 的 host op 路由全部内联于测试（`dispatch_host` → `GatewayBridge.handle_invoke` → client `respond_host` 回帧）；`respond_host`/`on_host_request` 以完整代码交付于 Task 9（B3 修复）。若本测试发现路由缺口，在此修复（不新建文件）。
 
 - [ ] 3. 运行期待通过：`pytest "agent/tests/pi_sidecar/test_integration_basic.py" --tb=short -q` → `2 passed`（首次运行 bun 需编译，<60s）。
 
@@ -5542,28 +6219,28 @@ def check_skills_count(staged_skills: Path) -> None:
 def check_manifest_and_user_dirs(tmp_agent: Path, tmp_sessions: Path) -> None:
     async def run():
         from src.pi_sidecar.client import PiSidecarClient
+        from src.pi_sidecar.manifest import build_tool_manifest
+        from src.tools import build_registry
 
-        env = {"VIBE_PI_AGENT_DIR": str(tmp_agent), "VIBE_PI_SESSIONS_DIR": str(tmp_sessions)}
-        import os
+        # 离线构建 registry（smoke 运行在构建机；check_available 未命中的工具自然缺席，
+        # manifest 与 registry 的"一致性"指 sidecar 不丢工具：set_tool_manifest 回显数 == len(manifest)）
+        registry = build_registry(persistent_memory=None, include_shell_tools=False)
+        manifest = build_tool_manifest(registry)
+        assert len(manifest) >= 1, "empty registry manifest"
 
-        old = {k: os.environ.get(k) for k in env}
-        os.environ.update(env)
+        c = PiSidecarClient(command=["bun", "run", "src/main.ts"], cwd=REPO / "pi-sidecar",
+                            agent_dir=tmp_agent, sessions_dir=tmp_sessions)
+        await c.start()
         try:
-            c = PiSidecarClient(command=["bun", "run", "src/main.ts"], cwd=REPO / "pi-sidecar",
-                                agent_dir=tmp_agent, sessions_dir=tmp_sessions)
-            await c.start()
-            try:
-                await c.request("new_session", {"session_id": "c0c0c0c0c0c0"})
-                state = await c.request("get_state", {"session_id": "c0c0c0c0c0c0"})
-                assert str(state["session_file"]).startswith(str(tmp_sessions)), state
-            finally:
-                await c.stop()
+            echoed = await c.request("set_tool_manifest", {"tools": manifest})
+            assert echoed["count"] == len(manifest), \
+                f"sidecar dropped tools: sent={len(manifest)} echoed={echoed['count']}"
+            await c.request("new_session", {"session_id": "c0c0c0c0c0c0"})
+            state = await c.request("get_state", {"session_id": "c0c0c0c0c0c0"})
+            assert str(state["session_file"]).startswith(str(tmp_sessions)), state
         finally:
-            for k, v in old.items():
-                if v is None:
-                    os.environ.pop(k, None)
-                else:
-                    os.environ[k] = v
+            await c.stop()
+
     asyncio.run(run())
     assert tmp_sessions.exists()
 
@@ -5605,7 +6282,9 @@ import asyncio
 import json
 import shutil
 import statistics
+import sys
 import time
+import uuid
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -5619,14 +6298,18 @@ CORPUS = [
 ]
 
 
+def _sid() -> str:
+    return uuid.uuid4().hex[:12]
+
+
 async def measure(session_factory, corpus) -> dict:
     first_tokens: list[float] = []
     correct = 0
     for item in corpus:
         c = await session_factory()
-        t0 = time.monotonic()
-        await c.request("new_session", {"session_id": _sid()})
         sid = _sid()
+        t0 = time.monotonic()
+        await c.request("new_session", {"session_id": sid})
         await c.request("prompt", {"session_id": sid, "text": item["q"]})
         first_at = await _first_text_delta_at(c, sid, timeout=60)
         first_tokens.append(first_at - t0)
@@ -5636,12 +6319,6 @@ async def measure(session_factory, corpus) -> dict:
         await c.stop()
     return {"first_token_latency_s": first_tokens, "first_token_p50_s": statistics.median(first_tokens),
             "task_correctness": correct / len(corpus)}
-
-
-def _sid() -> str:
-    import uuid
-
-    return uuid.uuid4().hex[:12]
 
 
 async def _first_text_delta_at(c, sid, timeout):
@@ -5666,29 +6343,64 @@ async def _final_content(c, sid, timeout):
     raise TimeoutError("turn unsettled")
 
 
-async def measure_cancellation_latency(c, sid) -> float:
-    t0 = time.monotonic()
-    await c.request("prompt", {"session_id": sid, "text": "long task"})
-    await c.request("abort", {"session_id": sid})
-    while True:
-        state = await c.request("get_state", {"session_id": sid})
-        if not state["busy"]:
-            return time.monotonic() - t0
-        await asyncio.sleep(0.02)
+async def measure_cancellation_latency(client_maker) -> float:
+    c = await client_maker()
+    sid = _sid()
+    try:
+        await c.request("new_session", {"session_id": sid})
+        t0 = time.monotonic()
+        await c.request("prompt", {"session_id": sid, "text": "long task"})
+        await c.request("abort", {"session_id": sid})
+        while True:
+            state = await c.request("get_state", {"session_id": sid})
+            if not state["busy"]:
+                return time.monotonic() - t0
+            await asyncio.sleep(0.02)
+    finally:
+        await c.stop()
 
 
 async def measure_restart_recovery(client_maker, kills: int = 3) -> float:
     ok = 0
     for _ in range(kills):
         c = await client_maker()
-        c._proc.kill()  # noqa: SLF001
         try:
+            c._proc.kill()  # noqa: SLF001
             await c.request("ping", {}, timeout=60)
             ok += 1
         except Exception:  # noqa: BLE001
             pass
-        await c.stop()
+        finally:
+            await c.stop()
     return ok / kills
+
+
+async def measure_tool_throughput(client_maker, rounds: int = 20) -> float:
+    """tool_invoke 完成/秒（无模型链路：直接以 GatewayBridge 双只读工具循环计）。"""
+    from src.pi_sidecar.gateway_bridge import GatewayBridge
+
+    class NoopRegistry:
+        def get(self, name):
+            t = type("T", (), {})()
+            t.name = name
+            t.is_readonly = True
+            t.side_effecting = False
+            return t
+
+    class FastGateway:
+        def execute(self, *a, **k):
+            return type("SR", (), {"status": "success", "data": {}, "error": None, "elapsed_ms": 1,
+                                   "to_wire": lambda s: {"status": "success"}})()
+
+    bridge = GatewayBridge(NoopRegistry(), gateway=FastGateway())
+    t0 = time.monotonic()
+    for i in range(rounds):
+        await bridge.handle_invoke({
+            "call_id": f"p{i}", "toolCallId": f"pc{i}", "toolName": "noop", "arguments": {},
+            "idempotencyKey": f"perf:k{i}", "is_readonly": True, "side_effecting": False,
+            "repeatable": True, "timeout_seconds": 5,
+        })
+    return rounds / (time.monotonic() - t0)
 
 
 def main() -> int:
@@ -5701,7 +6413,7 @@ def main() -> int:
 
     from src.pi_sidecar.client import PiSidecarClient
 
-    async def factory():
+    async def client_maker():
         c = PiSidecarClient(command=["bun", "run", "src/main.ts"], cwd=REPO / "pi-sidecar")
         await c.start()
         return c
@@ -5709,7 +6421,10 @@ def main() -> int:
     async def run():
         report = {
             "measured_at": time.strftime("%FT%TZ", time.gmtime()),
-            "baseline": await measure(factory, CORPUS),
+            "baseline": await measure(client_maker, CORPUS),
+            "cancellation_latency_s": await measure_cancellation_latency(client_maker),
+            "restart_recovery_rate": await measure_restart_recovery(client_maker),
+            "tool_throughput_per_s": await measure_tool_throughput(client_maker),
         }
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(report, indent=2))
@@ -5720,8 +6435,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    import sys
-
     raise SystemExit(main())
 ```
 
@@ -5748,7 +6461,7 @@ git commit -s -m "test(desktop): pi packaging smoke + performance baseline harne
 
 | 设计 § | 覆盖任务 |
 |---|---|
-| Architecture / Responsibilities（Pi owns / Python owns） | Task 4/5（Pi 侧）、Task 8/12（Python 侧） |
+| Architecture / Responsibilities（Pi owns / Python owns） | Task 4/5/5b（Pi 侧）、Task 8/12（Python 侧） |
 | 内建 read/write/edit/bash 禁用 | Task 5（`toolNames:[]`+`restrictToolNames`+`allowRestrictedCustomTools`），Task 16/17/18 集成验证 |
 | Sidecar and RPC Protocol（帧/命令/manifest/并行只读串行写/截断 redact） | Task 1/2（帧）、Task 4（命令）、Task 6（manifest）、Task 8（并行/截断/redact） |
 | Session Persistence（Pi JSONL 唯一真相源、Session/Attempt ledger、停写 messages） | Task 12（cutover）、Task 11（投影） |
@@ -5766,11 +6479,35 @@ git commit -s -m "test(desktop): pi packaging smoke + performance baseline harne
 
 **Gaps：无**——设计每个 § 均映射到任务；Non-goals 无违反。
 
-### (b) Placeholder 扫描
+### (b) Placeholder 扫描（director 修复后重扫）
 
 - 全文无 "TBD"/"add error handling"/"similar to Task N"/"write tests for the above"。
 - 两处显式标注的「执行者 d.ts 核对」点（Task 0 Step 7、Task 5 Step 6 注、Task 5 `importMessages` 双方案落地、Task 14 注入机制）均给出了**完整主实现代码 + 明确的备选实现语义**，不是 TODO：SDK 签名偏差按给定决策规则微调并记录，属锁定版本下的必要核对步骤。
-- Task 12 中 `client.respond_host` 集成缝已写明归属（Task 12 交付、Task 16 端到端验证）。
+- ~~Task 12 中 `client.respond_host` 集成缝~~ 已消除：`respond_host`/host-request 派发以完整代码交付于 Task 9（B3 修复），Task 12 仅消费。
+
+### (b2) Director review corrections（changelog，全部已应用）
+
+**Blockers**
+
+- **B1** 新增 **Task 5b: sidecar 入口 main.ts**（插在 Task 5 与 Task 6 之间，后续任务编号不变，交叉引用以 "Task 5b" 指代）：完整 main.ts 代码（ready 帧、HostRpc stdout sink、ToolBridge、SessionIndex、PiSessionDriver、createCommandHandler、入站响应帧派发、`globalThis.__VIBE_HOST__` 先于 extension import 设置、extensions 注入）+ 内存双工 TDD 测试。文件结构总览与 Task 15/16 引用同步更新。
+- **B2** SessionIndex 语义重定义：`register(vibeId, path)` 校验"存在合法 session header"并记录 `{path, headerId}`；`resolve` 返回 path 当且仅当文件仍有 session header 且其 id 等于**记录的 headerId**（替换检测），不强制 Pi header id === Vibe id；`PiSessionDriver.create()` 在 buildSession 后立即登记索引（修复 restart 后 open_session not_found → 静默丢历史的缺陷）；Task 3 测试改写；Task 5 执行者注说明：若 d.ts 揭示显式 session-id 创建选项则优先采用（headerId === vibeId），否则记录 headerId 即为设计"sidecar validates the header before opening it"的合理解读。
+- **B3** Task 9 增加入站 host-request 完整实现：`on_host_request` 回调 + `respond_host` 协程 + `_dispatch_frame` 分支（`op` 且无 `ok` → 入站请求）+ stub sidecar 的 `STUB_SEND_HOST_REQ` 模式与测试。原 Task 12 的"~15 行"占位措辞删除。
+- **B4** Task 12 异步桥接结构性重写：模块级专用 pi loop 守护线程（`_pi_loop()`）承载 `PiSidecarClient`；所有 service 交互统一 `run_coroutine_threadsafe(coro, _pi_loop()).result(timeout)`；`_run_with_pi` 改为**同步**方法经 `_AGENT_EXECUTOR` 执行（与既有 `agent.run` 形状一致）；client 新增公开 `started` property；删除 `ensure_started` 与一切 `_ready` 内部窥探；`send_message` 显式构造 `Message(...)`；迁移检查改用 `migration.is_migrated(session_id)`。
+- **B5** host op 集合扩展为 `tool_invoke`/`memory_context`/`remember`/`memory_search`/`memory_remove`（契约节 + Task 9 + Task 12 同步）；extension 监听 `input` 事件缓存最近用户文本，`memory_context` 请求带 `{"query": lastInput}`；Task 12 引入 `self._pi_host_handlers: dict[str, Callable]` 处理器注册表（Task 12 只接 `tool_invoke`，Task 14 追加注册四个 memory ops）；删除 `_dispatch_pi_event`/`_on_pi_session_event`/`client._on_session_event` 三件套，由 client 级回调取代。
+- **B6** `PiSidecarClient.__init__` 增加 `env: dict | None`，`_spawn` 合并 `os.environ`；Task 16 `_client` 显式传 env；stub ready 帧 `sdk` 字段回显 `VIBE_TEST_ENV_MARKER` 供断言。
+- **B7** `_default_command()` 解析顺序：env `VIBE_PI_SIDECAR_BIN`（存在且可执行 → `[bin]`）→ bun dev 命令；Task 15 新增 `src-tauri/src/sidecar.rs` 修改步骤（Rust 从资源目录解析 `pi/<target>/pi` 并注入 Python serve 进程 env，含完整 Rust 代码）。
+
+**Minors（M1–M9 全部应用）**
+
+- **M1** Task 4 `get_messages` 的 `limit` 改为可选（默认 100），契约节同步；`bad_request` 仅在 limit 非正整数时。
+- **M2** Task 12 事件泵收集 `entry_ids`（message_start/message_end payload id）；删除死代码 `preview = ""`。
+- **M3** Task 18 `perf_baseline.py`：`new_session` 与 prompt 使用同一 sid；`measure_cancellation_latency`/`measure_restart_recovery` 纳入报告；`import sys` 移到顶部。
+- **M4** Task 18 `smoke_pi.py`：顶部补 `import sys`；新增 manifest 数量校验（`build_registry` 以最小测试 env 构建 → `build_tool_manifest` → `set_tool_manifest` → 读回 `get_state` 链路比对，完整代码）。
+- **M5** Task 13 `_seed_old` 删除链式赋值笔误。
+- **M6** Task 5 移除未使用的 `readSessionHeaderId` import。
+- **M7** Task 0 Step 7 d.ts 核对清单增加：(a) `message_start` payload 是否暴露 entry/message id（Task 7 幂等键依赖；若无则回退 `tool_execution_start.toolCallId` + 轮次计数器，Task 7 注明回退）；(b) `getMessages` 使用的 sessionManager entries 读取 API 实名（`getEntries()`）。
+- **M8** Task 7 超时规则散文重写为两句定案：Python 拥有执行超时；sidecar 仅保留 2× 兜底计时器（写类 outcome_unknown / 只读 error）。
+- **M9** 本节 changelog 即其自身。
 
 ### (c) 类型一致性核对
 
