@@ -44,7 +44,7 @@ multi-market backtesting engines, 450+ alpha factors, live-trading safety
 layers) and its WebUI, then rebuilds everything around them for non-developers:
 a double-click-to-run Tauri shell with an embedded Python runtime, an account
 and membership layer with hosted LLMs (no API keys to manage), an A-share
-market workspace (dashboard, anomalies, indices, watchlist, news), and a
+market workspace (dashboard, anomalies, indices, watchlist), and a
 transparent LLM usage center. Everything runs locally on `127.0.0.1`.
 
 ## 项目定位
@@ -71,7 +71,7 @@ transparent LLM usage center. Everything runs locally on `127.0.0.1`.
 - **双击即用，不是给开发者的框架。** 安装包内嵌 Python 3.12 运行时，首次运行自动引导安装完整研究环境（支持清华/阿里镜像加速、断点重试），全程图形界面，无需终端。
 - **不用自己搞模型。** 会员可直接使用托管模型 —— 密钥由服务端按需注入本地进程、不写入磁盘；进阶用户也可切换为自定义 LLM 配置（OpenRouter、DeepSeek、Gemini、Zhipu 等 13+ 供应商）。
 - **数据在你手里。** 研究服务只监听 `127.0.0.1`，会话、回测、自选与配置全部保存在本机 `~/.vibe-trading/`，升级不丢数据，退出即停服务。
-- **从看盘到验证的完整闭环。** 市场看板 → 异动跟踪 → 指数详情 → 自选股一键交给 Agent → 资讯筛选 → 自然语言研究 → 回测验证 → 因子探索，一条工作流走完，而不是一堆孤立页面。
+- **从看盘到验证的完整闭环。** 市场看板 → 异动跟踪 → 指数详情 → 自选股一键交给 Agent → 自然语言研究 → 回测验证 → 因子探索，一条工作流走完，而不是一堆孤立页面。
 - **站在被验证过的核心引擎上。** 继承上游的 ReAct 研究循环、A 股 / 美股 / 港股 / 加密 / 期货 / 外汇回测引擎、Alpha Zoo 因子库与实盘安全层 —— 产品易用，引擎不玩具。
 - **为 A 股用户设计。** 中文优先、红涨绿跌、多数据源自动回退（tushare / akshare / 东财等），符合国内投资者的看盘直觉。
 
@@ -82,7 +82,7 @@ Trading Worker 由一个原生桌面壳和一个嵌入式研究工作区组成�
 | 层级       | 技术                              | 作用                                                               |
 | ---------- | --------------------------------- | ------------------------------------------------------------------ |
 | 桌面壳     | Tauri 2.x + Rust + Vue 控制台     | 账户登录、内嵌 Python 运行时、依赖引导安装、服务生命周期与本地日志 |
-| 研究工作区 | React 19 + TypeScript + ECharts   | Agent 对话、市场数据、资讯、自选股、回测与可视化（嵌入主窗口）     |
+| 研究工作区 | React 19 + TypeScript + ECharts   | Agent 对话、市场数据、自选股、回测与可视化（嵌入主窗口）     |
 | 研究引擎   | Python 3.12 + FastAPI + LangGraph | 金融研究、回测、数据源、技能与本地 API 服务（仅监听 127.0.0.1）    |
 
 桌面主窗口左侧是常驻导航栏（账户 / 环境 / 研究 / 设置）：**账户** 进登录与个人中心（会员状态、托管模型、用量），**环境** 是运行时控制台（安装依赖、启停服务、看日志），**研究** 直接在主窗口内嵌完整 WebUI。首次运行时控制台会引导安装依赖，就绪后一键启动并进入工作区。
@@ -140,14 +140,6 @@ Trading Worker 由一个原生桌面壳和一个嵌入式研究工作区组成�
 </p>
 
 输入 6 位代码添加自选，点选个股查看 K 线，并可把行情上下文一键交给 Agent 继续研究。
-
-### 投资资讯
-
-<p align="center">
-  <img src="assets/light_news.png" alt="投资资讯（浅色主题）" width="960" />
-</p>
-
-按行业分类浏览 A 股资讯，右侧直接阅读原文与 AI 要点。
 
 ### AI 研究 Agent
 
@@ -266,7 +258,7 @@ bash scripts/desktop/build-dmg.sh
 | 定位     | 面向开发者/研究者的开源智能体框架 | 面向个人投资者的桌面产品                |
 | 分发方式 | pip / Docker / CLI / MCP          | macOS DMG / Windows MSI 安装包          |
 | 使用门槛 | 自备环境、终端与 API key          | 双击安装、登录账号、托管模型            |
-| 市场数据 | 通用多市场研究                    | A 股优先的工作台（看板/异动/自选/资讯） |
+| 市场数据 | 通用多市场研究                    | A 股优先的工作台（看板/异动/自选） |
 | 账户体系 | 无                                | 登录、会员、用量中心                    |
 | 演进策略 | 社区驱动，快速迭代                | 保留上游核心，业务独立演进，选择性同步  |
 
