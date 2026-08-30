@@ -1,6 +1,6 @@
 # Pi Coding Agent Execution Layer Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.任务默认按编号顺序执行；唯一例外：Task 5b 在 Task 7 之后执行。
 
 **Goal:** 用 Pi Coding Agent SDK sidecar（自定义 JSONL RPC 模式）替换 Python `AgentLoop` 执行层，同时完整保留 86 个 finance skills、Python 工具/安全闸、长期记忆、REST/SSE API 契约与 run 工件。
 
@@ -55,13 +55,11 @@
 | pi-sidecar/extensions/vibe-providers/index.ts | Create | provider 注册 extension（factory load 时 registerProvider） |
 | pi-sidecar/src/host-rpc.ts | Create | sidecar→Python 双向 RPC helper（hostCall/响应关联） |
 | pi-sidecar/src/tool-bridge.ts (+test) | Create | manifest 工具注册为 customTools + `tool_invoke` RPC + 取消 |
-| pi-sidecar/src/main.ts | Create | 入口：ready 帧、stdin/stdout JSONL 循环、stderr 诊断 |
 | pi-sidecar/extensions/vibe-memory/index.ts (+test) | Create | vibe-memory extension（每轮记忆注入 + remember/memory_search/memory_remove） |
 | agent/src/pi_sidecar/__init__.py | Create | 包标记 + engine 开关（`get_agent_engine()`，默认 `pi`）+ LEGACY_ONLY_PROVIDERS |
 | pi-sidecar/src/main.ts (+test) | Create | **入口（Task 5b，B1）**：ready 帧、stdin/stdout JSONL 循环、HostRpc 装配、`__VIBE_HOST__` bridge、extensions 注入、stderr 诊断 |
 | agent/src/pi_sidecar/manifest.py (+test) | Create | `build_tool_manifest(registry)` |
 | agent/src/pi_sidecar/gateway_bridge.py (+test) | Create | tool_invoke 处理：幂等、并行只读/串行写、ToolGateway 路由、outcome_unknown、截断/redact |
-| agent/src/pi_sidecar/client.py (+test) | Create | `PiSidecarClient`：进程监管（restart-once）、请求关联、事件分发 |
 | agent/src/pi_sidecar/events.py (+test) | Create | Pi 事件 → 完整 Vibe 事件 glossary 归一化 |
 | agent/src/pi_sidecar/projection.py (+test) | Create | 最终 result 投影 + Pi 消息 → `Message` 投影 |
 | agent/src/pi_sidecar/memory_bridge.py (+test) | Create | memory_context/remember/memory_search/memory_remove host op（PersistentMemory） |
@@ -990,6 +988,8 @@ export function readSessionHeaderId(jsonPath: string): string | null {
     }
   }
   return null;
+}
+
 export interface IndexedSession {
   path: string;
   headerId: string; // 文件自身的 Pi session header id（B2：不强制等于 vibeId）
@@ -1933,6 +1933,7 @@ git commit -s -m "feat(pi-sidecar): Pi AgentSession driver with tool lockdown + 
 ---
 
 ### Task 5b: sidecar 入口 main.ts（B1：装配协议循环 + HostRpc + 工具桥 + 会话驱动 + extensions）
+**执行顺序：本任务必须在 Task 7 之后执行**——它 import Task 7 交付的 `tool-bridge.ts`/`host-rpc.ts`；编号 5b 仅表示语义分组（main.ts 装配的核心依赖）。
 
 **Files:** `pi-sidecar/src/main.ts`（Create）、`pi-sidecar/src/main.test.ts`（Create）
 
@@ -2616,6 +2617,7 @@ git add pi-sidecar/src/tool-bridge.ts pi-sidecar/src/tool-bridge.test.ts pi-side
 git commit -s -m "feat(pi-sidecar): tool bridge routing executions to python host"
 ```
 
+- [ ] 7. 完成后回到 Task 5b（sidecar 入口 main.ts）——其依赖的 ToolBridge/HostRpc 现已存在，可以执行。
 ---
 
 ### Task 8: Python Gateway Bridge（幂等 + 并行只读/串行写 + ToolGateway 路由 + outcome_unknown）
