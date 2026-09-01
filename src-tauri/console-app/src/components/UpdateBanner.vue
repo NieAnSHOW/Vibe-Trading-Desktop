@@ -6,6 +6,7 @@ import {
   consoleDownloadUpdate,
   consoleInstallUpdate,
 } from "../ipc/commands";
+import ConfirmDialog from "./ConfirmDialog.vue";
 import { onUpdateProgress } from "../ipc/events";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { onMounted, onUnmounted } from "vue";
@@ -184,30 +185,22 @@ defineExpose({ checkUpdate });
       </div>
     </template>
   </div>
-
-  <!-- 安装确认弹窗 -->
-  <dialog
-    ref="dlg"
-    class="confirm"
+  <!-- 安装确认弹窗(与全局 ConfirmDialog 同款:居中/动画/关闭语义统一) -->
+  <ConfirmDialog
+    data-test="install-dialog"
     :open="installDialogOpen"
-    @close="onInstallDialogClose((($event.target as HTMLDialogElement).returnValue as 'ok' | 'cancel') ?? 'cancel')"
+    title="确认安装更新？"
+    @close="onInstallDialogClose"
   >
-    <form method="dialog">
-      <h3>确认安装更新？</h3>
-      <p>
-        将打开安装包 <b>{{ updateInfo?.assetName }}</b>。
-        <template v-if="updateInfo?.releaseNotes">
-          <br /><br />
-          <b>更新内容：</b><br />
-          <span style="white-space:pre-wrap;font-size:12px;color:#aaa">{{ updateInfo.releaseNotes }}</span>
-        </template>
-      </p>
-      <div class="confirm-actions">
-        <button value="cancel" class="btn-ghost">稍后</button>
-        <button value="ok" class="btn-danger" type="submit">现在安装</button>
-      </div>
-    </form>
-  </dialog>
+    将打开安装包 <b>{{ updateInfo?.assetName }}</b>。
+    <template v-if="updateInfo?.releaseNotes">
+      <br /><br />
+      <b>更新内容：</b><br />
+      <span class="release-notes">{{ updateInfo.releaseNotes }}</span>
+    </template>
+    <template #cancel-text>稍后</template>
+    <template #confirm-text>现在安装</template>
+  </ConfirmDialog>
 </template>
 
 <style scoped>
@@ -309,4 +302,10 @@ defineExpose({ checkUpdate });
   flex-shrink: 0;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.release-notes {
+  white-space: pre-wrap;
+  font-size: 12px;
+  color: #aaa;
+}
 </style>

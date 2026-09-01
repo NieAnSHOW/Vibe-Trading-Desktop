@@ -31,7 +31,6 @@ function renderLayout(initialEntry = "/") {
         <Route element={<Layout />}>
           <Route path="/" element={<div>Dashboard route content</div>} />
           <Route path="/agent" element={<div>Agent route content</div>} />
-          <Route path="/news" element={<div>News route content</div>} />
           <Route path="/usage" element={<div>Usage route content</div>} />
         </Route>
       </Routes>
@@ -80,13 +79,12 @@ describe("Layout sidebar", () => {
     ).toBe(true);
   });
 
-  it("renders the investment news workspace link with active state", () => {
-    renderLayout("/news");
+  it("does not render an investment news nav item while workspace nav stays intact", () => {
+    renderLayout();
 
-    const news = screen.getByRole("link", { name: "投资资讯" });
-    expect(news).toHaveAttribute("href", "/news");
-    expect(news).toHaveClass("bg-primary/10", "text-primary");
-    expect(screen.getByText("News route content")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "投资资讯" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /自选股/i })).toHaveAttribute("href", "/watchlist");
+    expect(screen.getByRole("link", { name: /智能体/ })).toHaveAttribute("href", "/agent");
   });
 
   it("places the usage center beside Agent as an active workspace link", () => {

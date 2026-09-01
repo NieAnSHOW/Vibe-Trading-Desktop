@@ -7,7 +7,7 @@ import {
   Trash2,
   Send,
   RefreshCw,
-  CandlestickChart as CandlestickIcon,
+  Newspaper,
   TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -168,15 +168,15 @@ function WatchlistStockCard({
           ) : (
             <>
               <a
-                href={`https://stockpage.10jqka.com.cn/${stock.code}`}
+                href={`https://stockpage.10jqka.com.cn/${stock.code}/news`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                title={labels.kline}
-                aria-label={labels.kline}
-                data-testid={`kline-${stock.code}`}
+                title={labels.newsLink}
+                aria-label={labels.newsLink}
+                data-testid={`news-${stock.code}`}
               >
-                <CandlestickIcon size={14} />
+                <Newspaper size={14} />
               </a>
               <button
                 type="button"
@@ -258,81 +258,88 @@ function StockDetailSection({
       </header>
 
       <div className="tw-panel-body flex min-h-0 flex-1 flex-col">
-      <div
-        data-testid="watchlist-chart-stack"
-        className="space-y-3 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:space-y-0 lg:gap-4"
-      >
-      <div
-        data-testid="watchlist-daily-chart-region"
-        className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col"
-      >
-      {loading && (
-        <p className="text-xs text-muted-foreground">
-          {t("dashboard.loading")}
-        </p>
-      )}
-      {error && (
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <AlertCircle className="h-3 w-3" />
-          {error}
-        </div>
-      )}
-      {!loading && !error && bars.length === 0 && (
-        <p className="text-xs text-muted-foreground">
-          {t("charts.noPriceData")}
-        </p>
-      )}
-      {bars.length > 0 && (
-        <CandlestickChartView data={bars} height={440} fill defaultRange="3M" />
-      )}
-      </div>
-
-      <div
-        data-testid="watchlist-intraday-chart-region"
-        className="border-t pt-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col"
-      >
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold">
-            {t("watchlist.intradayHistory", "分时走势")}
-          </h3>
-          {intradayStale && (
-            <span role="status" className="text-xs text-muted-foreground">
-              {t("watchlist.stale", "行情延迟")}
-            </span>
-          )}
-        </div>
-        {intradayLoading && (
-          <p className="min-h-32 text-center text-xs text-muted-foreground">
-            {t("watchlist.intradayLoading", "分时数据加载中")}
-          </p>
-        )}
-        {!intradayLoading && intradayError && (
+        <div
+          data-testid="watchlist-chart-stack"
+          className="space-y-3 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:space-y-0 lg:gap-4"
+        >
           <div
-            role="alert"
-            className="flex min-h-32 items-center justify-center gap-1.5 rounded-md bg-destructive/10 p-3 text-xs text-destructive"
+            data-testid="watchlist-daily-chart-region"
+            className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col"
           >
-            <AlertCircle className="h-3.5 w-3.5" />
-            {t("watchlist.intradayError", "分时数据加载失败")}
+            {loading && (
+              <p className="text-xs text-muted-foreground">
+                {t("dashboard.loading")}
+              </p>
+            )}
+            {error && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <AlertCircle className="h-3 w-3" />
+                {error}
+              </div>
+            )}
+            {!loading && !error && bars.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                {t("charts.noPriceData")}
+              </p>
+            )}
+            {bars.length > 0 && (
+              <CandlestickChartView
+                data={bars}
+                height={440}
+                fill
+                defaultRange="3M"
+              />
+            )}
           </div>
-        )}
-        {!intradayLoading && !intradayError && intradayBars.length === 0 && (
-          <div className="flex min-h-32 flex-col items-center justify-center rounded-md bg-muted p-3 text-center">
-            <p className="text-xs font-medium">
-              {t("watchlist.intradayUnavailable", "暂无分时数据")}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t(
-                "watchlist.intradayUnavailableHint",
-                "当前交易时段可能暂无可用数据",
+
+          <div
+            data-testid="watchlist-intraday-chart-region"
+            className="border-t pt-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col"
+          >
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold">
+                {t("watchlist.intradayHistory", "分时走势")}
+              </h3>
+              {intradayStale && (
+                <span role="status" className="text-xs text-muted-foreground">
+                  {t("watchlist.stale", "行情延迟")}
+                </span>
               )}
-            </p>
+            </div>
+            {intradayLoading && (
+              <p className="min-h-32 text-center text-xs text-muted-foreground">
+                {t("watchlist.intradayLoading", "分时数据加载中")}
+              </p>
+            )}
+            {!intradayLoading && intradayError && (
+              <div
+                role="alert"
+                className="flex min-h-32 items-center justify-center gap-1.5 rounded-md bg-destructive/10 p-3 text-xs text-destructive"
+              >
+                <AlertCircle className="h-3.5 w-3.5" />
+                {t("watchlist.intradayError", "分时数据加载失败")}
+              </div>
+            )}
+            {!intradayLoading &&
+              !intradayError &&
+              intradayBars.length === 0 && (
+                <div className="flex min-h-32 flex-col items-center justify-center rounded-md bg-muted p-3 text-center">
+                  <p className="text-xs font-medium">
+                    {t("watchlist.intradayUnavailable", "暂无分时数据")}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t(
+                      "watchlist.intradayUnavailableHint",
+                      "当前交易时段可能暂无可用数据",
+                    )}
+                  </p>
+                </div>
+              )}
+            {intradayBars.length > 0 && (
+              <IntradayChart data={intradayBars} height={300} fill />
+            )}
           </div>
-        )}
-        {intradayBars.length > 0 && (
-          <IntradayChart data={intradayBars} height={300} fill />
-        )}
-      </div>
-      </div>
+        </div>
       </div>
     </div>
   );
@@ -481,7 +488,7 @@ export default function WatchlistPage() {
     selectAll: t("watchlist.selectAll", "全选"),
     select: t("watchlist.select", "选择"),
     stale: t("watchlist.stale", "行情延迟"),
-    kline: t("watchlist.kline", "同花顺 K 线"),
+    newsLink: t("watchlist.newsLink", "同花顺资讯"),
     delete: t("watchlist.delete", "删除"),
     confirmDelete: t("watchlist.confirmDelete", "确认删除"),
     cancelDelete: t("watchlist.cancelDelete", "取消"),
@@ -682,31 +689,34 @@ export default function WatchlistPage() {
             <div className="tw-panel-body flex min-h-0 flex-1 flex-col gap-3">
               {addForm}
 
-              <ul role="list" className="min-h-0 space-y-2 lg:flex-1 lg:overflow-y-auto">
-              {stocks.map((stock) => (
-                <WatchlistStockCard
-                  key={stock.code}
-                  stock={stock}
-                  quote={quotes[stock.code]}
-                  isSelected={selected.has(stock.code)}
-                  isActive={activeSelectedCode === stock.code}
-                  confirmingDelete={confirmDelete === stock.code}
-                  labels={cardLabels}
-                  detailLabel={t(
-                    "watchlist.viewDetail",
-                    "查看 {{name}}（{{code}}）详情",
-                    {
-                      name: quotes[stock.code]?.name ?? stock.name ?? "—",
-                      code: stock.code,
-                    },
-                  )}
-                  onToggleSelection={() => toggleSelection(stock.code)}
-                  onSelectDetail={() => void setSelectedCode(stock.code)}
-                  onDelete={() => void handleDelete(stock.code)}
-                  onCancelDelete={() => setConfirmDelete(null)}
-                />
-              ))}
-            </ul>
+              <ul
+                role="list"
+                className="min-h-0 space-y-2 lg:flex-1 lg:overflow-y-auto"
+              >
+                {stocks.map((stock) => (
+                  <WatchlistStockCard
+                    key={stock.code}
+                    stock={stock}
+                    quote={quotes[stock.code]}
+                    isSelected={selected.has(stock.code)}
+                    isActive={activeSelectedCode === stock.code}
+                    confirmingDelete={confirmDelete === stock.code}
+                    labels={cardLabels}
+                    detailLabel={t(
+                      "watchlist.viewDetail",
+                      "查看 {{name}}（{{code}}）详情",
+                      {
+                        name: quotes[stock.code]?.name ?? stock.name ?? "—",
+                        code: stock.code,
+                      },
+                    )}
+                    onToggleSelection={() => toggleSelection(stock.code)}
+                    onSelectDetail={() => void setSelectedCode(stock.code)}
+                    onDelete={() => void handleDelete(stock.code)}
+                    onCancelDelete={() => setConfirmDelete(null)}
+                  />
+                ))}
+              </ul>
             </div>
           </aside>
 

@@ -3,6 +3,7 @@
 锁回归：startup 必须调用 watchlist init_db，否则空库下
 GET/POST/DELETE /watchlist/stocks 触发 sqlite3.OperationalError → FastAPI 500。
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -20,6 +21,7 @@ def app_with_tmp_db(tmp_path, monkeypatch):
 
     db_file = tmp_path / "watchlist.db"
     monkeypatch.setattr(wm, "DB_PATH", db_file)
+    monkeypatch.setattr(wm, "name_provider", None)  # 回填不触网：空表下 backfill 会请求行情源
     # 屏蔽与 watchlist 无关的 startup 副作用（preflight 网络/日志、后台 executor）
     monkeypatch.setattr(preflight_mod, "run_preflight", lambda *a, **kw: None)
     monkeypatch.setattr(api_server, "_start_scheduled_research_executor", lambda *a, **kw: None)
@@ -33,9 +35,7 @@ def test_startup_creates_watchlist_table(app_with_tmp_db):
         pass  # startup 在进入 context 时执行
     assert db_file.exists(), "startup 未创建 db 文件"
     conn = sqlite3.connect(db_file)
-    rows = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='watchlist'"
-    ).fetchall()
+    rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='watchlist'").fetchall()
     conn.close()
     assert len(rows) == 1, "startup 后 watchlist 表不存在（漏调 init_db）"
 

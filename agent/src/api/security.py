@@ -66,10 +66,7 @@ _DESKTOP_FRAME_ANCESTORS = "tauri://localhost http://tauri.localhost https://tau
 
 
 def _redact_access_log_query(value: str) -> str:
-    """Remove illegal news API queries and known credential query values."""
-    path, separator, _ = value.partition("?")
-    if separator and (path == "/news-api" or path.startswith("/news-api/")):
-        return path
+    """Redact known credential query values from access-log URLs."""
     return _QUERY_SECRET_RE.sub(r"\1[redacted]", value)
 
 

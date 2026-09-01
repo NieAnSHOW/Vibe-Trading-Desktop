@@ -7,6 +7,7 @@
 ponytail: 覆盖 serve 入口链路顶层模块 + cli/api_server import 可达性,
          重型包不在检查范围(Tier 1 冒烟由 smoke_imports.py 覆盖)。
 """
+
 import sys
 
 # serve 入口链路顶层:cli.main → serve_main 的 import 面。缺任一即 Tier 0 边界判断错。
@@ -41,17 +42,9 @@ def main() -> int:
     # 证明入口链路顶层不 import 重型包。
     try:
         import cli  # noqa: F401
-        from api_server import app
+        from api_server import app  # noqa: F401 — deliberate side-effect import
+
         print("OK   import cli + api_server.app (serve 入口链路顶层就绪)")
-        try:
-            snapshot_path = str(app.url_path_for("get_snapshot"))
-        except Exception:  # noqa: BLE001 - missing routes must fail the smoke, not crash it
-            snapshot_path = None
-        if snapshot_path == "/news-api/snapshot":
-            print("OK   route /news-api/snapshot (news API 已注册)")
-        else:
-            failed.append(("/news-api/snapshot", "route is not registered"))
-            print("FAIL route /news-api/snapshot: route is not registered")
     except Exception as exc:  # noqa: BLE001
         failed.append(("cli/api_server", repr(exc)))
         print(f"FAIL import cli/api_server: {exc!r}")

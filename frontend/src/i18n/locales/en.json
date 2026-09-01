@@ -23,7 +23,6 @@
     "noEquityData": "No equity data"
   },
   "layout": {
-    "news": "Investment News",
     "section": {
       "workspace": "Workspace"
     },
@@ -947,6 +946,7 @@
   },
   "dashboard": {
     "title": "Market Overview",
+    "announcements": "Announcements",
     "marketPulse": "Market Pulse",
     "watchlistQuotes": "Watchlist",
     "stockDetail": "Stock Detail",
@@ -1070,7 +1070,7 @@
     "confirmDelete": "Confirm delete",
     "cancelDelete": "Cancel",
     "delete": "Delete",
-    "kline": "10jqka K-Line",
+    "newsLink": "10jqka News",
     "stale": "Delayed quote",
     "intradayHistory": "Intraday trend",
     "intradayLoading": "Loading intraday data",
@@ -1127,47 +1127,5 @@
     "nextPage": "Next page",
     "notProvided": "Not provided",
     "periodOverview": "Period overview"
-  },
-  "news": {
-    "title": "Investment News",
-    "fresh": "Current",
-    "stale": "Data may be out of date",
-    "unavailable": "News is unavailable",
-    "partial": "Some sources are unavailable",
-    "ai": "AI Highlights",
-    "aiUnavailable": "AI highlights are unavailable",
-    "error": "There was a problem loading news",
-    "refresh": "Refresh all news",
-    "scope": "News scope",
-    "summaryOnly": "Summary only",
-    "sourceHealth": "Unavailable sources",
-    "scopes": {
-      "a_share": "A-share news",
-      "global_industry": "Global industry summaries"
-    },
-    "trackList": "News tracks",
-    "selectTrack": "Select news track",
-    "refreshProgress": "Refreshing: {{processedEndpoints}} / {{totalEndpoints}} sources, {{processedTracks}} / {{totalTracks}} tracks",
-    "loading": "Loading news…",
-    "emptySnapshot": "No news snapshot is available",
-    "noSummary": "No summary available",
-    "unknownTime": "Time unavailable",
-    "viewOriginal": "View original",
-    "articleList": "News articles",
-    "emptyTrack": "No news is available for this track",
-    "tracks": {
-      "ai": "Artificial Intelligence",
-      "semi": "Semiconductors",
-      "robot": "Robotics",
-      "auto": "Smart Mobility",
-      "energy": "Clean Energy",
-      "bio": "Biotechnology",
-      "space": "Space",
-      "security": "Cybersecurity",
-      "tech": "Technology",
-      "consumer": "Consumer",
-      "macro": "Macro",
-      "science": "Science"
-    }
   }
 }

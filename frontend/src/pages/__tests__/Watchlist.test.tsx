@@ -166,6 +166,15 @@ describe("WatchlistPage — quotes list", () => {
     expect(screen.getByText("000001")).toBeTruthy();
   });
 
+  it("labels the third-party shortcut as a news link to the Tonghuashun news page", () => {
+    renderPage({ stocks, quotes });
+
+    const link = screen.getByTestId("news-000001");
+    expect(link.getAttribute("href")).toBe("https://stockpage.10jqka.com.cn/000001/news");
+    expect(link.getAttribute("aria-label")).toBe("同花顺资讯");
+    expect(link.getAttribute("title")).toBe("同花顺资讯");
+  });
+
   it("keeps a long stock name truncatable without hiding its code", () => {
     const longName = "这是一个很长很长很长很长很长很长很长很长很长很长的股票名称";
     renderPage({ stocks, quotes: { "000001": { ...quotes["000001"], name: longName } } });

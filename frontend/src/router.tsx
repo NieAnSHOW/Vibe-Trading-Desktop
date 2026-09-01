@@ -28,7 +28,6 @@ const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const MarketPulse = lazy(() => import("@/pages/MarketPulse"));
 const Indices = lazy(() => import("@/pages/Indices"));
 const Watchlist = lazy(() => import("@/pages/Watchlist"));
-const News = lazy(() => import("@/pages/News"));
 
 
 
@@ -48,7 +47,7 @@ function wrap(Component: ComponentType) {
   );
 }
 
-export const router = createBrowserRouter([
+export const routes = [
   {
     element: <Layout />,
     children: [
@@ -70,7 +69,10 @@ export const router = createBrowserRouter([
       { path: "/market-pulse", element: wrap(MarketPulse) },
       { path: "/indices", element: wrap(Indices) },
       { path: "/watchlist", element: wrap(Watchlist) },
-      { path: "/news", element: wrap(News) },
+      // 旧版投资资讯路径：页面已移除（spec 2026-08-30 §2.3），重定向到自选股。
+      { path: "/news", element: <Navigate to="/watchlist" replace /> },
     ],
   },
-]);
+];
+
+export const router = createBrowserRouter(routes);

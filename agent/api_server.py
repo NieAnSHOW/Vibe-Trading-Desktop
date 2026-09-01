@@ -8,6 +8,7 @@ infrastructure lives in ``src.api.{security,models,helpers,state}``.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from pathlib import Path
@@ -25,6 +26,7 @@ from src.ui_services import build_run_analysis, load_run_context  # noqa: F401
 
 # UTF-8 on Windows
 import sys as _sys
+
 for _s in ("stdout", "stderr"):
     _r = getattr(getattr(_sys, _s, None), "reconfigure", None)
     if callable(_r):
@@ -171,10 +173,10 @@ class SPAStaticFiles(StaticFiles):
         except StarletteHTTPException as exc:
             if exc.status_code != status.HTTP_404_NOT_FOUND:
                 raise
-            is_news_api = path.strip("/").startswith("news-api/") or path.strip("/") == "news-api"
-            if is_news_api or "text/html" not in _accept_header(scope):
+            if "text/html" not in _accept_header(scope):
                 return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
             return await super().get_response("index.html", scope)
+
 
 # ============================================================================
 # FastAPI Application
@@ -185,7 +187,7 @@ app = FastAPI(
     description="Vibe-Trading API: natural-language finance research, backtesting, and swarm workflows",
     version=APP_VERSION,
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 app.add_middleware(
@@ -213,12 +215,15 @@ async def _telemetry_error_middleware(request: Request, call_next):
     except Exception as exc:
         try:
             from starlette.exceptions import HTTPException  # noqa: PLC0415
+
             if not isinstance(exc, HTTPException):
                 from src.telemetry import counters  # noqa: PLC0415
+
                 counters.record_error(type(exc).__name__)
         except Exception:  # noqa: BLE001 - telemetry must never break a request
             pass
         raise
+
 
 # ============================================================================
 # Lifecycle hooks
@@ -244,6 +249,7 @@ async def _run_startup_preflight() -> None:
     run_preflight(console)
     _start_scheduled_research_executor()
     await _watchlist_init_db()  # 幂等建表；plan 约束：DB 初始化须在 startup，不在首次请求中建
+    await asyncio.get_event_loop().run_in_executor(None, _watchlist_backfill_names)  # 存量空名称回填
     if os.getenv("VIBE_TRADING_CHANNELS_AUTO_START", "").strip().lower() in {"1", "true", "yes"}:
         await _start_channel_runtime()
 
@@ -255,20 +261,13 @@ async def _stop_scheduled_research_on_shutdown() -> None:
     await _stop_scheduled_research_executor()
 
 
-async def _close_news_coordinator_registry() -> None:
-    """Release the same lazy coordinator registry used by the news routes."""
-    await news_coordinator_registry.close()
-
-
-app.on_event("shutdown")(_close_news_coordinator_registry)
-
-
 # ============================================================================
 # Route registration + re-exports
 # ============================================================================
 
 # --- Runs ---
 from src.api.runs_routes import register_runs_routes  # noqa: E402
+
 register_runs_routes(app)
 
 from src.api.runs_routes import (  # noqa: F401, E402
@@ -279,6 +278,7 @@ from src.api.runs_routes import (  # noqa: F401, E402
 
 # --- Sessions ---
 from src.api.sessions_routes import register_sessions_routes  # noqa: E402
+
 register_sessions_routes(app)
 
 from src.api.sessions_routes import (  # noqa: F401, E402
@@ -289,20 +289,24 @@ from src.api.sessions_routes import (  # noqa: F401, E402
 
 # --- Global LLM usage ---
 from src.api.llm_usage_routes import register_llm_usage_routes  # noqa: E402
+
 register_llm_usage_routes(app)
 
 # --- System ---
 from src.api.system_routes import register_system_routes  # noqa: E402
+
 register_system_routes(app)
 
 from src.api.system_routes import _terminate_current_process  # noqa: F401, E402
 
 # --- Browser EventSource authentication ---
 from src.api.auth_routes import router as auth_router  # noqa: E402
+
 app.include_router(auth_router)
 
 # --- Settings ---
 from src.api.settings_routes import register_settings_routes  # noqa: E402
+
 register_settings_routes(app)
 
 from src.api.settings_routes import (  # noqa: F401, E402
@@ -315,6 +319,7 @@ from src.api.settings_routes import (  # noqa: F401, E402
 
 # --- Uploads ---
 from src.api.uploads_routes import register_uploads_routes  # noqa: E402
+
 register_uploads_routes(app)
 
 from src.api.uploads_routes import (  # noqa: F401, E402
@@ -327,8 +332,10 @@ from src.api.uploads_routes import (  # noqa: F401, E402
 
 # --- Channels ---
 from src.api.channels_routes import register_channels_routes  # noqa: E402
+
 register_channels_routes(app)
 from src.api.qveris_routes import qveris_router  # noqa: E402  # QVERIS-INTEGRATION
+
 app.include_router(qveris_router)  # QVERIS-INTEGRATION
 
 from src.api.channels_routes import (  # noqa: F401, E402
@@ -337,12 +344,14 @@ from src.api.channels_routes import (  # noqa: F401, E402
 
 # --- Swarm ---
 from src.api.swarm_routes import register_swarm_routes  # noqa: E402
+
 register_swarm_routes(app)
 
 from src.api.swarm_routes import _get_swarm_runtime  # noqa: F401, E402
 
 # --- Live trading ---
 from src.api.live_routes import register_live_routes  # noqa: E402
+
 register_live_routes(app)
 
 from src.api.live_routes import (  # noqa: F401, E402
@@ -372,23 +381,22 @@ from src.api.live_routes import (  # noqa: F401, E402
 
 # --- Alpha Zoo ---
 from src.api.alpha_routes import register_alpha_routes  # noqa: E402
+
 register_alpha_routes(app)
 
 # --- Watchlist ---
-from src.api.watchlist_routes import register_watchlist_routes, init_db as _watchlist_init_db  # noqa: E402
+from src.api.watchlist_routes import (  # noqa: E402
+    register_watchlist_routes,
+    init_db as _watchlist_init_db,
+    backfill_missing_names as _watchlist_backfill_names,
+)
+
 register_watchlist_routes(app)
 
 # --- Dashboard ---
 from src.api.dashboard_routes import register_dashboard_routes  # noqa: E402
+
 register_dashboard_routes(app, require_auth=require_auth)
-
-# --- Investment news ---
-# Register before ``serve_main`` can mount the root SPA catch-all.
-from src.api.news_routes import register_news_routes  # noqa: E402
-from src.news.coordinator import get_news_coordinator_registry  # noqa: E402
-
-news_coordinator_registry = get_news_coordinator_registry()
-register_news_routes(app, require_auth=require_auth, registry=news_coordinator_registry)
 
 
 # ============================================================================
@@ -400,6 +408,7 @@ register_news_routes(app, require_auth=require_auth, registry=news_coordinator_r
 # guarded separately by VIBE_TRADING_ENABLE_SCHEDULER.
 
 from src.api.scheduled_routes import register_scheduled_routes  # noqa: E402
+
 register_scheduled_routes(app)
 
 from src.api.scheduled_routes import (  # noqa: E402, F401
@@ -435,6 +444,7 @@ async def telemetry_sidecar_metrics(since: float | None = None):
     返回自上次 snapshot 以来的增量并重置窗口；响应仅聚合数字。
     """
     from src.telemetry import counters  # 局部 import，避免启动期循环依赖
+
     return counters.snapshot(since)
 
 
@@ -453,8 +463,16 @@ async def _weixin_connectivity_probe(base_url: str) -> dict:
     out: dict = {"base_url": base_url}
     proxy_env = {
         k: os.environ[k]
-        for k in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
-                  "http_proxy", "https_proxy", "all_proxy", "no_proxy")
+        for k in (
+            "HTTP_PROXY",
+            "HTTPS_PROXY",
+            "ALL_PROXY",
+            "NO_PROXY",
+            "http_proxy",
+            "https_proxy",
+            "all_proxy",
+            "no_proxy",
+        )
         if os.environ.get(k)
     }
     out["proxy_env"] = proxy_env or "(none)"
@@ -494,7 +512,8 @@ async def weixin_login_start():
         probe = await _weixin_connectivity_probe(adapter.config.base_url)
         logger.exception(
             "WeChat QR login request failed to %s; in-process probe=%s",
-            adapter.config.base_url, probe,
+            adapter.config.base_url,
+            probe,
         )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -538,7 +557,8 @@ async def weixin_login_status(login_id: str = Query(...)):
         probe = await _weixin_connectivity_probe(adapter.config.base_url)
         logger.exception(
             "WeChat QR login status poll failed to %s; in-process probe=%s",
-            adapter.config.base_url, probe,
+            adapter.config.base_url,
+            probe,
         )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -555,6 +575,7 @@ async def weixin_login_status(login_id: str = Query(...)):
 # ============================================================================
 # Main Entry Point
 # ============================================================================
+
 
 def _has_root_route(routes: Any) -> bool:
     """Return whether a FastAPI/Starlette route collection already owns ``/``."""
@@ -600,6 +621,7 @@ def serve_main(argv: list[str] | None = None) -> int:
     import argparse
     import subprocess
     import uvicorn
+
     parser = argparse.ArgumentParser(description="Vibe-Trading Server")
     parser.add_argument("--port", type=int, default=8000, help="Listen port (default 8000)")
     parser.add_argument("--host", default="127.0.0.1", help="Bind address")

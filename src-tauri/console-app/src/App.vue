@@ -9,10 +9,12 @@ import ConfirmDialog from "./components/ConfirmDialog.vue";
 import { useToast } from "./composables/useToast";
 import {
   consoleCloseWebui,
+  consoleFetchAds,
   consoleOpenExternalUrl,
   consoleQuit,
   consoleTakePendingWebui,
 } from "./ipc/commands";
+import type { AdItem } from "./ipc/types";
 import { onQuitRequested, onWebuiClose, onWebuiOpen } from "./ipc/events";
 import { WEBUI_AUTH_EVENT, type WebuiAuthMessage } from "./webuiAuth";
 
@@ -98,9 +100,24 @@ function isWebUrl(value: string): boolean {
   }
 }
 
-function onWebuiMessage(event: MessageEvent) {
+async function onWebuiMessage(event: MessageEvent) {
   if (event.source !== webuiFrame.value?.contentWindow) return;
-  const data = event.data as { type?: string; url?: string } | null;
+  const data = event.data as { type?: string; url?: string; position?: string } | null;
+  if (data?.type === "vibe-shell:ads-request" && typeof data.position === "string") {
+    // 公告/广告数据在会员服务器(cool-admin),iframe 直连会被 CORS 拦下,
+    // 由控制台代取后回推;拉取失败回空列表,WebUI 侧静默隐藏公告栏。
+    let ads: AdItem[] = [];
+    try {
+      ads = await consoleFetchAds(data.position);
+    } catch {
+      // 广告接口失败不阻断消息桥,回空列表即可
+    }
+    (event.source as Window).postMessage(
+      { type: "vibe-shell:ads", position: data.position, ads },
+      event.origin,
+    );
+    return;
+  }
   if (data?.type !== "vibe-shell:open-external" || typeof data.url !== "string") return;
   if (!isWebUrl(data.url)) return;
   void consoleOpenExternalUrl(data.url);

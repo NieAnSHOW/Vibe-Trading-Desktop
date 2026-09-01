@@ -3,7 +3,6 @@
     "version": "v0.1.10"
   },
   "layout": {
-    "news": "投資ニュース",
     "section": { "workspace": "Workspace" },
     "researchTools": "投研ツール",
     "agent": "エージェント",
@@ -789,47 +788,5 @@
     "nextPage": "次のページ",
     "notProvided": "未提供",
     "periodOverview": "期間の使用量"
-  },
-  "news": {
-    "title": "投資ニュース",
-    "fresh": "最新",
-    "stale": "データが古い可能性があります",
-    "unavailable": "ニュースを利用できません",
-    "partial": "一部の情報源を利用できません",
-    "ai": "AI ハイライト",
-    "aiUnavailable": "AI ハイライトを利用できません",
-    "error": "ニュースの読み込み中に問題が発生しました",
-    "refresh": "すべてのニュースを更新",
-    "scope": "ニュースの範囲",
-    "summaryOnly": "概要のみ",
-    "sourceHealth": "利用できない情報源",
-    "scopes": {
-      "a_share": "中国A株ニュース",
-      "global_industry": "世界の業界要約"
-    },
-    "trackList": "ニュース分野",
-    "selectTrack": "ニュース分野を選択",
-    "refreshProgress": "更新中：情報源 {{processedEndpoints}} / {{totalEndpoints}}、分野 {{processedTracks}} / {{totalTracks}}",
-    "loading": "ニュースを読み込んでいます…",
-    "emptySnapshot": "ニュースのスナップショットがありません",
-    "noSummary": "概要はありません",
-    "unknownTime": "時刻不明",
-    "viewOriginal": "元の記事を見る",
-    "articleList": "ニュース記事",
-    "emptyTrack": "この分野のニュースはありません",
-    "tracks": {
-      "ai": "人工知能",
-      "semi": "半導体",
-      "robot": "ロボティクス",
-      "auto": "スマートモビリティ",
-      "energy": "クリーンエネルギー",
-      "bio": "バイオテクノロジー",
-      "space": "宇宙",
-      "security": "サイバーセキュリティ",
-      "tech": "テクノロジー",
-      "consumer": "消費",
-      "macro": "マクロ",
-      "science": "科学"
-    }
   }
 }
